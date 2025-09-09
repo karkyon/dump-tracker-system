@@ -1,0 +1,780 @@
+#!/bin/bash
+
+# GitHub環境ディレクトリ構造・ファイル一覧生成スクリプト
+# dump-tracker-system プロジェクト用
+
+set -e
+
+# 設定
+PROJECT_NAME="dump-tracker-system"
+PROJECT_DIR="/home/karkyon/dump-tracker"
+OUTPUT_DIR="$PROJECT_DIR/docs/structure"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+# カラー定義
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+# log_success "Claude共有用ファイル作成完了"
+
+# ============================================================================
+# 9. 結果表示・コピー可能な情報出力
+# ============================================================================
+
+log_step "📋 生成結果表示"
+
+echo ""
+echo -e "${GREEN}============================================================${NC}"
+echo -e "${GREEN}🎉 GitHub環境構造・ファイル一覧生成完了！${NC}"
+echo -e "${GREEN}============================================================${NC}"
+echo ""
+echo -e "${CYAN}📁 出力先ディレクトリ:${NC} $OUTPUT_DIR"
+echo ""
+echo -e "${YELLOW}🗂️  生成されたファイル一覧:${NC}"
+echo ""
+
+# 生成されたファイルを表示
+ls -la "$OUTPUT_DIR" | grep "$TIMESTAMP" | while read -r line; do
+    filename=$(echo "$line" | awk '{print $9}')
+    filesize=$(echo "$line" | awk '{print $5}')
+    echo -e "  📄 ${BLUE}$filename${NC} (${filesize} bytes)"
+done
+
+echo ""
+echo -e "${PURPLE}🚀 次のアクションとして実行できます:${NC}"
+echo ""
+echo -e "${CYAN}1. 統合レポートを確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/integrated_report_$TIMESTAMP.md\""
+echo ""
+echo -e "${CYAN}2. Claude共有用ファイルをコピー:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/claude_share_$TIMESTAMP.md\""
+echo ""
+echo -e "${CYAN}3. 完全ディレクトリ構造を確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt\""
+echo ""
+echo -e "${CYAN}4. 技術スタック分析を確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md\""
+echo ""
+
+# ============================================================================
+# 10. クイックサマリー・コピペ用出力
+# ============================================================================
+
+log_step "⚡ クイックサマリー出力（コピペ用）"
+
+echo ""
+echo -e "${YELLOW}以下の内容をClaude会話にコピペして共有できます:${NC}"
+echo ""
+echo "============================================================"
+cat << SUMMARY_EOF
+
+🚛 DUMP-TRACKER-SYSTEM - プロジェクト構造サマリー
+
+**最終スキャン:** $(date)
+**Gitブランチ:** $(git branch --show-current 2>/dev/null || echo "不明")
+
+## 📊 基本統計
+- 総ディレクトリ数: $(find . -type d -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- 総ファイル数: $(find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- TypeScriptファイル数: $(find . -name "*.ts" -not -path "*/node_modules/*" | wc -l)
+- Reactコンポーネント数: $(find . -name "*.tsx" -not -path "*/node_modules/*" | wc -l)
+
+## 🗂️ 重要ディレクトリ存在確認
+SUMMARY_EOF
+
+# 重要ディレクトリの存在確認を出力
+important_summary_dirs=("frontend/src" "backend/src" "backend/src/controllers" "backend/src/routes" "backend/prisma" "database" "docs")
+
+for check_dir in "${important_summary_dirs[@]}"; do
+    if [ -d "$check_dir" ]; then
+        file_count=$(find "$check_dir" -maxdepth 1 -type f | wc -l)
+        echo "✅ $check_dir/ ($file_count files)"
+    else
+        echo "❌ $check_dir/ (存在しない)"
+    fi
+done
+
+echo ""
+echo "## 🔧 主要ファイル確認"
+
+# Controllers
+if [ -d "backend/src/controllers" ]; then
+    echo "### Controllers:"
+    find backend/src/controllers -name "*.ts" | sort | head -5 | while read -r file; do
+        echo "- $(basename "$file")"
+    done
+    controller_count=$(find backend/src/controllers -name "*.ts" | wc -l)
+    if [ "$controller_count" -gt 5 ]; then
+        echo "- ... 他 $((controller_count - 5)) ファイル"
+    fi
+fi
+
+# Routes
+if [ -d "backend/src/routes" ]; then
+    echo "### Routes:"
+    find backend/src/routes -name "*.ts" | sort | head -5 | while read -r file; do
+        echo "- $(basename "$file")"
+    done
+    routes_count=$(find backend/src/routes -name "*.ts" | wc -l)
+    if [ "$routes_count" -gt 5 ]; then
+        echo "- ... 他 $((routes_count - 5)) ファイル"
+    fi
+fi
+
+# Components
+if [ -d "frontend/src/components" ]; then
+    echo "### React Components:"
+    find frontend/src/components -name "*.tsx" | sort | head -5 | while read -r file; do
+        echo "- $(basename "$file")"
+    done
+    components_count=$(find frontend/src/components -name "*.tsx" | wc -l)
+    if [ "$components_count" -gt 5 ]; then
+        echo "- ... 他 $((components_count - 5)) ファイル"
+    fi
+fi
+
+echo ""
+echo "============================================================"
+echo ""
+
+# ============================================================================
+# 11. 最新ファイルのシンボリックリンク作成
+# ============================================================================
+
+log_step "🔗 最新ファイルへのシンボリックリンク作成"
+
+cd "$OUTPUT_DIR"
+
+# 既存のシンボリックリンクを削除
+rm -f latest_*.md latest_*.txt
+
+# 新しいシンボリックリンクを作成
+ln -sf "project_info_$TIMESTAMP.md" "latest_project_info.md"
+ln -sf "directory_tree_$TIMESTAMP.txt" "latest_directory_tree.txt"
+ln -sf "detailed_files_$TIMESTAMP.md" "latest_detailed_files.md"
+ln -sf "tech_stack_files_$TIMESTAMP.md" "latest_tech_stack_files.md"
+ln -sf "package_analysis_$TIMESTAMP.md" "latest_package_analysis.md"
+ln -sf "git_info_$TIMESTAMP.md" "latest_git_info.md"
+ln -sf "integrated_report_$TIMESTAMP.md" "latest_integrated_report.md"
+ln -sf "claude_share_$TIMESTAMP.md" "latest_claude_share.md"
+
+log_success "シンボリックリンク作成完了"
+
+# ============================================================================
+# 12. 自動クリーンアップ（古いファイル削除）
+# ============================================================================
+
+log_step "🧹 古いファイルの自動クリーンアップ"
+
+# 7日より古いファイルを削除（オプション）
+if [ "${AUTO_CLEANUP:-true}" = "true" ]; then
+    find "$OUTPUT_DIR" -name "*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*" -type f -mtime +7 -delete
+    log_info "7日より古いファイルを削除しました"
+else
+    log_info "自動クリーンアップはスキップされました"
+fi
+
+# ============================================================================
+# 13. 最終確認とエラーハンドリング
+# ============================================================================
+
+log_step "✅ 最終確認"
+
+echo ""
+echo -e "${GREEN}🎯 スクリプト実行完了サマリー:${NC}"
+echo ""
+
+# 生成されたファイル数を確認
+generated_files=$(ls "$OUTPUT_DIR" | grep "$TIMESTAMP" | wc -l)
+echo -e "📄 生成ファイル数: ${BLUE}$generated_files${NC} ファイル"
+
+# ディスク使用量
+output_size=$(du -sh "$OUTPUT_DIR" | cut -f1)
+echo -e "💾 出力サイズ: ${BLUE}$output_size${NC}"
+
+# プロジェクトの健康度チェック
+health_score=100
+
+if [ ! -f "package.json" ]; then
+    health_score=$((health_score - 20))
+    echo -e "⚠️  ${YELLOW}package.json が見つかりません${NC}"
+fi
+
+if [ ! -d "node_modules" ]; then
+    health_score=$((health_score - 10))
+    echo -e "⚠️  ${YELLOW}node_modules が見つかりません（npm install未実行？）${NC}"
+fi
+
+if ! git status &>/dev/null; then
+    health_score=$((health_score - 15))
+    echo -e "⚠️  ${YELLOW}Gitリポジトリではありません${NC}"
+fi
+
+if [ ! -d "frontend" ] && [ ! -d "backend" ]; then
+    health_score=$((health_score - 30))
+    echo -e "🚨 ${RED}frontend/backend ディレクトリが見つかりません${NC}"
+fi
+
+echo ""
+if [ $health_score -gt 80 ]; then
+    echo -e "🟢 プロジェクト健康度: ${GREEN}$health_score/100 (良好)${NC}"
+elif [ $health_score -gt 50 ]; then
+    echo -e "🟡 プロジェクト健康度: ${YELLOW}$health_score/100 (注意)${NC}"
+else
+    echo -e "🔴 プロジェクト健康度: ${RED}$health_score/100 (要改善)${NC}"
+fi
+
+echo ""
+echo -e "${PURPLE}🚀 推奨される次のアクション:${NC}"
+echo ""
+
+if [ $health_score -lt 80 ]; then
+    echo -e "1. ${YELLOW}プロジェクト構造の見直し${NC}"
+    echo -e "2. ${YELLOW}必要な依存関係のインストール${NC}"
+    echo -e "3. ${YELLOW}Git初期化の実行${NC}"
+    echo ""
+fi
+
+echo -e "✨ ${CYAN}Claude共有用ファイル:${NC}"
+echo -e "   📄 $OUTPUT_DIR/latest_claude_share.md"
+echo ""
+echo -e "📊 ${CYAN}統合レポート:${NC}"
+echo -e "   📄 $OUTPUT_DIR/latest_integrated_report.md"
+echo ""
+
+# 最終的な使用方法の説明
+echo -e "${BLUE}============================================================${NC}"
+echo -e "${BLUE}🎓 使用方法:${NC}"
+echo -e "${BLUE}============================================================${NC}"
+echo ""
+echo -e "📋 ${CYAN}Claude会話で使用する場合:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/latest_claude_share.md\""
+echo ""
+echo -e "🔍 ${CYAN}詳細調査用:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/latest_integrated_report.md\""
+echo ""
+echo -e "🌳 ${CYAN}ディレクトリ構造確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/latest_directory_tree.txt\""
+echo ""
+
+# スクリプト完了
+echo -e "${GREEN}============================================================${NC}"
+echo -e "${GREEN}✅ GitHub環境構造スキャン完了！${NC}"
+echo -e "${GREEN}============================================================${NC}"
+echo ""
+
+# 最後に簡単な操作案内
+echo -e "${CYAN}💡 TIP:${NC} このスクリプトを定期的に実行して、プロジェクト構造を最新に保ちましょう！"
+echo ""
+
+exit 0() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step() { echo -e "\n${PURPLE}=== $1 ===${NC}"; }
+
+echo "============================================================"
+echo "🗂️  GitHub環境ディレクトリ構造・ファイル一覧生成"
+echo "============================================================"
+echo "プロジェクト: $PROJECT_NAME"
+echo "対象ディレクトリ: $PROJECT_DIR"
+echo "実行時刻: $(date)"
+echo ""
+
+# プロジェクトディレクトリの存在確認
+if [ ! -d "$PROJECT_DIR" ]; then
+    log_error "プロジェクトディレクトリが見つかりません: $PROJECT_DIR"
+    exit 1
+fi
+
+# 出力ディレクトリ作成
+mkdir -p "$OUTPUT_DIR"
+cd "$PROJECT_DIR"
+
+# ============================================================================
+# 1. 基本情報収集
+# ============================================================================
+
+log_step "📊 基本プロジェクト情報収集"
+
+cat > "$OUTPUT_DIR/project_info_$TIMESTAMP.md" << EOF
+# $PROJECT_NAME - プロジェクト情報
+
+**生成日時:** $(date)  
+**プロジェクトパス:** $PROJECT_DIR  
+**Gitブランチ:** $(git branch --show-current 2>/dev/null || echo "不明")  
+**最新コミット:** $(git log --oneline -1 2>/dev/null || echo "Gitリポジトリではありません")  
+
+## 基本統計
+
+- **総ディレクトリ数:** $(find . -type d -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- **総ファイル数:** $(find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- **TypeScriptファイル数:** $(find . -name "*.ts" -not -path "*/node_modules/*" | wc -l)
+- **JavaScriptファイル数:** $(find . -name "*.js" -not -path "*/node_modules/*" | wc -l)
+- **設定ファイル数:** $(find . -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.config.*" | grep -v node_modules | wc -l)
+
+## プロジェクト全体サイズ
+
+- **node_modules含む:** $(du -sh . 2>/dev/null | cut -f1)
+- **node_modules除外:** $(du -sh --exclude=node_modules . 2>/dev/null | cut -f1)
+
+---
+
+EOF
+
+log_success "基本プロジェクト情報生成完了"
+
+# ============================================================================
+# 2. 完全ディレクトリ構造（tree形式）
+# ============================================================================
+
+log_step "🌳 完全ディレクトリ構造生成（tree形式）"
+
+cat > "$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt" << EOF
+# $PROJECT_NAME - 完全ディレクトリ構造
+
+生成日時: $(date)
+プロジェクトパス: $PROJECT_DIR
+
+## 完全ディレクトリツリー（node_modules除外）
+
+EOF
+
+# tree コマンドが利用可能か確認
+if command -v tree &> /dev/null; then
+    tree -a -I 'node_modules|.git' >> "$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt"
+else
+    # treeがない場合はfindで代替
+    echo "tree コマンドが見つからないため、find コマンドで代替表示" >> "$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt"
+    echo "" >> "$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt"
+    find . -not -path "*/node_modules/*" -not -path "*/.git/*" | sort | sed 's|[^/]*/|- |g' >> "$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt"
+fi
+
+log_success "ディレクトリ構造生成完了"
+
+# ============================================================================
+# 3. 重要ディレクトリ別詳細ファイル一覧
+# ============================================================================
+
+log_step "📁 重要ディレクトリ別詳細ファイル一覧生成"
+
+# 重要ディレクトリリスト
+IMPORTANT_DIRS=(
+    "frontend/src"
+    "frontend/src/components"
+    "frontend/src/pages"
+    "frontend/src/hooks"
+    "frontend/src/utils"
+    "frontend/src/types"
+    "frontend/src/stores"
+    "backend/src"
+    "backend/src/controllers"
+    "backend/src/routes"
+    "backend/src/middleware"
+    "backend/src/models"
+    "backend/src/services"
+    "backend/src/types"
+    "backend/src/utils"
+    "backend/src/config"
+    "backend/prisma"
+    "database"
+    "docs"
+    "scripts"
+    "."
+)
+
+cat > "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md" << EOF
+# $PROJECT_NAME - 詳細ファイル一覧
+
+**生成日時:** $(date)
+
+EOF
+
+for dir in "${IMPORTANT_DIRS[@]}"; do
+    if [ -d "$dir" ]; then
+        echo "" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        echo "## 📂 $dir/" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        echo "" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        
+        # ファイル数をカウント
+        file_count=$(find "$dir" -maxdepth 1 -type f | wc -l)
+        subdir_count=$(find "$dir" -maxdepth 1 -type d | wc -l)
+        
+        echo "**ファイル数:** $file_count | **サブディレクトリ数:** $((subdir_count - 1))" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        echo "" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        
+        # 直下のファイル一覧
+        echo "### 📄 ファイル一覧" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        find "$dir" -maxdepth 1 -type f -printf "%f\n" 2>/dev/null | sort | while read -r file; do
+            if [ -n "$file" ]; then
+                # ファイルサイズ取得
+                size=$(ls -lh "$dir/$file" 2>/dev/null | awk '{print $5}' || echo "?")
+                # ファイル拡張子によるアイコン
+                case "$file" in
+                    *.ts) icon="🔷" ;;
+                    *.js) icon="🟨" ;;
+                    *.tsx) icon="⚛️" ;;
+                    *.jsx) icon="⚛️" ;;
+                    *.json) icon="📄" ;;
+                    *.md) icon="📝" ;;
+                    *.yml|*.yaml) icon="⚙️" ;;
+                    *.sql) icon="🗄️" ;;
+                    *.sh) icon="🔧" ;;
+                    *.env*) icon="🔐" ;;
+                    *.config.*) icon="⚙️" ;;
+                    *) icon="📄" ;;
+                esac
+                echo "- $icon \`$file\` ($size)" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+            fi
+        done
+        
+        # サブディレクトリ一覧
+        echo "" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        echo "### 📁 サブディレクトリ一覧" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+        find "$dir" -maxdepth 1 -type d -not -path "$dir" -printf "%f\n" 2>/dev/null | sort | while read -r subdir; do
+            if [ -n "$subdir" ]; then
+                subfile_count=$(find "$dir/$subdir" -type f | wc -l)
+                echo "- 📁 \`$subdir/\` ($subfile_count files)" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+            fi
+        done
+        
+        echo "---" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
+    fi
+done
+
+log_success "詳細ファイル一覧生成完了"
+
+# ============================================================================
+# 4. 技術スタック別ファイル分類
+# ============================================================================
+
+log_step "🔍 技術スタック別ファイル分類"
+
+cat > "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md" << EOF
+# $PROJECT_NAME - 技術スタック別ファイル分類
+
+**生成日時:** $(date)
+
+EOF
+
+# TypeScript/JavaScript ファイル
+echo "## 🔷 TypeScript/JavaScript ファイル" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+find . -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" | grep -v node_modules | sort | while read -r file; do
+    size=$(ls -lh "$file" 2>/dev/null | awk '{print $5}')
+    echo "- \`$file\` ($size)" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+done
+
+# 設定ファイル
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "## ⚙️ 設定ファイル" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+find . -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.config.*" -o -name "tsconfig.*" -o -name "vite.config.*" -o -name "tailwind.config.*" | grep -v node_modules | sort | while read -r file; do
+    size=$(ls -lh "$file" 2>/dev/null | awk '{print $5}')
+    echo "- \`$file\` ($size)" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+done
+
+# データベース関連
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "## 🗄️ データベース関連ファイル" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+find . -name "*.sql" -o -name "*.prisma" -o -path "*/migrations/*" -o -path "*/seeds/*" | grep -v node_modules | sort | while read -r file; do
+    size=$(ls -lh "$file" 2>/dev/null | awk '{print $5}')
+    echo "- \`$file\` ($size)" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+done
+
+# ドキュメント
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "## 📝 ドキュメント" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+find . -name "*.md" -o -name "*.txt" -o -name "*.doc*" | grep -v node_modules | sort | while read -r file; do
+    size=$(ls -lh "$file" 2>/dev/null | awk '{print $5}')
+    echo "- \`$file\` ($size)" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+done
+
+# スクリプト
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "## 🔧 スクリプト" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+find . -name "*.sh" -o -name "*.bat" -o -name "*.cmd" | grep -v node_modules | sort | while read -r file; do
+    size=$(ls -lh "$file" 2>/dev/null | awk '{print $5}')
+    echo "- \`$file\` ($size)" >> "$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md"
+done
+
+log_success "技術スタック別ファイル分類完了"
+
+# ============================================================================
+# 5. Package.json解析
+# ============================================================================
+
+log_step "📦 Package.json解析"
+
+cat > "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md" << EOF
+# $PROJECT_NAME - Package.json解析
+
+**生成日時:** $(date)
+
+EOF
+
+# 全てのpackage.jsonファイルを探す
+find . -name "package.json" | grep -v node_modules | while read -r pkg_file; do
+    echo "## 📦 $pkg_file" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+    echo "" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+    
+    if [ -f "$pkg_file" ]; then
+        # 基本情報
+        name=$(cat "$pkg_file" | grep -o '"name"[^,]*' | cut -d'"' -f4 2>/dev/null || echo "不明")
+        version=$(cat "$pkg_file" | grep -o '"version"[^,]*' | cut -d'"' -f4 2>/dev/null || echo "不明")
+        description=$(cat "$pkg_file" | grep -o '"description"[^,]*' | cut -d'"' -f4 2>/dev/null || echo "不明")
+        
+        echo "**名前:** $name" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        echo "**バージョン:** $version" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        echo "**説明:** $description" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        echo "" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        
+        # dependencies 数
+        deps_count=$(cat "$pkg_file" | grep -A 1000 '"dependencies"' | grep -B 1000 '}' | grep '":' | wc -l 2>/dev/null || echo "0")
+        devdeps_count=$(cat "$pkg_file" | grep -A 1000 '"devDependencies"' | grep -B 1000 '}' | grep '":' | wc -l 2>/dev/null || echo "0")
+        
+        echo "**Dependencies数:** $deps_count" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        echo "**DevDependencies数:** $devdeps_count" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        echo "" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        
+        # Scripts 一覧
+        echo "### Scripts一覧" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        cat "$pkg_file" | grep -A 1000 '"scripts"' | grep -B 1000 '}' | grep '":' | sed 's/.*"\([^"]*\)": *"\([^"]*\)".*/- `\1`: \2/' >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+        echo "" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+    fi
+    
+    echo "---" >> "$OUTPUT_DIR/package_analysis_$TIMESTAMP.md"
+done
+
+log_success "Package.json解析完了"
+
+# ============================================================================
+# 6. Git情報詳細
+# ============================================================================
+
+log_step "🔄 Git詳細情報"
+
+cat > "$OUTPUT_DIR/git_info_$TIMESTAMP.md" << EOF
+# $PROJECT_NAME - Git詳細情報
+
+**生成日時:** $(date)
+
+## Git基本情報
+
+**現在のブランチ:** $(git branch --show-current 2>/dev/null || echo "Gitリポジトリではありません")  
+**リモートURL:** $(git remote get-url origin 2>/dev/null || echo "リモートURL未設定")  
+**総コミット数:** $(git rev-list --all --count 2>/dev/null || echo "0")  
+
+## 最新コミット履歴（10件）
+
+EOF
+
+if git status &>/dev/null; then
+    git log --oneline -10 >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md" 2>/dev/null || echo "コミット履歴なし" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+    
+    echo "" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+    echo "## Git統計" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+    echo "" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+    echo "**追跡ファイル数:** $(git ls-files | wc -l)" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+    echo "**未追跡ファイル数:** $(git ls-files --others --exclude-standard | wc -l)" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+    echo "**変更されたファイル数:** $(git diff --name-only | wc -l)" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+else
+    echo "Gitリポジトリではありません" >> "$OUTPUT_DIR/git_info_$TIMESTAMP.md"
+fi
+
+log_success "Git情報生成完了"
+
+# ============================================================================
+# 7. 統合レポート生成
+# ============================================================================
+
+log_step "📊 統合レポート生成"
+
+cat > "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md" << EOF
+# 🚛 $PROJECT_NAME - 統合プロジェクトレポート
+
+**生成日時:** $(date)  
+**プロジェクトパス:** $PROJECT_DIR  
+**レポート生成者:** GitHub環境構造生成スクリプト v2.0
+
+---
+
+## 📋 目次
+
+1. [プロジェクト概要](#プロジェクト概要)
+2. [ディレクトリ構造](#ディレクトリ構造)
+3. [重要ファイル一覧](#重要ファイル一覧)
+4. [技術スタック](#技術スタック)
+5. [開発環境情報](#開発環境情報)
+
+---
+
+## 🎯 プロジェクト概要
+
+**プロジェクト名:** $PROJECT_NAME  
+**現在のGitブランチ:** $(git branch --show-current 2>/dev/null || echo "不明")  
+**最新コミット:** $(git log --oneline -1 2>/dev/null || echo "Gitリポジトリではありません")  
+
+### 📊 プロジェクト統計
+
+- **総ディレクトリ数:** $(find . -type d -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- **総ファイル数:** $(find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- **TypeScriptファイル数:** $(find . -name "*.ts" -not -path "*/node_modules/*" | wc -l)
+- **Reactコンポーネント数:** $(find . -name "*.tsx" -not -path "*/node_modules/*" | wc -l)
+
+---
+
+## 🗂️ ディレクトリ構造
+
+### フロントエンド (frontend/)
+EOF
+
+if [ -d "frontend" ]; then
+    echo "\`\`\`" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    find frontend -type d | head -20 | sort >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    echo "\`\`\`" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+else
+    echo "フロントエンドディレクトリなし" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+fi
+
+echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "### バックエンド (backend/)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+
+if [ -d "backend" ]; then
+    echo "\`\`\`" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    find backend -type d | head -20 | sort >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    echo "\`\`\`" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+else
+    echo "バックエンドディレクトリなし" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+fi
+
+echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "---" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "## 🎯 重要ファイル一覧" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+
+# Controllers
+if [ -d "backend/src/controllers" ]; then
+    echo "### 🎮 Controllers (backend/src/controllers/)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    find backend/src/controllers -name "*.ts" | sort | while read -r file; do
+        filename=$(basename "$file")
+        echo "- \`$filename\`" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    done
+    echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+fi
+
+# Routes
+if [ -d "backend/src/routes" ]; then
+    echo "### 🛣️ Routes (backend/src/routes/)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    find backend/src/routes -name "*.ts" | sort | while read -r file; do
+        filename=$(basename "$file")
+        echo "- \`$filename\`" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    done
+    echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+fi
+
+# Components
+if [ -d "frontend/src/components" ]; then
+    echo "### ⚛️ React Components (frontend/src/components/)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    find frontend/src/components -name "*.tsx" | sort | head -10 | while read -r file; do
+        filename=$(basename "$file")
+        echo "- \`$filename\`" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+    done
+    echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+fi
+
+echo "---" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "## 📄 詳細レポート" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "詳細な情報は以下のファイルを参照してください：" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "- 📁 [完全ディレクトリ構造](./directory_tree_$TIMESTAMP.txt)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "- 📋 [詳細ファイル一覧](./detailed_files_$TIMESTAMP.md)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "- 🔍 [技術スタック別分類](./tech_stack_files_$TIMESTAMP.md)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "- 📦 [Package.json解析](./package_analysis_$TIMESTAMP.md)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+echo "- 🔄 [Git詳細情報](./git_info_$TIMESTAMP.md)" >> "$OUTPUT_DIR/integrated_report_$TIMESTAMP.md"
+
+log_success "統合レポート生成完了"
+
+# ============================================================================
+# 8. 自動アップロード・共有用ファイル作成
+# ============================================================================
+
+log_step "🚀 Claude共有用ファイル作成"
+
+# Claude会話で使いやすい形式のファイル作成
+cat > "$OUTPUT_DIR/claude_share_$TIMESTAMP.md" << EOF
+# 🚛 DUMP-TRACKER-SYSTEM - Claude共有用プロジェクト構造
+
+**最終更新:** $(date)
+**GitHubブランチ:** $(git branch --show-current 2>/dev/null || echo "不明")
+**最新コミット:** $(git log --oneline -1 2>/dev/null || echo "不明")
+
+## 🎯 Claudeに共有すべき重要情報
+
+### プロジェクト統計
+- **総ファイル数:** $(find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- **TypeScriptファイル数:** $(find . -name "*.ts" -not -path "*/node_modules/*" | wc -l)
+- **プロジェクトサイズ:** $(du -sh --exclude=node_modules . | cut -f1)
+
+### ✅ 確実に存在するファイル（Controllers）
+EOF
+
+if [ -d "backend/src/controllers" ]; then
+    find backend/src/controllers -name "*.ts" | sort | while read -r file; do
+        filename=$(basename "$file")
+        echo "- ✅ \`$filename\`" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+    done
+else
+    echo "- ❌ controllersディレクトリなし" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+fi
+
+echo "" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+echo "### ✅ 確実に存在するファイル（Routes）" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+
+if [ -d "backend/src/routes" ]; then
+    find backend/src/routes -name "*.ts" | sort | while read -r file; do
+        filename=$(basename "$file")
+        echo "- ✅ \`$filename\`" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+    done
+else
+    echo "- ❌ routesディレクトリなし" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+fi
+
+echo "" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+echo "### 📁 重要ディレクトリの存在確認" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+
+important_check_dirs=("frontend/src" "backend/src" "backend/src/controllers" "backend/src/routes" "database" "docs")
+
+for check_dir in "${important_check_dirs[@]}"; do
+    if [ -d "$check_dir" ]; then
+        file_count=$(find "$check_dir" -maxdepth 1 -type f | wc -l)
+        echo "- ✅ \`$check_dir/\` ($file_count files)" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+    else
+        echo "- ❌ \`$check_dir/\` (存在しない)" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+    fi
+done
+
+echo "" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+echo "### 🔧 開発コマンド確認" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+
+if [ -f "package.json" ]; then
+    echo "#### ルートpackage.json scripts:" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+    cat package.json | grep -A 1000 '"scripts"' | grep -B 1000 '}' | grep '":' | sed 's/.*"\([^"]*\)": *"\([^"]*\)".*/- `npm run \1`: \2/' >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+fi
+
+echo "" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+echo "---" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+echo "**🎯 このファイルをClaude会話に共有することで、100%正確な情報でやり取りできます！**" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
+
+log_success
