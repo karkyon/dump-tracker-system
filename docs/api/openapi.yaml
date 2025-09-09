@@ -1,0 +1,710 @@
+openapi: 3.0.3
+info:
+  title: ダンプ運行記録システム API
+  description: |
+    ダンプトラック運行記録管理システムのRESTful API仕様書
+    
+    ## 機能概要
+    - ユーザー認証・認可
+    - 車両管理
+    - 運行記録管理
+    - GPS位置情報追跡
+    - 統計・レポート機能
+    
+  version: 1.0.0
+  contact:
+    name: システム管理者
+    email: admin@dumptracker.local
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: 開発環境
+  - url: http://10.1.119.244:8000/api/v1
+    description: ステージング環境
+
+security:
+  - bearerAuth: []
+
+paths:
+  # 認証エンドポイント
+  /auth/login:
+    post:
+      tags:
+        - 認証
+      summary: ログイン
+      description: ユーザー名とパスワードでログインし、JWTトークンを取得
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: ユーザー名
+                  example: "admin"
+                password:
+                  type: string
+                  description: パスワード
+                  example: "admin123"
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "ログインに成功しました"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      accessToken:
+                        type: string
+                        description: JWTアクセストークン
+                      refreshToken:
+                        type: string
+                        description: リフレッシュトークン
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags:
+        - 認証
+      summary: 現在のユーザー情報取得
+      description: 認証されたユーザーの詳細情報を取得
+      responses:
+        '200':
+          description: ユーザー情報取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ユーザー管理エンドポイント
+  /users:
+    get:
+      tags:
+        - ユーザー管理
+      summary: ユーザー一覧取得
+      description: ページネーション付きでユーザー一覧を取得（管理者・マネージャーのみ）
+      parameters:
+        - name: page
+          in: query
+          description: ページ番号
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: 1ページあたりの件数
+          schema:
+            type: integer
+            default: 10
+        - name: role
+          in: query
+          description: 役割フィルタ
+          schema:
+            type: string
+            enum: [ADMIN, MANAGER, DRIVER]
+        - name: search
+          in: query
+          description: 検索キーワード（名前、ユーザー名、メール）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ユーザー一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /users/{id}:
+    get:
+      tags:
+        - ユーザー管理
+      summary: ユーザー詳細取得
+      description: 指定されたIDのユーザー詳細情報を取得
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ユーザーID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ユーザー詳細取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/UserDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # 車両管理エンドポイント
+  /vehicles:
+    get:
+      tags:
+        - 車両管理
+      summary: 車両一覧取得
+      description: ページネーション付きで車両一覧を取得
+      parameters:
+        - name: page
+          in: query
+          description: ページ番号
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: 1ページあたりの件数
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          description: ステータスフィルタ
+          schema:
+            type: string
+            enum: [ACTIVE, MAINTENANCE, INACTIVE, RETIRED]
+        - name: search
+          in: query
+          description: 検索キーワード（ナンバープレート、車種）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 車両一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      vehicles:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Vehicle'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags:
+        - 車両管理
+      summary: 車両作成
+      description: 新しい車両を登録（管理者・マネージャーのみ）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleCreate'
+      responses:
+        '201':
+          description: 車両作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "車両が正常に作成されました"
+                  data:
+                    type: object
+                    properties:
+                      vehicle:
+                        $ref: '#/components/schemas/Vehicle'
+        '409':
+          description: ナンバープレート重複エラー
+
+  /vehicles/{id}:
+    get:
+      tags:
+        - 車両管理
+      summary: 車両詳細取得
+      description: 指定されたIDの車両詳細情報を取得
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 車両ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 車両詳細取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      vehicle:
+                        $ref: '#/components/schemas/VehicleDetail'
+
+    put:
+      tags:
+        - 車両管理
+      summary: 車両更新
+      description: 車両情報を更新（管理者・マネージャーのみ）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 車両ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleUpdate'
+      responses:
+        '200':
+          description: 車両更新成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - 車両管理
+      summary: 車両削除
+      description: 車両を論理削除（管理者のみ）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 車両ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 車両削除成功
+        '409':
+          description: 進行中の運行がある場合の削除不可エラー
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ユーザーID
+        username:
+          type: string
+          description: ユーザー名
+        email:
+          type: string
+          format: email
+          description: メールアドレス
+        name:
+          type: string
+          description: 表示名
+        role:
+          type: string
+          enum: [ADMIN, MANAGER, DRIVER]
+          description: 役割
+        employeeId:
+          type: string
+          description: 従業員ID
+        phone:
+          type: string
+          description: 電話番号
+        isActive:
+          type: boolean
+          description: アクティブフラグ
+        lastLoginAt:
+          type: string
+          format: date-time
+          description: 最終ログイン日時
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+
+    UserDetail:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            statistics:
+              type: object
+              properties:
+                totalOperations:
+                  type: integer
+                  description: 総運行回数
+                completedOperations:
+                  type: integer
+                  description: 完了した運行回数
+                totalDistance:
+                  type: number
+                  description: 総走行距離
+                lastOperationDate:
+                  type: string
+                  format: date
+                  description: 最終運行日
+
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 車両ID
+        plateNumber:
+          type: string
+          description: ナンバープレート
+        model:
+          type: string
+          description: 車種
+        manufacturer:
+          type: string
+          description: メーカー
+        year:
+          type: integer
+          description: 年式
+        fuelType:
+          type: string
+          enum: [GASOLINE, DIESEL, HYBRID, ELECTRIC]
+          description: 燃料タイプ
+        capacityTons:
+          type: number
+          format: decimal
+          description: 積載量（トン）
+        currentMileage:
+          type: integer
+          description: 現在の走行距離
+        status:
+          type: string
+          enum: [ACTIVE, MAINTENANCE, INACTIVE, RETIRED]
+          description: ステータス
+        purchaseDate:
+          type: string
+          format: date
+          description: 購入日
+        inspectionDueDate:
+          type: string
+          format: date
+          description: 車検期限
+        insuranceExpiryDate:
+          type: string
+          format: date
+          description: 保険期限
+        gpsDeviceId:
+          type: string
+          description: GPS機器ID
+        notes:
+          type: string
+          description: 備考
+        isActive:
+          type: boolean
+          description: アクティブフラグ
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+
+    VehicleDetail:
+      allOf:
+        - $ref: '#/components/schemas/Vehicle'
+        - type: object
+          properties:
+            statistics:
+              type: object
+              properties:
+                totalOperations:
+                  type: integer
+                  description: 総運行回数
+                completedOperations:
+                  type: integer
+                  description: 完了した運行回数
+                totalDistance:
+                  type: number
+                  description: 総走行距離
+                totalFuelConsumed:
+                  type: number
+                  description: 総燃料消費量
+                lastOperationDate:
+                  type: string
+                  format: date
+                  description: 最終運行日
+
+    VehicleCreate:
+      type: object
+      required:
+        - plateNumber
+        - model
+      properties:
+        plateNumber:
+          type: string
+          description: ナンバープレート
+          example: "大阪 500 あ 1234"
+        model:
+          type: string
+          description: 車種
+          example: "UD クオン"
+        manufacturer:
+          type: string
+          description: メーカー
+          example: "UD Trucks"
+        year:
+          type: integer
+          description: 年式
+          example: 2022
+        fuelType:
+          type: string
+          enum: [GASOLINE, DIESEL, HYBRID, ELECTRIC]
+          default: DIESEL
+          description: 燃料タイプ
+        capacityTons:
+          type: number
+          format: decimal
+          description: 積載量（トン）
+          example: 10.0
+        currentMileage:
+          type: integer
+          description: 現在の走行距離
+          example: 45000
+        purchaseDate:
+          type: string
+          format: date
+          description: 購入日
+        inspectionDueDate:
+          type: string
+          format: date
+          description: 車検期限
+        insuranceExpiryDate:
+          type: string
+          format: date
+          description: 保険期限
+        gpsDeviceId:
+          type: string
+          description: GPS機器ID
+        notes:
+          type: string
+          description: 備考
+
+    VehicleUpdate:
+      type: object
+      properties:
+        plateNumber:
+          type: string
+          description: ナンバープレート
+        model:
+          type: string
+          description: 車種
+        manufacturer:
+          type: string
+          description: メーカー
+        year:
+          type: integer
+          description: 年式
+        fuelType:
+          type: string
+          enum: [GASOLINE, DIESEL, HYBRID, ELECTRIC]
+          description: 燃料タイプ
+        capacityTons:
+          type: number
+          format: decimal
+          description: 積載量（トン）
+        currentMileage:
+          type: integer
+          description: 現在の走行距離
+        status:
+          type: string
+          enum: [ACTIVE, MAINTENANCE, INACTIVE, RETIRED]
+          description: ステータス
+        purchaseDate:
+          type: string
+          format: date
+          description: 購入日
+        inspectionDueDate:
+          type: string
+          format: date
+          description: 車検期限
+        insuranceExpiryDate:
+          type: string
+          format: date
+          description: 保険期限
+        gpsDeviceId:
+          type: string
+          description: GPS機器ID
+        notes:
+          type: string
+          description: 備考
+
+    Pagination:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+          description: 現在のページ
+        totalPages:
+          type: integer
+          description: 総ページ数
+        totalCount:
+          type: integer
+          description: 総件数
+        limit:
+          type: integer
+          description: 1ページあたりの件数
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: エラーメッセージ
+        error:
+          type: string
+          description: エラーコード
+
+  responses:
+    Unauthorized:
+      description: 認証エラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            message: "認証が必要です"
+            error: "UNAUTHORIZED"
+
+    Forbidden:
+      description: 権限エラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            message: "権限が不足しています"
+            error: "FORBIDDEN"
+
+    NotFound:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            message: "リソースが見つかりません"
+            error: "NOT_FOUND"
+
+    ValidationError:
+      description: バリデーションエラー
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "バリデーションエラーが発生しました"
+              errors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                      description: エラーが発生したフィールド
+                    message:
+                      type: string
+                      description: エラーメッセージ

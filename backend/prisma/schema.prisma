@@ -1,0 +1,387 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                                      String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  username                                String                    @unique @db.VarChar(50)
+  email                                   String                    @unique @db.VarChar(255)
+  password_hash                           String                    @db.VarChar(255)
+  name                                    String                    @db.VarChar(100)
+  role                                    user_role?                @default(DRIVER)
+  employee_id                             String?                   @db.VarChar(50)
+  phone                                   String?                   @db.VarChar(20)
+  is_active                               Boolean?                  @default(true)
+  last_login_at                           DateTime?                 @db.Timestamptz(6)
+  password_changed_at                     DateTime?                 @default(now()) @db.Timestamptz(6)
+  created_at                              DateTime?                 @default(now()) @db.Timestamptz(6)
+  updated_at                              DateTime?                 @default(now()) @db.Timestamptz(6)
+  audit_logs                              audit_logs[]
+  inspection_item_results                 inspection_item_results[]
+  inspection_items                        inspection_items[]
+  inspection_records                      inspection_records[]
+  maintenance_records                     maintenance_records[]
+  notifications                           notifications[]
+  operations_operations_created_byTousers operations[]              @relation("operations_created_byTousers")
+  operations_operations_driver_idTousers  operations[]              @relation("operations_driver_idTousers")
+
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
+  @@index([username], map: "idx_users_username")
+  @@map("users")
+}
+
+model Vehicle {
+  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  plate_number        String                @unique @db.VarChar(20)
+  model               String                @db.VarChar(100)
+  manufacturer        String?               @db.VarChar(100)
+  year                Int?
+  fuel_type           fuel_type?            @default(DIESEL)
+  capacity_tons       Decimal?              @db.Decimal(5, 2)
+  current_mileage     Int?                  @default(0)
+  status              vehicle_status?       @default(ACTIVE)
+  purchase_date       DateTime?             @db.Date
+  insurance_expiry    DateTime?             @db.Date
+  inspection_expiry   DateTime?             @db.Date
+  notes               String?
+  created_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  gps_logs            gps_logs[]
+  inspection_records  inspection_records[]
+  maintenance_records maintenance_records[]
+  operations          operations[]
+
+  @@index([plate_number], map: "idx_vehicles_plate_number")
+  @@index([status], map: "idx_vehicles_status")
+  @@map("vehicles")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model audit_logs {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  table_name     String    @db.VarChar(100)
+  operation_type String    @db.VarChar(20)
+  record_id      String?   @db.Uuid
+  user_id        String?   @db.Uuid
+  ip_address     String?   @db.Inet
+  user_agent     String?
+  old_values     Json?
+  new_values     Json?
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  users          User?     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([operation_type], map: "idx_audit_logs_operation")
+  @@index([table_name], map: "idx_audit_logs_table")
+  @@index([created_at], map: "idx_audit_logs_time")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model gps_logs {
+  id              String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  vehicle_id      String      @db.Uuid
+  operation_id    String?     @db.Uuid
+  latitude        Decimal     @db.Decimal(10, 8)
+  longitude       Decimal     @db.Decimal(11, 8)
+  altitude        Decimal?    @db.Decimal(8, 2)
+  speed_kmh       Decimal?    @db.Decimal(5, 2)
+  heading         Decimal?    @db.Decimal(5, 2)
+  accuracy_meters Decimal?    @db.Decimal(5, 2)
+  recorded_at     DateTime    @db.Timestamptz(6)
+  created_at      DateTime?   @default(now()) @db.Timestamptz(6)
+  operations      operations? @relation(fields: [operation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicles        Vehicle     @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([recorded_at], map: "idx_gps_logs_time")
+  @@index([vehicle_id], map: "idx_gps_logs_vehicle")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model items {
+  id                   String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                 String              @unique @db.VarChar(255)
+  category             String?             @db.VarChar(100)
+  unit                 String?             @default("トン") @db.VarChar(20)
+  standard_weight_tons Decimal?            @db.Decimal(5, 2)
+  hazardous            Boolean?            @default(false)
+  description          String?
+  is_active            Boolean?            @default(true)
+  created_at           DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?           @default(now()) @db.Timestamptz(6)
+  operation_details    operation_details[]
+
+  @@index([hazardous], map: "idx_items_hazardous")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model locations {
+  id                   String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                 String              @unique(map: "idx_locations_name") @db.VarChar(255)
+  address              String
+  latitude             Decimal?            @db.Decimal(10, 8)
+  longitude            Decimal?            @db.Decimal(11, 8)
+  location_type        location_type
+  client_name          String?             @db.VarChar(255)
+  contact_person       String?             @db.VarChar(100)
+  contact_phone        String?             @db.VarChar(20)
+  contact_email        String?             @db.VarChar(255)
+  operating_hours      String?
+  special_instructions String?
+  is_active            Boolean?            @default(true)
+  created_at           DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?           @default(now()) @db.Timestamptz(6)
+  operation_details    operation_details[]
+
+  @@index([location_type], map: "idx_locations_type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model maintenance_records {
+  id                       String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  vehicle_id               String           @db.Uuid
+  maintenance_type         maintenance_type
+  scheduled_date           DateTime?        @db.Date
+  completed_date           DateTime?        @db.Date
+  mileage_at_maintenance   Int?
+  cost                     Decimal?         @db.Decimal(10, 2)
+  vendor_name              String?          @db.VarChar(255)
+  description              String?
+  next_maintenance_date    DateTime?        @db.Date
+  next_maintenance_mileage Int?
+  is_completed             Boolean?         @default(false)
+  created_by               String?          @db.Uuid
+  created_at               DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime?        @default(now()) @db.Timestamptz(6)
+  users                    User?            @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicles                 Vehicle          @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([is_completed], map: "idx_maintenance_completed")
+  @@index([maintenance_type], map: "idx_maintenance_type")
+  @@index([vehicle_id], map: "idx_maintenance_vehicle")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model operation_details {
+  id                String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  operation_id      String     @db.Uuid
+  sequence_number   Int
+  activity_type     String     @db.VarChar(20)
+  location_id       String     @db.Uuid
+  item_id           String     @db.Uuid
+  planned_time      DateTime?  @db.Timestamptz(6)
+  actual_start_time DateTime?  @db.Timestamptz(6)
+  actual_end_time   DateTime?  @db.Timestamptz(6)
+  quantity_tons     Decimal    @db.Decimal(8, 2)
+  notes             String?
+  created_at        DateTime?  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?  @default(now()) @db.Timestamptz(6)
+  items             items      @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations         locations  @relation(fields: [location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operations        operations @relation(fields: [operation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([operation_id, sequence_number])
+  @@index([activity_type], map: "idx_operation_details_activity")
+  @@index([item_id], map: "idx_operation_details_item")
+  @@index([location_id], map: "idx_operation_details_location")
+  @@index([operation_id], map: "idx_operation_details_operation")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model operations {
+  id                                 String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  operation_number                   String               @unique @default("") @db.VarChar(50)
+  vehicle_id                         String               @db.Uuid
+  driver_id                          String               @db.Uuid
+  status                             operation_status?    @default(PLANNING)
+  planned_start_time                 DateTime?            @db.Timestamptz(6)
+  actual_start_time                  DateTime?            @db.Timestamptz(6)
+  planned_end_time                   DateTime?            @db.Timestamptz(6)
+  actual_end_time                    DateTime?            @db.Timestamptz(6)
+  total_distance_km                  Decimal?             @db.Decimal(8, 2)
+  fuel_consumed_liters               Decimal?             @db.Decimal(8, 2)
+  notes                              String?
+  created_by                         String?              @db.Uuid
+  created_at                         DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at                         DateTime?            @default(now()) @db.Timestamptz(6)
+  fuel_cost_yen                      Decimal?             @db.Decimal(10, 2)
+  weather_condition                  String?              @db.VarChar(50)
+  road_condition                     String?              @db.VarChar(100)
+  gps_logs                           gps_logs[]
+  inspection_records                 inspection_records[]
+  operation_details                  operation_details[]
+  users_operations_created_byTousers User?                @relation("operations_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_operations_driver_idTousers  User                 @relation("operations_driver_idTousers", fields: [driver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicles                           Vehicle              @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([driver_id], map: "idx_operations_driver")
+  @@index([status], map: "idx_operations_status")
+  @@index([vehicle_id], map: "idx_operations_vehicle")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inspection_item_results {
+  id                   String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  inspection_record_id String             @db.Uuid
+  inspection_item_id   String             @db.Uuid
+  result_value         String?
+  is_passed            Boolean?
+  notes                String?
+  defect_level         String?            @db.VarChar(20)
+  photo_urls           String[]
+  attachment_urls      String[]
+  checked_at           DateTime           @default(now()) @db.Timestamptz(6)
+  checked_by           String?            @db.Uuid
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime           @default(now()) @db.Timestamptz(6)
+  users                User?              @relation(fields: [checked_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspection_items     inspection_items   @relation(fields: [inspection_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspection_records   inspection_records @relation(fields: [inspection_record_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([inspection_record_id, inspection_item_id], map: "inspection_item_results_unique")
+  @@index([inspection_item_id], map: "idx_inspection_item_results_item")
+  @@index([is_passed], map: "idx_inspection_item_results_passed")
+  @@index([inspection_record_id], map: "idx_inspection_item_results_record")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inspection_items {
+  id                      String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                    String                    @db.VarChar(255)
+  description             String?
+  inspection_type         inspection_type
+  input_type              input_type                @default(CHECKBOX)
+  category                String?                   @db.VarChar(100)
+  display_order           Int                       @default(0)
+  is_required             Boolean                   @default(true)
+  is_active               Boolean                   @default(true)
+  default_value           String?
+  validation_rules        Json?
+  help_text               String?
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  created_by              String?                   @db.Uuid
+  inspection_item_results inspection_item_results[]
+  users                   User?                     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([name, inspection_type], map: "inspection_items_name_type_unique")
+  @@index([inspection_type, display_order], map: "idx_inspection_items_order")
+  @@index([inspection_type], map: "idx_inspection_items_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inspection_records {
+  id                      String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  operation_id            String?                   @db.Uuid
+  vehicle_id              String                    @db.Uuid
+  inspector_id            String                    @db.Uuid
+  inspection_type         inspection_type
+  status                  inspection_status         @default(PENDING)
+  scheduled_at            DateTime?                 @db.Timestamptz(6)
+  started_at              DateTime?                 @db.Timestamptz(6)
+  completed_at            DateTime?                 @db.Timestamptz(6)
+  overall_result          Boolean?
+  overall_notes           String?
+  defects_found           Int?                      @default(0)
+  latitude                Decimal?                  @db.Decimal(10, 8)
+  longitude               Decimal?                  @db.Decimal(11, 8)
+  location_name           String?                   @db.VarChar(255)
+  weather_condition       String?                   @db.VarChar(50)
+  temperature             Decimal?                  @db.Decimal(4, 1)
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  inspection_item_results inspection_item_results[]
+  users                   User                      @relation(fields: [inspector_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operations              operations?               @relation(fields: [operation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  vehicles                Vehicle                   @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([created_at], map: "idx_inspection_records_date")
+  @@index([inspector_id], map: "idx_inspection_records_inspector")
+  @@index([status], map: "idx_inspection_records_status")
+  @@index([inspection_type], map: "idx_inspection_records_type")
+  @@index([vehicle_id], map: "idx_inspection_records_vehicle")
+}
+
+model notifications {
+  id      String   @id @db.Uuid
+  user_id String?  @db.Uuid
+  title   String?  @db.VarChar(255)
+  message String?
+  is_read Boolean? @default(false)
+  users   User?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model system_settings {
+  key         String  @id @db.VarChar(100)
+  value       String?
+  description String?
+}
+
+enum fuel_type {
+  GASOLINE
+  DIESEL
+  HYBRID
+  ELECTRIC
+}
+
+enum location_type {
+  LOADING
+  UNLOADING
+  BOTH
+}
+
+enum maintenance_type {
+  ROUTINE
+  REPAIR
+  INSPECTION
+  EMERGENCY
+}
+
+enum operation_status {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum user_role {
+  ADMIN
+  MANAGER
+  DRIVER
+}
+
+enum vehicle_status {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+  RETIRED
+}
+
+enum input_type {
+  CHECKBOX
+  TEXT
+  NUMBER
+  SELECT
+}
+
+enum inspection_status {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum inspection_type {
+  PRE_TRIP
+  POST_TRIP
+  DAILY
+  WEEKLY
+  MONTHLY
+}

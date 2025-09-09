@@ -1,0 +1,52 @@
+C:\USERS\USER\DESKTOP\FRONTEND
+Ñ†  package.json
+Ñ†  postcss.config.js
+Ñ†  tailwind.config.js
+Ñ†  tsconfig.json
+Ñ†  vite.config.ts
+Ñ•ÑüÑü .eslintrc.json			Å~
+Ñ†  
+Ñ•Ñüpublic
+Ñ†   Ñ§ÑüÑü index.html			Å~
+Ñ§Ñüsrc
+    Ñ•Ñücomponents
+    Ñ†  Ñ•Ñücommon
+    Ñ†  Ñ†      Button.tsx
+    Ñ†  Ñ†      Input.tsx
+    Ñ†  Ñ†      Modal.tsx
+    Ñ†  Ñ†      Table.tsx
+    Ñ†  Ñ†      Pagination.tsx
+    Ñ†  Ñ†      
+    Ñ†  Ñ•ÑüLayout
+    Ñ†  Ñ†      Header.tsx
+    Ñ†  Ñ†      Sidebar.tsx
+    Ñ†  Ñ†      Layout.tsx
+    Ñ†  Ñ§Ñüui
+    Ñ†          LoadingSpinner.tsx
+    Ñ•Ñüpages
+    Ñ†      Login.tsx
+    Ñ†      Dashboard.tsx
+    Ñ†      UserManagement.tsx
+    Ñ†      VehicleManagement.tsx
+    Ñ†      InspectionItemManagement.tsx
+    Ñ†      LocationManagement.tsx
+    Ñ†      CargoTypeManagement.tsx
+    Ñ†      OperationRecords.tsx
+    Ñ†      GPSMonitoring.tsx
+    Ñ†      ReportOutput.tsx
+    Ñ†      SystemSettings.tsx
+    Ñ•Ñüstore
+    Ñ†      authStore.ts
+    Ñ†      userStore.ts
+    Ñ†      vehicleStore.ts
+    Ñ†      masterStore.ts
+    Ñ†      operationStore.ts
+    Ñ•Ñütypes
+    Ñ†      index.ts
+    Ñ•Ñüutils
+    Ñ†      api.ts
+    Ñ†      constants.ts
+    Ñ†      helpers.ts
+    Ñ•ÑüÑü App.tsx
+    Ñ•ÑüÑü main.tsx
+    Ñ§ÑüÑü indexs.css
