@@ -1,0 +1,334 @@
+# dump-tracker-system - 完全ディレクトリ構造
+
+生成日時: Tue Sep  9 09:43:52 AM UTC 2025
+プロジェクトパス: /home/karkyon/dump-tracker
+
+## 完全ディレクトリツリー（node_modules除外）
+
+.
+├── backend
+│   ├── data
+│   │   ├── backups
+│   │   └── uploads
+│   │       └── .gitkeep
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── docs
+│   ├── ecosystem.config.js
+│   ├── .editorconfig
+│   ├── .env
+│   ├── .env.example
+│   ├── .env.local
+│   ├── .eslintrc.js
+│   ├── .gitignore
+│   ├── jest.config.js
+│   ├── logs
+│   │   ├── app.log
+│   │   ├── combined.log
+│   │   ├── error.log
+│   │   └── .gitkeep
+│   ├── nodemon.json
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── .prettierrc
+│   ├── .prettierrc.js
+│   ├── prisma
+│   │   ├── schema.prisma
+│   │   └── seed.ts
+│   ├── README.md
+│   ├── scripts
+│   │   ├── 3_api_endpoints_setup.sh
+│   │   ├── database
+│   │   ├── deployment
+│   │   │   ├── add_api_endpoints.sh
+│   │   │   └── src
+│   │   │       ├── app.ts
+│   │   │       ├── controllers
+│   │   │       ├── middleware
+│   │   │       ├── routes
+│   │   │       │   ├── gps.ts
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── inspections.ts
+│   │   │       │   ├── items.ts
+│   │   │       │   ├── locations.ts
+│   │   │       │   ├── reports.ts
+│   │   │       │   ├── trips.ts
+│   │   │       │   └── vehicles.ts
+│   │   │       ├── services
+│   │   │       ├── types
+│   │   │       ├── utils
+│   │   │       └── validators
+│   │   ├── development
+│   │   │   ├── docker_dev.sh
+│   │   │   ├── reset.sh
+│   │   │   └── start_dev.sh
+│   │   ├── dev.sh
+│   │   ├── fix_typescript_errors.sh
+│   │   ├── fix_upload_types_script.sh
+│   │   ├── generate-routes.sh
+│   │   ├── health-check.sh
+│   │   ├── inspection_tables.sql
+│   │   ├── monitoring
+│   │   │   ├── health_check.sh
+│   │   │   └── system_check.sh
+│   │   └── start.sh
+│   ├── src
+│   │   ├── app.ts
+│   │   ├── config
+│   │   │   ├── constants.ts
+│   │   │   ├── database.ts
+│   │   │   ├── email.ts
+│   │   │   ├── environment.ts
+│   │   │   ├── jwt.ts
+│   │   │   ├── swagger.ts
+│   │   │   └── upload.ts
+│   │   ├── controllers
+│   │   │   ├── authController.ts
+│   │   │   ├── inspectionController.ts
+│   │   │   ├── itemController.ts
+│   │   │   ├── locationController.ts
+│   │   │   ├── reportController.ts
+│   │   │   ├── tripController.ts
+│   │   │   ├── userController.ts
+│   │   │   └── vehicleController.ts
+│   │   ├── database
+│   │   ├── index.ts
+│   │   ├── middleware
+│   │   │   ├── auth.ts
+│   │   │   ├── errorHandler.ts
+│   │   │   ├── logger.ts
+│   │   │   ├── upload.ts
+│   │   │   └── validation.ts
+│   │   ├── models
+│   │   │   ├── Inspection.ts
+│   │   │   ├── Item.ts
+│   │   │   ├── Location.ts
+│   │   │   ├── User.ts
+│   │   │   └── Vehicle.ts
+│   │   ├── routes
+│   │   │   ├── authRoutes.ts
+│   │   │   ├── auth.ts
+│   │   │   ├── gpsRoutes.ts
+│   │   │   ├── health.ts
+│   │   │   ├── index.ts
+│   │   │   ├── inspectionRoutes.ts
+│   │   │   ├── itemRoutes.ts
+│   │   │   ├── locationRoutes.ts
+│   │   │   ├── operationRoutes.ts
+│   │   │   ├── reportRoutes.ts
+│   │   │   ├── tripRoutes.ts
+│   │   │   ├── userRoutes.ts
+│   │   │   ├── users.ts
+│   │   │   └── vehicleRoutes.ts
+│   │   ├── server.ts
+│   │   ├── services
+│   │   │   ├── authService.ts
+│   │   │   ├── emailService.ts
+│   │   │   ├── inspectionService.ts
+│   │   │   ├── itemService.ts
+│   │   │   ├── locationService.ts
+│   │   │   ├── reportService.ts
+│   │   │   ├── tripService.ts
+│   │   │   ├── userService.ts
+│   │   │   └── vehicleService.ts
+│   │   ├── types
+│   │   │   ├── auth.ts
+│   │   │   └── index.ts
+│   │   ├── utils
+│   │   │   ├── asyncHandler.ts
+│   │   │   ├── constants.ts
+│   │   │   ├── crypto.ts
+│   │   │   ├── errors.ts
+│   │   │   ├── generateCSV.ts
+│   │   │   ├── generateExcel.ts
+│   │   │   ├── generatePDF.ts
+│   │   │   ├── gpsCalculations.ts
+│   │   │   ├── logger.ts
+│   │   │   └── validation.ts
+│   │   └── validators
+│   ├── ssh
+│   ├── temp
+│   │   └── .gitkeep
+│   ├── tests
+│   │   ├── e2e
+│   │   ├── integration
+│   │   ├── setup.ts
+│   │   └── unit
+│   │       ├── app.test.ts
+│   │       └── health.test.ts
+│   ├── tsconfig.json
+│   └── uploads
+│       ├── avatars
+│       ├── documents
+│       ├── .gitkeep
+│       └── photos
+├── database
+│   ├── backups
+│   ├── functions
+│   │   ├── gps_functions.sql
+│   │   └── statistics_functions.sql
+│   ├── migrations
+│   ├── schemas
+│   │   ├── audit_logs_table.sql
+│   │   ├── gps_logs_table.sql
+│   │   ├── items_table.sql
+│   │   ├── locations_table.sql
+│   │   ├── main_schema.sql
+│   │   ├── maintenance_records_table.sql
+│   │   ├── operation_details_table.sql
+│   │   ├── operations_table.sql
+│   │   ├── users_table.sql
+│   │   └── vehicles_table.sql
+│   ├── seeds
+│   │   └── initial_data.sql
+│   ├── triggers
+│   │   ├── audit_triggers.sql
+│   │   ├── maintenance_check_trigger.sql
+│   │   └── operation_number_trigger.sql
+│   └── views
+│       ├── driver_performance.sql
+│       ├── operation_statistics.sql
+│       └── vehicle_utilization.sql
+├── docs
+│   ├── api
+│   │   ├── API_GUIDE.md
+│   │   └── openapi.yaml
+│   ├── database
+│   │   └── DATABASE_DESIGN.md
+│   └── structure
+│       ├── directory_tree_20250909_094351.txt
+│       └── project_info_20250909_094351.md
+├── frontend
+│   ├── auth.ts
+│   ├── constants.ts
+│   ├── Dockerfile
+│   ├── .env.example
+│   ├── .env.local
+│   ├── .eslintrc.cjs
+│   ├── filelist.txt
+│   ├── .gitignore
+│   ├── index.html
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── playwright.config.ts
+│   ├── postcss.config.js
+│   ├── .prettierrc
+│   ├── public
+│   │   ├── favicon.svg
+│   │   ├── health.json
+│   │   ├── icons
+│   │   ├── images
+│   │   ├── index.html
+│   │   └── manifest
+│   ├── README.md
+│   ├── scripts
+│   │   └── 5_deploy_frontend_files.sh
+│   ├── src
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   │   ├── icons
+│   │   │   └── images
+│   │   ├── components
+│   │   │   ├── charts
+│   │   │   ├── common
+│   │   │   │   ├── Button.tsx
+│   │   │   │   ├── Input.tsx
+│   │   │   │   ├── Modal.tsx
+│   │   │   │   ├── Pagination.tsx
+│   │   │   │   └── Table.tsx
+│   │   │   ├── forms
+│   │   │   ├── layout
+│   │   │   ├── Layout
+│   │   │   │   ├── Header.tsx
+│   │   │   │   ├── Layout.tsx
+│   │   │   │   └── Sidebar.tsx
+│   │   │   ├── maps
+│   │   │   └── ui
+│   │   │       └── LoadingSpinner.tsx
+│   │   ├── constants
+│   │   ├── hooks
+│   │   ├── index.css
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   ├── auth
+│   │   │   ├── CargoTypeManagement.tsx
+│   │   │   ├── dashboard
+│   │   │   ├── Dashboard.tsx
+│   │   │   ├── GPSMonitoring.tsx
+│   │   │   ├── InspectionItemManagement.tsx
+│   │   │   ├── LocationManagement.tsx
+│   │   │   ├── Login.tsx
+│   │   │   ├── OperationRecords.tsx
+│   │   │   ├── ReportOutput.tsx
+│   │   │   ├── reports
+│   │   │   ├── routes
+│   │   │   ├── settings
+│   │   │   ├── SystemSettings.tsx
+│   │   │   ├── trucks
+│   │   │   ├── UserManagement.tsx
+│   │   │   └── VehicleManagement.tsx
+│   │   ├── services
+│   │   ├── store
+│   │   │   ├── authStore.ts
+│   │   │   ├── masterStore.ts
+│   │   │   ├── operationStore.ts
+│   │   │   ├── userStore.ts
+│   │   │   └── vehicleStore.ts
+│   │   ├── stores
+│   │   ├── styles
+│   │   │   └── globals.css
+│   │   ├── test
+│   │   │   └── setup.ts
+│   │   ├── types
+│   │   │   └── index.ts
+│   │   └── utils
+│   │       ├── api.ts
+│   │       ├── constants.ts
+│   │       ├── constants.ts.save
+│   │       ├── helpers.ts
+│   │       └── index.ts
+│   ├── tailwind.config.js
+│   ├── tests
+│   │   ├── e2e
+│   │   ├── integration
+│   │   └── unit
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   ├── vite.config.ts
+│   ├── vitest.config.ts
+│   └── .vscode
+│       ├── extensions.json
+│       └── settings.json
+├── .gitignore
+├── logs
+│   ├── api_setup.log
+│   ├── backend_setup_20250816_014948.log
+│   └── backend_setup_error_20250816_014948.log
+├── package.json
+├── README.md
+├── scripts
+│   ├── database
+│   │   ├── backup.sh
+│   │   ├── generate_erd.sh
+│   │   ├── info.sh
+│   │   ├── reset.sh
+│   │   └── restore.sh
+│   ├── development
+│   │   ├── download_from_gdrive.sh
+│   │   ├── run_tests.sh
+│   │   ├── setup_database.sh
+│   │   ├── start_backend.sh
+│   │   ├── sync_with_gdrive.sh
+│   │   └── upload_templates_to_gdrive.sh
+│   ├── github_setup.sh
+│   ├── git_status_check.sh
+│   ├── project_status_check.sh
+│   ├── structure_script.sh
+│   ├── .structure_script.sh.swp
+│   └── testing
+│       ├── load_test.sh
+│       └── test_api.sh
+└── start_backend.sh
+
+97 directories, 228 files

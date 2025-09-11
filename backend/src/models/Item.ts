@@ -4,85 +4,59 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 /**
- * 品目モデル
- * 運送品目の管理
+ * 品目モデル - Prismaスキーマ完全準拠版
+ * 運搬品目（砂利、コンクリート廃材等）の管理
  */
+
+// =====================================
+// 基本型定義（Prismaスキーマ準拠）
+// =====================================
 
 export interface ItemModel {
   id: string;
   name: string;
-  description?: string;
-  category?: string;
-  unit?: string;
-  standardWeight?: number; // kg
-  standardVolume?: number; // m³
-  hazardousClass?: string;
-  handlingInstructions?: string;
-  storageRequirements?: string;
-  temperatureRange?: string;
-  isFragile: boolean;
-  isHazardous: boolean;
-  requiresSpecialEquipment: boolean;
-  displayOrder: number;
-  isActive: boolean;
-  photoUrls: string[];
-  specificationFileUrl?: string;
-  msdsFileUrl?: string; // Material Safety Data Sheet
-  createdAt: Date;
-  updatedAt: Date;
+  category?: string | null;
+  unit?: string | null;
+  standard_weight_tons?: number | null; // Decimal型をnumberで扱う
+  hazardous: boolean;
+  description?: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface ItemCreateInput {
   name: string;
-  description?: string;
   category?: string;
   unit?: string;
-  standardWeight?: number;
-  standardVolume?: number;
-  hazardousClass?: string;
-  handlingInstructions?: string;
-  storageRequirements?: string;
-  temperatureRange?: string;
-  isFragile?: boolean;
-  isHazardous?: boolean;
-  requiresSpecialEquipment?: boolean;
-  displayOrder?: number;
-  photoUrls?: string[];
-  specificationFileUrl?: string;
-  msdsFileUrl?: string;
+  standard_weight_tons?: number;
+  hazardous?: boolean;
+  description?: string;
+  is_active?: boolean;
 }
 
 export interface ItemUpdateInput {
   name?: string;
-  description?: string;
   category?: string;
   unit?: string;
-  standardWeight?: number;
-  standardVolume?: number;
-  hazardousClass?: string;
-  handlingInstructions?: string;
-  storageRequirements?: string;
-  temperatureRange?: string;
-  isFragile?: boolean;
-  isHazardous?: boolean;
-  requiresSpecialEquipment?: boolean;
-  displayOrder?: number;
-  isActive?: boolean;
-  photoUrls?: string[];
-  specificationFileUrl?: string;
-  msdsFileUrl?: string;
+  standard_weight_tons?: number;
+  hazardous?: boolean;
+  description?: string;
+  is_active?: boolean;
 }
 
 export interface ItemWhereInput {
   id?: string;
-  name?: { contains?: string; mode?: 'insensitive' };
-  description?: { contains?: string; mode?: 'insensitive' };
-  category?: string;
-  isActive?: boolean;
-  isHazardous?: boolean;
-  isFragile?: boolean;
-  requiresSpecialEquipment?: boolean;
-  createdAt?: {
+  name?: string | { contains?: string; mode?: 'insensitive' };
+  category?: string | { contains?: string; mode?: 'insensitive' };
+  unit?: string;
+  hazardous?: boolean;
+  is_active?: boolean;
+  standard_weight_tons?: {
+    gte?: number;
+    lte?: number;
+  };
+  created_at?: {
     gte?: Date;
     lte?: Date;
   };
@@ -92,112 +66,120 @@ export interface ItemOrderByInput {
   id?: 'asc' | 'desc';
   name?: 'asc' | 'desc';
   category?: 'asc' | 'desc';
-  displayOrder?: 'asc' | 'desc';
-  createdAt?: 'asc' | 'desc';
-  updatedAt?: 'asc' | 'desc';
+  unit?: 'asc' | 'desc';
+  standard_weight_tons?: 'asc' | 'desc';
+  hazardous?: 'asc' | 'desc';
+  is_active?: 'asc' | 'desc';
+  created_at?: 'asc' | 'desc';
+  updated_at?: 'asc' | 'desc';
+}
+
+// =====================================
+// フロントエンド用追加型
+// =====================================
+
+export interface ItemResponseDTO {
+  id: string;
+  name: string;
+  category?: string | null;
+  unit?: string | null;
+  standard_weight_tons?: number | null;
+  hazardous: boolean;
+  description?: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface ItemStats {
-  totalItems: number;
-  activeItems: number;
-  categoriesCount: number;
-  hazardousItems: number;
-  fragileItems: number;
-  specialEquipmentItems: number;
-  newItemsThisMonth: number;
-}
-
-export interface ItemCategory {
-  name: string;
-  itemCount: number;
-  description?: string;
-  isActive: boolean;
+  total_items: number;
+  active_items: number;
+  hazardous_items: number;
+  categories_count: number;
+  most_used_items: ItemUsageStats[];
+  total_weight_capacity: number;
+  average_weight_per_item: number;
 }
 
 export interface ItemUsageStats {
-  itemId: string;
-  itemName: string;
-  totalTrips: number;
-  totalWeight?: number;
-  totalVolume?: number;
-  averageWeight?: number;
-  lastUsed?: Date;
-  popularRoutes: Array<{
-    fromLocation: string;
-    toLocation: string;
-    count: number;
-  }>;
-  monthlyTrends: Array<{
-    month: string;
-    tripCount: number;
-    weight?: number;
-    volume?: number;
-  }>;
+  item_id: string;
+  item_name: string;
+  category?: string;
+  usage_count: number;
+  total_quantity_tons: number;
+  average_quantity_per_use: number;
+  last_used_date?: Date;
 }
 
-export interface ItemPricing {
-  id: string;
-  itemId: string;
-  pricePerUnit?: number;
-  pricePerKg?: number;
-  pricePerKm?: number;
-  minimumCharge?: number;
-  effectiveFrom: Date;
-  effectiveTo?: Date;
-  isActive: boolean;
-  createdAt: Date;
+export interface ItemCategory {
+  category: string;
+  item_count: number;
+  total_weight_capacity: number;
+  hazardous_count: number;
+  items: ItemModel[];
 }
 
-export interface ItemCompatibility {
-  itemId: string;
-  compatibleItems: string[];
-  incompatibleItems: string[];
-  warnings: string[];
+export interface ItemAvailability {
+  item_id: string;
+  item_name: string;
+  is_available: boolean;
+  current_stock_tons?: number;
+  reserved_tons?: number;
+  available_tons?: number;
+  next_availability_date?: Date;
 }
 
-export interface ItemSeasonality {
-  itemId: string;
-  peakMonths: number[];
-  lowMonths: number[];
-  seasonalityIndex: number; // 0-1 (0: no seasonality, 1: high seasonality)
-}
+// =====================================
+// 品目モデルクラス
+// =====================================
 
-/**
- * 品目モデルクラス
- */
 export class Item {
-  constructor(private prisma: PrismaClient = new PrismaClient()) {}
+  constructor(private prisma: PrismaClient = prisma) {}
 
   /**
    * 品目作成
    */
   async create(data: ItemCreateInput): Promise<ItemModel> {
-    // 表示順序が指定されていない場合は最後に追加
-    let displayOrder = data.displayOrder;
-    if (displayOrder === undefined) {
-      const lastItem = await this.prisma.item.findFirst({
-        orderBy: { displayOrder: 'desc' }
+    try {
+      return await this.prisma.items.create({
+        data: {
+          ...data,
+          unit: data.unit || 'トン',
+          hazardous: data.hazardous ?? false,
+          is_active: data.is_active ?? true,
+          created_at: new Date(),
+          updated_at: new Date()
+        }
       });
-      displayOrder = (lastItem?.displayOrder || 0) + 10;
+    } catch (error) {
+      throw new Error(`品目作成エラー: ${error}`);
     }
-
-    return await this.prisma.item.create({
-      data: {
-        ...data,
-        displayOrder,
-        isFragile: data.isFragile || false,
-        isHazardous: data.isHazardous || false,
-        requiresSpecialEquipment: data.requiresSpecialEquipment || false,
-        photoUrls: data.photoUrls || []
-      }
-    });
   }
 
   /**
-   * 品目取得
+   * 品目取得（ID指定）
    */
-  async findUnique(where: { id?: string; name?: string }): Promise<ItemModel | null> {
-    return await this.prisma.item.findUnique({ where });
+  async findById(id: string): Promise<ItemModel | null> {
+    try {
+      return await this.prisma.items.findUnique({
+        where: { id }
+      });
+    } catch (error) {
+      throw new Error(`品目取得エラー: ${error}`);
+    }
+  }
+
+  /**
+   * 品目取得（名前指定）
+   */
+  async findByName(name: string): Promise<ItemModel | null> {
+    try {
+      return await this.prisma.items.findUnique({
+        where: { name }
+      });
+    } catch (error) {
+      throw new Error(`品目取得エラー: ${error}`);
+    }
   }
 
   /**
@@ -209,407 +191,413 @@ export class Item {
     skip?: number;
     take?: number;
     include?: {
-      trips?: boolean;
-      pricing?: boolean;
+      operation_details?: boolean;
     };
   }): Promise<ItemModel[]> {
-    return await this.prisma.item.findMany(params);
+    try {
+      return await this.prisma.items.findMany({
+        where: params.where,
+        orderBy: params.orderBy || { name: 'asc' },
+        skip: params.skip,
+        take: params.take,
+        include: params.include ? {
+          operation_details: params.include.operation_details
+        } : undefined
+      });
+    } catch (error) {
+      throw new Error(`品目一覧取得エラー: ${error}`);
+    }
   }
 
   /**
    * 品目更新
    */
-  async update(where: { id: string }, data: ItemUpdateInput): Promise<ItemModel> {
-    return await this.prisma.item.update({ where, data });
+  async update(id: string, data: ItemUpdateInput): Promise<ItemModel> {
+    try {
+      return await this.prisma.items.update({
+        where: { id },
+        data: {
+          ...data,
+          updated_at: new Date()
+        }
+      });
+    } catch (error) {
+      throw new Error(`品目更新エラー: ${error}`);
+    }
   }
 
   /**
    * 品目削除（論理削除）
    */
   async softDelete(id: string): Promise<ItemModel> {
-    return await this.prisma.item.update({
-      where: { id },
-      data: { isActive: false }
-    });
+    try {
+      return await this.prisma.items.update({
+        where: { id },
+        data: { 
+          is_active: false,
+          updated_at: new Date()
+        }
+      });
+    } catch (error) {
+      throw new Error(`品目削除エラー: ${error}`);
+    }
+  }
+
+  /**
+   * 品目物理削除
+   */
+  async delete(id: string): Promise<ItemModel> {
+    try {
+      return await this.prisma.items.delete({
+        where: { id }
+      });
+    } catch (error) {
+      throw new Error(`品目物理削除エラー: ${error}`);
+    }
   }
 
   /**
    * 品目数カウント
    */
   async count(where?: ItemWhereInput): Promise<number> {
-    return await this.prisma.item.count({ where });
+    try {
+      return await this.prisma.items.count({ where });
+    } catch (error) {
+      throw new Error(`品目数取得エラー: ${error}`);
+    }
   }
 
   /**
    * アクティブ品目取得
    */
   async findActiveItems(): Promise<ItemModel[]> {
-    return await this.prisma.item.findMany({
-      where: { isActive: true },
-      orderBy: { displayOrder: 'asc' }
-    });
-  }
-
-  /**
-   * カテゴリ別品目取得
-   */
-  async findByCategory(category: string): Promise<ItemModel[]> {
-    return await this.prisma.item.findMany({
-      where: {
-        category,
-        isActive: true
-      },
-      orderBy: { displayOrder: 'asc' }
-    });
-  }
-
-  /**
-   * 品目カテゴリ一覧取得
-   */
-  async getCategories(): Promise<ItemCategory[]> {
-    const categories = await this.prisma.item.groupBy({
-      by: ['category'],
-      where: {
-        isActive: true,
-        category: { not: null }
-      },
-      _count: { id: true }
-    });
-
-    return categories
-      .filter(cat => cat.category)
-      .map(cat => ({
-        name: cat.category!,
-        itemCount: cat._count.id,
-        isActive: true
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  /**
-   * 品目統計取得
-   */
-  async getStats(): Promise<ItemStats> {
-    const [
-      total,
-      active,
-      categories,
-      hazardous,
-      fragile,
-      specialEquipment,
-      newThisMonth
-    ] = await Promise.all([
-      this.prisma.item.count(),
-      this.prisma.item.count({ where: { isActive: true } }),
-      this.prisma.item.findMany({
-        where: { isActive: true, category: { not: null } },
-        select: { category: true },
-        distinct: ['category']
-      }),
-      this.prisma.item.count({ where: { isHazardous: true, isActive: true } }),
-      this.prisma.item.count({ where: { isFragile: true, isActive: true } }),
-      this.prisma.item.count({ where: { requiresSpecialEquipment: true, isActive: true } }),
-      this.prisma.item.count({
-        where: {
-          createdAt: {
-            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-          }
-        }
-      })
-    ]);
-
-    return {
-      totalItems: total,
-      activeItems: active,
-      categoriesCount: categories.length,
-      hazardousItems: hazardous,
-      fragileItems: fragile,
-      specialEquipmentItems: specialEquipment,
-      newItemsThisMonth: newThisMonth
-    };
-  }
-
-  /**
-   * 品目検索
-   */
-  async search(query: string): Promise<ItemModel[]> {
-    return await this.prisma.item.findMany({
-      where: {
-        AND: [
-          { isActive: true },
-          {
-            OR: [
-              { name: { contains: query, mode: 'insensitive' } },
-              { description: { contains: query, mode: 'insensitive' } },
-              { category: { contains: query, mode: 'insensitive' } },
-              { handlingInstructions: { contains: query, mode: 'insensitive' } }
-            ]
-          }
-        ]
-      },
-      orderBy: { displayOrder: 'asc' }
-    });
+    try {
+      return await this.prisma.items.findMany({
+        where: { is_active: true },
+        orderBy: { name: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`アクティブ品目取得エラー: ${error}`);
+    }
   }
 
   /**
    * 危険物品目取得
    */
   async findHazardousItems(): Promise<ItemModel[]> {
-    return await this.prisma.item.findMany({
-      where: {
-        isHazardous: true,
-        isActive: true
-      },
-      orderBy: { name: 'asc' }
-    });
-  }
-
-  /**
-   * 特殊装備必要品目取得
-   */
-  async findSpecialEquipmentItems(): Promise<ItemModel[]> {
-    return await this.prisma.item.findMany({
-      where: {
-        requiresSpecialEquipment: true,
-        isActive: true
-      },
-      orderBy: { name: 'asc' }
-    });
-  }
-
-  /**
-   * 品目使用統計取得
-   */
-  async getItemUsageStats(itemId: string): Promise<ItemUsageStats> {
-    const item = await this.findUnique({ id: itemId });
-    if (!item) {
-      throw new Error('品目が見つかりません');
+    try {
+      return await this.prisma.items.findMany({
+        where: { 
+          hazardous: true,
+          is_active: true 
+        },
+        orderBy: { name: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`危険物品目取得エラー: ${error}`);
     }
+  }
 
-    const trips = await this.prisma.trip.findMany({
-      where: { itemId },
-      include: {
-        loadingLocation: { select: { name: true } },
-        unloadingLocation: { select: { name: true } }
-      },
-      orderBy: { startTime: 'desc' }
-    });
+  /**
+   * カテゴリ別品目取得
+   */
+  async findByCategory(category: string): Promise<ItemModel[]> {
+    try {
+      return await this.prisma.items.findMany({
+        where: { 
+          category,
+          is_active: true 
+        },
+        orderBy: { name: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`カテゴリ別品目取得エラー: ${error}`);
+    }
+  }
 
-    const totalTrips = trips.length;
-    const lastUsed = trips.length > 0 ? trips[0].startTime : undefined;
+  /**
+   * 品目統計取得
+   */
+  async getStats(): Promise<ItemStats> {
+    try {
+      const [
+        total_items,
+        active_items,
+        hazardous_items,
+        categories_result,
+        weight_result,
+        usage_stats
+      ] = await Promise.all([
+        this.prisma.items.count(),
+        this.prisma.items.count({ where: { is_active: true } }),
+        this.prisma.items.count({ where: { hazardous: true, is_active: true } }),
+        this.prisma.items.groupBy({
+          by: ['category'],
+          where: { is_active: true },
+          _count: { category: true }
+        }),
+        this.prisma.items.aggregate({
+          where: { is_active: true },
+          _sum: { standard_weight_tons: true },
+          _avg: { standard_weight_tons: true }
+        }),
+        this.getMostUsedItems(5)
+      ]);
 
-    // 重量・容量の統計
-    const weights = trips.filter(trip => trip.actualWeight).map(trip => trip.actualWeight!);
-    const volumes = trips.filter(trip => trip.actualVolume).map(trip => trip.actualVolume!);
+      return {
+        total_items,
+        active_items,
+        hazardous_items,
+        categories_count: categories_result.length,
+        most_used_items: usage_stats,
+        total_weight_capacity: weight_result._sum.standard_weight_tons || 0,
+        average_weight_per_item: weight_result._avg.standard_weight_tons || 0
+      };
+    } catch (error) {
+      throw new Error(`品目統計取得エラー: ${error}`);
+    }
+  }
 
-    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-    const totalVolume = volumes.reduce((sum, volume) => sum + volume, 0);
-    const averageWeight = weights.length > 0 ? totalWeight / weights.length : undefined;
+  /**
+   * 使用頻度の高い品目取得
+   */
+  async getMostUsedItems(limit: number = 10): Promise<ItemUsageStats[]> {
+    try {
+      const usage_data = await this.prisma.$queryRaw`
+        SELECT 
+          i.id as item_id,
+          i.name as item_name,
+          i.category,
+          COUNT(od.id) as usage_count,
+          SUM(od.quantity_tons) as total_quantity_tons,
+          AVG(od.quantity_tons) as average_quantity_per_use,
+          MAX(od.created_at) as last_used_date
+        FROM items i
+        LEFT JOIN operation_details od ON i.id = od.item_id
+        WHERE i.is_active = true
+        GROUP BY i.id, i.name, i.category
+        ORDER BY usage_count DESC, total_quantity_tons DESC
+        LIMIT ${limit}
+      ` as any[];
 
-    // 人気ルート分析
-    const routeStats = new Map<string, { from: string; to: string; count: number }>();
-    trips.forEach(trip => {
-      if (trip.loadingLocation && trip.unloadingLocation) {
-        const routeKey = `${trip.loadingLocation.name}->${trip.unloadingLocation.name}`;
-        const existing = routeStats.get(routeKey) || {
-          from: trip.loadingLocation.name,
-          to: trip.unloadingLocation.name,
-          count: 0
-        };
-        existing.count++;
-        routeStats.set(routeKey, existing);
-      }
-    });
-
-    const popularRoutes = Array.from(routeStats.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5)
-      .map(route => ({
-        fromLocation: route.from,
-        toLocation: route.to,
-        count: route.count
+      return usage_data.map(item => ({
+        item_id: item.item_id,
+        item_name: item.item_name,
+        category: item.category,
+        usage_count: Number(item.usage_count),
+        total_quantity_tons: Number(item.total_quantity_tons) || 0,
+        average_quantity_per_use: Number(item.average_quantity_per_use) || 0,
+        last_used_date: item.last_used_date
       }));
+    } catch (error) {
+      throw new Error(`使用頻度品目取得エラー: ${error}`);
+    }
+  }
 
-    // 月別トレンド
-    const monthlyStats = new Map<string, { tripCount: number; weight: number; volume: number }>();
-    trips.forEach(trip => {
-      if (trip.startTime) {
-        const monthKey = trip.startTime.toISOString().substring(0, 7); // YYYY-MM
-        const existing = monthlyStats.get(monthKey) || { tripCount: 0, weight: 0, volume: 0 };
-        existing.tripCount++;
-        if (trip.actualWeight) existing.weight += trip.actualWeight;
-        if (trip.actualVolume) existing.volume += trip.actualVolume;
-        monthlyStats.set(monthKey, existing);
+  /**
+   * カテゴリ一覧取得
+   */
+  async getCategories(): Promise<ItemCategory[]> {
+    try {
+      const categories_data = await this.prisma.$queryRaw`
+        SELECT 
+          i.category,
+          COUNT(i.id) as item_count,
+          SUM(i.standard_weight_tons) as total_weight_capacity,
+          COUNT(CASE WHEN i.hazardous = true THEN 1 END) as hazardous_count
+        FROM items i
+        WHERE i.is_active = true AND i.category IS NOT NULL
+        GROUP BY i.category
+        ORDER BY i.category
+      ` as any[];
+
+      const categories: ItemCategory[] = [];
+
+      for (const cat of categories_data) {
+        const items = await this.findByCategory(cat.category);
+        categories.push({
+          category: cat.category,
+          item_count: Number(cat.item_count),
+          total_weight_capacity: Number(cat.total_weight_capacity) || 0,
+          hazardous_count: Number(cat.hazardous_count),
+          items
+        });
       }
-    });
 
-    const monthlyTrends = Array.from(monthlyStats.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, stats]) => ({
-        month,
-        tripCount: stats.tripCount,
-        weight: stats.weight > 0 ? stats.weight : undefined,
-        volume: stats.volume > 0 ? stats.volume : undefined
-      }));
-
-    return {
-      itemId,
-      itemName: item.name,
-      totalTrips,
-      totalWeight: totalWeight > 0 ? totalWeight : undefined,
-      totalVolume: totalVolume > 0 ? totalVolume : undefined,
-      averageWeight,
-      lastUsed,
-      popularRoutes,
-      monthlyTrends
-    };
+      return categories;
+    } catch (error) {
+      throw new Error(`カテゴリ一覧取得エラー: ${error}`);
+    }
   }
 
   /**
-   * 品目の人気度ランキング取得
+   * 品目検索
    */
-  async getPopularItems(limit: number = 10): Promise<Array<{ item: ItemModel; tripCount: number }>> {
-    const itemStats = await this.prisma.trip.groupBy({
-      by: ['itemId'],
-      _count: { id: true },
-      orderBy: { _count: { id: 'desc' } },
-      take: limit
-    });
-
-    const popularItems = await Promise.all(
-      itemStats.map(async (stat) => {
-        const item = await this.findUnique({ id: stat.itemId });
-        return {
-          item: item!,
-          tripCount: stat._count.id
-        };
-      })
-    );
-
-    return popularItems.filter(item => item.item);
+  async search(query: string, limit: number = 10): Promise<ItemModel[]> {
+    try {
+      return await this.prisma.items.findMany({
+        where: {
+          OR: [
+            { name: { contains: query, mode: 'insensitive' } },
+            { category: { contains: query, mode: 'insensitive' } },
+            { description: { contains: query, mode: 'insensitive' } }
+          ],
+          is_active: true
+        },
+        take: limit,
+        orderBy: { name: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`品目検索エラー: ${error}`);
+    }
   }
 
   /**
-   * 品目の季節性分析
+   * 単位別品目取得
    */
-  async analyzeSeasonality(itemId: string): Promise<ItemSeasonality> {
-    const trips = await this.prisma.trip.findMany({
-      where: { itemId },
-      select: { startTime: true }
-    });
-
-    const monthlyCount = new Array(12).fill(0);
-    trips.forEach(trip => {
-      if (trip.startTime) {
-        const month = trip.startTime.getMonth();
-        monthlyCount[month]++;
-      }
-    });
-
-    const totalTrips = trips.length;
-    const averageMonthly = totalTrips / 12;
-
-    // ピーク月と低調月を特定
-    const monthlyData = monthlyCount.map((count, index) => ({ month: index, count }));
-    const sortedByCount = [...monthlyData].sort((a, b) => b.count - a.count);
-
-    const peakMonths = sortedByCount
-      .filter(data => data.count > averageMonthly * 1.2)
-      .map(data => data.month + 1); // 1-based month
-
-    const lowMonths = sortedByCount
-      .filter(data => data.count < averageMonthly * 0.8)
-      .map(data => data.month + 1); // 1-based month
-
-    // 季節性指数計算（標準偏差に基づく）
-    const variance = monthlyCount.reduce((sum, count) => sum + Math.pow(count - averageMonthly, 2), 0) / 12;
-    const standardDeviation = Math.sqrt(variance);
-    const seasonalityIndex = Math.min(standardDeviation / (averageMonthly || 1), 1);
-
-    return {
-      itemId,
-      peakMonths,
-      lowMonths,
-      seasonalityIndex
-    };
+  async findByUnit(unit: string): Promise<ItemModel[]> {
+    try {
+      return await this.prisma.items.findMany({
+        where: { 
+          unit,
+          is_active: true 
+        },
+        orderBy: { name: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`単位別品目取得エラー: ${error}`);
+    }
   }
 
   /**
-   * 品目表示順更新
+   * 重量範囲別品目取得
    */
-  async updateDisplayOrder(items: Array<{ id: string; displayOrder: number }>): Promise<void> {
-    const updatePromises = items.map(item =>
-      this.prisma.item.update({
-        where: { id: item.id },
-        data: { displayOrder: item.displayOrder }
-      })
-    );
-
-    await Promise.all(updatePromises);
-  }
-
-  /**
-   * 重複品目検出
-   */
-  async findDuplicates(): Promise<ItemModel[][]> {
-    const items = await this.prisma.item.findMany({
-      where: { isActive: true }
-    });
-
-    const duplicateGroups: ItemModel[][] = [];
-    const processed = new Set<string>();
-
-    for (const item of items) {
-      if (processed.has(item.id)) continue;
-
-      const duplicates = [item];
-      processed.add(item.id);
-
-      for (const other of items) {
-        if (processed.has(other.id) || item.id === other.id) continue;
-
-        // 名前の類似度チェック（簡易版）
-        if (this.calculateSimilarity(item.name, other.name) > 0.8) {
-          duplicates.push(other);
-          processed.add(other.id);
+  async findByWeightRange(min_weight?: number, max_weight?: number): Promise<ItemModel[]> {
+    try {
+      const whereClause: any = { is_active: true };
+      
+      if (min_weight !== undefined || max_weight !== undefined) {
+        whereClause.standard_weight_tons = {};
+        if (min_weight !== undefined) {
+          whereClause.standard_weight_tons.gte = min_weight;
+        }
+        if (max_weight !== undefined) {
+          whereClause.standard_weight_tons.lte = max_weight;
         }
       }
 
-      if (duplicates.length > 1) {
-        duplicateGroups.push(duplicates);
-      }
+      return await this.prisma.items.findMany({
+        where: whereClause,
+        orderBy: { standard_weight_tons: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`重量範囲別品目取得エラー: ${error}`);
     }
-
-    return duplicateGroups;
   }
 
   /**
-   * 文字列類似度計算（Levenshtein距離ベース）
+   * フロントエンド用データ変換
    */
-  private calculateSimilarity(str1: string, str2: string): number {
-    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+  toResponseDTO(item: ItemModel): ItemResponseDTO {
+    return {
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      unit: item.unit,
+      standard_weight_tons: item.standard_weight_tons,
+      hazardous: item.hazardous,
+      description: item.description,
+      is_active: item.is_active,
+      created_at: item.created_at,
+      updated_at: item.updated_at
+    };
+  }
 
-    for (let i = 0; i <= str1.length; i++) {
-      matrix[0][i] = i;
+  /**
+   * バルク品目作成（CSV等からの一括登録）
+   */
+  async createMany(items: ItemCreateInput[]): Promise<{ count: number }> {
+    try {
+      const itemsWithDefaults = items.map(item => ({
+        ...item,
+        unit: item.unit || 'トン',
+        hazardous: item.hazardous ?? false,
+        is_active: item.is_active ?? true,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      return await this.prisma.items.createMany({
+        data: itemsWithDefaults,
+        skipDuplicates: true
+      });
+    } catch (error) {
+      throw new Error(`バルク品目作成エラー: ${error}`);
     }
+  }
 
-    for (let j = 0; j <= str2.length; j++) {
-      matrix[j][0] = j;
+  /**
+   * 品目存在確認
+   */
+  async exists(where: { 
+    id?: string; 
+    name?: string 
+  }): Promise<boolean> {
+    try {
+      const item = await this.prisma.items.findUnique({ where });
+      return item !== null;
+    } catch (error) {
+      throw new Error(`品目存在確認エラー: ${error}`);
     }
+  }
 
-    for (let j = 1; j <= str2.length; j++) {
-      for (let i = 1; i <= str1.length; i++) {
-        const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1, // deletion
-          matrix[j - 1][i] + 1, // insertion
-          matrix[j - 1][i - 1] + indicator // substitution
-        );
-      }
+  /**
+   * 未使用品目取得
+   */
+  async findUnusedItems(): Promise<ItemModel[]> {
+    try {
+      return await this.prisma.items.findMany({
+        where: {
+          is_active: true,
+          operation_details: {
+            none: {}
+          }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+    } catch (error) {
+      throw new Error(`未使用品目取得エラー: ${error}`);
     }
+  }
 
-    const distance = matrix[str2.length][str1.length];
-    const maxLength = Math.max(str1.length, str2.length);
-    return maxLength === 0 ? 1 : 1 - distance / maxLength;
+  /**
+   * 品目使用履歴取得
+   */
+  async getUsageHistory(item_id: string, limit: number = 20): Promise<any[]> {
+    try {
+      return await this.prisma.operation_details.findMany({
+        where: { item_id },
+        include: {
+          operations: {
+            include: {
+              vehicles: true,
+              users_operations_driver_idTousers: true
+            }
+          },
+          locations: true
+        },
+        orderBy: { created_at: 'desc' },
+        take: limit
+      });
+    } catch (error) {
+      throw new Error(`品目使用履歴取得エラー: ${error}`);
+    }
   }
 }
+
+// =====================================
+// デフォルトエクスポート
+// =====================================
+
+export const itemModel = new Item();
+export default itemModel;

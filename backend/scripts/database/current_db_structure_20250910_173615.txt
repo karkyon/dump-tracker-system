@@ -1,0 +1,16 @@
+|table_schema|table_name|column_count|columns|table_comment|
+|------------|----------|------------|-------|-------------|
+|public|audit_logs|10|id, table_name, operation_type, record_id, user_id, ip_address, user_agent, old_values, new_values, created_at||
+|public|gps_logs|11|id, vehicle_id, operation_id, latitude, longitude, altitude, speed_kmh, heading, accuracy_meters, recorded_at, created_at||
+|public|inspection_item_results|13|id, inspection_record_id, inspection_item_id, result_value, is_passed, notes, defect_level, photo_urls, attachment_urls, checked_at, checked_by, created_at, updated_at||
+|public|inspection_items|15|id, name, description, inspection_type, input_type, category, display_order, is_required, is_active, default_value, validation_rules, help_text, created_at, updated_at, created_by||
+|public|inspection_records|19|id, operation_id, vehicle_id, inspector_id, inspection_type, status, scheduled_at, started_at, completed_at, overall_result, overall_notes, defects_found, latitude, longitude, location_name, weather_condition, temperature, created_at, updated_at||
+|public|items|22|id, name, category, unit, standard_weight, hazardous, description, is_active, created_at, updated_at, standard_volume, hazardous_class, handling_instructions, storage_requirements, temperature_range, is_fragile, is_hazardous, requires_special_equipment, display_order, photo_urls, specification_file_url, msds_file_url||
+|public|locations|15|id, name, address, latitude, longitude, location_type, client_name, contact_person, contact_phone, contact_email, operating_hours, special_instructions, is_active, created_at, updated_at||
+|public|maintenance_records|15|id, vehicle_id, maintenance_type, scheduled_date, completed_date, mileage_at_maintenance, cost, vendor_name, description, next_maintenance_date, next_maintenance_mileage, is_completed, created_by, created_at, updated_at||
+|public|notifications|5|id, user_id, title, message, is_read||
+|public|operation_details|13|id, operation_id, sequence_number, activity_type, location_id, item_id, planned_time, actual_start_time, actual_end_time, quantity_tons, notes, created_at, updated_at||
+|public|operations|18|id, operation_number, vehicle_id, driver_id, status, planned_start_time, actual_start_time, planned_end_time, actual_end_time, total_distance_km, fuel_consumed_liters, notes, created_by, created_at, updated_at, fuel_cost_yen, weather_condition, road_condition||
+|public|system_settings|3|key, value, description||
+|public|users|13|id, username, email, password_hash, name, role, employee_id, phone, is_active, last_login_at, password_changed_at, created_at, updated_at||
+|public|vehicles|15|id, plate_number, model, manufacturer, year, fuel_type, capacity_tons, current_mileage, status, purchase_date, insurance_expiry, inspection_expiry, notes, created_at, updated_at||

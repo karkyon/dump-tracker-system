@@ -268,7 +268,7 @@ export class InspectionService {
       endDate
     } = filter;
 
-    const where: Prisma.InspectionRecordWhereInput = {};
+    const where: Prisma.inspection_recordsWhereInput = {};
 
     // フィルター条件
     if (operationId) {
@@ -299,14 +299,14 @@ export class InspectionService {
     }
 
     // 総件数取得
-    const totalItems = await prisma.inspectionRecord.count({ where });
+    const totalItems = await prisma.inspection_records.count({ where });
 
     // ページネーション計算
     const skip = (page - 1) * limit;
     const totalPages = Math.ceil(totalItems / limit);
 
     // データ取得
-    const records = await prisma.inspectionRecord.findMany({
+    const records = await prisma.inspection_records.findMany({
       where,
       skip,
       take: limit,
@@ -360,7 +360,7 @@ export class InspectionService {
     requesterId: string,
     requesterRole: UserRole
   ): Promise<InspectionRecord> {
-    const record = await prisma.inspectionRecord.findUnique({
+    const record = await prisma.inspection_records.findUnique({
       where: { id },
       include: {
         inspectionItem: true,
@@ -420,7 +420,7 @@ export class InspectionService {
 
     // 運行記録の存在確認
     if (data.operationId) {
-      const operation = await prisma.operation.findUnique({
+      const operation = await prisma.operations.findUnique({
         where: { id: data.operationId }
       });
 
@@ -431,7 +431,7 @@ export class InspectionService {
 
     // 重複チェック（同一運行・同一点検項目）
     if (data.operationId) {
-      const existingRecord = await prisma.inspectionRecord.findFirst({
+      const existingRecord = await prisma.inspection_records.findFirst({
         where: {
           operationId: data.operationId,
           inspectionItemId: data.inspectionItemId,
@@ -447,7 +447,7 @@ export class InspectionService {
       }
     }
 
-    const record = await prisma.inspectionRecord.create({
+    const record = await prisma.inspection_records.create({
       data: {
         inspectionItemId: data.inspectionItemId,
         operationId: data.operationId,
@@ -492,7 +492,7 @@ export class InspectionService {
     requesterId: string,
     requesterRole: UserRole
   ): Promise<InspectionRecord> {
-    const existingRecord = await prisma.inspectionRecord.findUnique({
+    const existingRecord = await prisma.inspection_records.findUnique({
       where: { id },
       include: { operation: true }
     });
@@ -506,7 +506,7 @@ export class InspectionService {
       throw new AppError('この点検記録を更新する権限がありません', 403);
     }
 
-    const record = await prisma.inspectionRecord.update({
+    const record = await prisma.inspection_records.update({
       where: { id },
       data,
       include: {
@@ -539,7 +539,7 @@ export class InspectionService {
    * 点検記録削除
    */
   async deleteInspectionRecord(id: string): Promise<void> {
-    const record = await prisma.inspectionRecord.findUnique({
+    const record = await prisma.inspection_records.findUnique({
       where: { id }
     });
 
@@ -547,7 +547,7 @@ export class InspectionService {
       throw new AppError('点検記録が見つかりません', 404);
     }
 
-    await prisma.inspectionRecord.delete({
+    await prisma.inspection_records.delete({
       where: { id }
     });
   }
@@ -561,7 +561,7 @@ export class InspectionService {
     requesterRole: UserRole
   ): Promise<InspectionRecord[]> {
     // 運行記録の存在確認
-    const operation = await prisma.operation.findUnique({
+    const operation = await prisma.operations.findUnique({
       where: { id: operationId }
     });
 
@@ -574,7 +574,7 @@ export class InspectionService {
       throw new AppError('この運行記録の点検記録にアクセスする権限がありません', 403);
     }
 
-    const records = await prisma.inspectionRecord.findMany({
+    const records = await prisma.inspection_records.findMany({
       where: { operationId },
       include: {
         inspectionItem: true,
@@ -609,7 +609,7 @@ export class InspectionService {
   }) {
     const { startDate, endDate, driverId, vehicleId, inspectionType, requesterId, requesterRole } = params;
 
-    const where: Prisma.InspectionRecordWhereInput = {};
+    const where: Prisma.inspection_recordsWhereInput = {};
 
     if (startDate || endDate) {
       where.inspectionDate = {};
@@ -640,14 +640,14 @@ export class InspectionService {
       ngRecords,
       recordsByType
     ] = await Promise.all([
-      prisma.inspectionRecord.count({ where }),
-      prisma.inspectionRecord.count({ 
+      prisma.inspection_records.count({ where }),
+      prisma.inspection_records.count({ 
         where: { ...where, result: 'OK' }
       }),
-      prisma.inspectionRecord.count({ 
+      prisma.inspection_records.count({ 
         where: { ...where, result: 'NG' }
       }),
-      prisma.inspectionRecord.groupBy({
+      prisma.inspection_records.groupBy({
         by: ['inspectionItem'],
         where,
         _count: {

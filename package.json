@@ -31,7 +31,8 @@
     "backend"
   ],
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "prisma": "^6.16.0"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -58,5 +59,8 @@
   "bugs": {
     "url": "https://github.com/YOUR_USERNAME/dump-tracker-system/issues"
   },
-  "homepage": "https://github.com/YOUR_USERNAME/dump-tracker-system#readme"
+  "homepage": "https://github.com/YOUR_USERNAME/dump-tracker-system#readme",
+  "dependencies": {
+    "@prisma/client": "^6.16.0"
+  }
 }

@@ -67,11 +67,11 @@ export const startTrip = asyncHandler(async (req: AuthenticatedRequest, res: Res
   const tripData: CreateTripRequest = req.body;
   
   // 運転手は自分の運行記録のみ作成可能
-  if (req.user.role === 'DRIVER' && req.user.id !== tripData.driverId) {
+  if (req.user?.role === 'DRIVER' && req.user?.id !== tripData.driverId) {
     throw new AppError('他の運転手の運行記録は作成できません', 403);
   }
   
-  const trip = await tripService.startTrip(tripData, req.user.id);
+  const trip = await tripService.startTrip(tripData, req.user?.id);
   
   res.status(201).json({
     success: true,
@@ -93,7 +93,7 @@ export const updateTrip = asyncHandler(async (req: AuthenticatedRequest, res: Re
   }
   
   // 権限チェック：運転手は自分の運行記録のみ更新可能
-  if (req.user.role === 'DRIVER' && trip.driverId !== req.user.id) {
+  if (req.user?.role === 'DRIVER' && trip.driverId !== req.user?.id) {
     throw new AppError('他の運転手の運行記録は更新できません', 403);
   }
   
@@ -119,7 +119,7 @@ export const endTrip = asyncHandler(async (req: AuthenticatedRequest, res: Respo
   }
   
   // 権限チェック
-  if (req.user.role === 'DRIVER' && trip.driverId !== req.user.id) {
+  if (req.user?.role === 'DRIVER' && trip.driverId !== req.user?.id) {
     throw new AppError('他の運転手の運行記録は終了できません', 403);
   }
   
@@ -149,7 +149,7 @@ export const updateGPSLocation = asyncHandler(async (req: AuthenticatedRequest, 
   }
   
   // 権限チェック
-  if (req.user.role === 'DRIVER' && trip.driverId !== req.user.id) {
+  if (req.user?.role === 'DRIVER' && trip.driverId !== req.user?.id) {
     throw new AppError('他の運転手の位置情報は更新できません', 403);
   }
   
@@ -179,7 +179,7 @@ export const addFuelRecord = asyncHandler(async (req: AuthenticatedRequest, res:
   }
   
   // 権限チェック
-  if (req.user.role === 'DRIVER' && trip.driverId !== req.user.id) {
+  if (req.user?.role === 'DRIVER' && trip.driverId !== req.user?.id) {
     throw new AppError('他の運転手の給油記録は追加できません', 403);
   }
   
@@ -212,7 +212,7 @@ export const addLoadingRecord = asyncHandler(async (req: AuthenticatedRequest, r
   }
   
   // 権限チェック
-  if (req.user.role === 'DRIVER' && trip.driverId !== req.user.id) {
+  if (req.user?.role === 'DRIVER' && trip.driverId !== req.user?.id) {
     throw new AppError('他の運転手の積込記録は追加できません', 403);
   }
   
@@ -245,7 +245,7 @@ export const addUnloadingRecord = asyncHandler(async (req: AuthenticatedRequest,
   }
   
   // 権限チェック
-  if (req.user.role === 'DRIVER' && trip.driverId !== req.user.id) {
+  if (req.user?.role === 'DRIVER' && trip.driverId !== req.user?.id) {
     throw new AppError('他の運転手の積下記録は追加できません', 403);
   }
   
@@ -288,7 +288,7 @@ export const getTripStatistics = asyncHandler(async (req: Request, res: Response
  * 運転手の現在の運行記録取得
  */
 export const getCurrentTrip = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const driverId = req.user.role === 'DRIVER' ? req.user.id : req.query.driverId as string;
+  const driverId = req.user?.role === 'DRIVER' ? req.user?.id : req.query.driverId as string;
   
   if (!driverId) {
     throw new AppError('運転手IDが指定されていません', 400);
@@ -309,7 +309,7 @@ export const deleteTrip = asyncHandler(async (req: AuthenticatedRequest, res: Re
   const { id } = req.params;
   
   // 管理者のみ削除可能
-  if (req.user.role !== 'ADMIN') {
+  if (req.user?.role !== 'ADMIN') {
     throw new AppError('運行記録削除の権限がありません', 403);
   }
   

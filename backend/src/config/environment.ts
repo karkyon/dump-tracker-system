@@ -1,5 +1,5 @@
 // backend/src/config/environment.ts
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 

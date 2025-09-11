@@ -225,7 +225,7 @@ export const auditLogger = (action: string, resource: string) => {
             oldValues = await prisma.vehicle.findUnique({ where: { id: resourceId } });
             break;
           case 'operation':
-            oldValues = await prisma.operation.findUnique({ where: { id: resourceId } });
+            oldValues = await prisma.operations.findUnique({ where: { id: resourceId } });
             break;
           // 他のリソースも必要に応じて追加
         }
@@ -239,7 +239,7 @@ export const auditLogger = (action: string, resource: string) => {
       try {
         // 成功時のみ監査ログを記録
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          await prisma.auditLog.create({
+          await prisma.audit_logs.create({
             data: {
               userId: req.user?.id,
               action,
@@ -422,7 +422,7 @@ export const getLogStats = async (): Promise<{
   try {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     
-    const auditLogCount = await prisma.auditLog.count();
+    const auditLogCount = await prisma.audit_logs.count();
     
     return {
       totalErrors: 0, // ファイルベースのログから計算が必要

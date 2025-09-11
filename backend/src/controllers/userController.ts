@@ -1,78 +1,92 @@
-// backend/src/controllers/userController.ts
 import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
-import { getPool } from '../config/database';
+import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger';
+
+const prisma = new PrismaClient();
 
 interface AuthRequest extends Request {
   user?: {
     id: string;
     username: string;
     role: string;
-    email: string;
   };
 }
 
 // ユーザー一覧取得
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { page = 1, limit = 10, role, search } = req.query;
-    const offset = (Number(page) - 1) * Number(limit);
-    
-    let whereClause = 'WHERE is_active = true';
-    const params: any[] = [];
-    let paramCount = 0;
+    const { 
+      page = 1, 
+      limit = 10, 
+      role, 
+      isActive, 
+      search 
+    } = req.query;
 
-    // 役割フィルタ
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+
+    // 検索条件構築
+    const where: any = {};
+    
     if (role) {
-      whereClause += ` AND role = ${++paramCount}`;
-      params.push(role);
+      where.role = role;
     }
-
-    // 検索フィルタ
-    if (search) {
-      whereClause += ` AND (username ILIKE ${++paramCount} OR name ILIKE ${++paramCount} OR email ILIKE ${++paramCount})`;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-      paramCount += 2;
-    }
-
-    const pool = getPool();
     
+    if (isActive !== undefined) {
+      where.is_active = isActive === 'true';
+    }
+    
+    if (search) {
+      where.OR = [
+        { username: { contains: search as string, mode: 'insensitive' } },
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { name: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
     // 総件数取得
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM users ${whereClause}`,
-      params
-    );
-    const totalCount = parseInt(countResult.rows[0].count);
+    const totalUsers = await prisma.user.count({ where });
 
-    // ユーザーデータ取得（パスワードハッシュは除外）
-    const usersResult = await pool.query(
-      `SELECT 
-        id, username, email, name, role, phone, employee_id,
-        is_active, last_login_at, created_at, updated_at
-       FROM users
-       ${whereClause}
-       ORDER BY created_at DESC
-       LIMIT ${++paramCount} OFFSET ${++paramCount}`,
-      [...params, Number(limit), offset]
-    );
-
-    const totalPages = Math.ceil(totalCount / Number(limit));
+    // ユーザー一覧取得
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        name: true,
+        role: true,
+        employee_id: true,
+        phone: true,
+        is_active: true,
+        created_at: true,
+        last_login_at: true
+      },
+      skip: offset,
+      take: limitNum,
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
 
     res.json({
       success: true,
       data: {
-        users: usersResult.rows,
+        users,
         pagination: {
-          currentPage: Number(page),
-          totalPages,
-          totalCount,
-          limit: Number(limit)
+          page: pageNum,
+          limit: limitNum,
+          total: totalUsers,
+          totalPages: Math.ceil(totalUsers / limitNum)
         }
       }
     });
-  } catch (error) {
-    logger.error('Get users error:', error);
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Get all users error:', errorMessage);
     res.status(500).json({
       success: false,
       message: 'ユーザー一覧の取得でエラーが発生しました',
@@ -85,18 +99,25 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
 export const getUserById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const pool = getPool();
 
-    const result = await pool.query(
-      `SELECT 
-        id, username, email, name, role, phone, employee_id,
-        is_active, last_login_at, created_at, updated_at
-       FROM users 
-       WHERE id = $1 AND is_active = true`,
-      [id]
-    );
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        name: true,
+        role: true,
+        employee_id: true,
+        phone: true,
+        is_active: true,
+        created_at: true,
+        updated_at: true,
+        last_login_at: true
+      }
+    });
 
-    if (result.rows.length === 0) {
+    if (!user) {
       res.status(404).json({
         success: false,
         message: 'ユーザーが見つかりません',
@@ -105,39 +126,240 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // ドライバーの場合は運行統計も取得
-    let statistics = null;
-    if (result.rows[0].role === 'DRIVER') {
-      const statsResult = await pool.query(
-        `SELECT 
-          COUNT(*) as total_operations,
-          COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed_operations,
-          SUM(CASE WHEN status = 'COMPLETED' THEN (end_mileage - start_mileage) END) as total_distance,
-          MAX(operation_date) as last_operation_date
-         FROM operations 
-         WHERE driver_id = $1`,
-        [id]
-      );
-      statistics = statsResult.rows[0];
-    }
-
-    const user = result.rows[0];
-    if (statistics) {
-      user.statistics = statistics;
-    }
-
     res.json({
       success: true,
       data: { user }
     });
-  } catch (error) {
-    logger.error('Get user by ID error:', error);
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Get user by ID error:', errorMessage);
     res.status(500).json({
       success: false,
-      message: 'ユーザー詳細の取得でエラーが発生しました',
+      message: 'ユーザー情報の取得でエラーが発生しました',
       error: 'USER_FETCH_ERROR'
     });
   }
 };
 
-export default { getAllUsers, getUserById };
+// ユーザー作成
+export const createUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { 
+      username, 
+      email, 
+      password, 
+      name, 
+      role = 'DRIVER', 
+      employee_id, 
+      phone 
+    } = req.body;
+
+    // 必須フィールドチェック
+    if (!username || !email || !password || !name) {
+      res.status(400).json({
+        success: false,
+        message: '必須フィールドが不足しています',
+        error: 'MISSING_REQUIRED_FIELDS'
+      });
+      return;
+    }
+
+    // ユーザー重複チェック
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username },
+          { email }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      res.status(409).json({
+        success: false,
+        message: 'ユーザー名またはメールアドレスが既に使用されています',
+        error: 'DUPLICATE_USER'
+      });
+      return;
+    }
+
+    // パスワードハッシュ化
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // ユーザー作成
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password_hash: hashedPassword,
+        name,
+        role,
+        employee_id,
+        phone,
+        is_active: true
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        name: true,
+        role: true,
+        employee_id: true,
+        phone: true,
+        is_active: true,
+        created_at: true
+      }
+    });
+
+    logger.info(`User created: ${newUser.username}`, { userId: newUser.id });
+
+    res.status(201).json({
+      success: true,
+      message: 'ユーザーを作成しました',
+      data: { user: newUser }
+    });
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Create user error:', errorMessage);
+    res.status(500).json({
+      success: false,
+      message: 'ユーザーの作成でエラーが発生しました',
+      error: 'USER_CREATION_ERROR'
+    });
+  }
+};
+
+// ユーザー更新
+export const updateUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // 存在確認
+    const existingUser = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!existingUser) {
+      res.status(404).json({
+        success: false,
+        message: 'ユーザーが見つかりません',
+        error: 'USER_NOT_FOUND'
+      });
+      return;
+    }
+
+    // 権限チェック（自分自身または管理者のみ）
+    if (req.user?.id !== id && req.user?.role !== 'ADMIN') {
+      res.status(403).json({
+        success: false,
+        message: 'このユーザーを更新する権限がありません',
+        error: 'INSUFFICIENT_PERMISSIONS'
+      });
+      return;
+    }
+
+    // パスワード更新時のハッシュ化
+    if (updateData.password) {
+      const bcrypt = require('bcryptjs');
+      updateData.password_hash = await bcrypt.hash(updateData.password, 10);
+      delete updateData.password;
+    }
+
+    // 更新実行
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        ...updateData,
+        updated_at: new Date()
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        name: true,
+        role: true,
+        employee_id: true,
+        phone: true,
+        is_active: true,
+        updated_at: true
+      }
+    });
+
+    logger.info(`User updated: ${updatedUser.username}`, { userId: updatedUser.id });
+
+    res.json({
+      success: true,
+      message: 'ユーザー情報を更新しました',
+      data: { user: updatedUser }
+    });
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Update user error:', errorMessage);
+    res.status(500).json({
+      success: false,
+      message: 'ユーザーの更新でエラーが発生しました',
+      error: 'USER_UPDATE_ERROR'
+    });
+  }
+};
+
+// ユーザー削除（論理削除）
+export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // 存在確認
+    const existingUser = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!existingUser) {
+      res.status(404).json({
+        success: false,
+        message: 'ユーザーが見つかりません',
+        error: 'USER_NOT_FOUND'
+      });
+      return;
+    }
+
+    // 自分自身の削除を防ぐ
+    if (req.user?.id === id) {
+      res.status(400).json({
+        success: false,
+        message: '自分自身を削除することはできません',
+        error: 'CANNOT_DELETE_SELF'
+      });
+      return;
+    }
+
+    // 論理削除（is_activeをfalseに設定）
+    await prisma.user.update({
+      where: { id },
+      data: {
+        is_active: false,
+        updated_at: new Date()
+      }
+    });
+
+    logger.info(`User deleted: ${existingUser.username}`, { userId: id });
+
+    res.json({
+      success: true,
+      message: 'ユーザーを削除しました'
+    });
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Delete user error:', errorMessage);
+    res.status(500).json({
+      success: false,
+      message: 'ユーザーの削除でエラーが発生しました',
+      error: 'USER_DELETION_ERROR'
+    });
+  }
+};

@@ -21,7 +21,259 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+# log_success "Claude共有用ファイル作成完了"
+
+# ============================================================================
+# 9. 結果表示・コピー可能な情報出力
+# ============================================================================
+
+log_step "📋 生成結果表示"
+
+echo ""
+echo -e "${GREEN}============================================================${NC}"
+echo -e "${GREEN}🎉 GitHub環境構造・ファイル一覧生成完了！${NC}"
+echo -e "${GREEN}============================================================${NC}"
+echo ""
+echo -e "${CYAN}📁 出力先ディレクトリ:${NC} $OUTPUT_DIR"
+echo ""
+echo -e "${YELLOW}🗂️  生成されたファイル一覧:${NC}"
+echo ""
+
+# 生成されたファイルを表示
+ls -la "$OUTPUT_DIR" | grep "$TIMESTAMP" | while read -r line; do
+    filename=$(echo "$line" | awk '{print $9}')
+    filesize=$(echo "$line" | awk '{print $5}')
+    echo -e "  📄 ${BLUE}$filename${NC} (${filesize} bytes)"
+done
+
+echo ""
+echo -e "${PURPLE}🚀 次のアクションとして実行できます:${NC}"
+echo ""
+echo -e "${CYAN}1. 統合レポートを確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/integrated_report_$TIMESTAMP.md\""
+echo ""
+echo -e "${CYAN}2. Claude共有用ファイルをコピー:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/claude_share_$TIMESTAMP.md\""
+echo ""
+echo -e "${CYAN}3. 完全ディレクトリ構造を確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt\""
+echo ""
+echo -e "${CYAN}4. 技術スタック分析を確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md\""
+echo ""
+
+# ============================================================================
+# 10. クイックサマリー・コピペ用出力
+# ============================================================================
+
+log_step "⚡ クイックサマリー出力（コピペ用）"
+
+echo ""
+echo -e "${YELLOW}以下の内容をClaude会話にコピペして共有できます:${NC}"
+echo ""
+echo "============================================================"
+cat << SUMMARY_EOF
+
+🚛 DUMP-TRACKER-SYSTEM - プロジェクト構造サマリー
+
+**最終スキャン:** $(date)
+**Gitブランチ:** $(git branch --show-current 2>/dev/null || echo "不明")
+
+## 📊 基本統計
+- 総ディレクトリ数: $(find . -type d -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- 総ファイル数: $(find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+- TypeScriptファイル数: $(find . -name "*.ts" -not -path "*/node_modules/*" | wc -l)
+- Reactコンポーネント数: $(find . -name "*.tsx" -not -path "*/node_modules/*" | wc -l)
+
+## 🗂️ 重要ディレクトリ存在確認
+SUMMARY_EOF
+
+# 重要ディレクトリの存在確認を出力
+important_summary_dirs=("frontend/src" "backend/src" "backend/src/controllers" "backend/src/routes" "backend/prisma" "database" "docs")
+
+for check_dir in "${important_summary_dirs[@]}"; do
+    if [ -d "$check_dir" ]; then
+        file_count=$(find "$check_dir" -maxdepth 1 -type f | wc -l)
+        echo "✅ $check_dir/ ($file_count files)"
+    else
+        echo "❌ $check_dir/ (存在しない)"
+    fi
+done
+
+echo ""
+echo "## 🔧 主要ファイル確認"
+
+# Controllers
+if [ -d "backend/src/controllers" ]; then
+    echo "### Controllers:"
+    find backend/src/controllers -name "*.ts" | sort | head -5 | while read -r file; do
+        echo "- $(basename "$file")"
+    done
+    controller_count=$(find backend/src/controllers -name "*.ts" | wc -l)
+    if [ "$controller_count" -gt 5 ]; then
+        echo "- ... 他 $((controller_count - 5)) ファイル"
+    fi
+fi
+
+# Routes
+if [ -d "backend/src/routes" ]; then
+    echo "### Routes:"
+    find backend/src/routes -name "*.ts" | sort | head -5 | while read -r file; do
+        echo "- $(basename "$file")"
+    done
+    routes_count=$(find backend/src/routes -name "*.ts" | wc -l)
+    if [ "$routes_count" -gt 5 ]; then
+        echo "- ... 他 $((routes_count - 5)) ファイル"
+    fi
+fi
+
+# Components
+if [ -d "frontend/src/components" ]; then
+    echo "### React Components:"
+    find frontend/src/components -name "*.tsx" | sort | head -5 | while read -r file; do
+        echo "- $(basename "$file")"
+    done
+    components_count=$(find frontend/src/components -name "*.tsx" | wc -l)
+    if [ "$components_count" -gt 5 ]; then
+        echo "- ... 他 $((components_count - 5)) ファイル"
+    fi
+fi
+
+echo ""
+echo "============================================================"
+echo ""
+
+# ============================================================================
+# 11. 最新ファイルのシンボリックリンク作成
+# ============================================================================
+
+log_step "🔗 最新ファイルへのシンボリックリンク作成"
+
+cd "$OUTPUT_DIR"
+
+# 既存のシンボリックリンクを削除
+rm -f latest_*.md latest_*.txt
+
+# 新しいシンボリックリンクを作成
+ln -sf "project_info_$TIMESTAMP.md" "latest_project_info.md"
+ln -sf "directory_tree_$TIMESTAMP.txt" "latest_directory_tree.txt"
+ln -sf "detailed_files_$TIMESTAMP.md" "latest_detailed_files.md"
+ln -sf "tech_stack_files_$TIMESTAMP.md" "latest_tech_stack_files.md"
+ln -sf "package_analysis_$TIMESTAMP.md" "latest_package_analysis.md"
+ln -sf "git_info_$TIMESTAMP.md" "latest_git_info.md"
+ln -sf "integrated_report_$TIMESTAMP.md" "latest_integrated_report.md"
+ln -sf "claude_share_$TIMESTAMP.md" "latest_claude_share.md"
+
+log_success "シンボリックリンク作成完了"
+
+# ============================================================================
+# 12. 自動クリーンアップ（古いファイル削除）
+# ============================================================================
+
+log_step "🧹 古いファイルの自動クリーンアップ"
+
+# 7日より古いファイルを削除（オプション）
+if [ "${AUTO_CLEANUP:-true}" = "true" ]; then
+    find "$OUTPUT_DIR" -name "*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*" -type f -mtime +7 -delete
+    log_info "7日より古いファイルを削除しました"
+else
+    log_info "自動クリーンアップはスキップされました"
+fi
+
+# ============================================================================
+# 13. 最終確認とエラーハンドリング
+# ============================================================================
+
+log_step "✅ 最終確認"
+
+echo ""
+echo -e "${GREEN}🎯 スクリプト実行完了サマリー:${NC}"
+echo ""
+
+# 生成されたファイル数を確認
+generated_files=$(ls "$OUTPUT_DIR" | grep "$TIMESTAMP" | wc -l)
+echo -e "📄 生成ファイル数: ${BLUE}$generated_files${NC} ファイル"
+
+# ディスク使用量
+output_size=$(du -sh "$OUTPUT_DIR" | cut -f1)
+echo -e "💾 出力サイズ: ${BLUE}$output_size${NC}"
+
+# プロジェクトの健康度チェック
+health_score=100
+
+if [ ! -f "package.json" ]; then
+    health_score=$((health_score - 20))
+    echo -e "⚠️  ${YELLOW}package.json が見つかりません${NC}"
+fi
+
+if [ ! -d "node_modules" ]; then
+    health_score=$((health_score - 10))
+    echo -e "⚠️  ${YELLOW}node_modules が見つかりません（npm install未実行？）${NC}"
+fi
+
+if ! git status &>/dev/null; then
+    health_score=$((health_score - 15))
+    echo -e "⚠️  ${YELLOW}Gitリポジトリではありません${NC}"
+fi
+
+if [ ! -d "frontend" ] && [ ! -d "backend" ]; then
+    health_score=$((health_score - 30))
+    echo -e "🚨 ${RED}frontend/backend ディレクトリが見つかりません${NC}"
+fi
+
+echo ""
+if [ $health_score -gt 80 ]; then
+    echo -e "🟢 プロジェクト健康度: ${GREEN}$health_score/100 (良好)${NC}"
+elif [ $health_score -gt 50 ]; then
+    echo -e "🟡 プロジェクト健康度: ${YELLOW}$health_score/100 (注意)${NC}"
+else
+    echo -e "🔴 プロジェクト健康度: ${RED}$health_score/100 (要改善)${NC}"
+fi
+
+echo ""
+echo -e "${PURPLE}🚀 推奨される次のアクション:${NC}"
+echo ""
+
+if [ $health_score -lt 80 ]; then
+    echo -e "1. ${YELLOW}プロジェクト構造の見直し${NC}"
+    echo -e "2. ${YELLOW}必要な依存関係のインストール${NC}"
+    echo -e "3. ${YELLOW}Git初期化の実行${NC}"
+    echo ""
+fi
+
+echo -e "✨ ${CYAN}Claude共有用ファイル:${NC}"
+echo -e "   📄 $OUTPUT_DIR/latest_claude_share.md"
+echo ""
+echo -e "📊 ${CYAN}統合レポート:${NC}"
+echo -e "   📄 $OUTPUT_DIR/latest_integrated_report.md"
+echo ""
+
+# 最終的な使用方法の説明
+echo -e "${BLUE}============================================================${NC}"
+echo -e "${BLUE}🎓 使用方法:${NC}"
+echo -e "${BLUE}============================================================${NC}"
+echo ""
+echo -e "📋 ${CYAN}Claude会話で使用する場合:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/latest_claude_share.md\""
+echo ""
+echo -e "🔍 ${CYAN}詳細調査用:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/latest_integrated_report.md\""
+echo ""
+echo -e "🌳 ${CYAN}ディレクトリ構造確認:${NC}"
+echo -e "   cat \"$OUTPUT_DIR/latest_directory_tree.txt\""
+echo ""
+
+# スクリプト完了
+echo -e "${GREEN}============================================================${NC}"
+echo -e "${GREEN}✅ GitHub環境構造スキャン完了！${NC}"
+echo -e "${GREEN}============================================================${NC}"
+echo ""
+
+# 最後に簡単な操作案内
+echo -e "${CYAN}💡 TIP:${NC} このスクリプトを定期的に実行して、プロジェクト構造を最新に保ちましょう！"
+echo ""
+
+exit 0() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "\n${PURPLE}=== $1 ===${NC}"; }
@@ -33,6 +285,12 @@ echo "プロジェクト: $PROJECT_NAME"
 echo "対象ディレクトリ: $PROJECT_DIR"
 echo "実行時刻: $(date)"
 echo ""
+
+# プロジェクトディレクトリの存在確認
+if [ ! -d "$PROJECT_DIR" ]; then
+    log_error "プロジェクトディレクトリが見つかりません: $PROJECT_DIR"
+    exit 1
+fi
 
 # 出力ディレクトリ作成
 mkdir -p "$OUTPUT_DIR"
@@ -152,7 +410,7 @@ for dir in "${IMPORTANT_DIRS[@]}"; do
         
         # 直下のファイル一覧
         echo "### 📄 ファイル一覧" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
-        find "$dir" -maxdepth 1 -type f -printf "%f\n" | sort | while read -r file; do
+        find "$dir" -maxdepth 1 -type f -printf "%f\n" 2>/dev/null | sort | while read -r file; do
             if [ -n "$file" ]; then
                 # ファイルサイズ取得
                 size=$(ls -lh "$dir/$file" 2>/dev/null | awk '{print $5}' || echo "?")
@@ -178,7 +436,7 @@ for dir in "${IMPORTANT_DIRS[@]}"; do
         # サブディレクトリ一覧
         echo "" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
         echo "### 📁 サブディレクトリ一覧" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
-        find "$dir" -maxdepth 1 -type d -not -path "$dir" -printf "%f\n" | sort | while read -r subdir; do
+        find "$dir" -maxdepth 1 -type d -not -path "$dir" -printf "%f\n" 2>/dev/null | sort | while read -r subdir; do
             if [ -n "$subdir" ]; then
                 subfile_count=$(find "$dir/$subdir" -type f | wc -l)
                 echo "- 📁 \`$subdir/\` ($subfile_count files)" >> "$OUTPUT_DIR/detailed_files_$TIMESTAMP.md"
@@ -519,256 +777,4 @@ echo "" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
 echo "---" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
 echo "**🎯 このファイルをClaude会話に共有することで、100%正確な情報でやり取りできます！**" >> "$OUTPUT_DIR/claude_share_$TIMESTAMP.md"
 
-log_success "Claude共有用ファイル作成完了"
-
-# ============================================================================
-# 9. 結果表示・コピー可能な情報出力
-# ============================================================================
-
-log_step "📋 生成結果表示"
-
-echo ""
-echo -e "${GREEN}============================================================${NC}"
-echo -e "${GREEN}🎉 GitHub環境構造・ファイル一覧生成完了！${NC}"
-echo -e "${GREEN}============================================================${NC}"
-echo ""
-echo -e "${CYAN}📁 出力先ディレクトリ:${NC} $OUTPUT_DIR"
-echo ""
-echo -e "${YELLOW}🗂️  生成されたファイル一覧:${NC}"
-echo ""
-
-# 生成されたファイルを表示
-ls -la "$OUTPUT_DIR" | grep "$TIMESTAMP" | while read -r line; do
-    filename=$(echo "$line" | awk '{print $9}')
-    filesize=$(echo "$line" | awk '{print $5}')
-    echo -e "  📄 ${BLUE}$filename${NC} (${filesize} bytes)"
-done
-
-echo ""
-echo -e "${PURPLE}🚀 次のアクションとして実行できます:${NC}"
-echo ""
-echo -e "${CYAN}1. 統合レポートを確認:${NC}"
-echo -e "   cat \"$OUTPUT_DIR/integrated_report_$TIMESTAMP.md\""
-echo ""
-echo -e "${CYAN}2. Claude共有用ファイルをコピー:${NC}"
-echo -e "   cat \"$OUTPUT_DIR/claude_share_$TIMESTAMP.md\""
-echo ""
-echo -e "${CYAN}3. 完全ディレクトリ構造を確認:${NC}"
-echo -e "   cat \"$OUTPUT_DIR/directory_tree_$TIMESTAMP.txt\""
-echo ""
-echo -e "${CYAN}4. 技術スタック分析を確認:${NC}"
-echo -e "   cat \"$OUTPUT_DIR/tech_stack_files_$TIMESTAMP.md\""
-echo ""
-
-# ============================================================================
-# 10. クイックサマリー・コピペ用出力
-# ============================================================================
-
-log_step "⚡ クイックサマリー出力（コピペ用）"
-
-echo ""
-echo -e "${YELLOW}以下の内容をClaude会話にコピペして共有できます:${NC}"
-echo ""
-echo "============================================================"
-cat << SUMMARY_EOF
-
-🚛 DUMP-TRACKER-SYSTEM - プロジェクト構造サマリー
-
-**最終スキャン:** $(date)
-**Gitブランチ:** $(git branch --show-current 2>/dev/null || echo "不明")
-
-## 📊 基本統計
-- 総ディレクトリ数: $(find . -type d -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
-- 総ファイル数: $(find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
-- TypeScriptファイル数: $(find . -name "*.ts" -not -path "*/node_modules/*" | wc -l)
-- Reactコンポーネント数: $(find . -name "*.tsx" -not -path "*/node_modules/*" | wc -l)
-
-## 🗂️ 重要ディレクトリ存在確認
-SUMMARY_EOF
-
-# 重要ディレクトリの存在確認を出力
-important_summary_dirs=("frontend/src" "backend/src" "backend/src/controllers" "backend/src/routes" "backend/prisma" "database" "docs")
-
-for check_dir in "${important_summary_dirs[@]}"; do
-    if [ -d "$check_dir" ]; then
-        file_count=$(find "$check_dir" -maxdepth 1 -type f | wc -l)
-        echo "✅ $check_dir/ ($file_count files)"
-    else
-        echo "❌ $check_dir/ (存在しない)"
-    fi
-done
-
-echo ""
-echo "## 🔧 主要ファイル確認"
-
-# Controllers
-if [ -d "backend/src/controllers" ]; then
-    echo "### Controllers:"
-    find backend/src/controllers -name "*.ts" | sort | head -5 | while read -r file; do
-        echo "- $(basename "$file")"
-    done
-    controller_count=$(find backend/src/controllers -name "*.ts" | wc -l)
-    if [ "$controller_count" -gt 5 ]; then
-        echo "- ... 他 $((controller_count - 5)) ファイル"
-    fi
-fi
-
-# Routes
-if [ -d "backend/src/routes" ]; then
-    echo "### Routes:"
-    find backend/src/routes -name "*.ts" | sort | head -5 | while read -r file; do
-        echo "- $(basename "$file")"
-    done
-    routes_count=$(find backend/src/routes -name "*.ts" | wc -l)
-    if [ "$routes_count" -gt 5 ]; then
-        echo "- ... 他 $((routes_count - 5)) ファイル"
-    fi
-fi
-
-# Components
-if [ -d "frontend/src/components" ]; then
-    echo "### React Components:"
-    find frontend/src/components -name "*.tsx" | sort | head -5 | while read -r file; do
-        echo "- $(basename "$file")"
-    done
-    components_count=$(find frontend/src/components -name "*.tsx" | wc -l)
-    if [ "$components_count" -gt 5 ]; then
-        echo "- ... 他 $((components_count - 5)) ファイル"
-    fi
-fi
-
-echo ""
-echo "============================================================"
-echo ""
-
-# ============================================================================
-# 11. 最新ファイルのシンボリックリンク作成
-# ============================================================================
-
-log_step "🔗 最新ファイルへのシンボリックリンク作成"
-
-cd "$OUTPUT_DIR"
-
-# 既存のシンボリックリンクを削除
-rm -f latest_*.md latest_*.txt
-
-# 新しいシンボリックリンクを作成
-ln -sf "project_info_$TIMESTAMP.md" "latest_project_info.md"
-ln -sf "directory_tree_$TIMESTAMP.txt" "latest_directory_tree.txt"
-ln -sf "detailed_files_$TIMESTAMP.md" "latest_detailed_files.md"
-ln -sf "tech_stack_files_$TIMESTAMP.md" "latest_tech_stack_files.md"
-ln -sf "package_analysis_$TIMESTAMP.md" "latest_package_analysis.md"
-ln -sf "git_info_$TIMESTAMP.md" "latest_git_info.md"
-ln -sf "integrated_report_$TIMESTAMP.md" "latest_integrated_report.md"
-ln -sf "claude_share_$TIMESTAMP.md" "latest_claude_share.md"
-
-log_success "シンボリックリンク作成完了"
-
-# ============================================================================
-# 12. 自動クリーンアップ（古いファイル削除）
-# ============================================================================
-
-log_step "🧹 古いファイルの自動クリーンアップ"
-
-# 7日より古いファイルを削除（オプション）
-if [ "${AUTO_CLEANUP:-true}" = "true" ]; then
-    find "$OUTPUT_DIR" -name "*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*" -type f -mtime +7 -delete
-    log_info "7日より古いファイルを削除しました"
-else
-    log_info "自動クリーンアップはスキップされました"
-fi
-
-# ============================================================================
-# 13. 最終確認とエラーハンドリング
-# ============================================================================
-
-log_step "✅ 最終確認"
-
-echo ""
-echo -e "${GREEN}🎯 スクリプト実行完了サマリー:${NC}"
-echo ""
-
-# 生成されたファイル数を確認
-generated_files=$(ls "$OUTPUT_DIR" | grep "$TIMESTAMP" | wc -l)
-echo -e "📄 生成ファイル数: ${BLUE}$generated_files${NC} ファイル"
-
-# ディスク使用量
-output_size=$(du -sh "$OUTPUT_DIR" | cut -f1)
-echo -e "💾 出力サイズ: ${BLUE}$output_size${NC}"
-
-# プロジェクトの健康度チェック
-health_score=100
-
-if [ ! -f "package.json" ]; then
-    health_score=$((health_score - 20))
-    echo -e "⚠️  ${YELLOW}package.json が見つかりません${NC}"
-fi
-
-if [ ! -d "node_modules" ]; then
-    health_score=$((health_score - 10))
-    echo -e "⚠️  ${YELLOW}node_modules が見つかりません（npm install未実行？）${NC}"
-fi
-
-if ! git status &>/dev/null; then
-    health_score=$((health_score - 15))
-    echo -e "⚠️  ${YELLOW}Gitリポジトリではありません${NC}"
-fi
-
-if [ ! -d "frontend" ] && [ ! -d "backend" ]; then
-    health_score=$((health_score - 30))
-    echo -e "🚨 ${RED}frontend/backend ディレクトリが見つかりません${NC}"
-fi
-
-echo ""
-if [ $health_score -gt 80 ]; then
-    echo -e "🟢 プロジェクト健康度: ${GREEN}$health_score/100 (良好)${NC}"
-elif [ $health_score -gt 50 ]; then
-    echo -e "🟡 プロジェクト健康度: ${YELLOW}$health_score/100 (注意)${NC}"
-else
-    echo -e "🔴 プロジェクト健康度: ${RED}$health_score/100 (要改善)${NC}"
-fi
-
-echo ""
-echo -e "${PURPLE}🚀 推奨される次のアクション:${NC}"
-echo ""
-
-if [ $health_score -lt 80 ]; then
-    echo -e "1. ${YELLOW}プロジェクト構造の見直し${NC}"
-    echo -e "2. ${YELLOW}必要な依存関係のインストール${NC}"
-    echo -e "3. ${YELLOW}Git初期化の実行${NC}"
-    echo ""
-fi
-
-echo -e "✨ ${CYAN}Claude共有用ファイル:${NC}"
-echo -e "   📄 $OUTPUT_DIR/latest_claude_share.md"
-echo ""
-echo -e "📊 ${CYAN}統合レポート:${NC}"
-echo -e "   📄 $OUTPUT_DIR/latest_integrated_report.md"
-echo ""
-
-# 最終的な使用方法の説明
-echo -e "${BLUE}============================================================${NC}"
-echo -e "${BLUE}🎓 使用方法:${NC}"
-echo -e "${BLUE}============================================================${NC}"
-echo ""
-echo -e "📋 ${CYAN}Claude会話で使用する場合:${NC}"
-echo -e "   cat \"$OUTPUT_DIR/latest_claude_share.md\""
-echo ""
-echo -e "🔍 ${CYAN}詳細調査用:${NC}"
-echo -e "   cat \"$OUTPUT_DIR/latest_integrated_report.md\""
-echo ""
-echo -e "🌳 ${CYAN}ディレクトリ構造確認:${NC}"
-echo -e "   cat \"$OUTPUT_DIR/latest_directory_tree.txt\""
-echo ""
-
-# スクリプト完了
-echo -e "${GREEN}============================================================${NC}"
-echo -e "${GREEN}✅ GitHub環境構造スキャン完了！${NC}"
-echo -e "${GREEN}============================================================${NC}"
-echo ""
-
-# 最後に簡単な操作案内
-echo -e "${CYAN}💡 TIP:${NC} このスクリプトを定期的に実行して、プロジェクト構造を最新に保ちましょう！"
-echo ""
-
-exit 0()
+log_success

@@ -75,10 +75,10 @@ export class TripService {
     }
 
     // 総件数取得
-    const total = await prisma.trip.count({ where });
+    const total = await prisma.operations.count({ where });
 
     // 運行記録取得
-    const trips = await prisma.trip.findMany({
+    const trips = await prisma.operations.findMany({
       where,
       skip,
       take,
@@ -169,7 +169,7 @@ export class TripService {
     fuelRecords?: any[];
     inspectionRecords?: any[];
   }> {
-    const trip = await prisma.trip.findUnique({
+    const trip = await prisma.operations.findUnique({
       where: { id: tripId },
       include: {
         driver: {
@@ -259,7 +259,7 @@ export class TripService {
     }
 
     // 運転手の未完了運行記録チェック
-    const activeTrip = await prisma.trip.findFirst({
+    const activeTrip = await prisma.operations.findFirst({
       where: {
         driverId,
         status: {
@@ -289,7 +289,7 @@ export class TripService {
 
     // トリップ番号生成（日付 + 連番）
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const todayTripsCount = await prisma.trip.count({
+    const todayTripsCount = await prisma.operations.count({
       where: {
         createdAt: {
           gte: new Date(new Date().setHours(0, 0, 0, 0)),
@@ -369,7 +369,7 @@ export class TripService {
     requesterId: string,
     requesterRole: UserRole
   ): Promise<Trip> {
-    const existingTrip = await prisma.trip.findUnique({
+    const existingTrip = await prisma.operations.findUnique({
       where: { id: tripId },
       include: { vehicle: true }
     });
@@ -399,7 +399,7 @@ export class TripService {
       );
     }
 
-    const updatedTrip = await prisma.trip.update({
+    const updatedTrip = await prisma.operations.update({
       where: { id: tripId },
       data: {
         ...updateData,
@@ -458,7 +458,7 @@ export class TripService {
     requesterId: string,
     requesterRole: UserRole
   ): Promise<Trip> {
-    const existingTrip = await prisma.trip.findUnique({
+    const existingTrip = await prisma.operations.findUnique({
       where: { id: tripId },
       include: { vehicle: true }
     });
@@ -557,7 +557,7 @@ export class TripService {
     requesterId: string,
     requesterRole: UserRole
   ): Promise<void> {
-    const existingTrip = await prisma.trip.findUnique({
+    const existingTrip = await prisma.operations.findUnique({
       where: { id: tripId }
     });
 
@@ -608,7 +608,7 @@ export class TripService {
     activityData: CreateTripDetailRequest,
     requesterId: string
   ): Promise<any> {
-    const trip = await prisma.trip.findUnique({
+    const trip = await prisma.operations.findUnique({
       where: { id: tripId }
     });
 
@@ -678,7 +678,7 @@ export class TripService {
 
     // 代替として、tripのnotesに活動記録を追加
     const activityNote = `[${activityData.activityType}] ${new Date(activityData.timestamp).toISOString()} - ${activityData.remarks || ''}`;
-    await prisma.trip.update({
+    await prisma.operations.update({
       where: { id: tripId },
       data: {
         notes: trip.notes ? `${trip.notes}\n${activityNote}` : activityNote
@@ -705,7 +705,7 @@ export class TripService {
     fuelData: CreateFuelRecordRequest,
     requesterId: string
   ): Promise<any> {
-    const trip = await prisma.trip.findUnique({
+    const trip = await prisma.operations.findUnique({
       where: { id: tripId }
     });
 
@@ -738,7 +738,7 @@ export class TripService {
     */
 
     // 代替として、tripのfuelConsumedとfuelCostを更新
-    await prisma.trip.update({
+    await prisma.operations.update({
       where: { id: tripId },
       data: {
         fuelConsumed: (trip.fuelConsumed || 0) + fuelData.fuelAmount,
@@ -761,7 +761,7 @@ export class TripService {
    * @returns アクティブな運行記録
    */
   async getActiveTrip(driverId: string): Promise<Trip | null> {
-    const trip = await prisma.trip.findFirst({
+    const trip = await prisma.operations.findFirst({
       where: {
         driverId,
         status: {
@@ -852,27 +852,27 @@ export class TripService {
       averageDistance,
       averageFuelCost
     ] = await Promise.all([
-      prisma.trip.count({ where: whereCondition }),
-      prisma.trip.count({ where: { ...whereCondition, status: 'COMPLETED' } }),
-      prisma.trip.count({ where: { ...whereCondition, status: 'IN_PROGRESS' } }),
-      prisma.trip.count({ where: { ...whereCondition, status: 'CANCELLED' } }),
-      prisma.trip.aggregate({
+      prisma.operations.count({ where: whereCondition }),
+      prisma.operations.count({ where: { ...whereCondition, status: 'COMPLETED' } }),
+      prisma.operations.count({ where: { ...whereCondition, status: 'IN_PROGRESS' } }),
+      prisma.operations.count({ where: { ...whereCondition, status: 'CANCELLED' } }),
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _sum: { distance: true }
       }).then(result => result._sum.distance || 0),
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _sum: { fuelCost: true }
       }).then(result => result._sum.fuelCost || 0),
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _sum: { fuelConsumed: true }
       }).then(result => result._sum.fuelConsumed || 0),
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _avg: { distance: true }
       }).then(result => result._avg.distance || 0),
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _avg: { fuelCost: true }
       }).then(result => result._avg.fuelCost || 0)
@@ -909,7 +909,7 @@ export class TripService {
     gpsData: { latitude: number; longitude: number; timestamp: Date },
     requesterId: string
   ) {
-    const trip = await prisma.trip.findUnique({
+    const trip = await prisma.operations.findUnique({
       where: { id: tripId }
     });
 
@@ -927,7 +927,7 @@ export class TripService {
 
     // 開始位置が未設定の場合は開始位置として設定
     if (!trip.startLatitude || !trip.startLongitude) {
-      return await prisma.trip.update({
+      return await prisma.operations.update({
         where: { id: tripId },
         data: {
           startLatitude: gpsData.latitude,
@@ -939,7 +939,7 @@ export class TripService {
 
     // 進行中の場合は現在位置として記録（実際のGPSログテーブルがあればそちらに記録）
     // 現在は最新位置として記録
-    return await prisma.trip.update({
+    return await prisma.operations.update({
       where: { id: tripId },
       data: {
         endLatitude: gpsData.latitude,
@@ -967,7 +967,7 @@ export class TripService {
       throw new AppError('運行記録の複製は管理者権限が必要です', 403);
     }
 
-    const originalTrip = await prisma.trip.findUnique({
+    const originalTrip = await prisma.operations.findUnique({
       where: { id: tripId }
     });
 
@@ -997,7 +997,7 @@ export class TripService {
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-    return await prisma.trip.findMany({
+    return await prisma.operations.findMany({
       where: {
         driverId,
         startTime: {
@@ -1047,7 +1047,7 @@ export class TripService {
       throw new AppError('更新対象の運行記録が指定されていません', 400);
     }
 
-    const updateResult = await prisma.trip.updateMany({
+    const updateResult = await prisma.operations.updateMany({
       where: {
         id: {
           in: tripIds
@@ -1085,7 +1085,7 @@ export class TripService {
       throw new AppError('運行記録の削除は管理者権限が必要です', 403);
     }
 
-    const trip = await prisma.trip.findUnique({
+    const trip = await prisma.operations.findUnique({
       where: { id: tripId }
     });
 
@@ -1099,7 +1099,7 @@ export class TripService {
     }
 
     // 論理削除（実際の削除ではなく、ステータスを変更）
-    await prisma.trip.update({
+    await prisma.operations.update({
       where: { id: tripId },
       data: {
         status: 'CANCELLED',

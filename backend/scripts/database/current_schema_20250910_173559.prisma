@@ -129,39 +129,28 @@ model items {
   operation_details          operation_details[]
 
   @@index([hazardous], map: "idx_items_hazardous")
-  @@index([display_order], map: "idx_items_display_order")
-  @@index([is_fragile], map: "idx_items_is_fragile")
-  @@index([is_hazardous], map: "idx_items_is_hazardous")
-  @@index([requires_special_equipment], map: "idx_items_requires_special_equipment")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model locations {
-  id                     String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name                   String              @unique(map: "idx_locations_name") @db.VarChar(255)
-  address                String
-  latitude               Decimal?            @db.Decimal(10, 8)
-  longitude              Decimal?            @db.Decimal(11, 8)
-  location_type          location_type
-  client_name            String?             @db.VarChar(255)
-  contact_person         String?             @db.VarChar(100)
-  contact_phone          String?             @db.VarChar(20)
-  contact_email          String?             @db.VarChar(255)
-  operating_hours        String?
-  special_instructions   String?
-  is_active              Boolean?            @default(true)
-  created_at             DateTime?           @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime?           @default(now()) @db.Timestamptz(6)
-  hazardous_area         Boolean?
-  access_restrictions    String?
-  parking_instructions   String?
-  unloading_instructions String?
-  equipment_available    String?
-  photo_urls             String[]
-  operation_details      operation_details[]
+  id                   String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                 String              @unique(map: "idx_locations_name") @db.VarChar(255)
+  address              String
+  latitude             Decimal?            @db.Decimal(10, 8)
+  longitude            Decimal?            @db.Decimal(11, 8)
+  location_type        location_type
+  client_name          String?             @db.VarChar(255)
+  contact_person       String?             @db.VarChar(100)
+  contact_phone        String?             @db.VarChar(20)
+  contact_email        String?             @db.VarChar(255)
+  operating_hours      String?
+  special_instructions String?
+  is_active            Boolean?            @default(true)
+  created_at           DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?           @default(now()) @db.Timestamptz(6)
+  operation_details    operation_details[]
 
   @@index([location_type], map: "idx_locations_type")
-  @@index([hazardous_area], map: "idx_locations_hazardous_area")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -408,3 +397,5 @@ enum inspection_type {
   WEEKLY
   MONTHLY
 }
+
+

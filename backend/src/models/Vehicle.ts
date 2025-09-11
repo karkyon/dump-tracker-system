@@ -1,440 +1,569 @@
 // backend/src/models/Vehicle.ts
-import { PrismaClient, Vehicle, VehicleStatus, MaintenanceRecord, User } from '@prisma/client';
-import { CreateVehicleRequest, UpdateVehicleRequest, VehicleFilter } from '../types';
+import { PrismaClient, fuel_type as PrismaFuelType, vehicle_status as PrismaVehicleStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 /**
- * 車両モデルクラス
- * データベースの車両テーブルに対する操作を提供
+ * 車両モデル - Prismaスキーマ完全準拠版
+ * スネークケース命名規則、DB整合性確保
  */
-export class VehicleModel {
-  
+
+// =====================================
+// 基本型定義（Prismaスキーマ準拠）
+// =====================================
+
+export interface VehicleModel {
+  id: string;
+  plate_number: string;
+  model: string;
+  manufacturer?: string | null;
+  year?: number | null;
+  fuel_type: PrismaFuelType;
+  capacity_tons?: number | null; // Decimal型をnumberで扱う
+  current_mileage: number;
+  status: PrismaVehicleStatus;
+  purchase_date?: Date | null;
+  insurance_expiry?: Date | null;
+  inspection_expiry?: Date | null;
+  notes?: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface VehicleCreateInput {
+  plate_number: string;
+  model: string;
+  manufacturer?: string;
+  year?: number;
+  fuel_type?: PrismaFuelType;
+  capacity_tons?: number;
+  current_mileage?: number;
+  status?: PrismaVehicleStatus;
+  purchase_date?: Date;
+  insurance_expiry?: Date;
+  inspection_expiry?: Date;
+  notes?: string;
+}
+
+export interface VehicleUpdateInput {
+  plate_number?: string;
+  model?: string;
+  manufacturer?: string;
+  year?: number;
+  fuel_type?: PrismaFuelType;
+  capacity_tons?: number;
+  current_mileage?: number;
+  status?: PrismaVehicleStatus;
+  purchase_date?: Date;
+  insurance_expiry?: Date;
+  inspection_expiry?: Date;
+  notes?: string;
+}
+
+export interface VehicleWhereInput {
+  id?: string;
+  plate_number?: string | { contains?: string; mode?: 'insensitive' };
+  model?: { contains?: string; mode?: 'insensitive' };
+  manufacturer?: { contains?: string; mode?: 'insensitive' };
+  year?: number | { gte?: number; lte?: number };
+  fuel_type?: PrismaFuelType | PrismaFuelType[];
+  status?: PrismaVehicleStatus | PrismaVehicleStatus[];
+  capacity_tons?: { gte?: number; lte?: number };
+  current_mileage?: { gte?: number; lte?: number };
+  created_at?: {
+    gte?: Date;
+    lte?: Date;
+  };
+}
+
+export interface VehicleOrderByInput {
+  id?: 'asc' | 'desc';
+  plate_number?: 'asc' | 'desc';
+  model?: 'asc' | 'desc';
+  manufacturer?: 'asc' | 'desc';
+  year?: 'asc' | 'desc';
+  fuel_type?: 'asc' | 'desc';
+  status?: 'asc' | 'desc';
+  current_mileage?: 'asc' | 'desc';
+  created_at?: 'asc' | 'desc';
+  updated_at?: 'asc' | 'desc';
+}
+
+// =====================================
+// フロントエンド用追加型
+// =====================================
+
+export interface VehicleResponseDTO {
+  id: string;
+  plate_number: string;
+  model: string;
+  manufacturer?: string | null;
+  year?: number | null;
+  fuel_type: PrismaFuelType;
+  capacity_tons?: number | null;
+  current_mileage: number;
+  status: PrismaVehicleStatus;
+  purchase_date?: Date | null;
+  insurance_expiry?: Date | null;
+  inspection_expiry?: Date | null;
+  notes?: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface VehicleStats {
+  total_vehicles: number;
+  active_vehicles: number;
+  maintenance_vehicles: number;
+  retired_vehicles: number;
+  diesel_vehicles: number;
+  electric_vehicles: number;
+  average_mileage: number;
+  total_capacity: number;
+  vehicles_needing_inspection: number;
+  vehicles_needing_insurance_renewal: number;
+}
+
+export interface VehicleUtilization {
+  vehicle_id: string;
+  plate_number: string;
+  period: {
+    start_date: Date;
+    end_date: Date;
+  };
+  total_operations: number;
+  total_distance: number;
+  total_fuel_consumed: number;
+  utilization_rate: number;
+  efficiency_score: number;
+  maintenance_cost: number;
+  revenue_generated: number;
+}
+
+export interface VehicleMaintenanceAlert {
+  vehicle_id: string;
+  plate_number: string;
+  alert_type: 'INSPECTION' | 'INSURANCE' | 'MAINTENANCE' | 'MILEAGE';
+  due_date?: Date;
+  days_remaining: number;
+  current_mileage: number;
+  message: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+}
+
+// =====================================
+// 車両モデルクラス
+// =====================================
+
+export class Vehicle {
+  constructor(private prisma: PrismaClient = prisma) {}
+
+  /**
+   * 車両作成
+   */
+  async create(data: VehicleCreateInput): Promise<VehicleModel> {
+    try {
+      return await this.prisma.vehicle.create({
+        data: {
+          ...data,
+          fuel_type: data.fuel_type ?? PrismaFuelType.DIESEL,
+          current_mileage: data.current_mileage ?? 0,
+          status: data.status ?? PrismaVehicleStatus.ACTIVE,
+          created_at: new Date(),
+          updated_at: new Date()
+        }
+      });
+    } catch (error) {
+      throw new Error(`車両作成エラー: ${error}`);
+    }
+  }
+
+  /**
+   * 車両取得（ID指定）
+   */
+  async findById(id: string): Promise<VehicleModel | null> {
+    try {
+      const result = await this.prisma.vehicle.findUnique({
+        where: { id }
+      });
+      if (!result) return null;
+      if (result.fuel_type === null) {
+        throw new Error('fuel_type is null, which is incompatible with VehicleModel');
+      }
+      return {
+        ...result,
+        fuel_type: result.fuel_type as PrismaFuelType
+      };
+    } catch (error) {
+      throw new Error(`車両取得エラー: ${error}`);
+    }
+  }
+
+  /**
+   * 車両取得（ナンバープレート指定）
+   */
+  async findByPlateNumber(plate_number: string): Promise<VehicleModel | null> {
+    try {
+      return await this.prisma.vehicle.findUnique({
+        where: { plate_number }
+      });
+    } catch (error) {
+      throw new Error(`車両取得エラー: ${error}`);
+    }
+  }
+
   /**
    * 車両一覧取得
    */
-  static async findAll(filter: VehicleFilter = {}) {
-    const {
-      page = 1,
-      limit = 20,
-      sortBy = 'vehicleNumber',
-      sortOrder = 'asc',
-      search,
-      status,
-      isActive,
-      vehicleType
-    } = filter;
-
-    const skip = (page - 1) * limit;
-
-    const where: any = {};
-
-    // 検索条件
-    if (search) {
-      where.OR = [
-        { vehicleNumber: { contains: search, mode: 'insensitive' } },
-        { vehicleType: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (status) {
-      where.status = status;
-    }
-
-    if (typeof isActive === 'boolean') {
-      where.isActive = isActive;
-    }
-
-    if (vehicleType) {
-      where.vehicleType = { contains: vehicleType, mode: 'insensitive' };
-    }
-
-    const [vehicles, total] = await Promise.all([
-      prisma.vehicle.findMany({
-        where,
-        include: {
-          lastDriver: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              email: true
-            }
-          },
-          operations: {
-            take: 5,
-            orderBy: { operationDate: 'desc' },
-            select: {
-              id: true,
-              operationDate: true,
-              status: true,
-              startMileage: true,
-              endMileage: true
-            }
-          },
-          maintenanceRecords: {
-            take: 3,
-            orderBy: { performedAt: 'desc' },
-            select: {
-              id: true,
-              maintenanceType: true,
-              description: true,
-              cost: true,
-              performedAt: true,
-              nextDue: true
-            }
-          }
-        },
-        orderBy: { [sortBy]: sortOrder },
-        skip,
-        take: limit,
-      }),
-      prisma.vehicle.count({ where })
-    ]);
-
-    return {
-      vehicles,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit),
-        count: total,
-        limit
-      }
+  async findMany(params: {
+    where?: VehicleWhereInput;
+    orderBy?: VehicleOrderByInput;
+    skip?: number;
+    take?: number;
+    include?: {
+      operations?: boolean;
+      maintenance_records?: boolean;
+      gps_logs?: boolean;
+      inspection_records?: boolean;
     };
-  }
-
-  /**
-   * 車両詳細取得
-   */
-  static async findById(id: string): Promise<Vehicle | null> {
-    return prisma.vehicle.findUnique({
-      where: { id },
-      include: {
-        lastDriver: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            email: true,
-            role: true
-          }
-        },
-        operations: {
-          orderBy: { operationDate: 'desc' },
-          take: 10,
-          include: {
-            driver: {
-              select: {
-                id: true,
-                name: true,
-                username: true
-              }
-            }
-          }
-        },
-        maintenanceRecords: {
-          orderBy: { performedAt: 'desc' },
-          take: 10
-        },
-        gpsLogs: {
-          orderBy: { timestamp: 'desc' },
-          take: 1
-        }
-      }
-    });
-  }
-
-  /**
-   * 車両番号で検索
-   */
-  static async findByVehicleNumber(vehicleNumber: string): Promise<Vehicle | null> {
-    return prisma.vehicle.findUnique({
-      where: { vehicleNumber }
-    });
-  }
-
-  /**
-   * 車両新規作成
-   */
-  static async create(data: CreateVehicleRequest): Promise<Vehicle> {
-    // 車両番号の重複チェック
-    const existingVehicle = await this.findByVehicleNumber(data.vehicleNumber);
-    if (existingVehicle) {
-      throw new Error('この車両番号は既に使用されています');
+  }): Promise<VehicleModel[]> {
+    try {
+      return await this.prisma.vehicle.findMany({
+        where: params.where,
+        orderBy: params.orderBy || { plate_number: 'asc' },
+        skip: params.skip,
+        take: params.take,
+        include: params.include
+      });
+    } catch (error) {
+      throw new Error(`車両一覧取得エラー: ${error}`);
     }
-
-    return prisma.vehicle.create({
-      data: {
-        vehicleNumber: data.vehicleNumber,
-        vehicleType: data.vehicleType,
-        capacity: data.capacity,
-        currentMileage: data.currentMileage,
-        status: VehicleStatus.AVAILABLE,
-        isActive: true
-      },
-      include: {
-        lastDriver: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            email: true
-          }
-        }
-      }
-    });
   }
 
   /**
-   * 車両情報更新
+   * 車両更新
    */
-  static async update(id: string, data: UpdateVehicleRequest): Promise<Vehicle> {
-    // 車両の存在確認
-    const existingVehicle = await this.findById(id);
-    if (!existingVehicle) {
-      throw new Error('車両が見つかりません');
-    }
-
-    // 車両番号の重複チェック（変更する場合）
-    if (data.vehicleNumber && data.vehicleNumber !== existingVehicle.vehicleNumber) {
-      const duplicateVehicle = await this.findByVehicleNumber(data.vehicleNumber);
-      if (duplicateVehicle) {
-        throw new Error('この車両番号は既に使用されています');
-      }
-    }
-
-    return prisma.vehicle.update({
-      where: { id },
-      data: {
-        ...data,
-        updatedAt: new Date()
-      },
-      include: {
-        lastDriver: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            email: true
-          }
+  async update(id: string, data: VehicleUpdateInput): Promise<VehicleModel> {
+    try {
+      return await this.prisma.vehicle.update({
+        where: { id },
+        data: {
+          ...data,
+          updated_at: new Date()
         }
-      }
-    });
+      });
+    } catch (error) {
+      throw new Error(`車両更新エラー: ${error}`);
+    }
   }
 
   /**
    * 車両削除（論理削除）
    */
-  static async delete(id: string): Promise<Vehicle> {
-    const vehicle = await this.findById(id);
-    if (!vehicle) {
-      throw new Error('車両が見つかりません');
-    }
-
-    // アクティブな運行記録があるかチェック
-    const activeOperations = await prisma.operation.count({
-      where: {
-        vehicleId: id,
-        status: {
-          in: ['PLANNING', 'IN_PROGRESS', 'STARTED']
+  async softDelete(id: string): Promise<VehicleModel> {
+    try {
+      return await this.prisma.vehicle.update({
+        where: { id },
+        data: { 
+          status: PrismaVehicleStatus.RETIRED,
+          updated_at: new Date()
         }
-      }
-    });
-
-    if (activeOperations > 0) {
-      throw new Error('この車両はアクティブな運行記録があるため削除できません');
+      });
+    } catch (error) {
+      throw new Error(`車両削除エラー: ${error}`);
     }
-
-    return prisma.vehicle.update({
-      where: { id },
-      data: {
-        isActive: false,
-        status: VehicleStatus.OUT_OF_SERVICE,
-        updatedAt: new Date()
-      }
-    });
   }
 
   /**
-   * 車両の走行距離更新
+   * 車両物理削除
    */
-  static async updateMileage(id: string, mileage: number): Promise<Vehicle> {
-    const vehicle = await this.findById(id);
-    if (!vehicle) {
-      throw new Error('車両が見つかりません');
+  async delete(id: string): Promise<VehicleModel> {
+    try {
+      return await this.prisma.vehicle.delete({
+        where: { id }
+      });
+    } catch (error) {
+      throw new Error(`車両物理削除エラー: ${error}`);
     }
+  }
 
-    if (mileage < vehicle.currentMileage) {
-      throw new Error('走行距離は現在の値より大きい必要があります');
+  /**
+   * 車両数カウント
+   */
+  async count(where?: VehicleWhereInput): Promise<number> {
+    try {
+      return await this.prisma.vehicle.count({ where });
+    } catch (error) {
+      throw new Error(`車両数取得エラー: ${error}`);
     }
-
-    return prisma.vehicle.update({
-      where: { id },
-      data: {
-        currentMileage: mileage,
-        updatedAt: new Date()
-      }
-    });
   }
 
   /**
-   * 車両ステータス更新
+   * 走行距離更新
    */
-  static async updateStatus(id: string, status: VehicleStatus): Promise<Vehicle> {
-    return prisma.vehicle.update({
-      where: { id },
-      data: {
-        status,
-        updatedAt: new Date()
-      }
-    });
-  }
-
-  /**
-   * 最終運転手設定
-   */
-  static async setLastDriver(vehicleId: string, driverId: string): Promise<Vehicle> {
-    return prisma.vehicle.update({
-      where: { id: vehicleId },
-      data: {
-        lastDriverId: driverId,
-        updatedAt: new Date()
-      }
-    });
-  }
-
-  /**
-   * 利用可能な車両一覧取得
-   */
-  static async findAvailable(): Promise<Vehicle[]> {
-    return prisma.vehicle.findMany({
-      where: {
-        isActive: true,
-        status: VehicleStatus.AVAILABLE
-      },
-      orderBy: { vehicleNumber: 'asc' },
-      include: {
-        lastDriver: {
-          select: {
-            id: true,
-            name: true,
-            username: true
-          }
+  async updateMileage(id: string, current_mileage: number): Promise<VehicleModel> {
+    try {
+      return await this.prisma.vehicle.update({
+        where: { id },
+        data: {
+          current_mileage,
+          updated_at: new Date()
         }
-      }
-    });
+      });
+    } catch (error) {
+      throw new Error(`走行距離更新エラー: ${error}`);
+    }
+  }
+
+  /**
+   * ステータス更新
+   */
+  async updateStatus(id: string, status: PrismaVehicleStatus): Promise<VehicleModel> {
+    try {
+      return await this.prisma.vehicle.update({
+        where: { id },
+        data: {
+          status,
+          updated_at: new Date()
+        }
+      });
+    } catch (error) {
+      throw new Error(`ステータス更新エラー: ${error}`);
+    }
+  }
+
+  /**
+   * アクティブ車両取得
+   */
+  async findActiveVehicles(): Promise<VehicleModel[]> {
+    try {
+      return await this.prisma.vehicle.findMany({
+        where: { status: PrismaVehicleStatus.ACTIVE },
+        orderBy: { plate_number: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`アクティブ車両取得エラー: ${error}`);
+    }
+  }
+
+  /**
+   * メンテナンス対象車両取得
+   */
+  async findMaintenanceVehicles(): Promise<VehicleModel[]> {
+    try {
+      return await this.prisma.vehicle.findMany({
+        where: { status: PrismaVehicleStatus.MAINTENANCE },
+        orderBy: { plate_number: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`メンテナンス車両取得エラー: ${error}`);
+    }
   }
 
   /**
    * 車両統計取得
    */
-  static async getStatistics(vehicleId: string, startDate?: Date, endDate?: Date) {
-    const vehicle = await this.findById(vehicleId);
-    if (!vehicle) {
-      throw new Error('車両が見つかりません');
-    }
+  async getStats(): Promise<VehicleStats> {
+    try {
+      const [
+        total_vehicles,
+        active_vehicles,
+        maintenance_vehicles,
+        retired_vehicles,
+        diesel_vehicles,
+        electric_vehicles,
+        mileage_result,
+        capacity_result,
+        inspection_alerts,
+        insurance_alerts
+      ] = await Promise.all([
+        this.prisma.vehicle.count(),
+        this.prisma.vehicle.count({ where: { status: PrismaVehicleStatus.ACTIVE } }),
+        this.prisma.vehicle.count({ where: { status: PrismaVehicleStatus.MAINTENANCE } }),
+        this.prisma.vehicle.count({ where: { status: PrismaVehicleStatus.RETIRED } }),
+        this.prisma.vehicle.count({ where: { fuel_type: PrismaFuelType.DIESEL } }),
+        this.prisma.vehicle.count({ where: { fuel_type: PrismaFuelType.ELECTRIC } }),
+        this.prisma.vehicle.aggregate({
+          _avg: { current_mileage: true }
+        }),
+        this.prisma.vehicle.aggregate({
+          _sum: { capacity_tons: true }
+        }),
+        this.prisma.vehicle.count({
+          where: {
+            inspection_expiry: {
+              lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30日以内
+            }
+          }
+        }),
+        this.prisma.vehicle.count({
+          where: {
+            insurance_expiry: {
+              lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30日以内
+            }
+          }
+        })
+      ]);
 
-    const whereCondition: any = { vehicleId };
-    
-    if (startDate || endDate) {
-      whereCondition.operationDate = {};
-      if (startDate) whereCondition.operationDate.gte = startDate;
-      if (endDate) whereCondition.operationDate.lte = endDate;
+      return {
+        total_vehicles,
+        active_vehicles,
+        maintenance_vehicles,
+        retired_vehicles,
+        diesel_vehicles,
+        electric_vehicles,
+        average_mileage: Math.round(mileage_result._avg.current_mileage || 0),
+        total_capacity: capacity_result._sum.capacity_tons || 0,
+        vehicles_needing_inspection: inspection_alerts,
+        vehicles_needing_insurance_renewal: insurance_alerts
+      };
+    } catch (error) {
+      throw new Error(`車両統計取得エラー: ${error}`);
     }
+  }
 
-    const [operations, maintenanceRecords] = await Promise.all([
-      prisma.operation.findMany({
-        where: whereCondition,
-        include: {
-          driver: {
-            select: { id: true, name: true }
+  /**
+   * 車両検索
+   */
+  async search(query: string, limit: number = 10): Promise<VehicleModel[]> {
+    try {
+      return await this.prisma.vehicle.findMany({
+        where: {
+          OR: [
+            { plate_number: { contains: query, mode: 'insensitive' } },
+            { model: { contains: query, mode: 'insensitive' } },
+            { manufacturer: { contains: query, mode: 'insensitive' } }
+          ]
+        },
+        take: limit,
+        orderBy: { plate_number: 'asc' }
+      });
+    } catch (error) {
+      throw new Error(`車両検索エラー: ${error}`);
+    }
+  }
+
+  /**
+   * メンテナンスアラート取得
+   */
+  async getMaintenanceAlerts(): Promise<VehicleMaintenanceAlert[]> {
+    try {
+      const vehicles = await this.prisma.vehicle.findMany({
+        where: {
+          status: { not: PrismaVehicleStatus.RETIRED }
+        }
+      });
+
+      const alerts: VehicleMaintenanceAlert[] = [];
+      const now = new Date();
+
+      vehicles.forEach(vehicle => {
+        // 車検期限チェック
+        if (vehicle.inspection_expiry) {
+          const days = Math.ceil((vehicle.inspection_expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          if (days <= 30) {
+            alerts.push({
+              vehicle_id: vehicle.id,
+              plate_number: vehicle.plate_number,
+              alert_type: 'INSPECTION',
+              due_date: vehicle.inspection_expiry,
+              days_remaining: days,
+              current_mileage: vehicle.current_mileage,
+              message: `車検期限まで${days}日です`,
+              priority: days <= 7 ? 'CRITICAL' : days <= 14 ? 'HIGH' : 'MEDIUM'
+            });
           }
         }
-      }),
-      prisma.maintenanceRecord.findMany({
-        where: {
-          vehicleId,
-          ...(startDate || endDate ? {
-            performedAt: {
-              ...(startDate && { gte: startDate }),
-              ...(endDate && { lte: endDate })
-            }
-          } : {})
+
+        // 保険期限チェック
+        if (vehicle.insurance_expiry) {
+          const days = Math.ceil((vehicle.insurance_expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          if (days <= 30) {
+            alerts.push({
+              vehicle_id: vehicle.id,
+              plate_number: vehicle.plate_number,
+              alert_type: 'INSURANCE',
+              due_date: vehicle.insurance_expiry,
+              days_remaining: days,
+              current_mileage: vehicle.current_mileage,
+              message: `保険期限まで${days}日です`,
+              priority: days <= 7 ? 'CRITICAL' : days <= 14 ? 'HIGH' : 'MEDIUM'
+            });
+          }
         }
-      })
-    ]);
+      });
 
-    // 統計計算
-    const totalOperations = operations.length;
-    const totalMileage = operations.reduce((sum, op) => {
-      if (op.endMileage && op.startMileage) {
-        return sum + (op.endMileage - op.startMileage);
-      }
-      return sum;
-    }, 0);
+      return alerts.sort((a, b) => a.days_remaining - b.days_remaining);
+    } catch (error) {
+      throw new Error(`メンテナンスアラート取得エラー: ${error}`);
+    }
+  }
 
-    const maintenanceCost = maintenanceRecords.reduce((sum, record) => {
-      return sum + (record.cost || 0);
-    }, 0);
-
-    const avgMileagePerOperation = totalOperations > 0 ? totalMileage / totalOperations : 0;
-
+  /**
+   * フロントエンド用データ変換
+   */
+  toResponseDTO(vehicle: VehicleModel): VehicleResponseDTO {
     return {
-      vehicle,
-      statistics: {
-        totalOperations,
-        totalMileage,
-        maintenanceCost,
-        avgMileagePerOperation,
-        maintenanceCount: maintenanceRecords.length,
-        period: {
-          startDate,
-          endDate
-        }
-      },
-      operations,
-      maintenanceRecords
+      id: vehicle.id,
+      plate_number: vehicle.plate_number,
+      model: vehicle.model,
+      manufacturer: vehicle.manufacturer,
+      year: vehicle.year,
+      fuel_type: vehicle.fuel_type,
+      capacity_tons: vehicle.capacity_tons,
+      current_mileage: vehicle.current_mileage,
+      status: vehicle.status,
+      purchase_date: vehicle.purchase_date,
+      insurance_expiry: vehicle.insurance_expiry,
+      inspection_expiry: vehicle.inspection_expiry,
+      notes: vehicle.notes,
+      created_at: vehicle.created_at,
+      updated_at: vehicle.updated_at
     };
   }
 
   /**
-   * メンテナンス記録追加
+   * バルク車両作成（CSV等からの一括登録）
    */
-  static async addMaintenanceRecord(vehicleId: string, data: {
-    maintenanceType: string;
-    description?: string;
-    cost?: number;
-    mileage: number;
-    performedAt: Date;
-    nextDue?: Date;
-  }): Promise<MaintenanceRecord> {
-    const vehicle = await this.findById(vehicleId);
-    if (!vehicle) {
-      throw new Error('車両が見つかりません');
-    }
+  async createMany(vehicles: VehicleCreateInput[]): Promise<{ count: number }> {
+    try {
+      const vehiclesWithTimestamps = vehicles.map(vehicle => ({
+        ...vehicle,
+        fuel_type: vehicle.fuel_type || PrismaFuelType.DIESEL,
+        current_mileage: vehicle.current_mileage || 0,
+        status: vehicle.status || PrismaVehicleStatus.ACTIVE,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
 
-    return prisma.maintenanceRecord.create({
-      data: {
-        vehicleId,
-        maintenanceType: data.maintenanceType,
-        description: data.description,
-        cost: data.cost,
-        mileage: data.mileage,
-        performedAt: data.performedAt,
-        nextDue: data.nextDue
-      }
-    });
+      return await this.prisma.vehicle.createMany({
+        data: vehiclesWithTimestamps,
+        skipDuplicates: true
+      });
+    } catch (error) {
+      throw new Error(`バルク車両作成エラー: ${error}`);
+    }
   }
 
   /**
-   * メンテナンス履歴取得
+   * 車両存在確認
    */
-  static async getMaintenanceHistory(vehicleId: string): Promise<MaintenanceRecord[]> {
-    return prisma.maintenanceRecord.findMany({
-      where: { vehicleId },
-      orderBy: { performedAt: 'desc' }
-    });
+  async exists(where: { 
+    id?: string; 
+    plate_number?: string 
+  }): Promise<boolean> {
+    try {
+      const vehicle = await this.prisma.vehicle.findUnique({ where });
+      return vehicle !== null;
+    } catch (error) {
+      throw new Error(`車両存在確認エラー: ${error}`);
+    }
   }
 }
 
-export default VehicleModel;
+// =====================================
+// デフォルトエクスポート
+// =====================================
+
+export const vehicleModel = new Vehicle();
+export default vehicleModel;

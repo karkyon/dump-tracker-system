@@ -49,7 +49,7 @@ export class VehicleService {
 
     if (search) {
       where.OR = [
-        { plateNumber: { contains: search, mode: 'insensitive' } },
+        { plate_number: { contains: search, mode: 'insensitive' } },
         { model: { contains: search, mode: 'insensitive' } },
         { manufacturer: { contains: search, mode: 'insensitive' } }
       ];
@@ -108,14 +108,14 @@ export class VehicleService {
     // レスポンス形式に変換
     const formattedVehicles = vehicles.map(vehicle => ({
       id: vehicle.id,
-      plateNumber: vehicle.plateNumber,
+      plate_number: vehicle.plate_number,
       model: vehicle.model,
       manufacturer: vehicle.manufacturer,
       year: vehicle.year,
       capacity: vehicle.capacity,
       fuelType: vehicle.fuelType,
       status: vehicle.status,
-      lastMaintenanceDate: vehicle.lastMaintenanceDate,
+      last_maintenance_date: vehicle.last_maintenance_date,
       nextMaintenanceDate: vehicle.nextMaintenanceDate,
       assignedDriverId: vehicle.assignedDriverId,
       createdAt: vehicle.createdAt,
@@ -188,7 +188,7 @@ export class VehicleService {
     }
 
     // メンテナンス履歴を取得（Inspectionテーブルから）
-    const maintenanceHistory = await prisma.inspection.findMany({
+    const maintenanceHistory = await prisma.inspection_records.findMany({
       where: { vehicleId },
       orderBy: { createdAt: 'desc' },
       take: 5
@@ -199,14 +199,14 @@ export class VehicleService {
 
     return {
       id: vehicle.id,
-      plateNumber: vehicle.plateNumber,
+      plate_number: vehicle.plate_number,
       model: vehicle.model,
       manufacturer: vehicle.manufacturer,
       year: vehicle.year,
       capacity: vehicle.capacity,
       fuelType: vehicle.fuelType,
       status: vehicle.status,
-      lastMaintenanceDate: vehicle.lastMaintenanceDate,
+      last_maintenance_date: vehicle.last_maintenance_date,
       nextMaintenanceDate: vehicle.nextMaintenanceDate,
       assignedDriverId: vehicle.assignedDriverId,
       createdAt: vehicle.createdAt,
@@ -241,11 +241,11 @@ export class VehicleService {
    * @returns 作成された車両
    */
   async createVehicle(vehicleData: CreateVehicleRequest, creatorId: string): Promise<Vehicle> {
-    const { plateNumber, model, manufacturer, year, capacity, fuelType } = vehicleData;
+    const { plate_number, model, manufacturer, year, capacity, fuelType } = vehicleData;
 
     // 車番重複チェック
     const existingVehicle = await prisma.vehicle.findUnique({
-      where: { plateNumber }
+      where: { plate_number }
     });
 
     if (existingVehicle) {
@@ -255,7 +255,7 @@ export class VehicleService {
     // 車両作成
     const newVehicle = await prisma.vehicle.create({
       data: {
-        plateNumber,
+        plate_number,
         model,
         manufacturer,
         year,
@@ -267,14 +267,14 @@ export class VehicleService {
 
     return {
       id: newVehicle.id,
-      plateNumber: newVehicle.plateNumber,
+      plate_number: newVehicle.plate_number,
       model: newVehicle.model,
       manufacturer: newVehicle.manufacturer,
       year: newVehicle.year,
       capacity: newVehicle.capacity,
       fuelType: newVehicle.fuelType,
       status: newVehicle.status,
-      lastMaintenanceDate: newVehicle.lastMaintenanceDate,
+      last_maintenance_date: newVehicle.last_maintenance_date,
       nextMaintenanceDate: newVehicle.nextMaintenanceDate,
       assignedDriverId: newVehicle.assignedDriverId,
       createdAt: newVehicle.createdAt,
@@ -299,9 +299,9 @@ export class VehicleService {
     }
 
     // 車番重複チェック（変更する場合）
-    if (updateData.plateNumber && updateData.plateNumber !== existingVehicle.plateNumber) {
+    if (updateData.plate_number && updateData.plate_number !== existingVehicle.plate_number) {
       const duplicateVehicle = await prisma.vehicle.findUnique({
-        where: { plateNumber: updateData.plateNumber }
+        where: { plate_number: updateData.plate_number }
       });
 
       if (duplicateVehicle) {
@@ -317,14 +317,14 @@ export class VehicleService {
 
     return {
       id: updatedVehicle.id,
-      plateNumber: updatedVehicle.plateNumber,
+      plate_number: updatedVehicle.plate_number,
       model: updatedVehicle.model,
       manufacturer: updatedVehicle.manufacturer,
       year: updatedVehicle.year,
       capacity: updatedVehicle.capacity,
       fuelType: updatedVehicle.fuelType,
       status: updatedVehicle.status,
-      lastMaintenanceDate: updatedVehicle.lastMaintenanceDate,
+      last_maintenance_date: updatedVehicle.last_maintenance_date,
       nextMaintenanceDate: updatedVehicle.nextMaintenanceDate,
       assignedDriverId: updatedVehicle.assignedDriverId,
       createdAt: updatedVehicle.createdAt,
@@ -427,14 +427,14 @@ export class VehicleService {
 
     return {
       id: updatedVehicle.id,
-      plateNumber: updatedVehicle.plateNumber,
+      plate_number: updatedVehicle.plate_number,
       model: updatedVehicle.model,
       manufacturer: updatedVehicle.manufacturer,
       year: updatedVehicle.year,
       capacity: updatedVehicle.capacity,
       fuelType: updatedVehicle.fuelType,
       status: updatedVehicle.status,
-      lastMaintenanceDate: updatedVehicle.lastMaintenanceDate,
+      last_maintenance_date: updatedVehicle.last_maintenance_date,
       nextMaintenanceDate: updatedVehicle.nextMaintenanceDate,
       assignedDriverId: updatedVehicle.assignedDriverId,
       createdAt: updatedVehicle.createdAt,
@@ -448,7 +448,7 @@ export class VehicleService {
    */
   async getAvailableVehicles(): Promise<Array<{ 
     id: string; 
-    plateNumber: string; 
+    plate_number: string; 
     model: string; 
     manufacturer: string;
     capacity: number;
@@ -460,14 +460,14 @@ export class VehicleService {
       },
       select: {
         id: true,
-        plateNumber: true,
+        plate_number: true,
         model: true,
         manufacturer: true,
         capacity: true,
         fuelType: true
       },
       orderBy: {
-        plateNumber: 'asc'
+        plate_number: 'asc'
       }
     });
   }
@@ -520,47 +520,47 @@ export class VehicleService {
     ] = await Promise.all([
       prisma.vehicle.findUnique({ where: { id: vehicleId } }),
       // 総運行回数
-      prisma.trip.count({
+      prisma.operations.count({
         where: whereCondition
       }),
       
       // 完了した運行回数
-      prisma.trip.count({
+      prisma.operations.count({
         where: { ...whereCondition, status: 'COMPLETED' }
       }),
       
       // 総走行距離
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _sum: { distance: true }
       }).then(result => result._sum.distance || 0),
       
       // 総給油費用
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _sum: { fuelCost: true }
       }).then(result => result._sum.fuelCost || 0),
 
       // 総燃料消費量
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _sum: { fuelConsumed: true }
       }).then(result => result._sum.fuelConsumed || 0),
       
       // 平均運行距離
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _avg: { distance: true }
       }).then(result => result._avg.distance || 0),
 
       // 平均燃料費
-      prisma.trip.aggregate({
+      prisma.operations.aggregate({
         where: { ...whereCondition, status: 'COMPLETED' },
         _avg: { fuelCost: true }
       }).then(result => result._avg.fuelCost || 0),
 
       // メンテナンス回数
-      prisma.inspection.count({
+      prisma.inspection_records.count({
         where: { 
           vehicleId,
           ...(startDate || endDate ? {
@@ -583,7 +583,7 @@ export class VehicleService {
     const periodDays = startDate && endDate ? 
       Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) : 
       365; // デフォルト1年
-    const operationDays = await prisma.trip.groupBy({
+    const operationDays = await prisma.operations.groupBy({
       by: ['vehicleId'],
       where: whereCondition,
       _count: {
@@ -594,7 +594,7 @@ export class VehicleService {
 
     return {
       vehicleInfo: {
-        plateNumber: vehicle?.plateNumber,
+        plate_number: vehicle?.plate_number,
         model: vehicle?.model,
         manufacturer: vehicle?.manufacturer,
         year: vehicle?.year,
@@ -662,7 +662,7 @@ export class VehicleService {
       throw new AppError('車両が見つかりません', 404);
     }
 
-    return await prisma.trip.findMany({
+    return await prisma.operations.findMany({
       where: { vehicleId },
       take: limit,
       orderBy: { createdAt: 'desc' },
@@ -698,14 +698,14 @@ export class VehicleService {
     return await prisma.vehicle.findMany({
       where: {
         OR: [
-          { plateNumber: { contains: query, mode: 'insensitive' } },
+          { plate_number: { contains: query, mode: 'insensitive' } },
           { model: { contains: query, mode: 'insensitive' } },
           { manufacturer: { contains: query, mode: 'insensitive' } }
         ]
       },
       select: {
         id: true,
-        plateNumber: true,
+        plate_number: true,
         model: true,
         manufacturer: true,
         status: true,
@@ -713,7 +713,7 @@ export class VehicleService {
       },
       take: limit,
       orderBy: {
-        plateNumber: 'asc'
+        plate_number: 'asc'
       }
     });
   }
@@ -753,7 +753,7 @@ export class VehicleService {
     }
 
     // メンテナンス記録を作成
-    const maintenanceRecord = await prisma.inspection.create({
+    const maintenanceRecord = await prisma.inspection_records.create({
       data: {
         vehicleId,
         inspectorId,
@@ -767,7 +767,7 @@ export class VehicleService {
       await prisma.vehicle.update({
         where: { id: vehicleId },
         data: {
-          lastMaintenanceDate: new Date(),
+          last_maintenance_date: new Date(),
           nextMaintenanceDate: maintenanceData.nextDue
         }
       });
@@ -791,7 +791,7 @@ export class VehicleService {
       throw new AppError('車両が見つかりません', 404);
     }
 
-    return await prisma.inspection.findMany({
+    return await prisma.inspection_records.findMany({
       where: { vehicleId },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -831,7 +831,7 @@ export class VehicleService {
 
     // 使用中から他のステータスに変更する場合は、アクティブなトリップがないかチェック
     if (status !== 'IN_USE') {
-      const activeTrips = await prisma.trip.findMany({
+      const activeTrips = await prisma.operations.findMany({
         where: {
           vehicleId: { in: vehicleIds },
           status: { in: ['PLANNED', 'IN_PROGRESS'] }
@@ -888,7 +888,7 @@ export class VehicleService {
       if (endDate) whereCondition.startTime.lte = new Date(endDate);
     }
 
-    const trips = await prisma.trip.findMany({
+    const trips = await prisma.operations.findMany({
       where: whereCondition,
       select: {
         startTime: true,
@@ -929,7 +929,7 @@ export class VehicleService {
 
     return {
       vehicleInfo: {
-        plateNumber: vehicle.plateNumber,
+        plate_number: vehicle.plate_number,
         model: vehicle.model,
         manufacturer: vehicle.manufacturer
       },
@@ -1026,7 +1026,7 @@ export class VehicleService {
 
       return {
         vehicleId: vehicle.id,
-        plateNumber: vehicle.plateNumber,
+        plate_number: vehicle.plate_number,
         model: vehicle.model,
         status: vehicle.status,
         totalTrips: vehicle._count.trips,

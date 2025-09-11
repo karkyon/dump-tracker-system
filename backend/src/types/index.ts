@@ -146,53 +146,44 @@ export enum InspectionType {
 
 export interface User {
   id: string;
-  email: string;
   username: string;
+  email: string;
   password_hash: string;
-  first_name: string;
-  last_name: string;
-  role: UserRole;
-  phone_number?: string;
-  license_number?: string;
-  license_expiry_date?: Date;
-  hire_date?: Date;
-  emergency_contact?: string;
-  emergency_contact_phone?: string;
+  name: string;
+  role?: UserRole;
+  employee_id?: string;
+  phone?: string;
   is_active: boolean;
   last_login_at?: Date;
-  login_attempts: number;
-  locked_until?: Date;
   password_changed_at?: Date;
   created_at: Date;
   updated_at: Date;
+  audit_logs?: any[]; // 関連するAuditLogの配列
+  inspection_item_results?: any[]; // 関連するInspectionItemResultの配列
+  inspection_items?: any[]; // 関連するInspectionItemの配列
+  inspection_records?: any[]; // 関連するInspectionRecordの配列
+  maintenance_records?: any[]; // 関連するMaintenanceRecordの配列
+  notifications?: any[]; // 関連するNotificationの配列
 }
 
 export interface CreateUserRequest {
-  email: string;
   username: string;
-  password: string;
-  first_name: string;
-  last_name: string;
+  email: string;
+  password_hash: string;
+  name: string;
   role?: UserRole;
-  phone_number?: string;
-  license_number?: string;
-  license_expiry_date?: Date;
-  hire_date?: Date;
-  emergency_contact?: string;
-  emergency_contact_phone?: string;
+  employee_id?: string;
+  phone?: string;
 }
 
 export interface UpdateUserRequest {
-  email?: string;
-  first_name?: string;
-  last_name?: string;
+  username: string;
+  email: string;
+  password_hash: string;
+  name: string;
   role?: UserRole;
-  phone_number?: string;
-  license_number?: string;
-  license_expiry_date?: Date;
-  hire_date?: Date;
-  emergency_contact?: string;
-  emergency_contact_phone?: string;
+  employee_id?: string;
+  phone?: string;
   is_active?: boolean;
 }
 

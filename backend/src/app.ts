@@ -15,7 +15,7 @@ try {
   config = require('./config/environment');
   config = config.default || config;
 } catch (error) {
-  console.warn('Config not found, using defaults:', error.message);
+  console.warn('Config not found, using defaults:', (error instanceof Error ? error.message : String(error)));
   config = {
     CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3000',
     NODE_ENV: process.env.NODE_ENV || 'development'
@@ -28,7 +28,10 @@ try {
   logger = require('./utils/logger');
   logger = logger.default || logger;
 } catch (error) {
-  console.warn('Logger not found, using console:', error.message);
+  console.warn(
+    'Logger not found, using console:',
+    error instanceof Error ? error.message : String(error)
+  );
   logger = console;
 }
 
@@ -45,7 +48,7 @@ try {
     },
   }));
 } catch (error) {
-  console.warn('Helmet setup failed:', error.message);
+  console.warn('Helmet setup failed:', error instanceof Error ? error.message : String(error));
 }
 
 // CORS設定
@@ -57,14 +60,17 @@ try {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
   }));
 } catch (error) {
-  console.warn('CORS setup failed:', error.message);
+  console.warn('CORS setup failed:', error instanceof Error ? error.message : String(error));
 }
 
 // 基本ミドルウェア
 try {
   app.use(compression());
 } catch (error) {
-  console.warn('Compression setup failed:', error.message);
+  console.warn(
+    'Compression setup failed:',
+    error instanceof Error ? error.message : String(error)
+  );
 }
 
 // ログミドルウェア
@@ -81,7 +87,10 @@ try {
     }
   }));
 } catch (error) {
-  console.warn('Morgan setup failed:', error.message);
+  console.warn(
+    'Morgan setup failed:',
+    error instanceof Error ? error.message : String(error)
+  );
   app.use(morgan('combined'));
 }
 
@@ -104,14 +113,20 @@ try {
   });
   app.use('/api/', limiter);
 } catch (error) {
-  console.warn('Rate limiting setup failed:', error.message);
+  console.warn(
+    'Rate limiting setup failed:',
+    error instanceof Error ? error.message : String(error)
+  );
 }
 
 // 静的ファイル配信（安全版）
 try {
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 } catch (error) {
-  console.warn('Static files setup failed:', error.message);
+  console.warn(
+    'Static files setup failed:',
+    error instanceof Error ? error.message : String(error)
+  );
 }
 
 // ルート設定（安全版）
@@ -120,7 +135,10 @@ try {
   const routes = apiRoutes.default || apiRoutes;
   app.use('/api/v1', routes);
 } catch (error) {
-  console.error('Failed to load API routes:', error.message);
+  console.error(
+    'Failed to load API routes:',
+    error instanceof Error ? error.message : String(error)
+  );
   
   // フォールバックルート
   app.get('/api/v1/health', (req, res) => {
@@ -173,7 +191,10 @@ try {
   app.use(notFound);
   app.use(errorHandler);
 } catch (error) {
-  console.warn('Error handlers not found, using fallback:', error.message);
+  console.warn(
+    'Error handlers not found, using fallback:',
+    error instanceof Error ? error.message : String(error)
+  );
   
   // フォールバック404ハンドラー
   app.use((req, res, next) => {
