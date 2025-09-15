@@ -4,7 +4,7 @@ import { config, initializeConfig } from './config/environment';
 import { connectDatabase } from './config/database';
 import logger from './utils/logger';
 
-const PORT = config.PORT || 8000;
+const PORT = config.port || 8000;
 
 const startServer = async () => {
   try {
@@ -15,11 +15,11 @@ const startServer = async () => {
     await connectDatabase();
     
     // サーバー起動
-    const server = app.listen(PORT, config.HOST, () => {
-      logger.info(`🚀 Server is running on http://${config.HOST}:${PORT}`);
-      logger.info(`📝 API Documentation: http://${config.HOST}:${PORT}/api/v1/docs`);
-      logger.info(`💓 Health Check: http://${config.HOST}:${PORT}/health`);
-      logger.info(`🌍 Environment: ${config.NODE_ENV}`);
+    const server = app.listen(PORT, () => {
+      logger.info(`🚀 Server is running on http://localhost:${PORT}`);
+      logger.info(`📝 API Documentation: http://localhost:${PORT}/api/v1/docs`);
+      logger.info(`💓 Health Check: http://localhost:${PORT}/health`);
+      logger.info(`🌍 Environment: ${config.nodeEnv}`);
     });
 
     // Graceful shutdown

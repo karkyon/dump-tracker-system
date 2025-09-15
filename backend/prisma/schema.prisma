@@ -11,389 +11,401 @@ model User {
   id                                      String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   username                                String                    @unique @db.VarChar(50)
   email                                   String                    @unique @db.VarChar(255)
-  password_hash                           String                    @db.VarChar(255)
+  passwordHash String @map("password_hash")                    @db.VarChar(255)
   name                                    String                    @db.VarChar(100)
-  role                                    user_role?                @default(DRIVER)
-  employee_id                             String?                   @db.VarChar(50)
+  role UserRole?                @default(DRIVER)
+  employeeId String? @map("employee_id")                   @db.VarChar(50)
   phone                                   String?                   @db.VarChar(20)
-  is_active                               Boolean?                  @default(true)
-  last_login_at                           DateTime?                 @db.Timestamptz(6)
-  password_changed_at                     DateTime?                 @default(now()) @db.Timestamptz(6)
-  created_at                              DateTime?                 @default(now()) @db.Timestamptz(6)
-  updated_at                              DateTime?                 @default(now()) @db.Timestamptz(6)
-  audit_logs                              audit_logs[]
-  inspection_item_results                 inspection_item_results[]
-  inspection_items                        inspection_items[]
-  inspection_records                      inspection_records[]
-  maintenance_records                     maintenance_records[]
-  notifications                           notifications[]
-  operations_operations_created_byTousers operations[]              @relation("operations_created_byTousers")
-  operations_operations_driver_idTousers  operations[]              @relation("operations_driver_idTousers")
+  isActive Boolean? @map("is_active")                  @default(true)
+  lastLoginAt DateTime? @map("last_login_at")                 @db.Timestamptz(6)
+  passwordChangedAt DateTime? @map("password_changed_at")                 @default(now()) @db.Timestamptz(6)
+  createdAt DateTime? @map("created_at")                 @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @map("updated_at")                 @default(now()) @db.Timestamptz(6)
+  auditLogs AuditLog[]
+  inspectionItemResults InspectionItemResult[]
+  inspectionItems InspectionItem[]
+  inspectionRecords InspectionRecord[]
+  maintenanceRecords MaintenanceRecord[]
+  notifications Notification[]
+  operationsOperationsCreatedByTousers Operation[]              @relation("operations_created_byTousers")
+  operationsOperationsDriverIdTousers Operation[]              @relation("operations_driver_idTousers")
 
-  @@index([email], map: "idx_users_email")
-  @@index([role], map: "idx_users_role")
-  @@index([username], map: "idx_users_username")
+@@index([email], map: "idx_users_email")
+@@index([role], map: "idx_users_role")
+@@index([username], map: "idx_users_username")
   @@map("users")
 }
 
 model Vehicle {
   id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  plate_number        String                @unique @db.VarChar(20)
+  plateNumber String @map("plate_number")                @unique @db.VarChar(20)
   model               String                @db.VarChar(100)
   manufacturer        String?               @db.VarChar(100)
   year                Int?
-  fuel_type           fuel_type?            @default(DIESEL)
-  capacity_tons       Decimal?              @db.Decimal(5, 2)
-  current_mileage     Int?                  @default(0)
-  status              vehicle_status?       @default(ACTIVE)
-  purchase_date       DateTime?             @db.Date
-  insurance_expiry    DateTime?             @db.Date
-  inspection_expiry   DateTime?             @db.Date
+  fuelType FuelType?            @default(DIESEL)
+  capacityTons Decimal? @map("capacity_tons")              @db.Decimal(5, 2)
+  currentMileage Int? @map("current_mileage")                  @default(0)
+  status VehicleStatus?       @default(ACTIVE)
+  purchaseDate DateTime? @map("purchase_date")             @db.Date
+  insuranceExpiry DateTime? @map("insurance_expiry")             @db.Date
+  inspectionExpiry DateTime? @map("inspection_expiry")             @db.Date
   notes               String?
-  created_at          DateTime?             @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime?             @default(now()) @db.Timestamptz(6)
-  gps_logs            gps_logs[]
-  inspection_records  inspection_records[]
-  maintenance_records maintenance_records[]
-  operations          operations[]
+  createdAt DateTime? @map("created_at")             @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @map("updated_at")             @default(now()) @db.Timestamptz(6)
+  gpsLogs GpsLog[]
+  inspectionRecords InspectionRecord[]
+  maintenanceRecords MaintenanceRecord[]
+  operations Operation[]
 
-  @@index([plate_number], map: "idx_vehicles_plate_number")
-  @@index([status], map: "idx_vehicles_status")
+@@index([plateNumber], map: "idx_vehicles_plate_number")
+@@index([status], map: "idx_vehicles_status")
   @@map("vehicles")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model audit_logs {
+model AuditLog {
   id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  table_name     String    @db.VarChar(100)
-  operation_type String    @db.VarChar(20)
-  record_id      String?   @db.Uuid
-  user_id        String?   @db.Uuid
-  ip_address     String?   @db.Inet
-  user_agent     String?
-  old_values     Json?
-  new_values     Json?
-  created_at     DateTime? @default(now()) @db.Timestamptz(6)
-  users          User?     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tableName String @map("table_name")    @db.VarChar(100)
+  operationType String @map("operation_type")    @db.VarChar(20)
+  recordId String? @map("record_id")   @db.Uuid
+  userId String? @map("user_id")   @db.Uuid
+  ipAddress String? @map("ip_address")   @db.Inet
+  userAgent String? @map("user_agent")
+  oldValues Json? @map("old_values")
+  newValues Json? @map("new_values")
+  createdAt DateTime? @map("created_at") @default(now()) @db.Timestamptz(6)
+  users User?     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([operation_type], map: "idx_audit_logs_operation")
-  @@index([table_name], map: "idx_audit_logs_table")
-  @@index([created_at], map: "idx_audit_logs_time")
+@@index([operationType], map: "idx_audit_logs_operation")
+@@index([tableName], map: "idx_audit_logs_table")
+@@index([createdAt], map: "idx_audit_logs_time")
+  @@map("audit_logs")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model gps_logs {
+model GpsLog {
   id              String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  vehicle_id      String      @db.Uuid
-  operation_id    String?     @db.Uuid
+  vehicleId String @map("vehicle_id")      @db.Uuid
+  operationId String? @map("operation_id")     @db.Uuid
   latitude        Decimal     @db.Decimal(10, 8)
   longitude       Decimal     @db.Decimal(11, 8)
   altitude        Decimal?    @db.Decimal(8, 2)
-  speed_kmh       Decimal?    @db.Decimal(5, 2)
+  speedKmh Decimal? @map("speed_kmh")    @db.Decimal(5, 2)
   heading         Decimal?    @db.Decimal(5, 2)
-  accuracy_meters Decimal?    @db.Decimal(5, 2)
-  recorded_at     DateTime    @db.Timestamptz(6)
-  created_at      DateTime?   @default(now()) @db.Timestamptz(6)
-  operations      operations? @relation(fields: [operation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  vehicles        Vehicle     @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  accuracyMeters Decimal? @map("accuracy_meters")    @db.Decimal(5, 2)
+  recordedAt DateTime @map("recorded_at")    @db.Timestamptz(6)
+  createdAt DateTime? @map("created_at")   @default(now()) @db.Timestamptz(6)
+  operations Operation? @relation(fields: [operationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicles Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([recorded_at], map: "idx_gps_logs_time")
-  @@index([vehicle_id], map: "idx_gps_logs_vehicle")
+@@index([recordedAt], map: "idx_gps_logs_time")
+@@index([vehicleId], map: "idx_gps_logs_vehicle")
+  @@map("gps_logs")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model items {
+model Item {
   id                         String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name                       String              @unique @db.VarChar(255)
   category                   String?             @db.VarChar(100)
   unit                       String?             @default("トン") @db.VarChar(20)
-  standard_weight            Decimal?            @db.Decimal(5, 2)
+  standardWeight Decimal? @map("standard_weight")            @db.Decimal(5, 2)
   hazardous                  Boolean?            @default(false)
   description                String?
-  is_active                  Boolean?            @default(true)
-  created_at                 DateTime?           @default(now()) @db.Timestamptz(6)
-  updated_at                 DateTime?           @default(now()) @db.Timestamptz(6)
-  standard_volume            Decimal?            @db.Decimal(5, 2)
-  hazardous_class            String?             @db.VarChar(100)
-  handling_instructions      String?             @db.VarChar(50)
-  storage_requirements       String?             @db.VarChar(100)
-  temperature_range          String?             @db.VarChar(50)
-  is_fragile                 Boolean?
-  is_hazardous               Boolean?
-  requires_special_equipment Boolean?
-  display_order              Int?
-  photo_urls                 String?             @db.VarChar(500)
-  specification_file_url     String?             @db.VarChar(500)
-  msds_file_url              String?             @db.VarChar(500)
-  operation_details          operation_details[]
+  isActive Boolean? @map("is_active")            @default(true)
+  createdAt DateTime? @map("created_at")           @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @map("updated_at")           @default(now()) @db.Timestamptz(6)
+  standardVolume Decimal? @map("standard_volume")            @db.Decimal(5, 2)
+  hazardousClass String? @map("hazardous_class")             @db.VarChar(100)
+  handlingInstructions String? @map("handling_instructions")             @db.VarChar(50)
+  storageRequirements String? @map("storage_requirements")             @db.VarChar(100)
+  temperatureRange String? @map("temperature_range")             @db.VarChar(50)
+  isFragile Boolean? @map("is_fragile")
+  isHazardous Boolean? @map("is_hazardous")
+  requiresSpecialEquipment Boolean? @map("requires_special_equipment")
+  displayOrder Int? @map("display_order")
+  photoUrls String? @map("photo_urls")             @db.VarChar(500)
+  specificationFileUrl String? @map("specification_file_url")             @db.VarChar(500)
+  msdsFileUrl String? @map("msds_file_url")             @db.VarChar(500)
+  operationDetails OperationDetail[]
 
-  @@index([hazardous], map: "idx_items_hazardous")
-  @@index([display_order], map: "idx_items_display_order")
-  @@index([is_fragile], map: "idx_items_is_fragile")
-  @@index([is_hazardous], map: "idx_items_is_hazardous")
-  @@index([requires_special_equipment], map: "idx_items_requires_special_equipment")
+@@index([hazardous], map: "idx_items_hazardous")
+@@index([displayOrder], map: "idx_items_display_order")
+@@index([isFragile], map: "idx_items_is_fragile")
+@@index([isHazardous], map: "idx_items_is_hazardous")
+@@index([requiresSpecialEquipment], map: "idx_items_requires_special_equipment")
+  @@map("items")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model locations {
+model Location {
   id                     String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name                   String              @unique(map: "idx_locations_name") @db.VarChar(255)
   address                String
   latitude               Decimal?            @db.Decimal(10, 8)
   longitude              Decimal?            @db.Decimal(11, 8)
-  location_type          location_type
-  client_name            String?             @db.VarChar(255)
-  contact_person         String?             @db.VarChar(100)
-  contact_phone          String?             @db.VarChar(20)
-  contact_email          String?             @db.VarChar(255)
-  operating_hours        String?
-  special_instructions   String?
-  is_active              Boolean?            @default(true)
-  created_at             DateTime?           @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime?           @default(now()) @db.Timestamptz(6)
-  hazardous_area         Boolean?
-  access_restrictions    String?
-  parking_instructions   String?
-  unloading_instructions String?
-  equipment_available    String?
-  photo_urls             String[]
-  operation_details      operation_details[]
+  locationType LocationType
+  clientName String? @map("client_name")             @db.VarChar(255)
+  contactPerson String? @map("contact_person")             @db.VarChar(100)
+  contactPhone String? @map("contact_phone")             @db.VarChar(20)
+  contactEmail String? @map("contact_email")             @db.VarChar(255)
+  operatingHours String? @map("operating_hours")
+  specialInstructions String? @map("special_instructions")
+  isActive Boolean? @map("is_active")            @default(true)
+  createdAt DateTime? @map("created_at")           @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @map("updated_at")           @default(now()) @db.Timestamptz(6)
+  hazardousArea Boolean? @map("hazardous_area")
+  accessRestrictions String? @map("access_restrictions")
+  parkingInstructions String? @map("parking_instructions")
+  unloadingInstructions String? @map("unloading_instructions")
+  equipmentAvailable String? @map("equipment_available")
+  photoUrls String[] @map("photo_urls")
+  operationDetails OperationDetail[]
 
-  @@index([location_type], map: "idx_locations_type")
-  @@index([hazardous_area], map: "idx_locations_hazardous_area")
+@@index([locationType], map: "idx_locations_type")
+@@index([hazardousArea], map: "idx_locations_hazardous_area")
+  @@map("locations")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model maintenance_records {
+model MaintenanceRecord {
   id                       String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  vehicle_id               String           @db.Uuid
-  maintenance_type         maintenance_type
-  scheduled_date           DateTime?        @db.Date
-  completed_date           DateTime?        @db.Date
-  mileage_at_maintenance   Int?
+  vehicleId String @map("vehicle_id")           @db.Uuid
+  maintenanceType MaintenanceType
+  scheduledDate DateTime? @map("scheduled_date")        @db.Date
+  completedDate DateTime? @map("completed_date")        @db.Date
+  mileageAtMaintenance Int? @map("mileage_at_maintenance")
   cost                     Decimal?         @db.Decimal(10, 2)
-  vendor_name              String?          @db.VarChar(255)
+  vendorName String? @map("vendor_name")          @db.VarChar(255)
   description              String?
-  next_maintenance_date    DateTime?        @db.Date
-  next_maintenance_mileage Int?
-  is_completed             Boolean?         @default(false)
-  created_by               String?          @db.Uuid
-  created_at               DateTime?        @default(now()) @db.Timestamptz(6)
-  updated_at               DateTime?        @default(now()) @db.Timestamptz(6)
-  users                    User?            @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  vehicles                 Vehicle          @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  nextMaintenanceDate DateTime? @map("next_maintenance_date")        @db.Date
+  nextMaintenanceMileage Int? @map("next_maintenance_mileage")
+  isCompleted Boolean? @map("is_completed")         @default(false)
+  createdBy String? @map("created_by")          @db.Uuid
+  createdAt DateTime? @map("created_at")        @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @map("updated_at")        @default(now()) @db.Timestamptz(6)
+  users User?            @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicles Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([is_completed], map: "idx_maintenance_completed")
-  @@index([maintenance_type], map: "idx_maintenance_type")
-  @@index([vehicle_id], map: "idx_maintenance_vehicle")
+@@index([isCompleted], map: "idx_maintenance_completed")
+@@index([maintenanceType], map: "idx_maintenance_type")
+@@index([vehicleId], map: "idx_maintenance_vehicle")
+  @@map("maintenance_records")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model operation_details {
+model OperationDetail {
   id                String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  operation_id      String     @db.Uuid
-  sequence_number   Int
-  activity_type     String     @db.VarChar(20)
-  location_id       String     @db.Uuid
-  item_id           String     @db.Uuid
-  planned_time      DateTime?  @db.Timestamptz(6)
-  actual_start_time DateTime?  @db.Timestamptz(6)
-  actual_end_time   DateTime?  @db.Timestamptz(6)
-  quantity_tons     Decimal    @db.Decimal(8, 2)
+  operationId String @map("operation_id")     @db.Uuid
+  sequenceNumber Int @map("sequence_number")
+  activityType String @map("activity_type")     @db.VarChar(20)
+  locationId String @map("location_id")     @db.Uuid
+  itemId String @map("item_id")     @db.Uuid
+  plannedTime DateTime? @map("planned_time")  @db.Timestamptz(6)
+  actualStartTime DateTime? @map("actual_start_time")  @db.Timestamptz(6)
+  actualEndTime DateTime? @map("actual_end_time")  @db.Timestamptz(6)
+  quantityTons Decimal @map("quantity_tons")    @db.Decimal(8, 2)
   notes             String?
-  created_at        DateTime?  @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime?  @default(now()) @db.Timestamptz(6)
-  items             items      @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  locations         locations  @relation(fields: [location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  operations        operations @relation(fields: [operation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  createdAt DateTime? @map("created_at")  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @map("updated_at")  @default(now()) @db.Timestamptz(6)
+  items Item      @relation(fields: [itemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations Location  @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operations Operation @relation(fields: [operationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([operation_id, sequence_number])
-  @@index([activity_type], map: "idx_operation_details_activity")
-  @@index([item_id], map: "idx_operation_details_item")
-  @@index([location_id], map: "idx_operation_details_location")
-  @@index([operation_id], map: "idx_operation_details_operation")
+@@unique([operationId, sequenceNumber])
+@@index([activityType], map: "idx_operation_details_activity")
+@@index([itemId], map: "idx_operation_details_item")
+@@index([locationId], map: "idx_operation_details_location")
+@@index([operationId], map: "idx_operation_details_operation")
+  @@map("operation_details")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model operations {
+model Operation {
   id                                 String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  operation_number                   String               @unique @default("") @db.VarChar(50)
-  vehicle_id                         String               @db.Uuid
-  driver_id                          String               @db.Uuid
-  status                             operation_status?    @default(PLANNING)
-  planned_start_time                 DateTime?            @db.Timestamptz(6)
-  actual_start_time                  DateTime?            @db.Timestamptz(6)
-  planned_end_time                   DateTime?            @db.Timestamptz(6)
-  actual_end_time                    DateTime?            @db.Timestamptz(6)
-  total_distance_km                  Decimal?             @db.Decimal(8, 2)
-  fuel_consumed_liters               Decimal?             @db.Decimal(8, 2)
+  operationNumber String @map("operation_number")               @unique @default("") @db.VarChar(50)
+  vehicleId String @map("vehicle_id")               @db.Uuid
+  driverId String @map("driver_id")               @db.Uuid
+  status OperationStatus?    @default(PLANNING)
+  plannedStartTime DateTime? @map("planned_start_time")            @db.Timestamptz(6)
+  actualStartTime DateTime? @map("actual_start_time")            @db.Timestamptz(6)
+  plannedEndTime DateTime? @map("planned_end_time")            @db.Timestamptz(6)
+  actualEndTime DateTime? @map("actual_end_time")            @db.Timestamptz(6)
+  totalDistanceKm Decimal? @map("total_distance_km")             @db.Decimal(8, 2)
+  fuelConsumedLiters Decimal? @map("fuel_consumed_liters")             @db.Decimal(8, 2)
   notes                              String?
-  created_by                         String?              @db.Uuid
-  created_at                         DateTime?            @default(now()) @db.Timestamptz(6)
-  updated_at                         DateTime?            @default(now()) @db.Timestamptz(6)
-  fuel_cost_yen                      Decimal?             @db.Decimal(10, 2)
-  weather_condition                  String?              @db.VarChar(50)
-  road_condition                     String?              @db.VarChar(100)
-  gps_logs                           gps_logs[]
-  inspection_records                 inspection_records[]
-  operation_details                  operation_details[]
-  users_operations_created_byTousers User?                @relation("operations_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users_operations_driver_idTousers  User                 @relation("operations_driver_idTousers", fields: [driver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  vehicles                           Vehicle              @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy String? @map("created_by")              @db.Uuid
+  createdAt DateTime? @map("created_at")            @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @map("updated_at")            @default(now()) @db.Timestamptz(6)
+  fuelCostYen Decimal? @map("fuel_cost_yen")             @db.Decimal(10, 2)
+  weatherCondition String? @map("weather_condition")              @db.VarChar(50)
+  roadCondition String? @map("road_condition")              @db.VarChar(100)
+  gpsLogs GpsLog[]
+  inspectionRecords InspectionRecord[]
+  operationDetails OperationDetail[]
+  usersOperationsCreatedByTousers User?                @relation("operations_created_byTousers", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usersOperationsDriverIdTousers User                 @relation("operations_driver_idTousers", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicles Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([driver_id], map: "idx_operations_driver")
-  @@index([status], map: "idx_operations_status")
-  @@index([vehicle_id], map: "idx_operations_vehicle")
+@@index([driverId], map: "idx_operations_driver")
+@@index([status], map: "idx_operations_status")
+@@index([vehicleId], map: "idx_operations_vehicle")
+  @@map("operations")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model inspection_item_results {
+model InspectionItemResult {
   id                   String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  inspection_record_id String             @db.Uuid
-  inspection_item_id   String             @db.Uuid
-  result_value         String?
-  is_passed            Boolean?
+  inspectionRecordId String @map("inspection_record_id")             @db.Uuid
+  inspectionItemId String @map("inspection_item_id")             @db.Uuid
+  resultValue String? @map("result_value")
+  isPassed Boolean? @map("is_passed")
   notes                String?
-  defect_level         String?            @db.VarChar(20)
-  photo_urls           String[]
-  attachment_urls      String[]
-  checked_at           DateTime           @default(now()) @db.Timestamptz(6)
-  checked_by           String?            @db.Uuid
-  created_at           DateTime           @default(now()) @db.Timestamptz(6)
-  updated_at           DateTime           @default(now()) @db.Timestamptz(6)
-  users                User?              @relation(fields: [checked_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  inspection_items     inspection_items   @relation(fields: [inspection_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  inspection_records   inspection_records @relation(fields: [inspection_record_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  defectLevel String? @map("defect_level")            @db.VarChar(20)
+  photoUrls String[] @map("photo_urls")
+  attachmentUrls String[] @map("attachment_urls")
+  checkedAt DateTime @map("checked_at")           @default(now()) @db.Timestamptz(6)
+  checkedBy String? @map("checked_by")            @db.Uuid
+  createdAt DateTime @map("created_at")           @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at")           @default(now()) @db.Timestamptz(6)
+  users User?              @relation(fields: [checkedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspectionItems InspectionItem   @relation(fields: [inspectionItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspectionRecords InspectionRecord @relation(fields: [inspectionRecordId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([inspection_record_id, inspection_item_id], map: "inspection_item_results_unique")
-  @@index([inspection_item_id], map: "idx_inspection_item_results_item")
-  @@index([is_passed], map: "idx_inspection_item_results_passed")
-  @@index([inspection_record_id], map: "idx_inspection_item_results_record")
+@@unique([inspectionRecordId, inspectionItemId], map: "inspection_item_results_unique")
+@@index([inspectionItemId], map: "idx_inspection_item_results_item")
+@@index([isPassed], map: "idx_inspection_item_results_passed")
+@@index([inspectionRecordId], map: "idx_inspection_item_results_record")
+  @@map("inspection_item_results")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model inspection_items {
+model InspectionItem {
   id                      String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name                    String                    @db.VarChar(255)
   description             String?
-  inspection_type         inspection_type
-  input_type              input_type                @default(CHECKBOX)
+  inspectionType InspectionType
+  inputType InputType                @default(CHECKBOX)
   category                String?                   @db.VarChar(100)
-  display_order           Int                       @default(0)
-  is_required             Boolean                   @default(true)
-  is_active               Boolean                   @default(true)
-  default_value           String?
-  validation_rules        Json?
-  help_text               String?
-  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
-  updated_at              DateTime                  @default(now()) @db.Timestamptz(6)
-  created_by              String?                   @db.Uuid
-  inspection_item_results inspection_item_results[]
-  users                   User?                     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  displayOrder Int @map("display_order")                       @default(0)
+  isRequired Boolean @map("is_required")                   @default(true)
+  isActive Boolean @map("is_active")                   @default(true)
+  defaultValue String? @map("default_value")
+  validationRules Json? @map("validation_rules")
+  helpText String? @map("help_text")
+  createdAt DateTime @map("created_at")                  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at")                  @default(now()) @db.Timestamptz(6)
+  createdBy String? @map("created_by")                   @db.Uuid
+  inspectionItemResults InspectionItemResult[]
+  users User?                     @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@unique([name, inspection_type], map: "inspection_items_name_type_unique")
-  @@index([inspection_type, display_order], map: "idx_inspection_items_order")
-  @@index([inspection_type], map: "idx_inspection_items_type")
+@@unique([name, inspectionType], map: "inspection_items_name_type_unique")
+@@index([inspectionType, displayOrder], map: "idx_inspection_items_order")
+@@index([inspectionType], map: "idx_inspection_items_type")
+  @@map("inspection_items")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model inspection_records {
+model InspectionRecord {
   id                      String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  operation_id            String?                   @db.Uuid
-  vehicle_id              String                    @db.Uuid
-  inspector_id            String                    @db.Uuid
-  inspection_type         inspection_type
-  status                  inspection_status         @default(PENDING)
-  scheduled_at            DateTime?                 @db.Timestamptz(6)
-  started_at              DateTime?                 @db.Timestamptz(6)
-  completed_at            DateTime?                 @db.Timestamptz(6)
-  overall_result          Boolean?
-  overall_notes           String?
-  defects_found           Int?                      @default(0)
+  operationId String? @map("operation_id")                   @db.Uuid
+  vehicleId String @map("vehicle_id")                    @db.Uuid
+  inspectorId String @map("inspector_id")                    @db.Uuid
+  inspectionType InspectionType
+  status InspectionStatus         @default(PENDING)
+  scheduledAt DateTime? @map("scheduled_at")                 @db.Timestamptz(6)
+  startedAt DateTime? @map("started_at")                 @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at")                 @db.Timestamptz(6)
+  overallResult Boolean? @map("overall_result")
+  overallNotes String? @map("overall_notes")
+  defectsFound Int? @map("defects_found")                      @default(0)
   latitude                Decimal?                  @db.Decimal(10, 8)
   longitude               Decimal?                  @db.Decimal(11, 8)
-  location_name           String?                   @db.VarChar(255)
-  weather_condition       String?                   @db.VarChar(50)
+  locationName String? @map("location_name")                   @db.VarChar(255)
+  weatherCondition String? @map("weather_condition")                   @db.VarChar(50)
   temperature             Decimal?                  @db.Decimal(4, 1)
-  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
-  updated_at              DateTime                  @default(now()) @db.Timestamptz(6)
-  inspection_item_results inspection_item_results[]
-  users                   User                      @relation(fields: [inspector_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  operations              operations?               @relation(fields: [operation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  vehicles                Vehicle                   @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @map("created_at")                  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at")                  @default(now()) @db.Timestamptz(6)
+  inspectionItemResults InspectionItemResult[]
+  users User                      @relation(fields: [inspectorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operations Operation?               @relation(fields: [operationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  vehicles Vehicle                   @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([created_at], map: "idx_inspection_records_date")
-  @@index([inspector_id], map: "idx_inspection_records_inspector")
-  @@index([status], map: "idx_inspection_records_status")
-  @@index([inspection_type], map: "idx_inspection_records_type")
-  @@index([vehicle_id], map: "idx_inspection_records_vehicle")
+@@index([createdAt], map: "idx_inspection_records_date")
+@@index([inspectorId], map: "idx_inspection_records_inspector")
+@@index([status], map: "idx_inspection_records_status")
+@@index([inspectionType], map: "idx_inspection_records_type")
+@@index([vehicleId], map: "idx_inspection_records_vehicle")
+  @@map("inspection_records")
 }
 
-model notifications {
+model Notification {
   id      String   @id @db.Uuid
-  user_id String?  @db.Uuid
+  userId String? @map("user_id")  @db.Uuid
   title   String?  @db.VarChar(255)
   message String?
-  is_read Boolean? @default(false)
-  users   User?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  isRead Boolean? @map("is_read") @default(false)
+  users User?    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@map("notifications")
 }
 
-model system_settings {
+model SystemSetting {
   key         String  @id @db.VarChar(100)
   value       String?
   description String?
+  @@map("system_settings")
 }
 
-enum fuel_type {
+enum FuelType {
   GASOLINE
   DIESEL
   HYBRID
   ELECTRIC
 }
 
-enum location_type {
+enum LocationType {
   LOADING
   UNLOADING
   BOTH
 }
 
-enum maintenance_type {
+enum MaintenanceType {
   ROUTINE
   REPAIR
   INSPECTION
   EMERGENCY
 }
 
-enum operation_status {
+enum OperationStatus {
   PLANNING
   IN_PROGRESS
   COMPLETED
   CANCELLED
 }
 
-enum user_role {
+enum UserRole {
   ADMIN
   MANAGER
   DRIVER
 }
 
-enum vehicle_status {
+enum VehicleStatus {
   ACTIVE
   MAINTENANCE
   INACTIVE
   RETIRED
 }
 
-enum input_type {
+enum InputType {
   CHECKBOX
   TEXT
   NUMBER
   SELECT
 }
 
-enum inspection_status {
+enum InspectionStatus {
   PENDING
   IN_PROGRESS
   COMPLETED
@@ -401,7 +413,7 @@ enum inspection_status {
   SKIPPED
 }
 
-enum inspection_type {
+enum InspectionType {
   PRE_TRIP
   POST_TRIP
   DAILY

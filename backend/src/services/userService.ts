@@ -1,26 +1,80 @@
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { 
-  User, 
-  CreateUserRequest, 
-  UpdateUserRequest,
-  UserRole,
-  PaginationParams, 
-  PaginatedResponse,
-  PaginationQuery
-} from '../types';
-import { 
-  NotFoundError, 
-  DuplicateError, 
+  AppError, 
   ValidationError, 
-  BusinessLogicError,
-  AppError
-} from '../utils/asyncHandler';
-import { APP_CONSTANTS } from '../utils/constants';
+  NotFoundError,
+  AuthenticationError
+} from '../utils/errors';
 import { logger } from '../middleware/logger';
-import { hashPassword } from '../utils/crypto';
 
 const prisma = new PrismaClient();
+
+// DTOの型定義
+interface User {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: UserRole | null;
+  employeeId?: string | null;
+  phone?: string | null;
+  isActive: boolean | null;
+  lastLoginAt?: Date | null;
+  passwordChangedAt?: Date | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
+
+interface CreateUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  name: string;
+  role?: UserRole;
+  employeeId?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+interface UpdateUserRequest {
+  username?: string;
+  email?: string;
+  name?: string;
+  role?: UserRole;
+  employeeId?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
+}
+
+// 定数
+const APP_CONSTANTS = {
+  DEFAULT_PAGE_SIZE: 20,
+  MAX_PAGE_SIZE: 100
+};
+
+// パスワードハッシュ化関数
+const hashPassword = async (password: string): Promise<string> => {
+  return await bcrypt.hash(password, 12);
+};
 
 /**
  * ユーザーサービスクラス
@@ -32,16 +86,16 @@ export class UserService {
   async getAllUsers(params: PaginationParams & {
     searchQuery?: string;
     role?: string;
-    is_active?: boolean;
+    isActive?: boolean;
   }): Promise<PaginatedResponse<User>> {
     const { 
       page = 1, 
       limit = APP_CONSTANTS.DEFAULT_PAGE_SIZE, 
-      sortBy = 'created_at', 
+      sortBy = 'createdAt', 
       sortOrder = 'desc',
       searchQuery,
       role,
-      is_active
+      isActive
     } = params;
 
     try {
@@ -60,8 +114,8 @@ export class UserService {
         where.role = role;
       }
 
-      if (is_active !== undefined) {
-        where.is_active = is_active;
+      if (isActive !== undefined) {
+        where.isActive = isActive;
       }
 
       // ソート条件を構築
@@ -76,13 +130,15 @@ export class UserService {
         where,
         select: {
           id: true,
-          name: true, lastName: true,
+          username: true,
           email: true,
-          firstName: true, lastName: true,
+          name: true,
           role: true,
-          is_active: true,
+          employeeId: true,
+          phone: true,
+          isActive: true,
           lastLoginAt: true,
-          created_at: true,
+          createdAt: true,
           updatedAt: true,
         },
         orderBy,
@@ -92,8 +148,23 @@ export class UserService {
 
       const totalPages = Math.ceil(totalItems / limit);
 
+      // DTOに変換
+      const userDTOs: User[] = users.map(user => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        employeeId: user.employeeId,
+        phone: user.phone,
+        isActive: user.isActive,
+        lastLoginAt: user.lastLoginAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      }));
+
       return {
-        data: users,
+        data: userDTOs,
         pagination: {
           currentPage: page,
           totalPages,
@@ -114,7 +185,7 @@ export class UserService {
   async getUserById(id: string, requesterId?: string, requesterRole?: UserRole): Promise<User> {
     try {
       // 権限チェック：運転手は自分の情報のみアクセス可能
-      if (requesterRole === UserRole.DRIVER && requesterId && id !== requesterId) {
+      if (requesterRole === 'DRIVER' && requesterId && id !== requesterId) {
         throw new AppError('このユーザー情報にアクセスする権限がありません', 403);
       }
 
@@ -122,24 +193,38 @@ export class UserService {
         where: { id },
         select: {
           id: true,
-          name: true, lastName: true,
+          username: true,
           email: true,
-          firstName: true, lastName: true,
+          name: true,
           role: true,
-          is_active: true,
+          employeeId: true,
+          phone: true,
+          isActive: true,
           lastLoginAt: true,
-          locked_until: true,
-          profileImage: true,
-          created_at: true,
+          passwordChangedAt: true,
+          createdAt: true,
           updatedAt: true,
         },
       });
 
       if (!user) {
-        throw new NotFoundError('ユーザー');
+        throw new NotFoundError('ユーザーが見つかりません');
       }
 
-      return user;
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        employeeId: user.employeeId,
+        phone: user.phone,
+        isActive: user.isActive,
+        lastLoginAt: user.lastLoginAt,
+        passwordChangedAt: user.passwordChangedAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      };
 
     } catch (error) {
       logger.error('ユーザー詳細取得エラー', error, { userId: id });
@@ -151,7 +236,7 @@ export class UserService {
    * ユーザー作成
    */
   async createUser(userData: CreateUserRequest, creatorId?: string): Promise<User> {
-    const { username, email, password, name, role, is_active = true } = userData;
+    const { username, email, password, name, role, employeeId, phone, isActive = true } = userData;
 
     try {
       // 重複チェック
@@ -166,10 +251,10 @@ export class UserService {
 
       if (existingUser) {
         if (existingUser.username === username) {
-          throw new DuplicateError('ユーザー名');
+          throw new ValidationError('ユーザー名は既に使用されています');
         }
         if (existingUser.email === email) {
-          throw new DuplicateError('メールアドレス');
+          throw new ValidationError('メールアドレスは既に使用されています');
         }
       }
 
@@ -181,26 +266,41 @@ export class UserService {
         data: {
           username,
           email,
-          password: hashedPassword,
+          passwordHash: hashedPassword,
           name,
-          role,
-          is_active,
+          role: role || 'DRIVER',
+          employeeId: employeeId,
+          phone,
+          isActive: isActive,
         },
         select: {
           id: true,
-          name: true, lastName: true,
+          username: true,
           email: true,
-          firstName: true, lastName: true,
+          name: true,
           role: true,
-          is_active: true,
-          created_at: true,
+          employeeId: true,
+          phone: true,
+          isActive: true,
+          createdAt: true,
           updatedAt: true,
         },
       });
 
       logger.info('ユーザー作成成功', { userId: newUser.id, username, creatorId });
 
-      return newUser;
+      return {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role,
+        employeeId: newUser.employeeId,
+        phone: newUser.phone,
+        isActive: newUser.isActive,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt,
+      };
 
     } catch (error) {
       logger.error('ユーザー作成エラー', error, { username, email });
@@ -219,13 +319,13 @@ export class UserService {
   ): Promise<User> {
     try {
       // 権限チェック：運転手は自分の情報のみ更新可能（ただし権限は変更不可）
-      if (requesterRole === UserRole.DRIVER && requesterId && id !== requesterId) {
+      if (requesterRole === 'DRIVER' && requesterId && id !== requesterId) {
         throw new AppError('このユーザー情報を更新する権限がありません', 403);
       }
 
       // 運転手は自分の権限やアクティブ状態を変更できない
-      if (requesterRole === UserRole.DRIVER) {
-        if (updateData.role || typeof updateData.is_active === 'boolean') {
+      if (requesterRole === 'DRIVER') {
+        if (updateData.role || typeof updateData.isActive === 'boolean') {
           throw new AppError('権限やアクティブ状態は変更できません', 403);
         }
       }
@@ -233,11 +333,11 @@ export class UserService {
       // ユーザーの存在確認
       const existingUser = await prisma.user.findUnique({
         where: { id },
-        select: { id: true, name: true, lastName: true, email: true },
+        select: { id: true, username: true, email: true },
       });
 
       if (!existingUser) {
-        throw new NotFoundError('ユーザー');
+        throw new NotFoundError('ユーザーが見つかりません');
       }
 
       // メールアドレスの重複チェック
@@ -250,7 +350,7 @@ export class UserService {
         });
 
         if (emailExists) {
-          throw new DuplicateError('メールアドレス');
+          throw new ValidationError('メールアドレスは既に使用されています');
         }
       }
 
@@ -264,31 +364,53 @@ export class UserService {
         });
 
         if (usernameExists) {
-          throw new DuplicateError('ユーザー名');
+          throw new ValidationError('ユーザー名は既に使用されています');
         }
       }
 
       // データを更新
       const updatedUser = await prisma.user.update({
         where: { id },
-        data: updateData,
+        data: {
+          username: updateData.username,
+          email: updateData.email,
+          name: updateData.name,
+          role: updateData.role,
+          employeeId: updateData.employeeId,
+          phone: updateData.phone,
+          isActive: updateData.isActive,
+          updatedAt: new Date(),
+        },
         select: {
           id: true,
-          name: true, lastName: true,
+          username: true,
           email: true,
-          firstName: true, lastName: true,
+          name: true,
           role: true,
-          is_active: true,
+          employeeId: true,
+          phone: true,
+          isActive: true,
           lastLoginAt: true,
-          profileImage: true,
-          created_at: true,
+          createdAt: true,
           updatedAt: true,
         },
       });
 
       logger.info('ユーザー更新成功', { userId: id, requesterId });
 
-      return updatedUser;
+      return {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        employeeId: updatedUser.employeeId,
+        phone: updatedUser.phone,
+        isActive: updatedUser.isActive,
+        lastLoginAt: updatedUser.lastLoginAt,
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt,
+      };
 
     } catch (error) {
       logger.error('ユーザー更新エラー', error, { userId: id });
@@ -311,21 +433,21 @@ export class UserService {
         where: { id },
         select: { 
           id: true, 
-          name: true, lastName: true,
-          trips: { select: { id: true } },
+          username: true,
+          operationsOperationsDriverIdTousers: { select: { id: true } },
         },
       });
 
       if (!user) {
-        throw new NotFoundError('ユーザー');
+        throw new NotFoundError('ユーザーが見つかりません');
       }
 
       // 運行記録が存在する場合は物理削除を禁止
-      if (user.trips.length > 0) {
+      if (user.operationsOperationsDriverIdTousers.length > 0) {
         // アクティブフラグを false に設定（論理削除）
         await prisma.user.update({
           where: { id },
-          data: { is_active: false },
+          data: { isActive: false },
         });
 
         logger.info('ユーザー論理削除成功', { userId: id });
@@ -337,16 +459,6 @@ export class UserService {
 
         logger.info('ユーザー物理削除成功', { userId: id });
       }
-
-      // セッションを削除
-      await prisma.userSession.deleteMany({
-        where: { userId: id },
-      });
-
-      // リフレッシュトークンも削除
-      await prisma.refreshToken.deleteMany({
-        where: { userId: id },
-      });
 
     } catch (error) {
       logger.error('ユーザー削除エラー', error, { userId: id });
@@ -361,11 +473,11 @@ export class UserService {
     try {
       const user = await prisma.user.findUnique({
         where: { id },
-        select: { id: true, name: true, lastName: true },
+        select: { id: true, username: true },
       });
 
       if (!user) {
-        throw new NotFoundError('ユーザー');
+        throw new NotFoundError('ユーザーが見つかりません');
       }
 
       // パスワードをハッシュ化
@@ -375,21 +487,10 @@ export class UserService {
       await prisma.user.update({
         where: { id },
         data: {
-          password: hashedPassword,
-          locked_until: null, // ロック状態を解除
+          passwordHash: hashedPassword,
+          passwordChangedAt: new Date(),
+          updatedAt: new Date(),
         },
-      });
-
-      // セキュリティのため、全セッションを無効化
-      await prisma.userSession.updateMany({
-        where: { userId: id },
-        data: { is_active: false },
-      });
-
-      // リフレッシュトークンも無効化
-      await prisma.refreshToken.updateMany({
-        where: { userId: id },
-        data: { isRevoked: true },
       });
 
       logger.info('パスワードリセット成功', { userId: id });
@@ -401,77 +502,11 @@ export class UserService {
   }
 
   /**
-   * ユーザーアカウントのロック/アンロック
-   */
-  async toggleUserLock(id: string, lock: boolean): Promise<User> {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id },
-        select: { id: true, name: true, lastName: true, locked_until: true },
-      });
-
-      if (!user) {
-        throw new NotFoundError('ユーザー');
-      }
-
-      const updateData: any = {
-      };
-
-      if (lock) {
-        // アカウントをロック（1年間）
-        updateData.locked_until = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-      } else {
-        // ロックを解除
-        updateData.locked_until = null;
-      }
-
-      const updatedUser = await prisma.user.update({
-        where: { id },
-        data: updateData,
-        select: {
-          id: true,
-          name: true, lastName: true,
-          email: true,
-          firstName: true, lastName: true,
-          role: true,
-          is_active: true,
-          lastLoginAt: true,
-          locked_until: true,
-          created_at: true,
-          updatedAt: true,
-        },
-      });
-
-      // ロック時は全セッションを削除
-      if (lock) {
-        await prisma.userSession.updateMany({
-          where: { userId: id },
-          data: { is_active: false },
-        });
-
-        await prisma.refreshToken.updateMany({
-          where: { userId: id },
-          data: { isRevoked: true },
-        });
-      }
-
-      logger.info(`ユーザーアカウント${lock ? 'ロック' : 'アンロック'}成功`, { userId: id });
-
-      return updatedUser;
-
-    } catch (error) {
-      logger.error(`ユーザーアカウント${lock ? 'ロック' : 'アンロック'}エラー`, error, { userId: id });
-      throw error;
-    }
-  }
-
-  /**
    * ユーザー統計情報取得
    */
   async getUserStats(): Promise<{
     totalUsers: number;
     activeUsers: number;
-    lockedUsers: number;
     recentUsers: number;
     usersByRole: { [key: string]: number };
   }> {
@@ -480,19 +515,12 @@ export class UserService {
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
       // 基本統計
-      const [totalUsers, activeUsers, lockedUsers, recentUsers] = await Promise.all([
+      const [totalUsers, activeUsers, recentUsers] = await Promise.all([
         prisma.user.count(),
-        prisma.user.count({ where: { is_active: true } }),
+        prisma.user.count({ where: { isActive: true } }),
         prisma.user.count({ 
           where: { 
-            locked_until: { 
-              gt: now 
-            } 
-          } 
-        }),
-        prisma.user.count({ 
-          where: { 
-            created_at: { 
+            createdAt: { 
               gte: oneDayAgo 
             } 
           } 
@@ -506,19 +534,20 @@ export class UserService {
           id: true,
         },
         where: {
-          is_active: true,
+          isActive: true,
         },
       });
 
       const usersByRole: { [key: string]: number } = {};
       usersByRoleResult.forEach(item => {
-        usersByRole[item.role] = item._count.id;
+        if (item.role) {
+          usersByRole[item.role] = item._count.id;
+        }
       });
 
       return {
         totalUsers,
         activeUsers,
-        lockedUsers,
         recentUsers,
         usersByRole,
       };
@@ -540,10 +569,10 @@ export class UserService {
       });
 
       if (!user) {
-        throw new NotFoundError('ユーザー');
+        throw new NotFoundError('ユーザーが見つかりません');
       }
 
-      if (user.role !== UserRole.DRIVER) {
+      if (user.role !== 'DRIVER') {
         return {
           totalTrips: 0,
           completedTrips: 0,
@@ -551,7 +580,6 @@ export class UserService {
           totalHours: 0,
           averageDistance: 0,
           recentActivity: null,
-          fuelEfficiency: 0,
           completionRate: '0',
         };
       }
@@ -568,50 +596,38 @@ export class UserService {
         totalTrips,
         completedTrips,
         totalDistance,
-        totalFuelAmount,
         averageTripDistance,
         recentTrip
       ] = await Promise.all([
         // 総運行回数
-        prisma.operations.count({
+        prisma.operation.count({
           where: whereCondition
         }),
         
         // 完了した運行回数
-        prisma.operations.count({
+        prisma.operation.count({
           where: { ...whereCondition, status: 'COMPLETED' }
         }),
         
         // 総走行距離
-        prisma.operations.aggregate({
+        prisma.operation.aggregate({
           where: { ...whereCondition, status: 'COMPLETED' },
-          _sum: { totalDistance: true }
-        }).then(result => result._sum.totalDistance || 0),
-        
-        // 総給油量
-        prisma.gps_logs.aggregate({
-          where: {
-            trip: whereCondition
-          },
-          _sum: { amount: true }
-        }).then(result => result._sum.amount || 0),
+          _sum: { totalDistanceKm: true }
+        }).then(result => result._sum.totalDistanceKm || 0),
         
         // 平均運行距離
-        prisma.operations.aggregate({
+        prisma.operation.aggregate({
           where: { ...whereCondition, status: 'COMPLETED' },
-          _avg: { totalDistance: true }
-        }).then(result => result._avg.totalDistance || 0),
+          _avg: { totalDistanceKm: true }
+        }).then(result => result._avg.totalDistanceKm || 0),
 
         // 最新の運行記録
-        prisma.operations.findFirst({
+        prisma.operation.findFirst({
           where: whereCondition,
-          orderBy: { startTime: 'desc' },
-          select: { startTime: true }
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true }
         })
       ]);
-
-      // 燃費計算
-      const fuelEfficiency = totalFuelAmount > 0 ? Number(totalDistance) / Number(totalFuelAmount) : 0;
 
       // 総運行時間は実際の運行データから計算する必要があるが、
       // 簡易実装として操作回数 * 平均時間で概算
@@ -620,13 +636,11 @@ export class UserService {
       return {
         totalTrips,
         completedTrips,
-        totalDistance: Number(totalDistance.toFixed(2)),
-        totalFuelAmount: Number(totalFuelAmount.toFixed(2)),
-        averageDistance: Number(averageTripDistance.toFixed(2)),
+        totalDistance: Number(totalDistance?.toFixed(2) || 0),
+        averageDistance: Number(averageTripDistance?.toFixed(2) || 0),
         totalHours,
-        fuelEfficiency: Number(fuelEfficiency.toFixed(2)),
         completionRate: totalTrips > 0 ? ((completedTrips / totalTrips) * 100).toFixed(1) : '0',
-        recentActivity: recentTrip?.startTime || null,
+        recentActivity: recentTrip?.createdAt || null,
       };
 
     } catch (error) {
@@ -642,17 +656,19 @@ export class UserService {
     try {
       const drivers = await prisma.user.findMany({
         where: {
-          role: UserRole.DRIVER,
-          is_active: true,
+          role: 'DRIVER',
+          isActive: true,
         },
         select: {
           id: true,
-          name: true, lastName: true,
+          username: true,
           email: true,
-          firstName: true, lastName: true,
+          name: true,
           role: true,
-          is_active: true,
-          created_at: true,
+          employeeId: true,
+          phone: true,
+          isActive: true,
+          createdAt: true,
           updatedAt: true,
         },
         orderBy: {
@@ -660,7 +676,18 @@ export class UserService {
         },
       });
 
-      return drivers;
+      return drivers.map(driver => ({
+        id: driver.id,
+        username: driver.username,
+        email: driver.email,
+        name: driver.name,
+        role: driver.role,
+        employeeId: driver.employeeId,
+        phone: driver.phone,
+        isActive: driver.isActive,
+        createdAt: driver.createdAt,
+        updatedAt: driver.updatedAt,
+      }));
 
     } catch (error) {
       logger.error('アクティブドライバー取得エラー', error);
@@ -679,28 +706,33 @@ export class UserService {
       });
 
       if (!user) {
-        throw new NotFoundError('ユーザー');
+        throw new NotFoundError('ユーザーが見つかりません');
       }
 
       // 監査ログからログイン情報を取得
       const loginHistory = await prisma.auditLog.findMany({
         where: {
           userId: id,
-          action: { in: ['LOGIN_SUCCESS', 'LOGIN_FAILED'] },
+          operationType: { in: ['LOGIN_SUCCESS', 'LOGIN_FAILED'] },
         },
         select: {
-          action: true,
+          operationType: true,
           ipAddress: true,
           userAgent: true,
-          created_at: true,
+          createdAt: true,
         },
         orderBy: {
-          created_at: 'desc',
+          createdAt: 'desc',
         },
         take: limit,
       });
 
-      return loginHistory;
+      return loginHistory.map(log => ({
+        action: log.operationType,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        createdAt: log.createdAt,
+      }));
 
     } catch (error) {
       logger.error('ユーザーログイン履歴取得エラー', error, { userId: id });
@@ -719,21 +751,38 @@ export class UserService {
             { username: identifier },
             { email: identifier },
           ],
-          is_active: true,
+          isActive: true,
         },
         select: {
           id: true,
-          name: true, lastName: true,
+          username: true,
           email: true,
-          firstName: true, lastName: true,
+          name: true,
           role: true,
-          is_active: true,
-          created_at: true,
+          employeeId: true,
+          phone: true,
+          isActive: true,
+          createdAt: true,
           updatedAt: true,
         },
       });
 
-      return user;
+      if (!user) {
+        return null;
+      }
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        employeeId: user.employeeId,
+        phone: user.phone,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      };
 
     } catch (error) {
       logger.error('ユーザー検索エラー', error, { identifier });
@@ -750,9 +799,9 @@ export class UserService {
     }
 
     try {
-      return await prisma.user.findMany({
+      const users = await prisma.user.findMany({
         where: {
-          is_active: true,
+          isActive: true,
           OR: [
             { username: { contains: query, mode: 'insensitive' } },
             { name: { contains: query, mode: 'insensitive' } },
@@ -761,8 +810,8 @@ export class UserService {
         },
         select: {
           id: true,
-          name: true, lastName: true,
-          firstName: true, lastName: true,
+          username: true,
+          name: true,
           email: true,
           role: true,
         },
@@ -771,6 +820,17 @@ export class UserService {
           name: 'asc'
         }
       });
+
+      return users.map(user => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isActive: true,
+        createdAt: null,
+        updatedAt: null,
+      }));
 
     } catch (error) {
       logger.error('ユーザー検索エラー', error, { query });
@@ -793,38 +853,43 @@ export class UserService {
       });
 
       if (!user) {
-        throw new NotFoundError('ユーザー');
+        throw new NotFoundError('ユーザーが見つかりません');
       }
 
       const updatedUser = await prisma.user.update({
         where: { id: userId },
-        data: { role: newRole },
+        data: { 
+          role: newRole,
+          updatedAt: new Date()
+        },
         select: {
           id: true,
-          name: true, lastName: true,
+          username: true,
           email: true,
-          firstName: true, lastName: true,
+          name: true,
           role: true,
-          is_active: true,
-          created_at: true,
+          employeeId: true,
+          phone: true,
+          isActive: true,
+          createdAt: true,
           updatedAt: true,
         }
       });
 
-      // ロール変更により既存のセッションを無効化
-      await prisma.userSession.updateMany({
-        where: { userId },
-        data: { is_active: false }
-      });
-
-      await prisma.refreshToken.updateMany({
-        where: { userId },
-        data: { isRevoked: true }
-      });
-
       logger.info('ユーザーロール変更成功', { userId, newRole, requesterId });
 
-      return updatedUser;
+      return {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        employeeId: updatedUser.employeeId,
+        phone: updatedUser.phone,
+        isActive: updatedUser.isActive,
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt,
+      };
 
     } catch (error) {
       logger.error('ユーザーロール変更エラー', error, { userId, newRole });

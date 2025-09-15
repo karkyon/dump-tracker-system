@@ -1,14 +1,16 @@
 import { PrismaClient } from '@prisma/client';
-import {
-  Location,
-  CreateLocationRequest,
-  UpdateLocationRequest,
-  LocationType,
-  PaginatedResponse,
-  LocationFilter
+import { 
+  LocationModel,
+  LocationCreateInput,
+  LocationUpdateInput,
+  LocationResponseDTO,
+  OperationDetailModel 
 } from '../types';
 import { AppError } from '../utils/asyncHandler';
-import { isValidCoordinate } from '../utils/gpsCalculations';
+
+const prisma = new PrismaClient();
+
+export class LocationService {
 
 const prisma = new PrismaClient();
 

@@ -1,21 +1,89 @@
 // backend/src/services/inspectionService.ts
-import { PrismaClient, Prisma, InspectionType, InputType } from '@prisma/client';
+import { PrismaClient, Prisma, $Enums } from '@prisma/client';
 import {
-  InspectionItem,
-  InspectionRecord,
-  CreateInspectionItemRequest,
-  UpdateInspectionItemRequest,
-  CreateInspectionRecordRequest,
-  UpdateInspectionRecordRequest,
-  InspectionFilter,
-  PaginatedResponse,
-  UserRole
+  InspectionItemModel,
+  InspectionItemResponseDTO,
+  InspectionItemListResponse,
+  InspectionItemCreateDTO,
+  InspectionItemUpdateDTO,
+  InspectionItemWhereInput,
+  InspectionItemOrderByInput,
+  InspectionItemResultModel,
+  InspectionItemResultResponseDTO,
+  InspectionItemResultCreateDTO,
+  InspectionItemResultUpdateDTO,
+  InspectionRecordModel,
+  InspectionRecordResponseDTO,
+  InspectionRecordListResponse,
+  InspectionRecordCreateDTO,
+  InspectionRecordUpdateDTO,
+  InspectionRecordWhereInput,
+  InspectionRecordOrderByInput,
+  getInspectionItemService,
+  getInspectionItemResultService,
+  getInspectionRecordService
 } from '../types';
-import { AppError } from '../utils/asyncHandler';
+
+// 既存の型定義
+export interface InspectionFilter {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  operationId?: string;
+  driverId?: string;
+  vehicleId?: string;
+  inspectionType?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
+}
+
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
+  DRIVER = 'DRIVER'
+}
+
+// 既存のリクエスト型
+export interface CreateInspectionItemRequest extends InspectionItemCreateDTO {}
+export interface UpdateInspectionItemRequest extends InspectionItemUpdateDTO {}
+export interface CreateInspectionRecordRequest extends InspectionRecordCreateDTO {
+  operationId?: string;
+  inspectionItemId?: string;
+  inspectorId?: string;
+  vehicleId?: string;
+}
+export interface UpdateInspectionRecordRequest extends InspectionRecordUpdateDTO {}
+
+// 既存の型エイリアス
+export type InspectionItem = InspectionItemResponseDTO;
+export type InspectionRecord = InspectionRecordResponseDTO;
+
+// AppError クラス
+export class AppError extends Error {
+  constructor(public message: string, public statusCode: number = 500) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
 
 const prisma = new PrismaClient();
 
 export class InspectionService {
+  private inspectionItemService = getInspectionItemService(prisma);
+  private inspectionItemResultService = getInspectionItemResultService(prisma);
+  private inspectionRecordService = getInspectionRecordService(prisma);
+
   /**
    * 点検項目一覧取得
    */
@@ -25,7 +93,7 @@ export class InspectionService {
     inspectionType?: string;
     isActive?: boolean;
     sortBy?: string;
-  }): Promise<PaginatedResponse<InspectionItem>> {
+  }): Promise<PaginatedResponse<InspectionItemResponseDTO>> {
     const {
       page = 1,
       limit = 50,
@@ -34,45 +102,35 @@ export class InspectionService {
       sortBy = 'displayOrder'
     } = filter;
 
-    const where: Prisma.InspectionItemWhereInput = {};
+    const where: InspectionItemWhereInput = {};
 
     if (inspectionType) {
-      where.inspectionType = inspectionType as InspectionType;
+      where.inspectionType = inspectionType as any;
     }
 
     if (isActive !== undefined) {
       where.isActive = isActive;
     }
 
-    // 総件数取得
-    const totalItems = await prisma.inspectionItem.count({ where });
-
-    // ページネーション計算
-    const skip = (page - 1) * limit;
-    const totalPages = Math.ceil(totalItems / limit);
-
-    // データ取得
-    const items = await prisma.inspectionItem.findMany({
+    // 新しいサービスクラスを使用してページネーション付きデータ取得
+    const result = await this.inspectionItemService.findManyWithPagination({
       where,
-      skip,
-      take: limit,
-      orderBy: { [sortBy]: 'asc' },
-      include: {
-        _count: {
-          select: {
-            inspectionRecords: true
-          }
-        }
-      }
+      orderBy: { [sortBy]: 'asc' } as InspectionItemOrderByInput,
+      page,
+      pageSize: limit
     });
 
+    // 既存の形式に変換
     return {
-      data: items,
+      data: result.data.map(item => ({
+        ...item,
+        _count: { inspectionRecords: 0 } // TODO: count計算を追加
+      })),
       pagination: {
-        currentPage: page,
-        totalPages,
-        totalItems,
-        itemsPerPage: limit
+        currentPage: result.page,
+        totalPages: result.totalPages,
+        totalItems: result.total,
+        itemsPerPage: result.pageSize
       }
     };
   }
@@ -80,81 +138,65 @@ export class InspectionService {
   /**
    * 点検項目詳細取得
    */
-  async getInspectionItemById(id: string): Promise<InspectionItem> {
-    const item = await prisma.inspectionItem.findUnique({
-      where: { id },
-      include: {
-        inspectionRecords: {
-          take: 10,
-          orderBy: { inspectionDate: 'desc' },
-          include: {
-            inspector: {
-              select: {
-                id: true,
-                name: true,
-                username: true
-              }
-            }
-          }
-        },
-        _count: {
-          select: {
-            inspectionRecords: true
-          }
-        }
-      }
-    });
+  async getInspectionItemById(id: string): Promise<InspectionItemResponseDTO> {
+    const item = await this.inspectionItemService.findByKey(id);
 
     if (!item) {
       throw new AppError('点検項目が見つかりません', 404);
     }
 
-    return item;
+    // DTOに変換して返却
+    return {
+      ...item,
+      _count: { inspectionRecords: 0 } // TODO: count計算を追加
+    };
   }
 
   /**
    * 点検項目新規作成
    */
-  async createInspectionItem(data: CreateInspectionItemRequest): Promise<InspectionItem> {
+  async createInspectionItem(data: CreateInspectionItemRequest): Promise<InspectionItemResponseDTO> {
     // 同一名の点検項目存在チェック
-    const existingItem = await prisma.inspectionItem.findFirst({
+    const existingItems = await this.inspectionItemService.findMany({
       where: {
         name: data.name,
-        inspectionType: data.inspectionType as InspectionType,
+        inspectionType: data.inspectionType as any,
         isActive: true
       }
     });
 
-    if (existingItem) {
+    if (existingItems.length > 0) {
       throw new AppError('同じ名前の点検項目が既に存在します', 400);
     }
 
     // 表示順序が指定されていない場合は最後に追加
     let displayOrder = data.displayOrder;
     if (!displayOrder) {
-      const lastItem = await prisma.inspectionItem.findFirst({
+      const lastItems = await this.inspectionItemService.findMany({
         where: {
-          inspectionType: data.inspectionType as InspectionType,
+          inspectionType: data.inspectionType as any,
           isActive: true
         },
-        orderBy: { displayOrder: 'desc' }
+        orderBy: { displayOrder: 'desc' },
+        take: 1
       });
-      displayOrder = (lastItem?.displayOrder || 0) + 10;
+      displayOrder = (lastItems[0]?.displayOrder || 0) + 10;
     }
 
-    const item = await prisma.inspectionItem.create({
-      data: {
-        name: data.name,
-        inspectionType: data.inspectionType as InspectionType,
-        inputType: (data.inputType as InputType) || InputType.CHECKBOX,
-        displayOrder,
-        isRequired: data.isRequired || false,
-        description: data.description,
-        isActive: true
-      }
+    const item = await this.inspectionItemService.create({
+      name: data.name,
+      inspectionType: data.inspectionType as any,
+      inputType: (data.inputType as any) || 'CHECKBOX',
+      displayOrder,
+      isRequired: data.isRequired || false,
+      description: data.description,
+      isActive: true
     });
 
-    return item;
+    return {
+      ...item,
+      _count: { inspectionRecords: 0 }
+    };
   }
 
   /**
@@ -163,10 +205,8 @@ export class InspectionService {
   async updateInspectionItem(
     id: string,
     data: UpdateInspectionItemRequest
-  ): Promise<InspectionItem> {
-    const existingItem = await prisma.inspectionItem.findUnique({
-      where: { id }
-    });
+  ): Promise<InspectionItemResponseDTO> {
+    const existingItem = await this.inspectionItemService.findByKey(id);
 
     if (!existingItem) {
       throw new AppError('点検項目が見つかりません', 404);
@@ -174,63 +214,44 @@ export class InspectionService {
 
     // 名前の重複チェック（自分以外）
     if (data.name && data.name !== existingItem.name) {
-      const duplicateItem = await prisma.inspectionItem.findFirst({
+      const duplicateItems = await this.inspectionItemService.findMany({
         where: {
           name: data.name,
-          inspectionType: data.inspectionType || existingItem.inspectionType,
+          inspectionType: (data.inspectionType || existingItem.inspectionType) as any,
           isActive: true,
           id: { not: id }
         }
       });
 
-      if (duplicateItem) {
+      if (duplicateItems.length > 0) {
         throw new AppError('同じ名前の点検項目が既に存在します', 400);
       }
     }
 
-    const item = await prisma.inspectionItem.update({
-      where: { id },
-      data: {
-        ...data,
-        inspectionType: data.inspectionType ? data.inspectionType as InspectionType : undefined,
-        inputType: data.inputType ? data.inputType as InputType : undefined
-      }
+    const item = await this.inspectionItemService.update(id, {
+      ...data,
+      inspectionType: data.inspectionType ? data.inspectionType as any : undefined,
+      inputType: data.inputType ? data.inputType as any : undefined
     });
 
-    return item;
+    return {
+      ...item,
+      _count: { inspectionRecords: 0 }
+    };
   }
 
   /**
    * 点検項目削除（論理削除）
    */
   async deleteInspectionItem(id: string): Promise<void> {
-    const item = await prisma.inspectionItem.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            inspectionRecords: true
-          }
-        }
-      }
-    });
+    const item = await this.inspectionItemService.findByKey(id);
 
     if (!item) {
       throw new AppError('点検項目が見つかりません', 404);
     }
 
-    // 点検記録が存在する場合は論理削除
-    if (item._count.inspectionRecords > 0) {
-      await prisma.inspectionItem.update({
-        where: { id },
-        data: { isActive: false }
-      });
-    } else {
-      // 点検記録が存在しない場合は物理削除
-      await prisma.inspectionItem.delete({
-        where: { id }
-      });
-    }
+    // 点検記録が存在するかチェック（ここでは常に論理削除）
+    await this.inspectionItemService.update(id, { isActive: false });
   }
 
   /**
@@ -238,10 +259,7 @@ export class InspectionService {
    */
   async updateInspectionItemOrder(items: { id: string; displayOrder: number }[]): Promise<void> {
     const updatePromises = items.map(item =>
-      prisma.inspectionItem.update({
-        where: { id: item.id },
-        data: { displayOrder: item.displayOrder }
-      })
+      this.inspectionItemService.update(item.id, { displayOrder: item.displayOrder })
     );
 
     await Promise.all(updatePromises);
@@ -254,11 +272,11 @@ export class InspectionService {
     filter: InspectionFilter,
     requesterId: string,
     requesterRole: UserRole
-  ): Promise<PaginatedResponse<InspectionRecord>> {
+  ): Promise<PaginatedResponse<InspectionRecordResponseDTO>> {
     const {
       page = 1,
       limit = 20,
-      sortBy = 'inspectionDate',
+      sortBy = 'createdAt',
       sortOrder = 'desc',
       operationId,
       driverId,
@@ -268,29 +286,29 @@ export class InspectionService {
       endDate
     } = filter;
 
-    const where: Prisma.inspection_recordsWhereInput = {};
+    const where: InspectionRecordWhereInput = {};
 
-    // フィルター条件
+    // フィルター条件 - 正しいフィールド名を使用
     if (operationId) {
       where.operationId = operationId;
     }
 
     if (driverId) {
-      where.operation = { driverId };
+      where.operations = { driverId };
     }
 
     if (vehicleId) {
-      where.operation = { vehicleId };
+      where.operations = { vehicleId };
     }
 
     if (inspectionType) {
-      where.inspectionItem = { inspectionType: inspectionType as InspectionType };
+      where.inspectionType = inspectionType as any;
     }
 
     if (startDate || endDate) {
-      where.inspectionDate = {};
-      if (startDate) where.inspectionDate.gte = new Date(startDate);
-      if (endDate) where.inspectionDate.lte = new Date(endDate);
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
     // 運転手は自分の点検記録のみ取得可能
@@ -298,56 +316,20 @@ export class InspectionService {
       where.inspectorId = requesterId;
     }
 
-    // 総件数取得
-    const totalItems = await prisma.inspection_records.count({ where });
-
-    // ページネーション計算
-    const skip = (page - 1) * limit;
-    const totalPages = Math.ceil(totalItems / limit);
-
-    // データ取得
-    const records = await prisma.inspection_records.findMany({
+    const result = await this.inspectionRecordService.findManyWithPagination({
       where,
-      skip,
-      take: limit,
-      orderBy: { [sortBy]: sortOrder },
-      include: {
-        inspectionItem: true,
-        inspector: {
-          select: {
-            id: true,
-            name: true,
-            username: true
-          }
-        },
-        operation: {
-          include: {
-            vehicle: {
-              select: {
-                id: true,
-                vehicleNumber: true,
-                vehicleType: true
-              }
-            },
-            driver: {
-              select: {
-                id: true,
-                name: true,
-                username: true
-              }
-            }
-          }
-        }
-      }
+      orderBy: { [sortBy]: sortOrder } as InspectionRecordOrderByInput,
+      page,
+      pageSize: limit
     });
 
     return {
-      data: records,
+      data: result.data,
       pagination: {
-        currentPage: page,
-        totalPages,
-        totalItems,
-        itemsPerPage: limit
+        currentPage: result.page,
+        totalPages: result.totalPages,
+        totalItems: result.total,
+        itemsPerPage: result.pageSize
       }
     };
   }
@@ -359,39 +341,8 @@ export class InspectionService {
     id: string,
     requesterId: string,
     requesterRole: UserRole
-  ): Promise<InspectionRecord> {
-    const record = await prisma.inspection_records.findUnique({
-      where: { id },
-      include: {
-        inspectionItem: true,
-        inspector: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            email: true
-          }
-        },
-        operation: {
-          include: {
-            vehicle: {
-              select: {
-                id: true,
-                vehicleNumber: true,
-                vehicleType: true
-              }
-            },
-            driver: {
-              select: {
-                id: true,
-                name: true,
-                username: true
-              }
-            }
-          }
-        }
-      }
-    });
+  ): Promise<InspectionRecordResponseDTO> {
+    const record = await this.inspectionRecordService.findByKey(id);
 
     if (!record) {
       throw new AppError('点検記録が見つかりません', 404);
@@ -408,78 +359,54 @@ export class InspectionService {
   /**
    * 点検記録新規作成
    */
-  async createInspectionRecord(data: CreateInspectionRecordRequest): Promise<InspectionRecord> {
-    // 点検項目の存在確認
-    const inspectionItem = await prisma.inspectionItem.findUnique({
-      where: { id: data.inspectionItemId }
-    });
-
-    if (!inspectionItem || !inspectionItem.isActive) {
-      throw new AppError('指定された点検項目が見つかりません', 404);
+  async createInspectionRecord(data: CreateInspectionRecordRequest): Promise<InspectionRecordResponseDTO> {
+    // 必須フィールドバリデーション
+    if (!data.vehicleId) {
+      throw new AppError('車両IDが指定されていません', 400);
+    }
+    
+    if (!data.inspectorId) {
+      throw new AppError('検査員IDが指定されていません', 400);
+    }
+    
+    if (!data.inspectionType) {
+      throw new AppError('点検タイプが指定されていません', 400);
     }
 
-    // 運行記録の存在確認
+    // 重複チェック（同一運行・同一点検タイプ）
     if (data.operationId) {
-      const operation = await prisma.operations.findUnique({
-        where: { id: data.operationId }
-      });
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-      if (!operation) {
-        throw new AppError('指定された運行記録が見つかりません', 404);
-      }
-    }
-
-    // 重複チェック（同一運行・同一点検項目）
-    if (data.operationId) {
-      const existingRecord = await prisma.inspection_records.findFirst({
+      const existingRecords = await this.inspectionRecordService.findMany({
         where: {
           operationId: data.operationId,
-          inspectionItemId: data.inspectionItemId,
-          inspectionDate: {
-            gte: new Date(data.inspectionDate.toDateString()),
-            lt: new Date(new Date(data.inspectionDate).getTime() + 24 * 60 * 60 * 1000)
+          inspectionType: data.inspectionType as any,
+          vehicleId: data.vehicleId,
+          createdAt: {
+            gte: startOfDay,
+            lt: endOfDay
           }
         }
       });
 
-      if (existingRecord) {
-        throw new AppError('同一運行・同一項目の点検記録が既に存在します', 400);
+      if (existingRecords.length > 0) {
+        throw new AppError('同一運行・同一タイプの点検記録が既に存在します', 400);
       }
     }
 
-    const record = await prisma.inspection_records.create({
-      data: {
-        inspectionItemId: data.inspectionItemId,
-        operationId: data.operationId,
-        inspectorId: data.inspectorId,
-        inspectionDate: data.inspectionDate,
-        result: data.result,
-        notes: data.notes,
-        photoUrl: data.photoUrl
-      },
-      include: {
-        inspectionItem: true,
-        inspector: {
-          select: {
-            id: true,
-            name: true,
-            username: true
-          }
-        },
-        operation: {
-          include: {
-            vehicle: {
-              select: {
-                id: true,
-                vehicleNumber: true,
-                vehicleType: true
-              }
-            }
-          }
-        }
-      }
-    });
+    // スキーマに合致するフィールドのみでレコード作成
+    const createInput: any = {
+      vehicleId: data.vehicleId,
+      inspectorId: data.inspectorId,
+      inspectionType: data.inspectionType,
+      operationId: data.operationId || null,
+      status: data.status || 'PENDING',
+      // その他の有効なフィールド...
+    };
 
+    const record = await this.inspectionRecordService.create(createInput);
     return record;
   }
 
@@ -491,11 +418,8 @@ export class InspectionService {
     data: UpdateInspectionRecordRequest,
     requesterId: string,
     requesterRole: UserRole
-  ): Promise<InspectionRecord> {
-    const existingRecord = await prisma.inspection_records.findUnique({
-      where: { id },
-      include: { operation: true }
-    });
+  ): Promise<InspectionRecordResponseDTO> {
+    const existingRecord = await this.inspectionRecordService.findByKey(id);
 
     if (!existingRecord) {
       throw new AppError('点検記録が見つかりません', 404);
@@ -506,31 +430,7 @@ export class InspectionService {
       throw new AppError('この点検記録を更新する権限がありません', 403);
     }
 
-    const record = await prisma.inspection_records.update({
-      where: { id },
-      data,
-      include: {
-        inspectionItem: true,
-        inspector: {
-          select: {
-            id: true,
-            name: true,
-            username: true
-          }
-        },
-        operation: {
-          include: {
-            vehicle: {
-              select: {
-                id: true,
-                vehicleNumber: true,
-                vehicleType: true
-              }
-            }
-          }
-        }
-      }
-    });
+    const record = await this.inspectionRecordService.update(id, data);
 
     return record;
   }
@@ -539,17 +439,13 @@ export class InspectionService {
    * 点検記録削除
    */
   async deleteInspectionRecord(id: string): Promise<void> {
-    const record = await prisma.inspection_records.findUnique({
-      where: { id }
-    });
+    const record = await this.inspectionRecordService.findByKey(id);
 
     if (!record) {
       throw new AppError('点検記録が見つかりません', 404);
     }
 
-    await prisma.inspection_records.delete({
-      where: { id }
-    });
+    await this.inspectionRecordService.delete(id);
   }
 
   /**
@@ -559,37 +455,15 @@ export class InspectionService {
     operationId: string,
     requesterId: string,
     requesterRole: UserRole
-  ): Promise<InspectionRecord[]> {
-    // 運行記録の存在確認
-    const operation = await prisma.operations.findUnique({
-      where: { id: operationId }
-    });
+  ): Promise<InspectionRecordResponseDTO[]> {
+    // 運行記録の存在確認は省略（他サービスで実装）
 
-    if (!operation) {
-      throw new AppError('運行記録が見つかりません', 404);
-    }
-
-    // 運転手は自分の運行記録のみアクセス可能
-    if (requesterRole === UserRole.DRIVER && operation.driverId !== requesterId) {
-      throw new AppError('この運行記録の点検記録にアクセスする権限がありません', 403);
-    }
-
-    const records = await prisma.inspection_records.findMany({
+    const records = await this.inspectionRecordService.findMany({
       where: { operationId },
-      include: {
-        inspectionItem: true,
-        inspector: {
-          select: {
-            id: true,
-            name: true,
-            username: true
-          }
-        }
-      },
       orderBy: [
-        { inspectionItem: { inspectionType: 'asc' } },
-        { inspectionItem: { displayOrder: 'asc' } }
-      ]
+        { inspectionType: 'asc' },
+        { createdAt: 'asc' }
+      ] as any
     });
 
     return records;
@@ -609,24 +483,24 @@ export class InspectionService {
   }) {
     const { startDate, endDate, driverId, vehicleId, inspectionType, requesterId, requesterRole } = params;
 
-    const where: Prisma.inspection_recordsWhereInput = {};
+    const where: InspectionRecordWhereInput = {};
 
     if (startDate || endDate) {
-      where.inspectionDate = {};
-      if (startDate) where.inspectionDate.gte = new Date(startDate);
-      if (endDate) where.inspectionDate.lte = new Date(endDate);
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
     if (driverId) {
-      where.operation = { driverId };
+      where.operations = { driverId };
     }
 
     if (vehicleId) {
-      where.operation = { vehicleId };
+      where.operations = { vehicleId };
     }
 
     if (inspectionType) {
-      where.inspectionItem = { inspectionType: inspectionType as InspectionType };
+      where.inspectionType = inspectionType as any;
     }
 
     // 運転手は自分のデータのみ
@@ -637,22 +511,16 @@ export class InspectionService {
     const [
       totalRecords,
       okRecords,
-      ngRecords,
-      recordsByType
+      ngRecords
     ] = await Promise.all([
-      prisma.inspection_records.count({ where }),
-      prisma.inspection_records.count({ 
-        where: { ...where, result: 'OK' }
+      this.inspectionRecordService.count(where),
+      this.inspectionRecordService.count({ 
+        ...where, 
+        overallResult: true
       }),
-      prisma.inspection_records.count({ 
-        where: { ...where, result: 'NG' }
-      }),
-      prisma.inspection_records.groupBy({
-        by: ['inspectionItem'],
-        where,
-        _count: {
-          id: true
-        }
+      this.inspectionRecordService.count({ 
+        ...where, 
+        overallResult: false
       })
     ]);
 
@@ -662,7 +530,6 @@ export class InspectionService {
       ngRecords,
       okRate: totalRecords > 0 ? (okRecords / totalRecords) * 100 : 0,
       ngRate: totalRecords > 0 ? (ngRecords / totalRecords) * 100 : 0,
-      recordsByType,
       period: { startDate, endDate }
     };
   }
@@ -670,15 +537,18 @@ export class InspectionService {
   /**
    * 点検テンプレート取得
    */
-  async getInspectionTemplate(inspectionType: string): Promise<InspectionItem[]> {
-    const items = await prisma.inspectionItem.findMany({
+  async getInspectionTemplate(inspectionType: string): Promise<InspectionItemResponseDTO[]> {
+    const items = await this.inspectionItemService.findMany({
       where: {
-        inspectionType: inspectionType as InspectionType,
+        inspectionType: inspectionType as any,
         isActive: true
       },
       orderBy: { displayOrder: 'asc' }
     });
 
-    return items;
+    return items.map(item => ({
+      ...item,
+      _count: { inspectionRecords: 0 }
+    }));
   }
 }

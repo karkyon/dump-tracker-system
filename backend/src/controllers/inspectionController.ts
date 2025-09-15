@@ -1,17 +1,21 @@
-// backend/src/controllers/inspectionController.ts
-import { Response } from 'express';
+import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { InspectionService } from '../services/inspectionService';
+import { 
+  InspectionItemModel,
+  InspectionItemResultModel,
+  InspectionRecordModel,
+  VehicleModel,
+  UserModel 
+} from '../types';
+import { AuthenticatedRequest } from '../types/auth';
+import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../middleware/errorHandler';
 
-// 型定義をローカルで定義（Prismaの型エラー回避）
-type UserRole = 'ADMIN' | 'MANAGER' | 'DRIVER' | 'VIEWER';
-type InspectionType = 'PRE_TRIP' | 'POST_TRIP' | 'PERIODIC' | 'MAINTENANCE';
-type InspectionStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+const prisma = new PrismaClient();
+const inspectionService = new InspectionService();
 
-// Express Request型を拡張（型エラー回避）
-interface AuthenticatedRequest {
-  user?: {
-    id: string;
-    role: UserRole;
-    name: string;
+// 既存のコードを維持
     email: string;
   };
   params: any;
@@ -729,7 +733,7 @@ export const getInspectionStatistics = asyncHandler(async (req: AuthenticatedReq
     // 平均点検時間を計算
     let avgInspectionTime = 0;
     if (averageTime.length > 0) {
-      const totalTime = averageTime.reduce((sum, record) => {
+      const totalTime = averageTime.reduce((sum: number, record: { started_at: Date; completed_at: Date }) => {
         if (record.started_at && record.completed_at) {
           return sum + (record.completed_at.getTime() - record.started_at.getTime());
         }

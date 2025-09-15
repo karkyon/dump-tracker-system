@@ -1,17 +1,23 @@
 import { Request, Response } from 'express';
-import * as bcrypt from 'bcryptjs';
-import * as jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import config from '../config/environment';
-import logger from '../utils/logger';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { AuthService } from '../services/authService';
+import { 
+  UserModel, 
+  UserCreateInput, 
+  UserResponseDTO,
+  AuditLogModel,
+  NotificationModel 
+} from '../types';
+import { AuthenticatedRequest } from '../types/auth';
+import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../middleware/errorHandler';
 
 const prisma = new PrismaClient();
+const authService = new AuthService();
 
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    username: string;
-    role: string;
+// 既存のコードを維持（import以降はそのまま）
   };
 }
 
@@ -48,7 +54,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           { username: username },
           { email: username }
         ],
-        is_active: true
+        isActive: true
       }
     });
 
@@ -62,7 +68,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     // パスワード確認
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
     
     if (!isValidPassword) {
       // ログイン試行回数更新
@@ -88,7 +94,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       data: {
         // failed_login_attempts: 0,
         // locked_until: null,
-        last_login_at: new Date()
+        lastLoginAt: new Date()
       }
     });
 
@@ -99,14 +105,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         username: user.username, 
         role: user.role 
       },
-      config.JWT_SECRET,
-      { expiresIn: config.JWT_EXPIRES_IN }
+      config.jwtSecret,
+      { expiresIn: config.jwtSecret }
     );
 
     const refreshToken = generateAccessToken(
       { userId: user.id },
       jwtConfig.refreshToken.secret,
-      { expiresIn: config.JWT_REFRESH_EXPIRES_IN }
+      { expiresIn: config.jwtExpiresIn }
     );
 
     // リフレッシュトークンをデータベースに保存（セッション管理）
@@ -166,10 +172,10 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
         email: true,
         name: true,
         role: true,
-        employee_id: true,
+        employeeId: true,
         phone: true,
-        created_at: true,
-        last_login_at: true
+        createdAt: true,
+        lastLoginAt: true
       }
     });
 
@@ -269,7 +275,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       where: { id: decoded.userId }
     });
 
-    if (!user || !user.is_active) {
+    if (!user || !user.isActive) {
       res.status(401).json({
         success: false,
         message: '無効なリフレッシュトークンです',
@@ -285,8 +291,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
         username: user.username,
         role: user.role
       },
-      config.JWT_SECRET,
-      { expiresIn: config.JWT_EXPIRES_IN }
+      config.jwtSecret,
+      { expiresIn: config.jwtExpiresIn }
     );
 
     res.json({

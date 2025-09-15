@@ -1,7 +1,15 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { TripService } from '../services/tripService';
-import { AuthenticatedRequest, CreateTripRequest, UpdateTripRequest } from '../types';
+import { 
+  OperationModel, 
+  OperationDetailModel,
+  OperationCreateInput,
+  OperationDetailCreateInput,
+  GpsLogModel,
+  GpsLogCreateInput
+} from '../types';
+import { AuthenticatedRequest, CreateTripRequest, UpdateTripRequest } from '../types/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../middleware/errorHandler';
 
@@ -61,7 +69,7 @@ export const getTripById = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * 運行開始
+ * 運行開始（Operation作成）
  */
 export const startTrip = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const tripData: CreateTripRequest = req.body;
@@ -137,11 +145,11 @@ export const endTrip = asyncHandler(async (req: AuthenticatedRequest, res: Respo
 });
 
 /**
- * GPS位置情報更新
+ * GPS位置情報更新（GpsLog作成）
  */
 export const updateGPSLocation = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
-  const { latitude, longitude } = req.body;
+  const { latitude, longitude, speed, heading, accuracy } = req.body;
   
   const trip = await tripService.getTripById(id);
   if (!trip) {
@@ -153,9 +161,13 @@ export const updateGPSLocation = asyncHandler(async (req: AuthenticatedRequest, 
     throw new AppError('他の運転手の位置情報は更新できません', 403);
   }
   
+  // GpsLogとして位置情報を記録
   const gpsData = await tripService.updateGPSLocation(id, {
     latitude,
     longitude,
+    speedKmh: speed,
+    heading,
+    accuracyMeters: accuracy,
     timestamp: new Date()
   });
   
@@ -200,7 +212,7 @@ export const addFuelRecord = asyncHandler(async (req: AuthenticatedRequest, res:
 });
 
 /**
- * 積込記録追加
+ * 積込記録追加（OperationDetail作成）
  */
 export const addLoadingRecord = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
@@ -216,10 +228,12 @@ export const addLoadingRecord = asyncHandler(async (req: AuthenticatedRequest, r
     throw new AppError('他の運転手の積込記録は追加できません', 403);
   }
   
+  // OperationDetailとして積込記録を作成
   const loadingRecord = await tripService.addLoadingRecord(id, {
     locationId,
     itemId,
     quantity,
+    activityType: 'LOADING',
     startTime: new Date(startTime),
     endTime: new Date(endTime),
     notes
@@ -233,7 +247,7 @@ export const addLoadingRecord = asyncHandler(async (req: AuthenticatedRequest, r
 });
 
 /**
- * 積下記録追加
+ * 積下記録追加（OperationDetail作成）
  */
 export const addUnloadingRecord = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
@@ -249,10 +263,12 @@ export const addUnloadingRecord = asyncHandler(async (req: AuthenticatedRequest,
     throw new AppError('他の運転手の積下記録は追加できません', 403);
   }
   
+  // OperationDetailとして積下記録を作成
   const unloadingRecord = await tripService.addUnloadingRecord(id, {
     locationId,
     itemId,
     quantity,
+    activityType: 'UNLOADING',
     startTime: new Date(startTime),
     endTime: new Date(endTime),
     notes

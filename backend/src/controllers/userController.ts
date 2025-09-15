@@ -1,17 +1,22 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import logger from '../utils/logger';
+import { UserService } from '../services/userService';
+import { 
+  UserModel,
+  UserCreateInput,
+  UserUpdateInput,
+  UserResponseDTO,
+  NotificationModel,
+  AuditLogModel 
+} from '../types';
+import { AuthenticatedRequest } from '../types/auth';
+import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../middleware/errorHandler';
 
 const prisma = new PrismaClient();
+const userService = new UserService();
 
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    username: string;
-    role: string;
-  };
-}
-
+// 既存のコードを維持
 // ユーザー一覧取得
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {

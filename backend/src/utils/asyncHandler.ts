@@ -1,5 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
-import { ApiResponse, PaginatedResponse } from '../types';
+import { ApiResponse } from '../types';
+
+// Define PaginatedResponse type
+export type PaginatedResponse<T> = {
+  data: T[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
+};
 
 export const asyncHandler = (fn: Function) => {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -15,7 +26,8 @@ export function successResponse<T>(
   return {
     success: true,
     data,
-    message
+    message,
+    timestamp: new Date().toISOString()
   };
 }
 
@@ -23,11 +35,12 @@ export function errorResponse(
   message: string,
   statusCode: number = 500,
   errors?: any[]
-): ApiResponse {
+): ApiResponse<null> {
   return {
     success: false,
     message,
-    error: message
+    error: message,
+    timestamp: new Date().toISOString()
   };
 }
 
@@ -51,6 +64,7 @@ export function paginatedResponse<T>(
         itemsPerPage
       }
     },
-    message
+    message,
+    timestamp: new Date().toISOString()
   };
 }

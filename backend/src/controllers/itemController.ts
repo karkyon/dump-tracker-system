@@ -1,17 +1,21 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ItemService } from '../services/itemService';
-import { AuthenticatedRequest } from '../types';
+import { 
+  ItemModel,
+  ItemCreateInput,
+  ItemUpdateInput,
+  ItemResponseDTO,
+  OperationDetailModel 
+} from '../types';
+import { AuthenticatedRequest } from '../types/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../middleware/errorHandler';
 
 const prisma = new PrismaClient();
 const itemService = new ItemService();
 
-/**
- * 全品目の一覧取得
- */
-export const getAllItems = asyncHandler(async (req: Request, res: Response) => {
+// 既存のコードを維持
   const {
     page = 1,
     limit = 50,
@@ -21,9 +25,8 @@ export const getAllItems = asyncHandler(async (req: Request, res: Response) => {
     sortBy = 'displayOrder'
   } = req.query;
   
-  const items = await itemService.getAllItems({
+  const items = await itemService.getItems({
     page: Number(page),
-    limit: Number(limit),
     search: search as string,
     category: category as string,
     isActive: isActive ? Boolean(isActive) : undefined,
@@ -137,7 +140,7 @@ export const updateItemOrder = asyncHandler(async (req: AuthenticatedRequest, re
     throw new AppError('品目順序変更の権限がありません', 403);
   }
   
-  await itemService.updateItemOrder(items);
+  await itemService.updateItem(items);
   
   res.json({
     success: true,

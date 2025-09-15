@@ -96,7 +96,7 @@ export const imageUpload = multer({
     fileSize: APP_CONSTANTS.MAX_FILE_SIZE,
     files: 5
   },
-  fileFilter: createFileFilter([...APP_CONSTANTS.ALLOWED_IMAGE_TYPES])
+  fileFilter: createFileFilter([...APP_CONSTANTS.ALLOWED_IMAGE_TYPES]) as any
 });
 
 /**
@@ -108,7 +108,7 @@ export const documentUpload = multer({
     fileSize: APP_CONSTANTS.MAX_FILE_SIZE,
     files: 3
   },
-  fileFilter: createFileFilter([...APP_CONSTANTS.ALLOWED_DOCUMENT_TYPES])
+  fileFilter: createFileFilter([...APP_CONSTANTS.ALLOWED_DOCUMENT_TYPES]) as any
 });
 
 /**

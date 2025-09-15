@@ -30,9 +30,9 @@ model User {
   operationsOperationsCreatedByTousers Operation[]              @relation("operations_created_byTousers")
   operationsOperationsDriverIdTousers Operation[]              @relation("operations_driver_idTousers")
 
-@@index([email], map: "idx_users_email")
-@@index([role], map: "idx_users_role")
-@@index([username], map: "idx_users_username")
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
+  @@index([username], map: "idx_users_username")
   @@map("users")
 }
 
@@ -57,29 +57,29 @@ model Vehicle {
   maintenanceRecords MaintenanceRecord[]
   operations Operation[]
 
-@@index([plateNumber], map: "idx_vehicles_plate_number")
-@@index([status], map: "idx_vehicles_status")
+  @@index([plateNumber], map: "idx_vehicles_plate_number")
+  @@index([status], map: "idx_vehicles_status")
   @@map("vehicles")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model AuditLog {
-  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  tableName String @map("table_name")    @db.VarChar(100)
-  operationType String @map("operation_type")    @db.VarChar(20)
-  recordId String? @map("record_id")   @db.Uuid
-  userId String? @map("user_id")   @db.Uuid
-  ipAddress String? @map("ip_address")   @db.Inet
-  userAgent String? @map("user_agent")
-  oldValues Json? @map("old_values")
-  newValues Json? @map("new_values")
-  createdAt DateTime? @map("created_at") @default(now()) @db.Timestamptz(6)
-  users User?     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id              String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tableName       String        @map("table_name")    @db.VarChar(100)
+  operationType   OperationType @map("operation_type")
+  recordId        String?       @map("record_id")   @db.Uuid
+  userId          String?       @map("user_id")   @db.Uuid
+  ipAddress       String?       @map("ip_address")   @db.Inet
+  userAgent       String?       @map("user_agent")
+  oldValues       Json?         @map("old_values")
+  newValues       Json?         @map("new_values")
+  createdAt       DateTime?     @map("created_at") @default(now()) @db.Timestamptz(6)
+  users           User?         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-@@index([operationType], map: "idx_audit_logs_operation")
-@@index([tableName], map: "idx_audit_logs_table")
-@@index([createdAt], map: "idx_audit_logs_time")
+  @@index([operationType], map: "idx_audit_logs_operation")
+  @@index([tableName], map: "idx_audit_logs_table")
+  @@index([createdAt], map: "idx_audit_logs_time")
   @@map("audit_logs")
 }
 
@@ -389,6 +389,8 @@ enum UserRole {
   ADMIN
   MANAGER
   DRIVER
+
+  @@map("user_role")  // ← データベースの実際のENUM名にマッピング
 }
 
 enum VehicleStatus {
@@ -419,4 +421,16 @@ enum InspectionType {
   DAILY
   WEEKLY
   MONTHLY
+}
+
+enum OperationType {
+  CREATE
+  UPDATE
+  DELETE
+  AUTH
+  LOGIN
+  LOGOUT
+  SYSTEM
+  
+  @@map("operation_type")
 }

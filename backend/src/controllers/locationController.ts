@@ -1,17 +1,21 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { LocationService } from '../services/locationService';
-import { AuthenticatedRequest, CreateLocationRequest, UpdateLocationRequest } from '../types';
+import { 
+  LocationModel,
+  LocationCreateInput,
+  LocationUpdateInput,
+  LocationResponseDTO,
+  OperationDetailModel 
+} from '../types';
+import { AuthenticatedRequest } from '../types/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../middleware/errorHandler';
 
 const prisma = new PrismaClient();
 const locationService = new LocationService();
 
-/**
- * 全場所の一覧取得
- */
-export const getAllLocations = asyncHandler(async (req: Request, res: Response) => {
+// 既存のコードを維持
   const {
     page = 1,
     limit = 10,

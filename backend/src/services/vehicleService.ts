@@ -1,14 +1,18 @@
 import { PrismaClient } from '@prisma/client';
-import {
-  Vehicle,
-  CreateVehicleRequest,
-  UpdateVehicleRequest,
-  VehicleStatus,
-  PaginatedResponse,
-  PaginationQuery,
-  UserRole
+import { 
+  VehicleModel,
+  VehicleCreateInput,
+  VehicleUpdateInput,
+  MaintenanceRecordModel,
+  InspectionRecordModel,
+  OperationModel,
+  GpsLogModel 
 } from '../types';
 import { AppError } from '../utils/asyncHandler';
+
+const prisma = new PrismaClient();
+
+export class VehicleService {
 
 const prisma = new PrismaClient();
 

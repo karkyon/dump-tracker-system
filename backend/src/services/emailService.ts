@@ -1,15 +1,30 @@
-// backend/src/services/emailService.ts
 import nodemailer from 'nodemailer';
-import { PrismaClient } from '@prisma/client';
-import {
-  EmailTemplate,
-  EmailNotification,
-  NotificationType,
-  User,
-  Operation,
-  InspectionRecord
+import { 
+  UserModel,
+  NotificationModel 
 } from '../types';
-import { AppError } from '../utils/asyncHandler';
+import { emailConfig } from '../config/email';
+import { PrismaClient, User } from '@prisma/client';
+import { Operation } from '@prisma/client';
+import { InspectionRecord } from '@prisma/client';
+import { AppError } from '../utils/errors';
+
+// 通知タイプ
+export
+enum NotificationType {
+  OPERATION_START = 'OPERATION_START',
+  OPERATION_COMPLETE = 'OPERATION_COMPLETE',
+  INSPECTION_ALERT = 'INSPECTION_ALERT',
+  MAINTENANCE_DUE = 'MAINTENANCE_DUE',
+  REPORT_GENERATION_COMPLETE = 'REPORT_GENERATION_COMPLETE',
+  SYSTEM_NOTIFICATION = 'SYSTEM_NOTIFICATION'
+}
+
+interface EmailTemplate {
+  type: NotificationType;
+  subject: string;
+  html: string;
+}
 
 const prisma = new PrismaClient();
 
@@ -17,7 +32,7 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    this.transporter = nodemailer.createTransporter({
+    this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'localhost',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
@@ -484,7 +499,7 @@ export class EmailService {
       where: {
         role: { in: ['ADMIN', 'MANAGER'] },
         isActive: true,
-        email: { not: null }
+        NOT: { email: null }
       },
       select: { email: true }
     });
@@ -505,9 +520,9 @@ export class EmailService {
     errorMessage?: string;
   }): Promise<void> {
     try {
-      await prisma.emailNotification.create({
+      await prisma.notification.create({
         data: {
-          type: notification.type,
+          notificationType: notification.type,
           recipients: notification.recipients,
           subject: notification.subject,
           content: notification.content,

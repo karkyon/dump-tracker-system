@@ -1,12 +1,14 @@
-import { PrismaClient } from '@prisma/client';
-import {
-  Item,
-  CreateItemRequest,
-  UpdateItemRequest,
-  PaginatedResponse,
+import { Item, PrismaClient } from '@prisma/client';
+import { 
+  ItemModel,
+  ItemCreateInput,
+  ItemUpdateInput,
+  ItemResponseDTO,
+  OperationDetailModel, 
   PaginationQuery
 } from '../types';
-import { AppError } from '../utils/asyncHandler';
+import { AppError } from '../utils/errors';
+import { PaginatedResponse } from '../utils/asyncHandler';
 
 const prisma = new PrismaClient();
 

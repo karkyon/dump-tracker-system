@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "ダンプ運行記録システム - バックエンドAPI",
   "main": "dist/server.js",
+  "prisma": {
+    "schema": "prisma/schema.camel.prisma"
+  },
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
@@ -29,9 +32,11 @@
     "api:dev": "npm run dev",
     "type-check": "tsc --noEmit",
     "test:build": "npm run clean && npm run build",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:generate": "prisma generate --schema=prisma/schema.camel.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=prisma/schema.camel.prisma",
+    "prisma:studio": "prisma studio --schema=prisma/schema.camel.prisma",
+    "prisma:push": "prisma db push --schema=prisma/schema.camel.prisma",
+    "prisma:pull": "prisma db pull --schema=prisma/schema.camel.prisma"
   },
   "dependencies": {
     "@prisma/client": "^6.16.0",

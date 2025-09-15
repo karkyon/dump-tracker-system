@@ -179,7 +179,7 @@ export const accessLogger = (req: AuthenticatedRequest, res: Response, next: Nex
       responseTime,
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      userId: req.user?.id,
+      userId: req.user?.userId,
     };
 
     writeLogToConsole(logEntry);
@@ -225,7 +225,7 @@ export const auditLogger = (action: string, resource: string) => {
             oldValues = await prisma.vehicle.findUnique({ where: { id: resourceId } });
             break;
           case 'operation':
-            oldValues = await prisma.operations.findUnique({ where: { id: resourceId } });
+            oldValues = await prisma.operation.findUnique({ where: { id: resourceId } });
             break;
           // 他のリソースも必要に応じて追加
         }
@@ -239,12 +239,12 @@ export const auditLogger = (action: string, resource: string) => {
       try {
         // 成功時のみ監査ログを記録
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          await prisma.audit_logs.create({
+          await prisma.auditLog.create({
             data: {
-              userId: req.user?.id,
-              action,
-              resource,
-              resourceId,
+              tableName: resource,
+              operationType: action,
+              recordId: resourceId,
+              userId: req.user?.userId,
               oldValues: oldValues ? JSON.parse(JSON.stringify(oldValues)) : null,
               newValues: responseData && typeof responseData === 'object' 
                 ? JSON.parse(JSON.stringify(responseData)) 
@@ -255,7 +255,7 @@ export const auditLogger = (action: string, resource: string) => {
           });
 
           logger.info('監査ログ記録', {
-            userId: req.user?.id,
+            userId: req.user?.userId,
             action,
             resource,
             resourceId,
@@ -294,7 +294,7 @@ export const errorLogger = (
     url: req.originalUrl,
     ip: req.ip,
     userAgent: req.get('User-Agent'),
-    userId: (req as AuthenticatedRequest).user?.id,
+    userId: (req as AuthenticatedRequest).user?.userId,
   };
 
   writeLogToConsole(logEntry);
@@ -339,7 +339,7 @@ export const securityLogger = (event: string, details?: any) => {
       ...details,
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      userId: req.user?.id,
+      userId: req.user?.userId,
       url: req.originalUrl,
       method: req.method,
     });
@@ -422,7 +422,7 @@ export const getLogStats = async (): Promise<{
   try {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     
-    const auditLogCount = await prisma.audit_logs.count();
+    const auditLogCount = await prisma.auditLog.count();
     
     return {
       totalErrors: 0, // ファイルベースのログから計算が必要

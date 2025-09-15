@@ -1,17 +1,22 @@
-// backend/src/controllers/reportController.ts
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ReportService } from '../services/reportService';
 import { 
-  AuthenticatedRequest, 
-  ReportType,
-  ReportFormat,
-  ReportFilter,
-  UserRole 
+  OperationModel,
+  OperationDetailModel,
+  VehicleModel,
+  UserModel,
+  ItemModel,
+  LocationModel 
 } from '../types';
-import { asyncHandler, sendSuccess, sendError } from '../utils/asyncHandler';
-import { validate, reportValidation } from '../utils/validation';
+import { AuthenticatedRequest } from '../types/auth';
+import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../middleware/errorHandler';
 
+const prisma = new PrismaClient();
+const reportService = new ReportService();
+
+// 既存のコードを維持
 const prisma = new PrismaClient();
 const reportService = new ReportService();
 

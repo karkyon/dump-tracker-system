@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { config } from '../config/database';
+import config from '../config/database';
 import { JWTPayload } from '../types';
 
 export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
@@ -16,8 +16,8 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
   }
 
   try {
-    const decoded = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
-    (req as any).user = decoded;  // 型安全にuserプロパティを追加
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
+    (req as any).user = decoded;
     next();
   } catch (error) {
     res.status(403).json({

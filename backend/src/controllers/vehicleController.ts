@@ -1,17 +1,24 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { VehicleService } from '../services/vehicleService';
+import { 
+  VehicleModel, 
+  VehicleCreateInput, 
+  VehicleUpdateInput, 
+  VehicleResponseDTO,
+  MaintenanceRecordModel,
+  InspectionRecordModel,
+  GpsLogModel,
+  OperationModel 
+} from '../types';
+import { AuthenticatedRequest } from '../types/auth';
+import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../middleware/errorHandler';
 
 const prisma = new PrismaClient();
+const vehicleService = new VehicleService();
 
-// 基本型定義
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    username: string;
-    role: string;
-    email: string;
-  };
-}
+// 既存のコードを維持
 
 // 車両一覧取得
 export const getAllVehicles = async (req: AuthRequest, res: Response) => {

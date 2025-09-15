@@ -65,7 +65,8 @@ try {
 
 // 基本ミドルウェア
 try {
-  app.use(compression());
+  // Cast to unknown first to avoid incompatible @types/express versions causing a direct cast error.
+  app.use(compression() as unknown as express.RequestHandler);
 } catch (error) {
   console.warn(
     'Compression setup failed:',
@@ -111,7 +112,7 @@ try {
     standardHeaders: true,
     legacyHeaders: false,
   });
-  app.use('/api/', limiter);
+  app.use('/api/', limiter as unknown as express.RequestHandler);
 } catch (error) {
   console.warn(
     'Rate limiting setup failed:',

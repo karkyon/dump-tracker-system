@@ -1,14 +1,17 @@
-// backend/src/services/reportService.ts
-import { PrismaClient, Prisma } from '@prisma/client';
-import {
-  GeneratedReport,
-  ReportType,
-  ReportFormat,
-  ReportFilter,
-  ReportStatus,
-  PaginatedResponse,
-  UserRole,
-  DailyOperationReportParams,
+import { PrismaClient } from '@prisma/client';
+import { 
+  OperationModel,
+  OperationDetailModel,
+  VehicleModel,
+  UserModel,
+  ItemModel,
+  LocationModel 
+} from '../types';
+import { AppError } from '../utils/asyncHandler';
+
+const prisma = new PrismaClient();
+
+export class ReportService {
   MonthlyOperationReportParams,
   VehicleUtilizationReportParams,
   DriverPerformanceReportParams,
