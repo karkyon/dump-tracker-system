@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { AuthenticatedRequest } from '../types';
+import { AuthenticatedRequest } from '../types/auth';
 import { LOG_LEVELS } from '../utils/constants';
 import fs from 'fs';
 import path from 'path';

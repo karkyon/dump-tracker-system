@@ -54,3 +54,9 @@ temp/
 
 # TypeScript cache
 *.tsbuildinfo
+
+/src/generated/prisma
+
+/src/generated/prisma
+
+/src/generated/prisma

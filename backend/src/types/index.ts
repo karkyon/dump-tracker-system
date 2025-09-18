@@ -1,30 +1,14 @@
 // =====================================
-// 統合型定義ファイル
-// 全モデルの型定義を集約
+// types/index.ts
+// クリーン生成された統合型定義ファイル
+// 生成日時: Tue Sep 16 10:05:28 AM JST 2025
 // =====================================
 
-// 各モデルの型とサービスをエクスポート
+// =====================================
+// 全モデル型エクスポート
+// =====================================
 
-// Auth 関連型
-export type {
-  AuthLoginRequest,
-  AuthLoginResponse,
-  AuthJWTPayload,
-  AuthenticatedRequest,
-  AuthResponseDTO,
-  AuthCreateDTO,
-  AuthUpdateDTO,
-  // 互換性のための型エイリアス
-  LoginRequest,
-  LoginResponse,
-  JWTPayload
-} from '../models/AuthModel';
-
-export {
-  // Authサービスが必要な場合は後で追加
-} from '../models/AuthModel';
-
-// AuditLog 関連型定義
+// AuditLog 関連型
 export type {
   AuditLogModel,
   AuditLogCreateInput,
@@ -38,7 +22,11 @@ export type {
   AuditLogUpdateDTO
 } from '../models/AuditLogModel';
 
-// GpsLog 関連型定義
+export {
+  getAuditLogService
+} from '../models/AuditLogModel';
+
+// GpsLog 関連型
 export type {
   GpsLogModel,
   GpsLogCreateInput,
@@ -52,7 +40,11 @@ export type {
   GpsLogUpdateDTO
 } from '../models/GpsLogModel';
 
-// InspectionItem 関連型定義
+export {
+  getGpsLogService
+} from '../models/GpsLogModel';
+
+// InspectionItem 関連型
 export type {
   InspectionItemModel,
   InspectionItemCreateInput,
@@ -66,7 +58,11 @@ export type {
   InspectionItemUpdateDTO
 } from '../models/InspectionItemModel';
 
-// InspectionItemResult 関連型定義
+export {
+  getInspectionItemService
+} from '../models/InspectionItemModel';
+
+// InspectionItemResult 関連型
 export type {
   InspectionItemResultModel,
   InspectionItemResultCreateInput,
@@ -80,7 +76,11 @@ export type {
   InspectionItemResultUpdateDTO
 } from '../models/InspectionItemResultModel';
 
-// InspectionRecord 関連型定義
+export {
+  getInspectionItemResultService
+} from '../models/InspectionItemResultModel';
+
+// InspectionRecord 関連型
 export type {
   InspectionRecordModel,
   InspectionRecordCreateInput,
@@ -94,7 +94,11 @@ export type {
   InspectionRecordUpdateDTO
 } from '../models/InspectionRecordModel';
 
-// Item 関連型定義
+export {
+  getInspectionRecordService
+} from '../models/InspectionRecordModel';
+
+// Item 関連型
 export type {
   ItemModel,
   ItemCreateInput,
@@ -105,10 +109,17 @@ export type {
   ItemResponseDTO,
   ItemListResponse,
   ItemCreateDTO,
-  ItemUpdateDTO
+  ItemUpdateDTO,
+  ItemSummary,
+  ItemWithUsage,
+  ItemUsageStats
 } from '../models/ItemModel';
 
-// Location 関連型定義
+export {
+  getItemService
+} from '../models/ItemModel';
+
+// Location 関連型
 export type {
   LocationModel,
   LocationCreateInput,
@@ -122,7 +133,11 @@ export type {
   LocationUpdateDTO
 } from '../models/LocationModel';
 
-// MaintenanceRecord 関連型定義
+export {
+  getLocationService
+} from '../models/LocationModel';
+
+// MaintenanceRecord 関連型
 export type {
   MaintenanceRecordModel,
   MaintenanceRecordCreateInput,
@@ -136,7 +151,11 @@ export type {
   MaintenanceRecordUpdateDTO
 } from '../models/MaintenanceRecordModel';
 
-// Notification 関連型定義
+export {
+  getMaintenanceRecordService
+} from '../models/MaintenanceRecordModel';
+
+// Notification 関連型
 export type {
   NotificationModel,
   NotificationCreateInput,
@@ -150,7 +169,11 @@ export type {
   NotificationUpdateDTO
 } from '../models/NotificationModel';
 
-// Operation 関連型定義
+export {
+  getNotificationService
+} from '../models/NotificationModel';
+
+// Operation 関連型
 export type {
   OperationModel,
   OperationCreateInput,
@@ -164,7 +187,11 @@ export type {
   OperationUpdateDTO
 } from '../models/OperationModel';
 
-// OperationDetail 関連型定義
+export {
+  getOperationService
+} from '../models/OperationModel';
+
+// OperationDetail 関連型
 export type {
   OperationDetailModel,
   OperationDetailCreateInput,
@@ -178,7 +205,11 @@ export type {
   OperationDetailUpdateDTO
 } from '../models/OperationDetailModel';
 
-// SystemSetting 関連型定義
+export {
+  getOperationDetailService
+} from '../models/OperationDetailModel';
+
+// SystemSetting 関連型
 export type {
   SystemSettingModel,
   SystemSettingCreateInput,
@@ -192,7 +223,11 @@ export type {
   SystemSettingUpdateDTO
 } from '../models/SystemSettingModel';
 
-// User 関連型定義
+export {
+  getSystemSettingService
+} from '../models/SystemSettingModel';
+
+// User 関連型
 export type {
   UserModel,
   UserCreateInput,
@@ -206,7 +241,11 @@ export type {
   UserUpdateDTO
 } from '../models/UserModel';
 
-// Vehicle 関連型定義
+export {
+  getUserService
+} from '../models/UserModel';
+
+// Vehicle 関連型
 export type {
   VehicleModel,
   VehicleCreateInput,
@@ -220,38 +259,23 @@ export type {
   VehicleUpdateDTO
 } from '../models/VehicleModel';
 
-// サービスクラスのエクスポート
-export { AuditLogService } from '../models/AuditLogModel';
-export { GpsLogService } from '../models/GpsLogModel';
-export { InspectionItemService } from '../models/InspectionItemModel';
-export { InspectionItemResultService } from '../models/InspectionItemResultModel';
-export { InspectionRecordService } from '../models/InspectionRecordModel';
-export { ItemService as ItemModelService } from '../models/ItemModel';
-export { LocationService as LocationModelService } from '../models/LocationModel';
-export { MaintenanceRecordService } from '../models/MaintenanceRecordModel';
-export { NotificationService } from '../models/NotificationModel';
-export { OperationService } from '../models/OperationModel';
-export { OperationDetailService } from '../models/OperationDetailModel';
-export { SystemSettingService } from '../models/SystemSettingModel';
-export { UserService as UserModelService } from '../models/UserModel';
-export { VehicleService as VehicleModelService } from '../models/VehicleModel';
-export { getInspectionItemService } from '../models/InspectionItemModel';
-export { getInspectionItemResultService } from '../models/InspectionItemResultModel';
-export { getInspectionRecordService } from '../models/InspectionRecordModel';
+export {
+  getVehicleService
+} from '../models/VehicleModel';
+
+
 
 // =====================================
-// 共通インターフェース
+// 共通型定義
 // =====================================
 
-// ページネーション、ソート、フィルタリングのクエリパラメータ
-export interface PaginationQuery {
-  page?: number;
-  pageSize?: number;
+export interface PaginationParams {
+  page: number;
+  pageSize: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
 
-// 汎用APIレスポンス型
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -260,7 +284,6 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
-// リストレスポンスのメタ情報
 export interface ListMeta {
   total: number;
   page: number;
@@ -270,7 +293,6 @@ export interface ListMeta {
   hasPreviousPage: boolean;
 }
 
-// リストレスポンス型
 export interface ApiListResponse<T> {
   success: boolean;
   data: T[];
@@ -287,55 +309,63 @@ export type RequiredBy<T, K extends keyof T> = T & Required<Pick<T, K>>;
 export type OmitTimestamps<T> = Omit<T, 'createdAt' | 'updatedAt'>;
 
 // =====================================
-// モデルレジストリ
+// モデル別集約型（修正版）
 // =====================================
 
-import * as AuditLog from '../models/AuditLogModel';
-import * as GpsLog from '../models/GpsLogModel';
-import * as InspectionItem from '../models/InspectionItemModel';
-import * as InspectionItemResult from '../models/InspectionItemResultModel';
-import * as InspectionRecord from '../models/InspectionRecordModel';
-import * as Item from '../models/ItemModel';
-import * as Location from '../models/LocationModel';
-import * as MaintenanceRecord from '../models/MaintenanceRecordModel';
-import * as Notification from '../models/NotificationModel';
-import * as Operation from '../models/OperationModel';
-import * as OperationDetail from '../models/OperationDetailModel';
-import * as SystemSetting from '../models/SystemSettingModel';
-import * as User from '../models/UserModel';
-import * as Vehicle from '../models/VehicleModel';
-import * as Auth from '../models/AuthModel';
+// 各モデル型を再エクスポート（型参照用）
+import type { AuditLogModel as _AuditLogModel } from '../models/AuditLogModel';
+import type { GpsLogModel as _GpsLogModel } from '../models/GpsLogModel';
+import type { InspectionItemModel as _InspectionItemModel } from '../models/InspectionItemModel';
+import type { InspectionItemResultModel as _InspectionItemResultModel } from '../models/InspectionItemResultModel';
+import type { InspectionRecordModel as _InspectionRecordModel } from '../models/InspectionRecordModel';
+import type { ItemModel as _ItemModel } from '../models/ItemModel';
+import type { LocationModel as _LocationModel } from '../models/LocationModel';
+import type { MaintenanceRecordModel as _MaintenanceRecordModel } from '../models/MaintenanceRecordModel';
+import type { NotificationModel as _NotificationModel } from '../models/NotificationModel';
+import type { OperationModel as _OperationModel } from '../models/OperationModel';
+import type { OperationDetailModel as _OperationDetailModel } from '../models/OperationDetailModel';
+import type { SystemSettingModel as _SystemSettingModel } from '../models/SystemSettingModel';
+import type { UserModel as _UserModel } from '../models/UserModel';
+import type { VehicleModel as _VehicleModel } from '../models/VehicleModel';
 
-// 各モデルの型を集約したインターフェース
 export interface ModelRegistry {
-  AuditLog: AuditLog.AuditLogModel;
-  GpsLog: GpsLog.GpsLogModel;
-  InspectionItem: InspectionItem.InspectionItemModel;
-  InspectionItemResult: InspectionItemResult.InspectionItemResultModel;
-  InspectionRecord: InspectionRecord.InspectionRecordModel;
-  Item: Item.ItemModel;
-  Location: Location.LocationModel;
-  MaintenanceRecord: MaintenanceRecord.MaintenanceRecordModel;
-  Notification: Notification.NotificationModel;
-  Operation: Operation.OperationModel;
-  OperationDetail: OperationDetail.OperationDetailModel;
-  SystemSetting: SystemSetting.SystemSettingModel;
-  User: User.UserModel;
-  Vehicle: Vehicle.VehicleModel;
-  Auth: Auth.AuthenticatedRequest; // Authモデルの型
+  AuditLog: _AuditLogModel;
+  GpsLog: _GpsLogModel;
+  InspectionItem: _InspectionItemModel;
+  InspectionItemResult: _InspectionItemResultModel;
+  InspectionRecord: _InspectionRecordModel;
+  Item: _ItemModel;
+  Location: _LocationModel;
+  MaintenanceRecord: _MaintenanceRecordModel;
+  Notification: _NotificationModel;
+  Operation: _OperationModel;
+  OperationDetail: _OperationDetailModel;
+  SystemSetting: _SystemSettingModel;
+  User: _UserModel;
+  Vehicle: _VehicleModel;
 }
 
 export type ModelNames = keyof ModelRegistry;
 export type ModelType<T extends ModelNames> = ModelRegistry[T];
+export type {
+  Trip,
+  CreateTripRequest,
+  UpdateTripRequest,
+  TripFilter,
+  PaginatedTripResponse,
+  ActivityType,
+  CreateTripDetailRequest,
+  CreateFuelRecordRequest,
+  TripStatistics,
+  TripStatus,
+  VehicleOperationStatus,
+  TripDetail,
+  PrismaVehicleStatus, 
+  BusinessVehicleStatus
+} from './trip';
 
-// =====================================
-// 既存のauth.tsとの互換性維持
-// =====================================
-
-// Trip関連の型定義（Operation移行用）
-export type Trip = Operation.OperationModel;
-export type TripDetail = OperationDetail.OperationDetailModel;
-export type TripCreateDTO = Operation.OperationCreateDTO;
-export type TripDetailCreateDTO = OperationDetail.OperationDetailCreateDTO;
-export type TripUpdateDTO = Operation.OperationUpdateDTO;
-export type TripDetailUpdateDTO = OperationDetail.OperationDetailUpdateDTO;
+export {
+  vehicleStatusHelper,
+  VEHICLE_STATUS_CONSTANTS,
+  TripVehicleStatusManager
+} from './trip';

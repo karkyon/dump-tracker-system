@@ -3,10 +3,16 @@ import {
   ItemModel,
   ItemCreateInput,
   ItemUpdateInput,
+  ItemWhereInput,
   ItemResponseDTO,
-  OperationDetailModel, 
-  PaginationQuery
+  OperationDetailModel,
+  ItemSummary,
+  ItemWithUsage,
+  ItemUsageStats
 } from '../types';
+import { 
+  PaginationQuery
+} from '../types/common';
 import { AppError } from '../utils/errors';
 import { PaginatedResponse } from '../utils/asyncHandler';
 
@@ -20,7 +26,7 @@ export class ItemService {
    */
   async getItems(
     query: PaginationQuery & { search?: string; isActive?: boolean }
-  ): Promise<PaginatedResponse<Item & { usageCount?: number }>> {
+  ): Promise<PaginatedResponse<ItemSummary>> {
     const {
       page = 1,
       limit = 50,
@@ -58,7 +64,7 @@ export class ItemService {
       include: {
         _count: {
           select: {
-            tripDetails: true
+            operationDetails: true
           }
         }
       }
@@ -74,7 +80,7 @@ export class ItemService {
       isActive: item.isActive,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
-      usageCount: item._count.tripDetails
+      usageCount: item._count.operationDetails
     }));
 
     return {
@@ -82,7 +88,13 @@ export class ItemService {
       total,
       page,
       limit: take,
-      totalPages
+      totalPages,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: take
+      }
     };
   }
 
@@ -91,13 +103,13 @@ export class ItemService {
    * @param itemId 品目ID
    * @returns 品目情報
    */
-  async getItemById(itemId: string): Promise<Item & { usageCount?: number; recentUsage?: any[] }> {
+  async getItemById(itemId: string): Promise<ItemWithUsage> {
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       include: {
         _count: {
           select: {
-            tripDetails: true
+            operationDetails : true
           }
         }
       }
@@ -108,30 +120,30 @@ export class ItemService {
     }
 
     // 最近の使用履歴を取得
-    const recentUsage = await prisma.tripDetail.findMany({
+    const recentUsage = await prisma.operationDetail.findMany({
       where: { itemId },
       take: 10,
-      orderBy: { timestamp: 'desc' },
+      orderBy: { createdAt: 'desc' },
       include: {
-        trip: {
+        operations: {
           select: {
-            date: true,
-            driver: {
+            plannedStartTime: true,
+            usersOperationsDriverIdTousers: {
               select: {
                 name: true
               }
             },
-            vehicle: {
+            vehicles: {
               select: {
-                vehicleNumber: true
+                plateNumber: true
               }
             }
           }
         },
-        location: {
+        locations: {
           select: {
-            customerName: true,
-            locationName: true
+            clientName: true,
+            name: true
           }
         }
       }
@@ -144,15 +156,15 @@ export class ItemService {
       isActive: item.isActive,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
-      usageCount: item._count.tripDetails,
+      usageCount: item._count.operationDetails,
       recentUsage: recentUsage.map(usage => ({
         activityType: usage.activityType,
-        timestamp: usage.timestamp,
-        tripDate: usage.trip.date,
-        driverName: usage.trip.driver.name,
-        vehicleNumber: usage.trip.vehicle.vehicleNumber,
-        customerName: usage.location?.customerName,
-        locationName: usage.location?.locationName
+        createdAt: usage.createdAt!,
+        operationDate: usage.operations?.plannedStartTime ?? undefined,
+        driverName: usage.operations?.usersOperationsDriverIdTousers?.name ?? undefined,
+        plateNumber: usage.operations?.vehicles?.plateNumber ?? undefined,
+        clientName: usage.locations?.clientName ?? undefined,
+        locationName: usage.locations?.name ?? undefined
       }))
     };
   }
@@ -162,7 +174,7 @@ export class ItemService {
    * @param itemData 品目データ
    * @returns 作成された品目
    */
-  async createItem(itemData: CreateItemRequest): Promise<Item> {
+  async createItem(itemData: ItemCreateInput): Promise<ItemSummary> {
     const { name, displayOrder } = itemData;
 
     // 品目名重複チェック
@@ -209,7 +221,7 @@ export class ItemService {
    * @param updateData 更新データ
    * @returns 更新された品目
    */
-  async updateItem(itemId: string, updateData: UpdateItemRequest): Promise<Item> {
+  async updateItem(itemId: string, updateData: ItemUpdateInput): Promise<ItemSummary> {
     // 品目存在確認
     const existingItem = await prisma.item.findUnique({
       where: { id: itemId }
@@ -220,13 +232,14 @@ export class ItemService {
     }
 
     // 品目名重複チェック（更新する場合）
-    if (updateData.name) {
+    if (updateData.name && typeof updateData.name === 'string') {
       const duplicateItem = await prisma.item.findFirst({
         where: {
-          AND: [
-            { id: { not: itemId } },
-            { name: { equals: updateData.name, mode: 'insensitive' } }
-          ]
+          id: { not: itemId },
+          name: { 
+            equals: updateData.name,
+            mode: 'insensitive' 
+          }
         }
       });
 
@@ -259,11 +272,11 @@ export class ItemService {
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       include: {
-        tripDetails: {
+        operationDetails: {
           where: {
-            trip: {
+            operations: {
               status: {
-                in: ['PREPARING', 'IN_PROGRESS']
+                in: ['PLANNING', 'IN_PROGRESS']
               }
             }
           }
@@ -276,7 +289,7 @@ export class ItemService {
     }
 
     // アクティブな運行記録で使用中の場合は削除不可
-    if (item.tripDetails.length > 0) {
+    if (item.operationDetails.length > 0) {
       throw new AppError('進行中の運行記録で使用されているため、この品目を削除できません', 400);
     }
 
@@ -292,7 +305,7 @@ export class ItemService {
    * @returns アクティブ品目一覧
    */
   async getActiveItems(): Promise<Array<{ id: string; name: string; displayOrder: number }>> {
-    return await prisma.item.findMany({
+    const items = await prisma.item.findMany({
       where: { isActive: true },
       select: {
         id: true,
@@ -303,6 +316,13 @@ export class ItemService {
         displayOrder: 'asc'
       }
     });
+
+    // Prisma may return displayOrder as number | null; ensure we return number
+    return items.map(i => ({
+      id: i.id,
+      name: i.name,
+      displayOrder: i.displayOrder ?? 0
+    }));
   }
 
   /**
@@ -338,7 +358,7 @@ export class ItemService {
    * @param newDisplayOrder 新しい表示順序
    * @returns 更新された品目
    */
-  async updateDisplayOrder(itemId: string, newDisplayOrder: number): Promise<Item> {
+  async updateDisplayOrder(itemId: string, newDisplayOrder: number): Promise<ItemSummary> {
     const item = await prisma.item.findUnique({
       where: { id: itemId }
     });
@@ -396,11 +416,11 @@ export class ItemService {
     const whereCondition: any = { itemId };
 
     if (startDate || endDate) {
-      whereCondition.trip = {
-        date: {}
+      whereCondition.operations = {
+        plannedStartTime: {}  // dateではなくplannedStartTimeを使用
       };
-      if (startDate) whereCondition.trip.date.gte = new Date(startDate);
-      if (endDate) whereCondition.trip.date.lte = new Date(endDate);
+      if (startDate) whereCondition.operations.plannedStartTime.gte = new Date(startDate);
+      if (endDate) whereCondition.operations.plannedStartTime.lte = new Date(endDate);
     }
 
     const [
@@ -411,12 +431,12 @@ export class ItemService {
       monthlyUsage
     ] = await Promise.all([
       // 総使用回数
-      prisma.tripDetail.count({
+      prisma.operationDetail.count({
         where: whereCondition
       }),
       
       // ユニーク客先数
-      prisma.tripDetail.groupBy({
+      prisma.operationDetail.groupBy({
         by: ['locationId'],
         where: whereCondition
       }).then(async (results) => {
@@ -424,42 +444,56 @@ export class ItemService {
         if (locationIds.length === 0) return 0;
         
         const uniqueCustomersResult = await prisma.location.groupBy({
-          by: ['customerName'],
+          by: ['clientName'],
           where: { id: { in: locationIds } }
         });
         return uniqueCustomersResult.length;
       }),
       
       // ユニーク運転手数
-      prisma.tripDetail.groupBy({
-        by: ['tripId'],
+      prisma.operationDetail.groupBy({
+        by: ['operationId'],
         where: whereCondition
       }).then(async (results) => {
-        const tripIds = results.map(r => r.tripId);
-        const uniqueDriversResult = await prisma.trip.groupBy({
-          by: ['driverId'],
-          where: { id: { in: tripIds } }
+        const operationIds = results.map(r => r.operationId);
+        const uniqueDriverIds = await prisma.operationDetail.findMany({
+          where: { id: { in: operationIds } },
+          select: {
+            operations: {
+              select: {
+                driverId: true
+              }
+            }
+          }
         });
-        return uniqueDriversResult.length;
+        const driverIdSet = new Set();
+        uniqueDriverIds.forEach(r => {
+          if (r.operations.driverId) {
+            driverIdSet.add(r.operations.driverId);
+          }
+        });
+        const uniqueDriversCount = driverIdSet.size;
+
+        return uniqueDriversCount;
       }),
       
       // 最近の活動
-      prisma.tripDetail.findMany({
+      prisma.operationDetail.findMany({
         where: whereCondition,
         take: 5,
-        orderBy: { timestamp: 'desc' },
+        orderBy: { createdAt: 'desc' },
         include: {
-          trip: {
+          operations: {
             select: {
-              driver: {
+              usersOperationsDriverIdTousers: {
                 select: { name: true }
               }
             }
           },
-          location: {
+          locations: {
             select: {
-              customerName: true,
-              locationName: true
+              clientName: true,
+              name: true
             }
           }
         }
@@ -468,13 +502,13 @@ export class ItemService {
       // 月別使用回数（過去12ヶ月）
       prisma.$queryRaw`
         SELECT 
-          DATE_TRUNC('month', td.timestamp) as month,
+          DATE_TRUNC('month', od.created_at) as month,
           COUNT(*) as usage_count
-        FROM trip_details td
-        INNER JOIN trips t ON td.trip_id = t.id
-        WHERE td.item_id = ${itemId}
-          AND td.timestamp >= CURRENT_DATE - INTERVAL '12 months'
-        GROUP BY DATE_TRUNC('month', td.timestamp)
+        FROM operation_details od
+        INNER JOIN operations o ON od.operation_id = o.id
+        WHERE od.item_id = ${itemId}
+          AND od.created_at >= CURRENT_DATE - INTERVAL '12 months'
+        GROUP BY DATE_TRUNC('month', od.created_at)
         ORDER BY month DESC
       `
     ]);
@@ -492,10 +526,10 @@ export class ItemService {
         monthlyUsage,
         recentActivity: recentActivity.map(activity => ({
           activityType: activity.activityType,
-          timestamp: activity.timestamp,
-          driverName: activity.trip?.driver.name,
-          customerName: activity.location?.customerName,
-          locationName: activity.location?.locationName
+          createdAt: activity.createdAt,
+          driverName: activity.operations?.usersOperationsDriverIdTousers?.name || null,
+          clientName: activity.locations?.clientName || null,
+          locationName: activity.locations?.name || null
         }))
       }
     };
@@ -512,11 +546,11 @@ export class ItemService {
     limit: number = 10,
     startDate?: string,
     endDate?: string
-  ): Promise<Array<{ item: Item; usageCount: number }>> {
+  ): Promise<Array<ItemUsageStats>> {
     const whereCondition: any = {};
 
     if (startDate || endDate) {
-      whereCondition.trip = {
+      whereCondition.operations = {
         date: {}
       };
       if (startDate) whereCondition.trip.date.gte = new Date(startDate);
@@ -524,7 +558,7 @@ export class ItemService {
     }
 
     // 使用回数でグループ化
-    const usageStats = await prisma.tripDetail.groupBy({
+    const usageStats = await prisma.operationDetail.groupBy({
       by: ['itemId'],
       where: {
         ...whereCondition,
@@ -542,13 +576,13 @@ export class ItemService {
     });
 
     // 品目情報を取得
-    const itemIds = usageStats.map(stat => stat.itemId!);
+    const itemIds = usageStats.map((stat: { itemId: any; }) => stat.itemId!);
     const items = await prisma.item.findMany({
       where: { id: { in: itemIds } }
     });
 
     // 結果をマージ
-    return usageStats.map(stat => {
+    return usageStats.map((stat: { itemId: string; _count: { itemId: any; }; }) => {
       const item = items.find(i => i.id === stat.itemId)!;
       return {
         item: {

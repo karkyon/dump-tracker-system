@@ -1,7 +1,7 @@
 // =====================================
 // ItemModel.ts
 // クリーン生成されたモデルファイル  
-// 生成日時: Sat Sep 13 10:52:23 PM JST 2025
+// 生成日時: Tue Sep 16 10:05:28 AM JST 2025
 // テーブルアクセサ: item
 // =====================================
 
@@ -48,6 +48,46 @@ export interface ItemCreateDTO extends Omit<ItemCreateInput, 'id' | 'createdAt' 
 
 export interface ItemUpdateDTO extends Partial<ItemCreateDTO> {
   // 更新用（部分更新対応）
+}
+
+// =====================================
+// カスタム型定義（itemService.ts用）
+// =====================================
+
+/**
+ * 軽量な品目情報（一覧表示・選択肢用）
+ */
+export interface ItemSummary {
+  id: string;
+  name: string;
+  displayOrder: number | null;
+  isActive: boolean | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  usageCount?: number;
+}
+
+/**
+ * 使用履歴付き品目詳細情報
+ */
+export interface ItemWithUsage extends ItemSummary {
+  recentUsage?: Array<{
+    activityType: string;
+    createdAt: Date;
+    operationDate?: Date;
+    driverName?: string;
+    plateNumber?: string;
+    clientName?: string;
+    locationName?: string;
+  }>;
+}
+
+/**
+ * 統計・分析用の品目と使用回数のペア
+ */
+export interface ItemUsageStats {
+  item: ItemSummary;
+  usageCount: number;
 }
 
 // =====================================

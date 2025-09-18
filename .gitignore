@@ -239,3 +239,5 @@ ecosystem.config.js
 
 # Linux
 **/*~
+
+/generated/prisma

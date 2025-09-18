@@ -7,65 +7,77 @@ import {
   GpsLogModel,
   GpsLogCreateInput,
   UserModel,
-  VehicleModel
-} from '../types';
-import {
-  Trip,
+  VehicleModel,
   CreateTripRequest,
   UpdateTripRequest,
-  TripStatus,
-  VehicleStatus,
-  UserRole,
   TripFilter,
-  PaginatedResponse,
+  PaginatedTripResponse,
   ActivityType,
   CreateTripDetailRequest,
-  CreateFuelRecordRequest
-} from '../types/auth';
-import { AppError } from '../utils/asyncHandler';
+  CreateFuelRecordRequest,
+  TripStatus,
+  VehicleOperationStatus,
+  vehicleStatusHelper
+} from '../types';
+import { UserRole } from '../types/auth';
+import { AppError } from '../utils/errors';
 import { calculateDistance } from '../utils/gpsCalculations';
+import { truncate } from 'fs/promises';
 
 const prisma = new PrismaClient();
 
 export class TripService {
+  constructor(private prisma: PrismaClient) {}            // Dependency Injection
   /**
    * 運行開始（Operationレコード作成）
    */
   async startTrip(tripData: CreateTripRequest, userId?: string): Promise<OperationModel> {
+    // driverIdの確定
+    const driverId = tripData.driverId || userId;
+    if (!driverId) {
+      throw new AppError('ドライバーIDが指定されていません', 400);
+    }
+    
     // 車両の利用可能性チェック
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: tripData.vehicleId }
     });
     
-    if (!vehicle || vehicle.status !== 'AVAILABLE') {
+    if (!vehicle) {
+      throw new AppError('指定された車両が見つかりません', 404);
+    }
+
+    if (vehicle.status !== 'ACTIVE') {
       throw new AppError('指定された車両は利用できません', 400);
     }
     
     // 運行番号生成
     const operationNumber = `OP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Operationレコード作成
-    const operation = await prisma.operation.create({
-      data: {
-        operationNumber,
-        vehicleId: tripData.vehicleId,
-        driverId: tripData.driverId || userId,
-        operationDate: new Date(tripData.startTime),
-        startTime: new Date(tripData.startTime),
-        status: 'IN_PROGRESS',
-        notes: tripData.notes
-      },
-      include: {
-        vehicle: true,
-        driver: true
-      }
-    });
-    
-    // 車両ステータスを更新
-    await prisma.vehicle.update({
-      where: { id: tripData.vehicleId },
-      data: { status: 'IN_USE' }
-    });
+    // トランザクションで運行作成と車両ステータス更新を実行
+    const [operation] = await prisma.$transaction([
+      // Operation作成
+      prisma.operation.create({
+        data: {
+          operationNumber,
+          vehicleId: tripData.vehicleId,
+          driverId: driverId,
+          plannedStartTime: new Date(tripData.startTime),
+          actualStartTime: new Date(tripData.startTime),
+          status: 'IN_PROGRESS',
+          notes: tripData.notes
+        },
+        include: {
+          vehicles: true,
+          usersOperationsDriverIdTousers: true
+        }
+      }),
+      // 車両ステータス更新
+      prisma.vehicle.update({
+        where: { id: tripData.vehicleId },
+        data: { status: vehicleStatusHelper.getOperatingStatus() }
+      })
+    ]);
     
     return operation;
   }
@@ -77,12 +89,12 @@ export class TripService {
     return await prisma.operation.findUnique({
       where: { id },
       include: {
-        vehicle: true,
-        driver: true,
+        vehicles: true,
+        usersOperationsDriverIdTousers: true,
         operationDetails: {
           include: {
-            item: true,
-            location: true
+            items: true,
+            locations: true
           }
         },
         gpsLogs: {
@@ -104,10 +116,10 @@ export class TripService {
         notes: updateData.notes,
         updatedAt: new Date()
       },
-      include: {
-        vehicle: true,
-        driver: true
-      }
+        include: {
+          vehicles: true,
+          usersOperationsDriverIdTousers: true
+        }
     });
   }
   
@@ -115,19 +127,40 @@ export class TripService {
    * 運行終了
    */
   async endTrip(id: string, endData: any): Promise<any> {
-    return await prisma.operation.update({
+    // 運行情報を取得
+    const operation = await prisma.operation.findUnique({
       where: { id },
-      data: {
-        endTime: endData.endTime,
-        status: 'COMPLETED',
-        notes: endData.notes,
-        updatedAt: new Date()
-      },
-      include: {
-        vehicle: true,
-        driver: true
-      }
+      select: { vehicleId: true }
     });
+    
+    if (!operation) {
+      throw new AppError('運行記録が見つかりません', 404);
+    }
+    
+    // トランザクションで運行終了と車両ステータス復旧を実行
+    const [updatedOperation] = await prisma.$transaction([
+      // 運行記録を更新
+      prisma.operation.update({
+        where: { id },
+        data: {
+          actualEndTime: endData.endTime,
+          status: 'COMPLETED',
+          notes: endData.notes,
+          updatedAt: new Date()
+        },
+        include: {
+          vehicles: true,
+          usersOperationsDriverIdTousers: true
+        }
+      }),
+      // 車両ステータスをACTIVEに復旧
+      prisma.vehicle.update({
+        where: { id: operation.vehicleId },
+        data: { status: 'ACTIVE' }                       // 利用可能状態に復旧
+      })
+    ]);
+    
+    return updatedOperation;
   }
   
   /**
@@ -162,13 +195,13 @@ export class TripService {
         locationId: data.locationId,
         itemId: data.itemId,
         quantityTons: data.quantity,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        actualStartTime: data.startTime,                    // 実際開始時刻
+        actualEndTime: data.endTime,                        // 実際終了時刻
         notes: data.notes
       },
       include: {
-        item: true,
-        location: true
+        items: true,
+        locations: true
       }
     });
     
@@ -207,13 +240,13 @@ export class TripService {
         locationId: data.locationId,
         itemId: data.itemId,
         quantityTons: data.quantity,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        actualStartTime: data.startTime,                    // 実際開始時刻
+        actualEndTime: data.endTime,                        // 実際終了時刻
         notes: data.notes
       },
       include: {
-        item: true,
-        location: true
+        items: true,
+        locations: true
       }
     });
     
@@ -234,9 +267,19 @@ export class TripService {
       timestamp: Date;
     }
   ): Promise<GpsLogModel> {
+    const operation = await prisma.operation.findUnique({ 
+      where: { id: operationId },
+      select: { vehicleId: true }
+    });
+    
+    if (!operation) {
+      throw new AppError('運行記録が見つかりません', 404);
+    }
+    
     const gpsLog = await prisma.gpsLog.create({
       data: {
-        operationId,
+        vehicleId: operation.vehicleId,                      // 必ず存在するvehicleId
+        operationId: operationId,
         latitude: data.latitude,
         longitude: data.longitude,
         speedKmh: data.speedKmh,
@@ -285,21 +328,21 @@ export class TripService {
       where.vehicleId = params.vehicleId;
     }
     
-    const [totalTrips, totalDistance, operationDetails] = await Promise.all([
+    const [totalTrips, totalQuantity, totalActivities] = await Promise.all([
       prisma.operation.count({ where }),
       prisma.operationDetail.aggregate({
-        where: { operation: where },
+        where: { operations: where },
         _sum: { quantityTons: true }
       }),
       prisma.operationDetail.count({
-        where: { operation: where }
+        where: { operations: where }
       })
     ]);
     
     return {
       totalTrips,
-      totalQuantity: operationDetails._sum?.quantityTons || 0,
-      totalActivities: operationDetails,
+      totalQuantity: totalQuantity._sum?.quantityTons || 0,
+      totalActivities: totalActivities,
       period: {
         startDate: params.startDate,
         endDate: params.endDate
@@ -317,15 +360,15 @@ export class TripService {
         status: 'IN_PROGRESS'
       },
       include: {
-        vehicle: true,
+        vehicles: true,
         operationDetails: {
           include: {
-            item: true,
-            location: true
+            items: true,                                      // ✅ 正しいリレーション名
+            locations: true
           }
         }
       },
-      orderBy: { startTime: 'desc' }
+      orderBy: { actualStartTime: 'desc' }  // 最新の運行を取得
     });
   }
   
@@ -370,18 +413,18 @@ export class TripService {
       prisma.operation.findMany({
         where,
         include: {
-          vehicle: true,
-          driver: true,
+          vehicles: true,
+          usersOperationsDriverIdTousers: true,
           operationDetails: {
             include: {
-              item: true,
-              location: true
+              items: true,
+              locations: true
             }
           }
         },
         skip: (params.page - 1) * params.limit,
         take: params.limit,
-        orderBy: { operationDate: 'desc' }
+        orderBy: { createdAt: 'desc' } // 最新の運行を先頭に
       }),
       prisma.operation.count({ where })
     ]);
@@ -395,3 +438,35 @@ export class TripService {
     };
   }
 }
+
+// TripServiceインスタンス管理用の変数
+let _tripServiceInstance: TripService | null = null;
+
+/**
+ * TripServiceのインスタンスを取得するファクトリー関数
+ * @param prismaClient 任意のPrismaClientインスタンス
+ * @returns TripServiceインスタンス
+ */
+export const getTripService = (prismaClient?: PrismaClient): TripService => {
+  if (!_tripServiceInstance) {
+    _tripServiceInstance = new TripService(prismaClient || prisma);
+  }
+  return _tripServiceInstance;
+};
+
+// デフォルトエクスポート（他のモジュールとの互換性のため）
+export default getTripService();
+
+// =====================================
+// ファイル構成例（全体像）
+// =====================================
+
+/*
+src/services/tripService.ts の構成:
+
+1. import文
+2. 型定義
+3. TripServiceクラス定義
+4. ファクトリー関数とインスタンス管理
+5. エクスポート
+*/

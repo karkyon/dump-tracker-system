@@ -1,5 +1,5 @@
 // backend/src/services/inspectionService.ts
-import { PrismaClient, Prisma, $Enums } from '@prisma/client';
+import { PrismaClient, Prisma, UserRole, InspectionType, $Enums } from '@prisma/client';
 import {
   InspectionItemModel,
   InspectionItemResponseDTO,
@@ -46,12 +46,6 @@ export interface PaginatedResponse<T> {
     totalItems: number;
     itemsPerPage: number;
   };
-}
-
-export enum UserRole {
-  ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER',
-  DRIVER = 'DRIVER'
 }
 
 // 既存のリクエスト型

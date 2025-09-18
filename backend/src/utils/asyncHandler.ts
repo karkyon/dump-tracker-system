@@ -4,6 +4,10 @@ import { ApiResponse } from '../types';
 // Define PaginatedResponse type
 export type PaginatedResponse<T> = {
   data: T[];
+  page: number;
+  limit: number;
+  totalPages: number;
+  total?: number;
   pagination: {
     currentPage: number;
     totalPages: number;
@@ -62,7 +66,10 @@ export function paginatedResponse<T>(
         totalPages,
         totalItems,
         itemsPerPage
-      }
+      },
+      page: 0,
+      limit: 0,
+      totalPages: 0
     },
     message,
     timestamp: new Date().toISOString()

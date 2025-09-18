@@ -1,6 +1,6 @@
 import { InspectionService } from "../src/services/inspectionService";
-import { PrismaClient } from "@prisma/client";
 import { authService } from "../src/services/authService";
+import { $Enums, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -77,15 +77,14 @@ async function createTestVehicle() {
   // 車両作成（Prismaを直接使用）
   testData.vehicle = await prisma.vehicle.create({
     data: {
-      vehicleNumber: "TEST-001",
+      plateNumber: "TEST-001",
       vehicleType: "DUMP_TRUCK",
       manufacturer: "テストメーカー",
       model: "テストモデル",
       year: 2023,
-      capacity: 10.0,
+      capacityTons: 10.0,
       fuelType: "DIESEL",
-      isActive: true,
-      createdBy: testData.adminUser.id
+      status: $Enums.VehicleStatus.ACTIVE
     }
   });
   
@@ -101,9 +100,8 @@ async function createTestOperation() {
     data: {
       vehicleId: testData.vehicle.id,
       driverId: testData.driverUser.id,
-      operationType: "TRANSPORTATION",
       status: "IN_PROGRESS",
-      startTime: new Date(),
+      actualStartTime: new Date(),
       plannedEndTime: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8時間後
       startOdometer: 1000.0,
       startFuelLevel: 80.0
@@ -267,7 +265,17 @@ async function main() {
       operationId: testData.operation.id,
       status: "COMPLETED",
       overallResult: true,
-      overallNotes: "全て正常です"
+      overallNotes: "全て正常です",
+      vehicles: {
+        create: undefined,
+        connectOrCreate: undefined,
+        connect: undefined
+      },
+      users: {
+        create: undefined,
+        connectOrCreate: undefined,
+        connect: undefined
+      }
     });
     testData.inspectionRecords.push(inspectionRecord1);
     
@@ -438,7 +446,17 @@ async function main() {
         inspectorId: testData.adminUser.id,
         inspectionType: "POST_TRIP",
         status: "COMPLETED",
-        overallResult: true
+        overallResult: true,
+        vehicles: {
+          create: undefined,
+          connectOrCreate: undefined,
+          connect: undefined
+        },
+        users: {
+          create: undefined,
+          connectOrCreate: undefined,
+          connect: undefined
+        }
       });
 
       // 運転手が管理者の記録を更新しようとする
@@ -462,7 +480,17 @@ async function main() {
         inspectorId: testData.driverUser.id,
         inspectionType: "PRE_TRIP",
         operationId: testData.operation.id, // 同じ運行ID
-        status: "COMPLETED"
+        status: "COMPLETED",
+        vehicles: {
+          create: undefined,
+          connectOrCreate: undefined,
+          connect: undefined
+        },
+        users: {
+          create: undefined,
+          connectOrCreate: undefined,
+          connect: undefined
+        }
       });
       console.log("✗ エラーが発生すべきでした");
     } catch (error) {
