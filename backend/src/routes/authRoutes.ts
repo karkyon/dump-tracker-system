@@ -1,6 +1,6 @@
 // backend/src/routes/authRoutes.ts
 import { Router } from 'express';
-import { authenticateToken, optionalAuth } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
 import { validateLogin } from '../middleware/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 

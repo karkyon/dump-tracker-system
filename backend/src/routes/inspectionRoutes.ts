@@ -1,7 +1,7 @@
 // backend/src/routes/inspectionRoutes.ts
 import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth';
-import { validateInspection, validateId } from '../middleware/validation';
+import { validateId } from '../middleware/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 
 const router = Router();

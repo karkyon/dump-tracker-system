@@ -18,7 +18,8 @@ const safeImportRoute = (routeName: string, path: string): boolean => {
       return false;
     }
   } catch (error) {
-    console.warn(`⚠️ ルート登録スキップ: ${routeName} (${error.message})`);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠️ ルート登録スキップ: ${routeName} (${errMsg})`);
     return false;
   }
 };
