@@ -1,4 +1,4 @@
-import { Item, PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { 
   ItemModel,
   ItemCreateInput,

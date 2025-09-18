@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { UserRole } from '@prisma/client';
 import { 
@@ -7,7 +7,7 @@ import {
   NotFoundError,
   AuthenticationError
 } from '../utils/errors';
-import { logger } from '../middleware/logger';
+import logger from '../utils/logger';
 
 const prisma = new PrismaClient();
 

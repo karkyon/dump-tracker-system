@@ -6,11 +6,7 @@ import {
   LocationResponseDTO,
   OperationDetailModel 
 } from '../types';
-import { AppError } from '../utils/asyncHandler';
-
-const prisma = new PrismaClient();
-
-export class LocationService {
+import { AppError } from '../utils/errors';
 
 const prisma = new PrismaClient();
 
