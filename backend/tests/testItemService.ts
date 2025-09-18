@@ -124,7 +124,8 @@ async function createTestLocation() {
         clientName: "テスト顧客",
         address: "テスト住所123",
         contactPhone: "000-0000-0000",
-        isActive: true
+        isActive: true,
+        locationType: $Enums.LocationType.BOTH
       }
     });
     
@@ -482,10 +483,11 @@ async function main() {
           connect: { id: testData.location.id }
         },
         activityType: "LOADING",
-        quantity: 10.5,
-        unit: "ton",
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 30 * 60 * 1000) // 30分後
+        quantityTons: 10.5,
+        actualStartTime: new Date(),
+        actualEndTime: new Date(Date.now() + 30 * 60 * 1000), // 30分後
+        sequenceNumber: 1,
+        plannedTime: new Date()
       }
     });
     testData.operationDetails.push(operationDetail);
@@ -495,7 +497,7 @@ async function main() {
     console.log("  - 品目ID:", item1.id);
     console.log("  - 場所ID:", testData.location.id);
     console.log("  - 活動タイプ:", operationDetail.activityType);
-    console.log("  - 数量:", operationDetail.quantity, operationDetail.unit);
+    console.log("  - 数量:", operationDetail.quantityTons);
     console.log("");
 
     // ========================================
@@ -674,10 +676,10 @@ async function main() {
     });
     
     console.log("✓ 全品目取得成功:", {
-      総品目数: allItemsResult.total
+      総品目数: allItemsResult.total ?? 0
     });
     
-    const inactiveCount = allItemsResult.total - activeOnlyResult.total;
+    const inactiveCount = (allItemsResult.total ?? 0) - (activeOnlyResult.total ?? 0);
     console.log("  非アクティブ品目数:", inactiveCount);
     console.log("");
 

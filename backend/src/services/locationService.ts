@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, LocationType } from '@prisma/client';
 import { 
   LocationModel,
   LocationCreateInput,
@@ -6,6 +6,9 @@ import {
   LocationResponseDTO,
   OperationDetailModel 
 } from '../types';
+import { PaginatedResponse } from '../utils/asyncHandler';
+import { isValidCoordinate } from '../utils/gpsCalculations';
+import { LocationFilter, CreateLocationRequest, UpdateLocationRequest } from '../types/location';
 import { AppError } from '../utils/errors';
 
 const prisma = new PrismaClient();
@@ -16,7 +19,7 @@ export class LocationService {
    * @param filter フィルター条件
    * @returns 場所一覧
    */
-  async getLocations(filter: LocationFilter): Promise<PaginatedResponse<Location>> {
+  async getLocations(filter: LocationFilter): Promise<PaginatedResponse<LocationModel>> {
     const {
       page = 1,
       limit = 20,
@@ -35,8 +38,8 @@ export class LocationService {
 
     if (search) {
       where.OR = [
-        { customerName: { contains: search, mode: 'insensitive' } },
-        { locationName: { contains: search, mode: 'insensitive' } },
+        { clientName: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
         { address: { contains: search, mode: 'insensitive' } }
       ];
     }
@@ -59,40 +62,23 @@ export class LocationService {
       take,
       orderBy: {
         [sortBy]: sortOrder
-      },
-      include: {
-        createdBy: {
-          select: {
-            name: true
-          }
-        }
       }
     });
 
     const totalPages = Math.ceil(total / take);
 
-    // レスポンス形式に変換
-    const formattedLocations = locations.map(location => ({
-      id: location.id,
-      customerName: location.customerName,
-      locationName: location.locationName,
-      address: location.address,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      locationType: location.locationType,
-      isActive: location.isActive,
-      registrationSource: location.registrationSource,
-      createdAt: location.createdAt,
-      updatedAt: location.updatedAt,
-      createdByName: location.createdBy?.name
-    }));
-
     return {
-      data: formattedLocations,
+      data: locations,
       total,
       page,
       limit: take,
-      totalPages
+      totalPages,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: take
+      }
     };
   }
 
@@ -101,16 +87,9 @@ export class LocationService {
    * @param locationId 場所ID
    * @returns 場所情報
    */
-  async getLocationById(locationId: string): Promise<Location & { usageCount?: number; recentUsage?: any[] }> {
+  async getLocationById(locationId: string): Promise<LocationModel & { usageCount?: number; recentUsage?: any[] }> {
     const location = await prisma.location.findUnique({
-      where: { id: locationId },
-      include: {
-        createdBy: {
-          select: {
-            name: true
-          }
-        }
-      }
+      where: { id: locationId }
     });
 
     if (!location) {
@@ -118,20 +97,20 @@ export class LocationService {
     }
 
     // 使用回数を取得
-    const usageCount = await prisma.tripDetail.count({
+    const usageCount = await prisma.operationDetail.count({
       where: { locationId }
     });
 
     // 最近の使用履歴を取得
-    const recentUsage = await prisma.tripDetail.findMany({
+    const recentUsage = await prisma.operationDetail.findMany({
       where: { locationId },
       take: 5,
-      orderBy: { timestamp: 'desc' },
+      orderBy: { createdAt: 'desc' },
       include: {
-        trip: {
+        operations: {
           select: {
-            date: true,
-            driver: {
+            plannedStartTime: true,
+            usersOperationsDriverIdTousers: {
               select: {
                 name: true
               }
@@ -142,23 +121,13 @@ export class LocationService {
     });
 
     return {
-      id: location.id,
-      customerName: location.customerName,
-      locationName: location.locationName,
-      address: location.address,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      locationType: location.locationType,
-      isActive: location.isActive,
-      registrationSource: location.registrationSource,
-      createdAt: location.createdAt,
-      updatedAt: location.updatedAt,
+      ...location,
       usageCount,
       recentUsage: recentUsage.map(usage => ({
         activityType: usage.activityType,
-        timestamp: usage.timestamp,
-        tripDate: usage.trip.date,
-        driverName: usage.trip.driver.name
+        timestamp: usage.createdAt,
+        plannedTime: usage.operations.plannedStartTime,
+        driverName: usage.operations.usersOperationsDriverIdTousers.name
       }))
     };
   }
@@ -169,14 +138,24 @@ export class LocationService {
    * @param creatorId 作成者ID
    * @returns 作成された場所
    */
-  async createLocation(locationData: CreateLocationRequest, creatorId?: string): Promise<Location> {
+  async createLocation(locationData: CreateLocationRequest, creatorId?: string): Promise<LocationModel> {
     const {
-      customerName,
-      locationName,
+      name,
+      clientName,
       address,
       latitude,
       longitude,
-      locationType
+      locationType,
+      contactPerson,
+      contactPhone,
+      contactEmail,
+      operatingHours,
+      specialInstructions,
+      hazardousArea,
+      accessRestrictions,
+      parkingInstructions,
+      unloadingInstructions,
+      equipmentAvailable
     } = locationData;
 
     // GPS座標の有効性チェック
@@ -184,46 +163,41 @@ export class LocationService {
       throw new AppError('無効なGPS座標です', 400);
     }
 
-    // 重複チェック（同じ客先・場所名の組み合わせ）
+    // 重複チェック（同じ名前の場所）
     const existingLocation = await prisma.location.findFirst({
       where: {
-        customerName,
-        locationName,
+        name,
         address
       }
     });
 
     if (existingLocation) {
-      throw new AppError('同じ客先名・場所名・住所の組み合わせが既に存在します', 409);
+      throw new AppError('同じ名前・住所の組み合わせが既に存在します', 409);
     }
 
     // 場所作成
     const newLocation = await prisma.location.create({
       data: {
-        customerName,
-        locationName,
+        name,
+        clientName,
         address,
         latitude,
         longitude,
         locationType,
-        createdById: creatorId,
-        registrationSource: creatorId ? 'admin' : 'app'
+        contactPerson,
+        contactPhone,
+        contactEmail,
+        operatingHours,
+        specialInstructions,
+        hazardousArea,
+        accessRestrictions,
+        parkingInstructions,
+        unloadingInstructions,
+        equipmentAvailable
       }
     });
 
-    return {
-      id: newLocation.id,
-      customerName: newLocation.customerName,
-      locationName: newLocation.locationName,
-      address: newLocation.address,
-      latitude: newLocation.latitude,
-      longitude: newLocation.longitude,
-      locationType: newLocation.locationType,
-      isActive: newLocation.isActive,
-      registrationSource: newLocation.registrationSource,
-      createdAt: newLocation.createdAt,
-      updatedAt: newLocation.updatedAt
-    };
+    return newLocation;
   }
 
   /**
@@ -232,7 +206,7 @@ export class LocationService {
    * @param updateData 更新データ
    * @returns 更新された場所
    */
-  async updateLocation(locationId: string, updateData: UpdateLocationRequest): Promise<Location> {
+  async updateLocation(locationId: string, updateData: UpdateLocationRequest): Promise<LocationModel> {
     // 場所存在確認
     const existingLocation = await prisma.location.findUnique({
       where: { id: locationId }
@@ -249,14 +223,13 @@ export class LocationService {
     }
 
     // 重複チェック（更新する場合）
-    if (updateData.customerName || updateData.locationName || updateData.address) {
+    if (updateData.name || updateData.address) {
       const duplicateLocation = await prisma.location.findFirst({
         where: {
           AND: [
             { id: { not: locationId } },
             {
-              customerName: updateData.customerName || existingLocation.customerName,
-              locationName: updateData.locationName || existingLocation.locationName,
+              name: updateData.name || existingLocation.name,
               address: updateData.address || existingLocation.address
             }
           ]
@@ -264,7 +237,7 @@ export class LocationService {
       });
 
       if (duplicateLocation) {
-        throw new AppError('同じ客先名・場所名・住所の組み合わせが既に存在します', 409);
+        throw new AppError('同じ名前・住所の組み合わせが既に存在します', 409);
       }
     }
 
@@ -274,19 +247,7 @@ export class LocationService {
       data: updateData
     });
 
-    return {
-      id: updatedLocation.id,
-      customerName: updatedLocation.customerName,
-      locationName: updatedLocation.locationName,
-      address: updatedLocation.address,
-      latitude: updatedLocation.latitude,
-      longitude: updatedLocation.longitude,
-      locationType: updatedLocation.locationType,
-      isActive: updatedLocation.isActive,
-      registrationSource: updatedLocation.registrationSource,
-      createdAt: updatedLocation.createdAt,
-      updatedAt: updatedLocation.updatedAt
-    };
+    return updatedLocation;
   }
 
   /**
@@ -297,11 +258,11 @@ export class LocationService {
     const location = await prisma.location.findUnique({
       where: { id: locationId },
       include: {
-        tripDetails: {
+        operationDetails: {
           where: {
-            trip: {
+            operations: {
               status: {
-                in: ['PREPARING', 'IN_PROGRESS']
+                in: ['PLANNING', 'IN_PROGRESS']
               }
             }
           }
@@ -314,7 +275,7 @@ export class LocationService {
     }
 
     // アクティブな運行記録で使用中の場合は削除不可
-    if (location.tripDetails.length > 0) {
+    if (location.operationDetails.length > 0) {
       throw new AppError('進行中の運行記録で使用されているため、この場所を削除できません', 400);
     }
 
@@ -334,8 +295,8 @@ export class LocationService {
   async getLocationsByType(
     locationType: LocationType,
     isActive: boolean = true
-  ): Promise<Array<{ id: string; customerName: string; locationName: string; address: string }>> {
-    return await prisma.location.findMany({
+  ): Promise<Array<{ id: string; clientName: string; name: string; address: string }>> {
+    const locations = await prisma.location.findMany({
       where: {
         locationType: {
           in: locationType === LocationType.BOTH 
@@ -346,31 +307,48 @@ export class LocationService {
       },
       select: {
         id: true,
-        customerName: true,
-        locationName: true,
+        clientName: true,
+        name: true,
         address: true
       },
       orderBy: [
-        { customerName: 'asc' },
-        { locationName: 'asc' }
+        { clientName: 'asc' },
+        { name: 'asc' }
       ]
     });
+
+    return locations.map(location => ({
+      id: location.id,
+      clientName: location.clientName || '',
+      name: location.name,
+      address: location.address
+    }));
   }
 
   /**
    * 積込場所一覧取得（簡易版）
    * @returns 積込場所一覧
    */
-  async getLoadingLocations(): Promise<Array<{ id: string; customerName: string; locationName: string }>> {
-    return this.getLocationsByType(LocationType.LOADING);
+  async getLoadingLocations(): Promise<Array<{ id: string; clientName: string; name: string }>> {
+    const locations = await this.getLocationsByType(LocationType.LOADING);
+    return locations.map(loc => ({
+      id: loc.id,
+      clientName: loc.clientName,
+      name: loc.name
+    }));
   }
 
   /**
    * 積下場所一覧取得（簡易版）
    * @returns 積下場所一覧
    */
-  async getUnloadingLocations(): Promise<Array<{ id: string; customerName: string; locationName: string }>> {
-    return this.getLocationsByType(LocationType.UNLOADING);
+  async getUnloadingLocations(): Promise<Array<{ id: string; clientName: string; name: string }>> {
+    const locations = await this.getLocationsByType(LocationType.UNLOADING);
+    return locations.map(loc => ({
+      id: loc.id,
+      clientName: loc.clientName,
+      name: loc.name
+    }));
   }
 
   /**
@@ -379,13 +357,16 @@ export class LocationService {
    */
   async getCustomers(): Promise<string[]> {
     const result = await prisma.location.findMany({
-      where: { isActive: true },
-      select: { customerName: true },
-      distinct: ['customerName'],
-      orderBy: { customerName: 'asc' }
+      where: { 
+        isActive: true,
+        clientName: { not: null }
+      },
+      select: { clientName: true },
+      distinct: ['clientName'],
+      orderBy: { clientName: 'asc' }
     });
 
-    return result.map(customer => customer.customerName);
+    return result.map(customer => customer.clientName!).filter(Boolean);
   }
 
   /**
@@ -399,7 +380,7 @@ export class LocationService {
     query: string, 
     locationType?: LocationType, 
     limit: number = 10
-  ): Promise<Array<{ id: string; customerName: string; locationName: string; address: string; locationType: LocationType }>> {
+  ): Promise<Array<{ id: string; clientName: string; name: string; address: string; locationType: LocationType }>> {
     if (!query || query.length < 2) {
       return [];
     }
@@ -407,8 +388,8 @@ export class LocationService {
     const where: any = {
       isActive: true,
       OR: [
-        { customerName: { contains: query, mode: 'insensitive' } },
-        { locationName: { contains: query, mode: 'insensitive' } },
+        { clientName: { contains: query, mode: 'insensitive' } },
+        { name: { contains: query, mode: 'insensitive' } },
         { address: { contains: query, mode: 'insensitive' } }
       ]
     };
@@ -421,21 +402,29 @@ export class LocationService {
       };
     }
 
-    return await prisma.location.findMany({
+    const locations = await prisma.location.findMany({
       where,
       select: {
         id: true,
-        customerName: true,
-        locationName: true,
+        clientName: true,
+        name: true,
         address: true,
         locationType: true
       },
       take: limit,
       orderBy: [
-        { customerName: 'asc' },
-        { locationName: 'asc' }
+        { clientName: 'asc' },
+        { name: 'asc' }
       ]
     });
+
+    return locations.map(location => ({
+      id: location.id,
+      clientName: location.clientName || '',
+      name: location.name,
+      address: location.address,
+      locationType: location.locationType
+    }));
   }
 
   /**
@@ -451,7 +440,7 @@ export class LocationService {
     longitude: number,
     radiusKm: number = 1.0,
     limit: number = 10
-  ): Promise<Array<Location & { distance: number }>> {
+  ): Promise<Array<LocationModel & { distance: number }>> {
     if (!isValidCoordinate(latitude, longitude)) {
       throw new AppError('無効なGPS座標です', 400);
     }
@@ -470,7 +459,7 @@ export class LocationService {
       .map(location => {
         const distance = this.calculateDistance(
           latitude, longitude,
-          location.latitude!, location.longitude!
+          Number(location.latitude!), Number(location.longitude!)
         );
         return {
           ...location,
@@ -481,20 +470,7 @@ export class LocationService {
       .sort((a, b) => a.distance - b.distance)
       .slice(0, limit);
 
-    return locationsWithDistance.map(location => ({
-      id: location.id,
-      customerName: location.customerName,
-      locationName: location.locationName,
-      address: location.address,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      locationType: location.locationType,
-      isActive: location.isActive,
-      registrationSource: location.registrationSource,
-      createdAt: location.createdAt,
-      updatedAt: location.updatedAt,
-      distance: location.distance
-    }));
+    return locationsWithDistance;
   }
 
   /**
@@ -504,7 +480,7 @@ export class LocationService {
    */
   async autoRegisterFromApp(
     locationData: CreateLocationRequest & { latitude: number; longitude: number }
-  ): Promise<Location> {
+  ): Promise<LocationModel> {
     const { latitude, longitude } = locationData;
 
     // GPS座標の有効性チェック
@@ -516,8 +492,8 @@ export class LocationService {
     const nearbyLocations = await this.findNearbyLocations(latitude, longitude, 0.1, 5);
     
     const similarLocation = nearbyLocations.find(loc => 
-      loc.customerName.toLowerCase().includes(locationData.customerName.toLowerCase()) ||
-      locationData.customerName.toLowerCase().includes(loc.customerName.toLowerCase())
+      (loc.clientName && loc.clientName.toLowerCase().includes(locationData.clientName?.toLowerCase() || '')) ||
+      (locationData.clientName && locationData.clientName.toLowerCase().includes(loc.clientName?.toLowerCase() || ''))
     );
 
     if (similarLocation) {
@@ -552,11 +528,11 @@ export class LocationService {
     const whereCondition: any = { locationId };
 
     if (startDate || endDate) {
-      whereCondition.trip = {
-        date: {}
+      whereCondition.operations = {
+        plannedStartTime: {}
       };
-      if (startDate) whereCondition.trip.date.gte = new Date(startDate);
-      if (endDate) whereCondition.trip.date.lte = new Date(endDate);
+      if (startDate) whereCondition.operations.plannedStartTime.gte = new Date(startDate);
+      if (endDate) whereCondition.operations.plannedStartTime.lte = new Date(endDate);
     }
 
     const [
@@ -567,52 +543,48 @@ export class LocationService {
       recentActivity
     ] = await Promise.all([
       // 総使用回数
-      prisma.tripDetail.count({
+      prisma.operationDetail.count({
         where: whereCondition
       }),
       
       // 積込活動回数
-      prisma.tripDetail.count({
+      prisma.operationDetail.count({
         where: {
           ...whereCondition,
-          activityType: {
-            in: ['LOADING_ARRIVAL', 'LOADING_DEPARTURE']
-          }
+          activityType: 'LOADING'
         }
       }),
       
       // 積下活動回数
-      prisma.tripDetail.count({
+      prisma.operationDetail.count({
         where: {
           ...whereCondition,
-          activityType: {
-            in: ['UNLOADING_ARRIVAL', 'UNLOADING_DEPARTURE']
-          }
+          activityType: 'UNLOADING'
         }
       }),
       
       // ユニーク運転手数
-      prisma.tripDetail.groupBy({
-        by: ['trip'],
+      prisma.operationDetail.groupBy({
+        by: ['operationId'],
         where: whereCondition
       }).then(async (results) => {
-        const tripIds = results.map(r => r.trip);
-        const uniqueDriversResult = await prisma.trip.groupBy({
+        const operationIds = results.map(r => r.operationId);
+        const uniqueDriversResult = await prisma.operation.groupBy({
           by: ['driverId'],
-          where: { id: { in: tripIds } }
+          where: { id: { in: operationIds } }
         });
         return uniqueDriversResult.length;
       }),
       
       // 最近の活動
-      prisma.tripDetail.findMany({
+      prisma.operationDetail.findMany({
         where: whereCondition,
         take: 5,
-        orderBy: { timestamp: 'desc' },
+        orderBy: { createdAt: 'desc' },
         include: {
-          trip: {
+          operations: {
             select: {
-              driver: {
+              usersOperationsDriverIdTousers: {
                 select: { name: true }
               }
             }
@@ -623,8 +595,8 @@ export class LocationService {
 
     return {
       locationInfo: {
-        customerName: location.customerName,
-        locationName: location.locationName,
+        clientName: location.clientName,
+        name: location.name,
         address: location.address,
         locationType: location.locationType
       },
@@ -635,8 +607,8 @@ export class LocationService {
         uniqueDrivers,
         recentActivity: recentActivity.map(activity => ({
           activityType: activity.activityType,
-          timestamp: activity.timestamp,
-          driverName: activity.trip?.driver.name
+          timestamp: activity.createdAt,
+          driverName: activity.operations?.usersOperationsDriverIdTousers.name
         }))
       }
     };
