@@ -11,7 +11,8 @@ const getInspectionController = () => {
     const controller = require('../controllers/inspectionController');
     return controller.default || controller;
   } catch (error) {
-    console.warn('inspectionController not found or invalid:', error.message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('inspectionController not found or invalid:', message);
     return null;
   }
 };

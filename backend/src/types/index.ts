@@ -3,6 +3,22 @@
 // クリーン生成された統合型定義ファイル
 // 生成日時: Tue Sep 16 10:05:28 AM JST 2025
 // =====================================
+import { JwtPayload } from 'jsonwebtoken';
+
+// カスタムJWTペイロード型
+export interface JWTPayload extends JwtPayload {
+  userId: string;
+  username: string;
+  email: string;
+  role: 'ADMIN' | 'MANAGER' | 'DRIVER';
+  isActive?: boolean;
+  // JwtPayloadの標準フィールドは継承される
+  // iat?: number;
+  // exp?: number;
+  // sub?: string;
+  // aud?: string | string[];
+  // iss?: string;
+}
 
 // =====================================
 // 全モデル型エクスポート

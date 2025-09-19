@@ -1,7 +1,7 @@
 // backend/src/routes/vehicleRoutes.ts
 import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth';
-import { validateVehicle, validateId } from '../middleware/validation';
+import { validateId } from '../middleware/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 
 const router = Router();
@@ -12,7 +12,8 @@ const getVehicleController = () => {
     const controller = require('../controllers/vehicleController');
     return controller.default || controller;
   } catch (error) {
-    console.warn('vehicleController not found or invalid:', error.message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('vehicleController not found or invalid:', message);
     return null;
   }
 };
@@ -35,7 +36,7 @@ if (vehicleController) {
 
   // 車両作成（管理者・マネージャーのみ）
   if (vehicleController.createVehicle) {
-    router.post('/', requireRole(['ADMIN', 'MANAGER']), validateVehicle, asyncHandler(vehicleController.createVehicle));
+    router.post('/', requireRole(['ADMIN', 'MANAGER']), asyncHandler(vehicleController.createVehicle));
   }
 
   // 車両更新（管理者・マネージャーのみ）

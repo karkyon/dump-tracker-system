@@ -11,6 +11,9 @@ import path from 'path';
 // 既存のルートをインポート
 import routes from './routes';
 
+// 汎用バリデーションミドルウェアをインポート
+import { sanitizeQuery } from './middleware/validation';
+
 // 環境変数読み込み
 dotenv.config();
 
@@ -42,7 +45,7 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || ['http://localhost:3001', 'http://10.1.119.244:3001'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key']
 }));
 
 // 修正: compression の型エラー解決  
@@ -50,6 +53,9 @@ app.use(compression() as unknown as express.RequestHandler);
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// グローバルなクエリサニタイズを適用
+app.use(sanitizeQuery);
 
 // Swagger設定
 const swaggerOptions = {
@@ -102,6 +108,12 @@ const swaggerOptions = {
           scheme: 'bearer',
           bearerFormat: 'JWT',
           description: 'JWT認証トークンを入力してください'
+        },
+        apiKey: {
+          type: 'apiKey',
+          name: 'X-API-Key',
+          in: 'header',
+          description: 'API Key認証'
         }
       },
       schemas: {
@@ -126,6 +138,15 @@ const swaggerOptions = {
             isActive: { type: 'boolean', example: true }
           }
         },
+        PaginationParams: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer', example: 1, minimum: 1 },
+            limit: { type: 'integer', example: 20, minimum: 1, maximum: 100 },
+            sortBy: { type: 'string', example: 'createdAt' },
+            sortOrder: { type: 'string', enum: ['asc', 'desc'], example: 'desc' }
+          }
+        },
         ApiResponse: {
           type: 'object',
           properties: {
@@ -135,12 +156,48 @@ const swaggerOptions = {
             timestamp: { type: 'string', format: 'date-time' }
           }
         },
+        PaginatedResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: { type: 'object' } },
+            pagination: {
+              type: 'object',
+              properties: {
+                page: { type: 'integer' },
+                limit: { type: 'integer' },
+                total: { type: 'integer' },
+                totalPages: { type: 'integer' }
+              }
+            },
+            timestamp: { type: 'string', format: 'date-time' }
+          }
+        },
         Error: {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: false },
             message: { type: 'string', example: 'エラーメッセージ' },
             error: { type: 'string', example: 'ERROR_CODE' },
+            timestamp: { type: 'string', format: 'date-time' }
+          }
+        },
+        ValidationError: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'バリデーションエラー' },
+            error: { type: 'string', example: 'VALIDATION_ERROR' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  field: { type: 'string' },
+                  message: { type: 'string' }
+                }
+              }
+            },
             timestamp: { type: 'string', format: 'date-time' }
           }
         }
@@ -170,7 +227,8 @@ try {
     swaggerOptions: {
       docExpansion: 'list',
       filter: true,
-      showRequestHeaders: true
+      showRequestHeaders: true,
+      persistAuthorization: true
     }
   }));
   
@@ -208,6 +266,11 @@ app.get('/', (req: Request, res: Response) => {
       '📦 品目管理',
       '📍 場所管理'
     ],
+    validation: {
+      pagination: 'クエリパラメータの自動検証',
+      authentication: 'Bearer Token / API Key対応',
+      idFormats: 'UUID, ObjectId, カスタムID対応'
+    },
     links: {
       documentation: `http://10.1.119.244:8000/docs`,
       apiHealth: `http://10.1.119.244:8000/health`,
@@ -247,6 +310,28 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   
   const statusCode: number = err.statusCode || err.status || 500;
   
+  // バリデーションエラーの処理
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      message: 'バリデーションエラー',
+      error: 'VALIDATION_ERROR',
+      details: err.details || [],
+      timestamp: new Date().toISOString()
+    });
+  }
+  
+  // 認証エラーの処理
+  if (err.name === 'UnauthorizedError' || statusCode === 401) {
+    return res.status(401).json({
+      success: false,
+      message: err.message || '認証が必要です',
+      error: err.code || 'UNAUTHORIZED',
+      timestamp: new Date().toISOString()
+    });
+  }
+  
+  // その他のエラー
   (res as any).status(statusCode).json({
     success: false,
     message: err.message || 'サーバーエラーが発生しました',
@@ -294,6 +379,12 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`⚡ Node.js: ${process.version}`);
   console.log(`🕒 Started at: ${new Date().toISOString()}`);
   console.log('');
+  console.log('📋 Available Features:');
+  console.log('   ✅ Auto Query Sanitization');
+  console.log('   ✅ Pagination Validation');
+  console.log('   ✅ Multiple ID Format Support');
+  console.log('   ✅ Bearer Token & API Key Auth');
+  console.log('');
   console.log('📋 Available Endpoints:');
   console.log('   - GET /           (API Information)');
   console.log('   - GET /health     (Health Check)');
@@ -321,6 +412,12 @@ process.on('SIGINT', () => {
     console.log('✅ Server closed successfully');
     process.exit(0);
   });
+});
+
+// 未処理のPromise拒否を処理
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // アプリケーションを終了させない（ログのみ）
 });
 
 export default app;

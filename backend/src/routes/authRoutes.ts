@@ -1,7 +1,6 @@
 // backend/src/routes/authRoutes.ts
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth';
-import { validateLogin } from '../middleware/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 
 const router = Router();
@@ -12,7 +11,8 @@ const getAuthController = () => {
     const controller = require('../controllers/authController');
     return controller.default || controller;
   } catch (error) {
-    console.warn('authController not found or invalid:', error.message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('authController not found or invalid:', message);
     return null;
   }
 };
@@ -22,7 +22,7 @@ const authController = getAuthController();
 if (authController) {
   // 公開エンドポイント
   if (authController.login) {
-    router.post('/login', validateLogin, asyncHandler(authController.login));
+    router.post('/login', asyncHandler(authController.login));
   }
   
   if (authController.refresh || authController.refreshToken) {

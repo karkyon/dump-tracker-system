@@ -1,7 +1,7 @@
 // backend/src/routes/locationRoutes.ts
 import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth';
-import { validateLocation, validateId } from '../middleware/validation';
+import { validateId } from '../middleware/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 
 const router = Router();
@@ -11,7 +11,8 @@ const getLocationController = () => {
     const controller = require('../controllers/locationController');
     return controller.default || controller;
   } catch (error) {
-    console.warn('locationController not found or invalid:', error.message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('locationController not found or invalid:', message);
     return null;
   }
 };

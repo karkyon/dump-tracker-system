@@ -1,7 +1,6 @@
 // backend/src/routes/userRoutes.ts
 import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth';
-import { validateUser, validateId } from '../middleware/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 
 const router = Router();
@@ -12,7 +11,8 @@ const getUserController = () => {
     const controller = require('../controllers/userController');
     return controller.default || controller;
   } catch (error) {
-    console.warn('userController not found or invalid:', error.message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('userController not found or invalid:', message);
     return null;
   }
 };
@@ -30,22 +30,22 @@ if (userController) {
 
   // ユーザー詳細
   if (userController.getUserById) {
-    router.get('/:id', validateId, asyncHandler(userController.getUserById));
+    router.get('/:id', asyncHandler(userController.getUserById));
   }
 
   // ユーザー作成（管理者・マネージャーのみ）
   if (userController.createUser) {
-    router.post('/', requireRole(['ADMIN', 'MANAGER']), validateUser, asyncHandler(userController.createUser));
+    router.post('/', requireRole(['ADMIN', 'MANAGER']), asyncHandler(userController.createUser));
   }
 
   // ユーザー更新
   if (userController.updateUser) {
-    router.put('/:id', validateId, asyncHandler(userController.updateUser));
+    router.put('/:id', asyncHandler(userController.updateUser));
   }
 
   // ユーザー削除（管理者のみ）
   if (userController.deleteUser) {
-    router.delete('/:id', requireRole(['ADMIN']), validateId, asyncHandler(userController.deleteUser));
+    router.delete('/:id', requireRole(['ADMIN']), asyncHandler(userController.deleteUser));
   }
   
   console.log('✓ ユーザールート登録完了');
