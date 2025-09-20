@@ -17,9 +17,25 @@ import { AppError } from '../middleware/errorHandler';
 const prisma = new PrismaClient();
 const authService = new AuthService();
 
-// 既存のコードを維持（import以降はそのまま）
+// 不足しているインターフェースと設定を追加
+interface AuthRequest extends Request {
+  user?: {
+    id: string;
+    username: string;
+    role: string;
   };
 }
+
+const logger = {
+  info: (message: string, meta?: any) => console.log(message, meta),
+  warn: (message: string, meta?: any) => console.warn(message, meta),
+  error: (message: string, meta?: any) => console.error(message, meta)
+};
+
+const config = {
+  jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h'
+};
 
 // JWT トークン生成関数を追加
 const generateAccessToken = (payload: any, secret: string, options: any) => {
@@ -106,13 +122,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         role: user.role 
       },
       config.jwtSecret,
-      { expiresIn: config.jwtSecret }
+      { expiresIn: config.jwtExpiresIn }
     );
 
     const refreshToken = generateAccessToken(
       { userId: user.id },
       jwtConfig.refreshToken.secret,
-      { expiresIn: config.jwtExpiresIn }
+      { expiresIn: '7d' }
     );
 
     // リフレッシュトークンをデータベースに保存（セッション管理）

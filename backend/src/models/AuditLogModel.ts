@@ -5,30 +5,30 @@
 // テーブルアクセサ: auditLog
 // =====================================
 
-import type { 
-  AuditLog as PrismaAuditLog,
-  Prisma,
-  User,} from '@prisma/client';
-
-// PrismaClientを通常のimportとして追加
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 // =====================================
 // 基本型定義
 // =====================================
 
-export type AuditLogModel = PrismaAuditLog;
-export type AuditLogCreateInput = Prisma.AuditLogCreateInput;
-export type AuditLogUpdateInput = Prisma.AuditLogUpdateInput;  
+// Prisma v6対応の型定義
+export type AuditLogModel = Prisma.AuditLogGetPayload<{}>;
+export type UserModel = Prisma.UserGetPayload<{}>;
+
+// 正しいPrisma型の参照
+export type AuditLogCreateInput = Prisma.AuditLogCreateArgs;
+export type AuditLogUpdateInput = Prisma.AuditLogUpdateArgs;
 export type AuditLogWhereInput = Prisma.AuditLogWhereInput;
 export type AuditLogWhereUniqueInput = Prisma.AuditLogWhereUniqueInput;
 export type AuditLogOrderByInput = Prisma.AuditLogOrderByWithRelationInput;
+export type AuditLogInclude = Prisma.AuditLogInclude;
 
 // =====================================
 // 標準DTO
 // =====================================
 
 export interface AuditLogResponseDTO extends AuditLogModel {
+  users?: UserModel;
   _count?: {
     [key: string]: number;
   };
@@ -40,14 +40,6 @@ export interface AuditLogListResponse {
   page: number;
   pageSize: number;
   totalPages: number;
-}
-
-export interface AuditLogCreateDTO extends Omit<AuditLogCreateInput, 'id'> {
-  // フロントエンド送信用
-}
-
-export interface AuditLogUpdateDTO extends Partial<AuditLogCreateDTO> {
-  // 更新用（部分更新対応）
 }
 
 // =====================================
@@ -62,19 +54,20 @@ export class AuditLogService {
    */
   async create(data: AuditLogCreateInput): Promise<AuditLogModel> {
     return await this.prisma.auditLog.create({
-      data: {
-        ...data,
-
-      }
+      data
     });
   }
 
   /**
    * 主キー指定取得
    */
-  async findByKey(id: string): Promise<AuditLogModel | null> {
+  async findByKey(
+    id: string, 
+    include?: AuditLogInclude
+  ): Promise<AuditLogModel | null> {
     return await this.prisma.auditLog.findUnique({
-      where: { id }
+      where: { id },
+      include
     });
   }
 
@@ -83,15 +76,17 @@ export class AuditLogService {
    */
   async findMany(params?: {
     where?: AuditLogWhereInput;
-    orderBy?: AuditLogOrderByInput;
+    orderBy?: AuditLogOrderByInput | AuditLogOrderByInput[];
     skip?: number;
     take?: number;
+    include?: AuditLogInclude;
   }): Promise<AuditLogModel[]> {
     return await this.prisma.auditLog.findMany({
       where: params?.where,
-      orderBy: params?.orderBy || {},
+      orderBy: params?.orderBy || { createdAt: 'desc' },
       skip: params?.skip,
-      take: params?.take
+      take: params?.take,
+      include: params?.include
     });
   }
 
@@ -100,19 +95,21 @@ export class AuditLogService {
    */
   async findManyWithPagination(params: {
     where?: AuditLogWhereInput;
-    orderBy?: AuditLogOrderByInput;
+    orderBy?: AuditLogOrderByInput | AuditLogOrderByInput[];
     page: number;
     pageSize: number;
+    include?: AuditLogInclude;
   }): Promise<AuditLogListResponse> {
-    const { page, pageSize, where, orderBy } = params;
+    const { page, pageSize, where, orderBy, include } = params;
     const skip = (page - 1) * pageSize;
 
     const [data, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
-        orderBy: orderBy || {},
+        orderBy: orderBy || { createdAt: 'desc' },
         skip,
-        take: pageSize
+        take: pageSize,
+        include
       }),
       this.prisma.auditLog.count({ where })
     ]);
@@ -129,13 +126,15 @@ export class AuditLogService {
   /**
    * 更新
    */
-  async update(id: string, data: AuditLogUpdateInput): Promise<AuditLogModel> {
+  async update(
+    id: string, 
+    data: AuditLogUpdateInput,
+    include?: AuditLogInclude
+  ): Promise<AuditLogModel> {
     return await this.prisma.auditLog.update({
       where: { id },
-      data: {
-        ...data,
-
-      }
+      data,
+      include
     });
   }
 
@@ -163,6 +162,100 @@ export class AuditLogService {
    */
   async count(where?: AuditLogWhereInput): Promise<number> {
     return await this.prisma.auditLog.count({ where });
+  }
+
+  /**
+   * ユーザー別監査ログ取得
+   */
+  async findByUser(
+    userId: string,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      operationType?: string;
+      tableName?: string;
+    }
+  ): Promise<AuditLogListResponse> {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || 50;
+    
+    const where: AuditLogWhereInput = {
+      userId,
+      ...(params?.operationType && { operationType: params.operationType }),
+      ...(params?.tableName && { tableName: params.tableName })
+    };
+
+    return this.findManyWithPagination({
+      where,
+      page,
+      pageSize,
+      orderBy: { createdAt: 'desc' },
+      include: { users: true }
+    });
+  }
+
+  /**
+   * 操作タイプ別監査ログ取得
+   */
+  async findByOperationType(
+    operationType: string,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      tableName?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+    }
+  ): Promise<AuditLogListResponse> {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || 50;
+    
+    const where: AuditLogWhereInput = {
+      operationType,
+      ...(params?.tableName && { tableName: params.tableName }),
+      ...(params?.dateFrom || params?.dateTo) && {
+        createdAt: {
+          ...(params?.dateFrom && { gte: params.dateFrom }),
+          ...(params?.dateTo && { lte: params.dateTo })
+        }
+      }
+    };
+
+    return this.findManyWithPagination({
+      where,
+      page,
+      pageSize,
+      orderBy: { createdAt: 'desc' },
+      include: { users: true }
+    });
+  }
+
+  /**
+   * テーブル別監査ログ取得
+   */
+  async findByTable(
+    tableName: string,
+    recordId?: string,
+    params?: {
+      page?: number;
+      pageSize?: number;
+    }
+  ): Promise<AuditLogListResponse> {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || 50;
+    
+    const where: AuditLogWhereInput = {
+      tableName,
+      ...(recordId && { recordId })
+    };
+
+    return this.findManyWithPagination({
+      where,
+      page,
+      pageSize,
+      orderBy: { createdAt: 'desc' },
+      include: { users: true }
+    });
   }
 }
 

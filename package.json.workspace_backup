@@ -26,6 +26,10 @@
     "clean": "rm -rf node_modules frontend/node_modules backend/node_modules",
     "start": "npm run docker:up && npm run dev"
   },
+  // "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "devDependencies": {
     "concurrently": "^8.2.2",
     "prisma": "^6.16.1"
