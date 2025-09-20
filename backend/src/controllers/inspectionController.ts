@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, InspectionType } from '@prisma/client';
 import { InspectionService } from '../services/inspectionService';
 import { 
   InspectionItemModel,
@@ -9,54 +9,25 @@ import {
   UserModel 
 } from '../types';
 import { AuthenticatedRequest } from '../types/auth';
-import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../middleware/errorHandler';
 
+// PrismaClientの単一初期化
 const prisma = new PrismaClient();
 const inspectionService = new InspectionService();
 
-// 既存のコードを維持
-    email: string;
+// asyncHandlerを安全にインポート
+const asyncHandler = (fn: Function) => {
+  return (req: any, res: any, next: any) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
   };
-  params: any;
-  query: any;
-  body: any;
-}
+};
 
-// PrismaClientを動的にインポート（型エラー回避）
-let prismaClient: any;
-try {
-  const { PrismaClient } = require('@prisma/client');
-  prismaClient = new PrismaClient();
-} catch (error) {
-  console.error('Prisma initialization error:', error);
-  prismaClient = null;
-}
-
-// asyncHandlerを動的にインポート
-let asyncHandler: any;
-try {
-  asyncHandler = require('../middleware/errorHandler').asyncHandler;
-} catch (error) {
-  // フォールバック版asyncHandler
-  asyncHandler = (fn: Function) => {
-    return (req: any, res: any, next: any) => {
-      Promise.resolve(fn(req, res, next)).catch(next);
-    };
-  };
-}
-
-// ロガーのセーフインポート
-let logger: any;
-try {
-  logger = require('../utils/logger').default;
-} catch (error) {
-  logger = {
-    info: (msg: string, data?: any) => console.log(`[INFO] ${msg}`, data || ''),
-    warn: (msg: string, data?: any) => console.warn(`[WARN] ${msg}`, data || ''),
-    error: (msg: string, data?: any) => console.error(`[ERROR] ${msg}`, data || '')
-  };
-}
+// ロガーの安全なインポート
+const logger = {
+  info: (msg: string, data?: any) => console.log(`[INFO] ${msg}`, data || ''),
+  warn: (msg: string, data?: any) => console.warn(`[WARN] ${msg}`, data || ''),
+  error: (msg: string, data?: any) => console.error(`[ERROR] ${msg}`, data || '')
+};
 
 /**
  * 成功レスポンスを送信する汎用関数
@@ -99,7 +70,7 @@ const validateRequestData = (data: any, requiredFields: string[] = []): boolean 
  * Prismaクライアントが利用可能かチェック
  */
 const checkPrismaAvailable = (): boolean => {
-  return prismaClient !== null;
+  return prisma !== null;
 };
 
 /**
@@ -121,28 +92,29 @@ export const getAllInspectionItems = asyncHandler(async (req: AuthenticatedReque
       limit = 50, 
       inspection_type, 
       is_active = 'true',
-      sort_by = 'display_order' 
+      sort_by = 'displayOrder'  // ✅ 修正: display_order -> displayOrder
     } = req.query;
 
     const skip = (Number(page) - 1) * Number(limit);
     const where: any = {};
 
     if (inspection_type) {
-      where.inspection_type = inspection_type;
+      where.inspectionType = inspection_type;  // ✅ 修正: inspection_type -> inspectionType
     }
 
     if (is_active !== undefined) {
-      where.is_active = is_active === 'true';
+      where.isActive = is_active === 'true';
     }
 
     const [items, total] = await Promise.all([
-      prismaClient.inspection_items.findMany({
+      // ✅ 修正: inspectionItemResult -> inspectionItem
+      prisma.inspectionItem.findMany({
         where,
         orderBy: { [sort_by as string]: 'asc' },
         skip,
         take: Number(limit)
       }),
-      prismaClient.inspection_items.count({ where })
+      prisma.inspectionItem.count({ where })  // ✅ 修正: inspectionItemResult -> inspectionItem
     ]);
 
     return sendSuccess(res, {
@@ -180,7 +152,7 @@ export const getInspectionItemById = asyncHandler(async (req: AuthenticatedReque
       return sendError(res, '点検項目IDが必要です', 400);
     }
 
-    const item = await prismaClient.inspection_items.findUnique({
+    const item = await prisma.inspectionItem.findUnique({
       where: { id }
     });
 
@@ -223,26 +195,26 @@ export const createInspectionItem = asyncHandler(async (req: AuthenticatedReques
     // 表示順序の重複チェック・自動設定
     let finalDisplayOrder = display_order;
     if (!finalDisplayOrder) {
-      const maxOrder = await prismaClient.inspection_items.aggregate({
+      const maxOrder = await prisma.inspectionItem.aggregate({
         _max: {
-          display_order: true
+          displayOrder: true
         }
       });
-      finalDisplayOrder = (maxOrder._max.display_order || 0) + 1;
+      finalDisplayOrder = (maxOrder._max.displayOrder || 0) + 1;
     }
 
-    const item = await prismaClient.inspection_items.create({
+    const item = await prisma.inspectionItem.create({
       data: {
         name,
         description,
-        inspection_type: inspection_type as InspectionType,
-        input_type: input_type || 'TEXT',
+        inspectionType: inspection_type as InspectionType,
+        inputType: input_type || 'TEXT',
         category,
-        is_required: is_required || false,
-        display_order: finalDisplayOrder,
-        is_active: true,
-        created_at: new Date(),
-        updated_at: new Date()
+        isRequired: is_required || false,
+        displayOrder: finalDisplayOrder,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     });
 
@@ -280,7 +252,7 @@ export const updateInspectionItem = asyncHandler(async (req: AuthenticatedReques
     }
 
     // 既存項目の存在確認
-    const existingItem = await prismaClient.inspection_items.findUnique({
+    const existingItem = await prisma.inspectionItem.findUnique({
       where: { id }
     });
 
@@ -291,7 +263,7 @@ export const updateInspectionItem = asyncHandler(async (req: AuthenticatedReques
     // 更新日時を設定
     updateData.updated_at = new Date();
 
-    const item = await prismaClient.inspection_items.update({
+    const item = await prisma.inspectionItem.update({
       where: { id },
       data: updateData
     });
@@ -329,7 +301,7 @@ export const deleteInspectionItem = asyncHandler(async (req: AuthenticatedReques
     }
 
     // 既存項目の存在確認
-    const existingItem = await prismaClient.inspection_items.findUnique({
+    const existingItem = await prisma.inspectionItem.findUnique({
       where: { id }
     });
 
@@ -338,11 +310,11 @@ export const deleteInspectionItem = asyncHandler(async (req: AuthenticatedReques
     }
 
     // 論理削除
-    await prismaClient.inspection_items.update({
+    await prisma.inspectionItem.update({
       where: { id },
       data: { 
-        is_active: false,
-        updated_at: new Date()
+        isActive: false,
+        updatedAt: new Date()
       }
     });
 
@@ -353,6 +325,10 @@ export const deleteInspectionItem = asyncHandler(async (req: AuthenticatedReques
   }
 });
 
+/**
+ * 点検記録一覧取得
+ * GET /api/v1/inspections/records
+ */
 /**
  * 点検記録一覧取得
  * GET /api/v1/inspections/records
@@ -381,46 +357,47 @@ export const getAllInspectionRecords = asyncHandler(async (req: AuthenticatedReq
     const skip = (Number(page) - 1) * Number(limit);
     const where: any = {};
 
-    if (vehicle_id) where.vehicle_id = vehicle_id;
-    if (inspector_id) where.inspector_id = inspector_id;
-    if (inspection_type) where.inspection_type = inspection_type;
+    // ✅ 修正: フィールド名をキャメルケースに統一
+    if (vehicle_id) where.vehicleId = vehicle_id;
+    if (inspector_id) where.inspectorId = inspector_id;
+    if (inspection_type) where.inspectionType = inspection_type;
     if (status) where.status = status;
 
-    // 日付範囲フィルター
+    // ✅ 修正: 日付範囲フィルター
     if (date_from || date_to) {
-      where.created_at = {};
-      if (date_from) where.created_at.gte = new Date(date_from as string);
-      if (date_to) where.created_at.lte = new Date(date_to as string);
+      where.createdAt = {};
+      if (date_from) where.createdAt.gte = new Date(date_from as string);
+      if (date_to) where.createdAt.lte = new Date(date_to as string);
     }
 
-    // 権限に基づくフィルター
+    // ✅ 修正: 権限に基づくフィルター
     if (req.user.role === 'DRIVER') {
-      where.inspector_id = req.user.id;
+      where.inspectorId = req.user.userId;
     }
 
     const [records, total] = await Promise.all([
-      prismaClient.inspection_records.findMany({
+      prisma.inspectionRecord.findMany({
         where,
         include: {
           users: {
             select: { id: true, name: true, email: true }
           },
-          vehicle: {
-            select: { id: true, plate_number: true, model: true }
+          vehicles: {
+            select: { id: true, plateNumber: true, model: true }
           },
-          inspection_item_results: {
+          inspectionItemResults: {
             include: {
-              inspection_items: {
-                select: { id: true, name: true, inspection_type: true }
+              inspectionItems: {
+                select: { id: true, name: true, inspectionType: true }
               }
             }
           }
         },
-        orderBy: { created_at: 'desc' },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: Number(limit)
       }),
-      prismaClient.inspection_records.count({ where })
+      prisma.inspectionRecord.count({ where })
     ]);
 
     return sendSuccess(res, {
@@ -458,23 +435,23 @@ export const getInspectionRecordById = asyncHandler(async (req: AuthenticatedReq
       return sendError(res, '点検記録IDが必要です', 400);
     }
 
-    const record = await prismaClient.inspection_records.findUnique({
+    const record = await prisma.inspectionRecord.findUnique({
       where: { id },
       include: {
         users: {
           select: { id: true, name: true, email: true }
         },
-        vehicle: {
-          select: { id: true, plate_number: true, model: true }
+        vehicles: {
+          select: { id: true, plateNumber: true, model: true }
         },
         operations: {
-          select: { id: true, status: true, planned_start_time: true }
+          select: { id: true, status: true, plannedStartTime: true }
         },
-        inspection_item_results: {
+        inspectionItemResults: {
           include: {
-            inspection_items: true
+            inspectionItems: true
           },
-          orderBy: { created_at: 'asc' }
+          orderBy: { createdAt: 'asc' }
         }
       }
     });
@@ -484,7 +461,7 @@ export const getInspectionRecordById = asyncHandler(async (req: AuthenticatedReq
     }
 
     // 権限チェック（ドライバーは自分の記録のみ）
-    if (req.user.role === 'DRIVER' && record.inspector_id !== req.user.id) {
+    if (req.user.role === 'DRIVER' && record.inspectorId !== req.user.userId) {
       return sendError(res, '点検記録へのアクセス権限がありません', 403);
     }
 
@@ -525,7 +502,7 @@ export const createInspectionRecord = asyncHandler(async (req: AuthenticatedRequ
     }
 
     // 車両の存在確認
-    const vehicle = await prismaClient.vehicle.findUnique({
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: vehicle_id }
     });
 
@@ -533,21 +510,21 @@ export const createInspectionRecord = asyncHandler(async (req: AuthenticatedRequ
       return sendError(res, '指定された車両が見つかりません', 404);
     }
 
-    const record = await prismaClient.inspection_records.create({
+    const record = await prisma.inspectionRecord.create({
       data: {
-        vehicle_id,
-        inspector_id: req.user.id,
-        operation_id,
-        inspection_type: inspection_type as InspectionType,
+        vehicleId: vehicle_id,
+        inspectorId: req.user.userId,
+        operationId: operation_id || null,
+        inspectionType: inspection_type as InspectionType,
         status: 'IN_PROGRESS',
-        started_at: new Date(),
+        startedAt: new Date(),
         latitude,
         longitude,
-        location_name,
-        weather_condition,
+        locationName: location_name,
+        weatherCondition: weather_condition,
         temperature,
-        created_at: new Date(),
-        updated_at: new Date()
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     });
 
@@ -580,7 +557,7 @@ export const updateInspectionRecord = asyncHandler(async (req: AuthenticatedRequ
     }
 
     // 既存記録の存在確認
-    const existingRecord = await prismaClient.inspection_records.findUnique({
+    const existingRecord = await prisma.inspectionRecord.findUnique({
       where: { id }
     });
 
@@ -589,18 +566,18 @@ export const updateInspectionRecord = asyncHandler(async (req: AuthenticatedRequ
     }
 
     // 権限チェック（ドライバーは自分の記録のみ、管理者・マネージャーは全て）
-    if (req.user.role === 'DRIVER' && existingRecord.inspector_id !== req.user.id) {
+    if (req.user.role === 'DRIVER' && existingRecord.inspectorId !== req.user.userId) {
       return sendError(res, '点検記録の更新権限がありません', 403);
     }
 
     // 完了時の処理
-    if (updateData.status === 'COMPLETED' && !existingRecord.completed_at) {
-      updateData.completed_at = new Date();
+    if (updateData.status === 'COMPLETED' && !existingRecord.completedAt) {
+      updateData.completedAt = new Date();
     }
 
-    updateData.updated_at = new Date();
+    updateData.updatedAt = new Date();
 
-    const record = await prismaClient.inspection_records.update({
+    const record = await prisma.inspectionRecord.update({
       where: { id },
       data: updateData
     });
@@ -638,10 +615,10 @@ export const deleteInspectionRecord = asyncHandler(async (req: AuthenticatedRequ
     }
 
     // 既存記録の存在確認
-    const existingRecord = await prismaClient.inspection_records.findUnique({
+    const existingRecord = await prisma.inspectionRecord.findUnique({
       where: { id },
       include: {
-        inspection_item_results: true
+        inspectionItemResults: true
       }
     });
 
@@ -650,11 +627,11 @@ export const deleteInspectionRecord = asyncHandler(async (req: AuthenticatedRequ
     }
 
     // 関連する結果データも削除
-    await prismaClient.$transaction([
-      prismaClient.inspection_item_results.deleteMany({
-        where: { inspection_record_id: id }
+    await prisma.$transaction([
+      prisma.inspectionItemResult.deleteMany({
+        where: { inspectionRecordId: id }
       }),
-      prismaClient.inspection_records.delete({
+      prisma.inspectionRecord.delete({
         where: { id }
       })
     ]);
@@ -692,54 +669,55 @@ export const getInspectionStatistics = asyncHandler(async (req: AuthenticatedReq
 
     const [totalRecords, completedRecords, defectsCount, averageTime] = await Promise.all([
       // 総点検回数
-      prismaClient.inspection_records.count({
+      prisma.inspectionRecord.count({
         where: {
-          vehicle_id: vehicleId,
-          created_at: { gte: dateFrom }
+          vehicleId: vehicleId,
+          createdAt: { gte: dateFrom }
         }
       }),
       // 完了した点検回数
-      prismaClient.inspection_records.count({
+      prisma.inspectionRecord.count({
         where: {
-          vehicle_id: vehicleId,
+          vehicleId: vehicleId,
           status: 'COMPLETED',
-          created_at: { gte: dateFrom }
+          createdAt: { gte: dateFrom }
         }
       }),
       // 不具合発見回数
-      prismaClient.inspection_records.count({
+      prisma.inspectionRecord.count({
         where: {
-          vehicle_id: vehicleId,
-          overall_result: false,
-          created_at: { gte: dateFrom }
+          vehicleId: vehicleId,
+          overallResult: false,
+          createdAt: { gte: dateFrom }
         }
       }),
       // 平均点検時間の計算
-      prismaClient.inspection_records.findMany({
+      prisma.inspectionRecord.findMany({
         where: {
-          vehicle_id: vehicleId,
+          vehicleId: vehicleId,
           status: 'COMPLETED',
-          started_at: { not: null },
-          completed_at: { not: null },
-          created_at: { gte: dateFrom }
+          startedAt: { not: null },
+          completedAt: { not: null },
+          createdAt: { gte: dateFrom }
         },
         select: {
-          started_at: true,
-          completed_at: true
+          startedAt: true,
+          completedAt: true
         }
       })
     ]);
 
     // 平均点検時間を計算
     let avgInspectionTime = 0;
-    if (averageTime.length > 0) {
-      const totalTime = averageTime.reduce((sum: number, record: { started_at: Date; completed_at: Date }) => {
-        if (record.started_at && record.completed_at) {
-          return sum + (record.completed_at.getTime() - record.started_at.getTime());
+    const completedTimes = averageTime as { startedAt: Date; completedAt: Date }[];
+    if (Array.isArray(completedTimes) && completedTimes.length > 0) {
+      const totalTime: number = completedTimes.reduce((sum: number, record: { startedAt: Date; completedAt: Date }) => {
+        if (record && record.startedAt && record.completedAt) {
+          return sum + (record.completedAt.getTime() - record.startedAt.getTime());
         }
         return sum;
       }, 0);
-      avgInspectionTime = Math.round(totalTime / averageTime.length / (1000 * 60)); // 分単位
+      avgInspectionTime = Math.round(totalTime / completedTimes.length / (1000 * 60)); // 分単位
     }
 
     const statistics = {

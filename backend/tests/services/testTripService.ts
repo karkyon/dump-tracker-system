@@ -1,5 +1,5 @@
-import { TripService } from "../src/services/tripService";
-import { authService } from "../src/services/authService";
+import { TripService } from "../../src/services/tripService";
+import { authService } from "../../src/services/authService";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();

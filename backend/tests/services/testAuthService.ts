@@ -1,4 +1,4 @@
-import { authService, AuthService } from "../src/services/authService";
+import { authService, AuthService } from "../../src/services/authService";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 

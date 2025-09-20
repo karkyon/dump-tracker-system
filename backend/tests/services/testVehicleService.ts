@@ -1,5 +1,5 @@
-import { VehicleService } from "../src/services/vehicleService";
-import { authService } from "../src/services/authService";
+import { VehicleService } from "../../src/services/vehicleService";
+import { authService } from "../../src/services/authService";
 import { $Enums, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();

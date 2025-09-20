@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import * as bcrypt from 'bcryptjs';
+import * as jwt from 'jsonwebtoken';
+import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../middleware/errorHandler';
 import { AuthService } from '../services/authService';
 import { 
   UserModel, 
@@ -11,8 +13,6 @@ import {
   NotificationModel 
 } from '../types';
 import { AuthenticatedRequest } from '../types/auth';
-import { asyncHandler } from '../utils/asyncHandler';
-import { AppError } from '../middleware/errorHandler';
 
 const prisma = new PrismaClient();
 const authService = new AuthService();

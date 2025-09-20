@@ -1,5 +1,5 @@
-import { LocationService } from "../src/services/locationService";
-import { authService } from "../src/services/authService";
+import { LocationService } from "../../src/services/locationService";
+import { authService } from "../../src/services/authService";
 import { $Enums, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();

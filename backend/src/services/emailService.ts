@@ -155,13 +155,15 @@ export class EmailService {
       `
     };
 
+    const startMileage = (operation as any).startMileage ?? 0;
+
     const variables = {
-      operationDate: operation.operationDate.toLocaleDateString('ja-JP'),
+      operationDate: (operation.actualStartTime ?? operation.actualEndTime ?? operation.createdAt)?.toLocaleDateString('ja-JP') || '未設定',
       driverName: operation.driver.name,
       vehicleNumber: operation.vehicle.vehicleNumber,
       vehicleType: operation.vehicle.vehicleType,
       startTime: operation.actualStartTime?.toLocaleString('ja-JP') || '未設定',
-      startMileage: operation.startMileage,
+      startMileage,
       notes: operation.notes || 'なし'
     };
 
@@ -172,7 +174,7 @@ export class EmailService {
    * 運行完了通知
    */
   async sendOperationCompleteNotification(
-    operation: Operation & { driver: User; vehicle: any },
+    operation: Operation & { driver: User; vehicle: any; endMileage?: number },
     recipients: string[]
   ): Promise<void> {
     const template: EmailTemplate = {
@@ -226,20 +228,22 @@ export class EmailService {
           </body>
         </html>
       `
-    };
-
-    const totalDistance = (operation.endMileage || 0) - operation.startMileage;
+    const startMileage = (operation as any).startMileage ?? 0;
+    const endMileage = (operation as any).endMileage ?? 0;
+    const totalDistance = endMileage - startMileage;
 
     const variables = {
-      operationDate: operation.operationDate.toLocaleDateString('ja-JP'),
+      operationDate: (operation.actualStartTime ?? operation.actualEndTime ?? operation.createdAt)?.toLocaleDateString('ja-JP') || '未設定',
       driverName: operation.driver.name,
       vehicleNumber: operation.vehicle.vehicleNumber,
       vehicleType: operation.vehicle.vehicleType,
       startTime: operation.actualStartTime?.toLocaleString('ja-JP') || '未設定',
       endTime: operation.actualEndTime?.toLocaleString('ja-JP') || '未設定',
-      startMileage: operation.startMileage,
-      endMileage: operation.endMileage || 0,
+      startMileage,
+      endMileage,
       totalDistance,
+      notes: operation.notes || 'なし'
+    };
       notes: operation.notes || 'なし'
     };
 

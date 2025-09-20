@@ -1,6 +1,6 @@
 // =====================================
 // AuditLogModel.ts
-// クリーン生成されたモデルファイル  
+// 修正版 - Prisma型エラー解消済み
 // 生成日時: Tue Sep 16 10:05:28 AM JST 2025
 // テーブルアクセサ: auditLog
 // =====================================
@@ -8,16 +8,16 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 
 // =====================================
-// 基本型定義
+// 基本型定義（修正版）
 // =====================================
 
-// Prisma v6対応の型定義
+// 正しいPrisma型の参照
 export type AuditLogModel = Prisma.AuditLogGetPayload<{}>;
 export type UserModel = Prisma.UserGetPayload<{}>;
 
-// 正しいPrisma型の参照
-export type AuditLogCreateInput = Prisma.AuditLogCreateArgs;
-export type AuditLogUpdateInput = Prisma.AuditLogUpdateArgs;
+// 正しい入力型の定義
+export type AuditLogCreateInput = Prisma.AuditLogCreateInput;
+export type AuditLogUpdateInput = Prisma.AuditLogUpdateInput;
 export type AuditLogWhereInput = Prisma.AuditLogWhereInput;
 export type AuditLogWhereUniqueInput = Prisma.AuditLogWhereUniqueInput;
 export type AuditLogOrderByInput = Prisma.AuditLogOrderByWithRelationInput;
@@ -41,6 +41,21 @@ export interface AuditLogListResponse {
   pageSize: number;
   totalPages: number;
 }
+
+// 作成用DTO（フロントエンド用）
+export interface AuditLogCreateDTO {
+  tableName: string;
+  operationType: string;
+  recordId?: string;
+  userId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  oldValues?: any;
+  newValues?: any;
+}
+
+// 更新用DTO（フロントエンド用）
+export interface AuditLogUpdateDTO extends Partial<AuditLogCreateDTO> {}
 
 // =====================================
 // 基本CRUDクラス
@@ -256,6 +271,107 @@ export class AuditLogService {
       orderBy: { createdAt: 'desc' },
       include: { users: true }
     });
+  }
+
+  /**
+   * 日付範囲での監査ログ取得
+   */
+  async findByDateRange(
+    dateFrom: Date,
+    dateTo: Date,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      userId?: string;
+      tableName?: string;
+      operationType?: string;
+    }
+  ): Promise<AuditLogListResponse> {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || 50;
+    
+    const where: AuditLogWhereInput = {
+      createdAt: {
+        gte: dateFrom,
+        lte: dateTo
+      },
+      ...(params?.userId && { userId: params.userId }),
+      ...(params?.tableName && { tableName: params.tableName }),
+      ...(params?.operationType && { operationType: params.operationType })
+    };
+
+    return this.findManyWithPagination({
+      where,
+      page,
+      pageSize,
+      orderBy: { createdAt: 'desc' },
+      include: { users: true }
+    });
+  }
+
+  /**
+   * レコード変更履歴取得
+   */
+  async getRecordHistory(
+    tableName: string,
+    recordId: string,
+    params?: {
+      page?: number;
+      pageSize?: number;
+    }
+  ): Promise<AuditLogListResponse> {
+    return this.findByTable(tableName, recordId, params);
+  }
+
+  /**
+   * 監査ログ統計情報取得
+   */
+  async getAuditStatistics(params?: {
+    dateFrom?: Date;
+    dateTo?: Date;
+    userId?: string;
+  }): Promise<{
+    totalLogs: number;
+    operationTypeCounts: { operationType: string; count: number }[];
+    tableNameCounts: { tableName: string; count: number }[];
+    dailyCounts: { date: string; count: number }[];
+  }> {
+    const where: AuditLogWhereInput = {
+      ...(params?.dateFrom || params?.dateTo) && {
+        createdAt: {
+          ...(params?.dateFrom && { gte: params.dateFrom }),
+          ...(params?.dateTo && { lte: params.dateTo })
+        }
+      },
+      ...(params?.userId && { userId: params.userId })
+    };
+
+    const [totalLogs, operationTypeStats, tableNameStats] = await Promise.all([
+      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.groupBy({
+        by: ['operationType'],
+        where,
+        _count: { operationType: true }
+      }),
+      this.prisma.auditLog.groupBy({
+        by: ['tableName'],
+        where,
+        _count: { tableName: true }
+      })
+    ]);
+
+    return {
+      totalLogs,
+      operationTypeCounts: operationTypeStats.map(stat => ({
+        operationType: stat.operationType,
+        count: stat._count.operationType
+      })),
+      tableNameCounts: tableNameStats.map(stat => ({
+        tableName: stat.tableName,
+        count: stat._count.tableName
+      })),
+      dailyCounts: [] // 必要に応じて実装
+    };
   }
 }
 
