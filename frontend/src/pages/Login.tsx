@@ -7,13 +7,13 @@ import Input from '../components/common/Input';
 import { validateRequired, validateMinLength } from '../utils/helpers';
 
 interface LoginFormData {
-  email: string;
+  username: string;  // emailからusernameに変更
   password: string;
   rememberMe: boolean;
 }
 
 interface FormErrors {
-  email?: string;
+  username?: string;  // emailからusernameに変更
   password?: string;
 }
 
@@ -23,7 +23,7 @@ const Login: React.FC = () => {
   const { login, isAuthenticated, isLoading, error, clearError } = useAuthStore();
 
   const [formData, setFormData] = useState<LoginFormData>({
-    email: '',
+    username: '',  // emailからusernameに変更
     password: '',
     rememberMe: false,
   });
@@ -49,8 +49,8 @@ const Login: React.FC = () => {
     const newErrors: FormErrors = {};
 
     // ユーザー名バリデーション
-    if (!validateRequired(formData.email)) {
-      newErrors.email = 'ユーザー名は必須です';
+    if (!validateRequired(formData.username)) {  // emailからusernameに変更
+      newErrors.username = 'ユーザー名は必須です';
     }
 
     // パスワードバリデーション
@@ -73,7 +73,7 @@ const Login: React.FC = () => {
 
     try {
       const success = await login({
-        email: formData.email,
+        username: formData.username,  // emailからusernameに変更
         password: formData.password,
         rememberMe: formData.rememberMe,
       });
@@ -134,9 +134,9 @@ const Login: React.FC = () => {
             <Input
               label="ユーザー名"
               type="text"
-              value={formData.email}
-              onChange={handleInputChange('email')}
-              error={errors.email}
+              value={formData.username}
+              onChange={handleInputChange('username')}
+              error={errors.username}
               placeholder="ユーザーIDを入力"
               required
               disabled={isLoading}

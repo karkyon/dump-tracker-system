@@ -597,4 +597,141 @@ export class ItemService {
       };
     });
   }
+
+  /**
+   * 品目のアクティブ状態切り替え
+   * @param itemId 品目ID
+   * @returns 更新された品目
+   */
+  async toggleItemStatus(itemId: string): Promise<ItemSummary> {
+    const item = await prisma.item.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      throw new AppError('品目が見つかりません', 404);
+    }
+
+    // アクティブ状態を反転
+    const updatedItem = await prisma.item.update({
+      where: { id: itemId },
+      data: { isActive: !item.isActive }
+    });
+
+    return {
+      id: updatedItem.id,
+      name: updatedItem.name,
+      displayOrder: updatedItem.displayOrder,
+      isActive: updatedItem.isActive,
+      createdAt: updatedItem.createdAt,
+      updatedAt: updatedItem.updatedAt
+    };
+  }
+
+  /**
+   * カテゴリ一覧取得
+   * @returns カテゴリ一覧
+   */
+  async getCategories(): Promise<Array<{ name: string; count: number }>> {
+    // Note: 現在のスキーマにはcategoryフィールドがないため、
+    // 仮実装として品目タイプ別の分類を返す
+    const categories = [
+      { name: '砂利・砕石', count: 0 },
+      { name: '土砂', count: 0 },
+      { name: 'アスファルト', count: 0 },
+      { name: 'コンクリート', count: 0 },
+      { name: 'その他', count: 0 }
+    ];
+
+    // 実際の品目数を取得してカウントを更新
+    const totalItems = await prisma.item.count({ where: { isActive: true } });
+    
+    // 簡易実装: 全て「その他」カテゴリに分類
+    categories[4].count = totalItems;
+
+    return categories.filter(category => category.count > 0);
+  }
+
+  /**
+   * 品目使用統計取得（getItemStatsのエイリアス）
+   * @param itemId 品目ID
+   * @param params 統計パラメータ
+   * @returns 使用統計
+   */
+  async getItemUsageStats(
+    itemId: string, 
+    params: { startDate?: string; endDate?: string }
+  ) {
+    return this.getItemStats(itemId, params.startDate, params.endDate);
+  }
+
+  /**
+   * よく使用される品目取得（運転手用）
+   * @param driverId 運転手ID（オプショナル）
+   * @param limit 取得件数
+   * @returns よく使用される品目一覧
+   */
+  async getFrequentlyUsedItems(
+    driverId?: string, 
+    limit: number = 10
+  ): Promise<Array<ItemUsageStats>> {
+    let whereCondition: any = {
+      itemId: { not: null }
+    };
+
+    // 運転手IDが指定されている場合、そのドライバーの使用履歴のみを対象とする
+    if (driverId) {
+      whereCondition.operations = {
+        driverId: driverId
+      };
+    }
+
+    // 過去30日間の使用統計を取得
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    whereCondition.createdAt = {
+      gte: thirtyDaysAgo
+    };
+
+    // 使用回数でグループ化
+    const usageStats = await prisma.operationDetail.groupBy({
+      by: ['itemId'],
+      where: whereCondition,
+      _count: {
+        itemId: true
+      },
+      orderBy: {
+        _count: {
+          itemId: 'desc'
+        }
+      },
+      take: limit
+    });
+
+    // 品目情報を取得
+    const itemIds = usageStats.map(stat => stat.itemId!);
+    const items = await prisma.item.findMany({
+      where: { 
+        id: { in: itemIds },
+        isActive: true 
+      }
+    });
+
+    // 結果をマージ
+    return usageStats.map(stat => {
+      const item = items.find(i => i.id === stat.itemId)!;
+      return {
+        item: {
+          id: item.id,
+          name: item.name,
+          displayOrder: item.displayOrder,
+          isActive: item.isActive,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        },
+        usageCount: stat._count.itemId
+      };
+    }).filter(result => result.item); // 削除された品目を除外
+  }
 }

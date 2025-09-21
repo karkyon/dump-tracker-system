@@ -329,10 +329,6 @@ export const deleteInspectionItem = asyncHandler(async (req: AuthenticatedReques
  * 点検記録一覧取得
  * GET /api/v1/inspections/records
  */
-/**
- * 点検記録一覧取得
- * GET /api/v1/inspections/records
- */
 export const getAllInspectionRecords = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) {
     return sendError(res, '認証が必要です', 401);
