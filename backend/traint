@@ -1,0 +1,26 @@
+                                                                             Table "public.audit_logs"
+     Column     |           Type           | Collation | Nullable |      Default       | Storage  | Compression | Stats target |                    Description                    
+----------------+--------------------------+-----------+----------+--------------------+----------+-------------+--------------+---------------------------------------------------
+ id             | uuid                     |           | not null | uuid_generate_v4() | plain    |             |              | 
+ table_name     | character varying(100)   |           | not null |                    | extended |             |              | 対象テーブル名
+ operation_type | character varying(20)    |           | not null |                    | extended |             |              | 操作種別 (INSERT/UPDATE/DELETE/WARNING/SEED_DATA)
+ record_id      | uuid                     |           |          |                    | plain    |             |              | 
+ user_id        | uuid                     |           |          |                    | plain    |             |              | 
+ ip_address     | inet                     |           |          |                    | main     |             |              | 
+ user_agent     | text                     |           |          |                    | extended |             |              | 
+ old_values     | jsonb                    |           |          |                    | extended |             |              | 変更前の値（JSON）
+ new_values     | jsonb                    |           |          |                    | extended |             |              | 変更後の値（JSON）
+ created_at     | timestamp with time zone |           |          | now()              | plain    |             |              | 
+Indexes:
+    "audit_logs_pkey" PRIMARY KEY, btree (id)
+    "idx_audit_logs_operation" btree (operation_type)
+    "idx_audit_logs_record" btree (record_id) WHERE record_id IS NOT NULL
+    "idx_audit_logs_table" btree (table_name)
+    "idx_audit_logs_time" btree (created_at)
+    "idx_audit_logs_user" btree (user_id) WHERE user_id IS NOT NULL
+Check constraints:
+    "audit_logs_operation_type_check" CHECK (operation_type::text = ANY (ARRAY['INSERT'::character varying, 'UPDATE'::character varying, 'DELETE'::character varying, 'WARNING'::character varying, 'SEED_DATA'::character varying]::text[]))
+Foreign-key constraints:
+    "audit_logs_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id)
+Access method: heap
+

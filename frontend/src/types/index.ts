@@ -4,12 +4,17 @@ export interface User {
   username: string;
   email: string;
   name: string;
-  role: 'admin' | 'driver';
-  status: 'active' | 'inactive';
+  role: 'ADMIN' | 'MANAGER' | 'DRIVER';
+  status?: 'active' | 'inactive';
+  isActive?: boolean;
   createdAt: string;
   lastLogin?: string;
+  lastLoginAt?: string;
+  employeeId?: string;
+  phone?: string;
 }
 
+// ログイン情報
 export interface LoginCredentials {
   username: string;
   password: string;
@@ -19,84 +24,105 @@ export interface LoginCredentials {
 // 車両関連
 export interface Vehicle {
   id: string;
-  vehicleNumber: string;
-  vehicleType: string;
+  plateNumber: string;
+  model: string;
+  manufacturer: string;
+  year: number;
+  fuelType: 'GASOLINE' | 'DIESEL' | 'HYBRID' | 'ELECTRIC';
+  capacityTons: number;
   currentMileage: number;
-  lastDriver?: string;
-  status: 'active' | 'inactive' | 'maintenance';
+  status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
+  purchaseDate?: string;
+  insuranceExpiry?: string;
+  inspectionExpiry?: string;
+  notes?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 // 点検項目関連
 export interface InspectionItem {
   id: string;
   name: string;
-  type: 'checkbox' | 'input';
-  category: 'pre' | 'post';
+  description?: string;
+  category?: string;
   order: number;
   isRequired: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 場所関連
 export interface Location {
   id: string;
-  clientName: string;
-  locationName: string;
+  name: string;
   address: string;
-  type: 'pickup' | 'delivery';
-  gpsLatitude?: number;
-  gpsLongitude?: number;
-  registrationMethod: 'admin' | 'app';
+  latitude?: number;
+  longitude?: number;
+  locationType: 'loading' | 'unloading' | 'both';
+  clientName?: string;
+  contactPerson?: string;
+  contactPhone?: string;
+  notes?: string;
+  isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 // 品目関連
 export interface CargoType {
   id: string;
   name: string;
+  description?: string;
+  category?: string;
+  unit?: string;
+  standardPrice?: number;
   order: number;
   isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 // 運行記録関連
 export interface OperationRecord {
   id: string;
-  operationDate: string;
-  driverName: string;
-  vehicleNumber: string;
-  clientName: string;
-  pickupLocation: string;
-  deliveryLocation: string;
-  cargoType: string;
-  startMileage: number;
-  endMileage: number;
-  totalDistance: number;
-  operationTime: string;
+  vehicleId: string;
+  driverId: string;
+  startTime: string;
+  endTime?: string;
+  startLocation: string;
+  endLocation?: string;
+  cargoTypeId: string;
+  loadWeight?: number;
   status: 'ongoing' | 'completed' | 'cancelled';
   notes?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 // GPS関連
 export interface GPSLocation {
+  id: string;
   vehicleId: string;
-  vehicleNumber: string;
-  driverName: string;
   latitude: number;
   longitude: number;
-  status: 'driving' | 'loading' | 'unloading' | 'resting' | 'refueling' | 'offline';
-  lastUpdate: string;
-  currentLocation?: string;
+  altitude?: number;
+  speed?: number;
+  heading?: number;
+  accuracy?: number;
+  timestamp: string;
+  address?: string;
 }
 
 // 帳票関連
 export interface ReportFilter {
-  startDate?: string;
-  endDate?: string;
-  vehicleId?: string;
-  driverId?: string;
-  format: 'pdf' | 'excel' | 'csv';
+  startDate: string;
+  endDate: string;
+  vehicleIds?: string[];
+  driverIds?: string[];
+  cargoTypeIds?: string[];
+  status?: string[];
 }
 
 // API レスポンス
@@ -108,11 +134,13 @@ export interface ApiResponse<T> {
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+  data: T[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 // システム設定
@@ -127,14 +155,11 @@ export interface SystemSettings {
 
 // フィルター・検索
 export interface FilterOptions {
-  searchTerm?: string;
-  status?: string;
-  role?: string;
-  vehicleType?: string;
-  dateRange?: {
-    start: string;
-    end: string;
-  };
+  search?: string;
+  category?: string;
+  isActive?: boolean;
   page?: number;
-  pageSize?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }

@@ -1,5 +1,7 @@
+/// <reference types="vite/client" />
+
 // API 設定
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8000/api/v1';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443/api/v1';
 
 // ローカルストレージキー
 export const STORAGE_KEYS = {

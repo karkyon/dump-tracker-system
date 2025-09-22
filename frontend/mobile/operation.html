@@ -1,0 +1,1166 @@
+</style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="status-indicator" id="statusIndicator">運行中</div>
+            <div class="time-info">
+                <div class="time-display" id="timeDisplay">00:00:00</div>
+                <div class="date-display" id="dateDisplay">2025年9月22日</div>
+            </div>
+            <button class="logout-button" onclick="handleLogout()">ログアウト</button>
+        </div>
+
+        <div class="map-container">
+            <div class="map-loading" id="mapLoading">
+                <div>位置情報を取得中...</div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">WebGLベクターマップを初期化中...</div>
+            </div>
+            <div class="heading-indicator" id="headingIndicator">方位: --°</div>
+            <div class="map-type-indicator" id="mapTypeIndicator">マップ種別: --</div>
+            <div id="map"></div>
+        </div>
+
+        <div class="controls-section">
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">積込場所</div>
+                    <div class="info-value" id="loadingLocation">○○建設資材置場</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">積降場所</div>
+                    <div class="info-value" id="unloadingLocation">△△工事現場</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">積荷</div>
+                    <div class="info-value" id="cargoInfo">砂利 12t</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">経過時間</div>
+                    <div class="info-value" id="elapsedTime">0時間 0分</div>
+                </div>
+                <div class="info-card distance">
+                    <div class="info-label">運行距離</div>
+                    <div class="info-value" id="travelDistance">0.0 km</div>
+                </div>
+                <div class="info-card distance">
+                    <div class="info-label">平均速度</div>
+                    <div class="info-value" id="averageSpeed">0.0 km/h</div>
+                </div>
+            </div>
+
+            <div class="button-grid">
+                <button class="action-button enabled" id="btnLoad" onclick="handleButtonClick('積込場所到着')">
+                    積込場所<br>到着
+                </button>
+                <button class="action-button disabled" id="btnUnload" onclick="handleButtonClick('積降場所到着')">
+                    積降場所<br>到着
+                </button>
+                <button class="action-button special" id="btnBreak" onclick="handleButtonClick('休憩・荷待ち')">
+                    休憩・荷待ち
+                </button>
+                <button class="action-button special" id="btnFuel" onclick="handleButtonClick('給油')">
+                    給油
+                </button>
+            </div>
+        </div>
+
+        <div class="bottom-info">
+            <div class="gps-status">
+                <div class="gps-icon"></div>
+                <span>GPS接続中</span>
+            </div>
+            <div class="location-info" id="locationInfo">
+                位置情報取得中...
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // グローバル変数
+        let map;
+        let currentLocationMarker;
+        let pathPolyline;
+        let watchId;
+        let startTime = new Date();
+        let currentPosition = null;
+        let previousPosition = null;
+        let totalDistance = 0;
+        let pathCoordinates = [];
+        let currentHeading = 0;
+        let currentSpeed = 0;
+        let lastValidHeading = 0;
+        let minimumSpeedForHeading = 1.0;
+        let isVectorMap = false;
+        let headingBuffer = [];
+        let speedBuffer = [];
+        let lastHeadingUpdate = 0;
+        let headingUpdateInterval = 500;
+
+        // API設定（プロジェクトナレッジの設定に合わせる）
+        const API_BASE_URL = 'http://10.1.119.244:8000/api/v1';
+        
+        // ローカルストレージキー
+        const STORAGE_KEYS = {
+            AUTH_TOKEN: 'auth_token',
+            USER_DATA: 'user_data',
+            REMEMBER_LOGIN: 'remember_login'
+        };
+
+        // 現在の運行情報
+        let currentOperation = {
+            id: null,
+            vehicleId: null,
+            driverId: null,
+            startTime: new Date(),
+            status: 'IN_PROGRESS'
+        };
+
+        // 時刻表示の更新
+        function updateTime() {
+            const now = new Date();
+            const elapsed = now - startTime;
+            const hours = Math.floor(elapsed / (1000 * 60 * 60));
+            const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((elapsed % (1000 * 60)) / 1000);
+            
+            document.getElementById('timeDisplay').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            document.getElementById('elapsedTime').textContent = 
+                `${hours}時間 ${minutes}分`;
+
+            // 平均速度の計算
+            const elapsedHours = elapsed / (1000 * 60 * 60);
+            if (elapsedHours > 0 && totalDistance > 0) {
+                const avgSpeed = (totalDistance / elapsedHours).toFixed(1);
+                document.getElementById('averageSpeed').textContent = `${avgSpeed} km/h`;
+            }
+        }
+
+        // 2点間の距離を計算（ハーバーサイン公式）
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // 地球の半径（km）
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // 2点間の方位角を計算（真北を0度とする）
+        function calculateBearing(lat1, lng1, lat2, lng2) {
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const lat1Rad = lat1 * Math.PI / 180;
+            const lat2Rad = lat2 * Math.PI / 180;
+            
+            const y = Math.sin(dLng) * Math.cos(lat2Rad);
+            const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - 
+                     Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+            
+            let bearing = Math.atan2(y, x) * 180 / Math.PI;
+            return (bearing + 360) % 360;
+        }
+
+        // GPS設定の最適化
+        function getOptimizedGPSOptions() {
+            return {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            };
+        }
+
+        // 方位角の平滑化
+        function smoothHeading(newHeading) {
+            headingBuffer.push(newHeading);
+            if (headingBuffer.length > 3) {
+                headingBuffer.shift();
+            }
+
+            if (headingBuffer.length > 1) {
+                const lastHeading = headingBuffer[headingBuffer.length - 2];
+                const diff = Math.abs(newHeading - lastHeading);
+                const adjustedDiff = Math.min(diff, 360 - diff);
+                
+                if (adjustedDiff > 30) {
+                    return newHeading;
+                }
+            }
+
+            let sumX = 0, sumY = 0;
+            headingBuffer.forEach(heading => {
+                sumX += Math.cos(heading * Math.PI / 180);
+                sumY += Math.sin(heading * Math.PI / 180);
+            });
+            
+            let avgHeading = Math.atan2(sumY, sumX) * 180 / Math.PI;
+            return (avgHeading + 360) % 360;
+        }
+
+        // 速度の平滑化
+        function smoothSpeed(newSpeed) {
+            speedBuffer.push(newSpeed);
+            if (speedBuffer.length > 2) {
+                speedBuffer.shift();
+            }
+            return speedBuffer.reduce((sum, speed) => sum + speed, 0) / speedBuffer.length;
+        }
+
+        // カスタムマーカーのSVGを生成
+        function createCustomMarkerSVG(distance, speed) {
+            const distanceText = distance.toFixed(1);
+            const speedText = Math.round(speed);
+            
+            return `
+                <svg width="60" height="80" viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="30" cy="40" r="28" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
+                    <circle cx="30" cy="40" r="22" fill="rgba(255,255,255,0.9)" stroke="#4285F4" stroke-width="1"/>
+                    <path d="M30 15 L25 25 L35 25 Z" fill="#4285F4"/>
+                    <text x="30" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#333">
+                        ${distanceText}km
+                    </text>
+                    <text x="30" y="47" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#4285F4">
+                        ${speedText}
+                    </text>
+                    <text x="30" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="6" fill="#666">
+                        km/h
+                    </text>
+                </svg>
+            `;
+        }
+
+        // GPS位置情報をサーバーに送信
+        async function sendGPSData(position) {
+            try {
+                const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+                const userData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_DATA) || '{}');
+
+                const gpsData = {
+                    vehicleId: userData.vehicleId || currentOperation.vehicleId,
+                    operationId: currentOperation.id,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    altitude: position.coords.altitude,
+                    speedKmh: position.coords.speed ? position.coords.speed * 3.6 : currentSpeed,
+                    heading: currentHeading,
+                    accuracyMeters: position.coords.accuracy,
+                    timestamp: new Date().toISOString()
+                };
+
+                // 実際のAPI呼び出し（開発中はコメントアウト）
+                /*
+                const response = await fetch(`${API_BASE_URL}/gps/log`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(gpsData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('GPS データの送信に失敗しました');
+                }
+                */
+
+                console.log('GPS データ送信:', gpsData);
+                
+            } catch (error) {
+                console.error('GPS データ送信エラー:', error);
+                // エラーが発生してもGPS記録は継続
+            }
+        }
+
+        // 位置情報の取得と表示
+        function initializeLocation() {
+            if (!navigator.geolocation) {
+                showToast('このデバイスは位置情報をサポートしていません');
+                document.getElementById('mapLoading').innerHTML = '<div>位置情報が利用できません</div>';
+                return;
+            }
+
+            const options = getOptimizedGPSOptions();
+
+            // 初回位置取得
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    currentPosition = position;
+                    previousPosition = position;
+                    currentSpeed = position.coords.speed ? position.coords.speed * 3.6 : 0;
+                    
+                    if (position.coords.heading !== null && position.coords.heading !== undefined) {
+                        currentHeading = position.coords.heading;
+                        lastValidHeading = currentHeading;
+                    }
+                    
+                    initializeMap(position.coords.latitude, position.coords.longitude);
+                    updateLocationInfo(position);
+                    
+                    // 初期位置をパスに追加
+                    pathCoordinates.push({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    });
+                    
+                    // GPS データを送信
+                    sendGPSData(position);
+                    
+                    console.log('初期位置取得完了:', position.coords);
+                },
+                (error) => {
+                    console.error('位置情報取得エラー:', error);
+                    // エラー時は大阪の座標をデフォルトとして使用
+                    const defaultLat = 34.6937;
+                    const defaultLng = 135.5023;
+                    initializeMap(defaultLat, defaultLng);
+                    showToast('位置情報の取得に失敗しました。デフォルト位置を表示します。');
+                },
+                options
+            );
+
+            // 継続的な位置監視
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const now = Date.now();
+                    
+                    if (previousPosition) {
+                        const distance = calculateDistance(
+                            previousPosition.coords.latitude,
+                            previousPosition.coords.longitude,
+                            position.coords.latitude,
+                            position.coords.longitude
+                        );
+                        
+                        const rawSpeed = position.coords.speed ? position.coords.speed * 3.6 : 0;
+                        currentSpeed = smoothSpeed(rawSpeed);
+                        
+                        if (distance > 0.001) { // 1m以上の移動
+                            totalDistance += distance;
+                            document.getElementById('travelDistance').textContent = 
+                                `${totalDistance.toFixed(1)} km`;
+
+                            console.log(`移動検出: ${(distance * 1000).toFixed(1)}m, 現在速度: ${currentSpeed.toFixed(1)}km/h`);
+
+                            if (currentSpeed >= minimumSpeedForHeading) {
+                                let newHeading = currentHeading;
+                                
+                                if (position.coords.heading !== null && position.coords.heading !== undefined && position.coords.heading >= 0) {
+                                    newHeading = position.coords.heading;
+                                    console.log(`GPS方位使用: ${newHeading.toFixed(1)}°`);
+                                } else {
+                                    newHeading = calculateBearing(
+                                        previousPosition.coords.latitude,
+                                        previousPosition.coords.longitude,
+                                        position.coords.latitude,
+                                        position.coords.longitude
+                                    );
+                                    console.log(`計算方位使用: ${newHeading.toFixed(1)}°`);
+                                }
+                                
+                                const oldHeading = currentHeading;
+                                currentHeading = smoothHeading(newHeading);
+                                lastValidHeading = currentHeading;
+                                
+                                console.log(`方位更新: ${oldHeading.toFixed(1)}° → ${currentHeading.toFixed(1)}°`);
+                            } else if (currentSpeed < minimumSpeedForHeading) {
+                                currentHeading = lastValidHeading;
+                                console.log(`低速時方位維持: ${currentHeading.toFixed(1)}°`);
+                            }
+                            
+                            pathCoordinates.push({
+                                lat: position.coords.latitude,
+                                lng: position.coords.longitude
+                            });
+                            updatePath();
+                        }
+                    }
+                    
+                    previousPosition = currentPosition;
+                    currentPosition = position;
+                    
+                    requestAnimationFrame(() => {
+                        updateMapLocation(position.coords.latitude, position.coords.longitude);
+                    });
+                    
+                    updateLocationInfo(position);
+                    updateHeadingIndicator();
+                    
+                    // GPS データを定期的に送信（5秒間隔）
+                    if (now - lastHeadingUpdate > 5000) {
+                        sendGPSData(position);
+                        lastHeadingUpdate = now;
+                    }
+                },
+                (error) => {
+                    console.error('位置監視エラー:', error);
+                    setTimeout(() => {
+                        console.log('GPS再接続を試行します...');
+                    }, 2000);
+                },
+                options
+            );
+        }
+
+        // Googleマップの初期化（WebGLベクターマップ使用）
+        function initializeMap(lat, lng) {
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: lat, lng: lng },
+                zoom: 18,
+                renderingType: google.maps.RenderingType.VECTOR,
+                heading: currentHeading,
+                tilt: 0,
+                mapId: "DEMO_MAP_ID",
+                disableDefaultUI: true,
+                zoomControl: true,
+                gestureHandling: 'greedy',
+                tiltInteractionEnabled: true,
+                headingInteractionEnabled: true
+            });
+
+            map.addListener('renderingtype_changed', () => {
+                const renderingType = map.getRenderingType();
+                isVectorMap = (renderingType === google.maps.RenderingType.VECTOR);
+                document.getElementById('mapTypeIndicator').textContent = 
+                    `マップ: ${isVectorMap ? 'VECTOR' : 'RASTER'}`;
+                
+                if (!isVectorMap) {
+                    showToast('警告: ベクターマップが利用できません。ヘッドアップ表示は制限されます。');
+                } else {
+                    showToast('ベクターマップが有効になりました。ヘッドアップ表示が利用可能です。');
+                }
+                console.log('マップレンダリングタイプ:', renderingType);
+            });
+
+            isVectorMap = true;
+            document.getElementById('mapTypeIndicator').textContent = 'マップ: VECTOR（初期化中）';
+            
+            setTimeout(() => {
+                const renderingType = map.getRenderingType();
+                isVectorMap = (renderingType === google.maps.RenderingType.VECTOR);
+                document.getElementById('mapTypeIndicator').textContent = 
+                    `マップ: ${isVectorMap ? 'VECTOR' : 'RASTER'}`;
+                console.log('初期マップレンダリングタイプ:', renderingType);
+            }, 1000);
+
+            const markerSVG = createCustomMarkerSVG(totalDistance, currentSpeed);
+            const markerIcon = {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
+                scaledSize: new google.maps.Size(60, 80),
+                anchor: new google.maps.Point(30, 40)
+            };
+
+            currentLocationMarker = new google.maps.Marker({
+                position: { lat: lat, lng: lng },
+                map: map,
+                title: '現在位置',
+                icon: markerIcon,
+                zIndex: 1000
+            });
+
+            pathPolyline = new google.maps.Polyline({
+                path: pathCoordinates,
+                geodesic: true,
+                strokeColor: '#FF0000',
+                strokeOpacity: 1.0,
+                strokeWeight: 4,
+                zIndex: 999
+            });
+            pathPolyline.setMap(map);
+
+            document.getElementById('mapLoading').style.display = 'none';
+            showToast('WebGLベクターマップを初期化しました');
+            
+            console.log('マップ初期化完了:', { lat, lng, heading: currentHeading, isVector: isVectorMap });
+        }
+
+        // マップ上の位置更新
+        function updateMapLocation(lat, lng) {
+            if (map && currentLocationMarker) {
+                const newPosition = { lat: lat, lng: lng };
+                
+                currentLocationMarker.setPosition(newPosition);
+                
+                if (Math.random() < 0.3) {
+                    const markerSVG = createCustomMarkerSVG(totalDistance, currentSpeed);
+                    const markerIcon = {
+                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
+                        scaledSize: new google.maps.Size(60, 80),
+                        anchor: new google.maps.Point(30, 40)
+                    };
+                    currentLocationMarker.setIcon(markerIcon);
+                }
+                
+                map.panTo(newPosition);
+                
+                const currentRenderingType = map.getRenderingType();
+                const isCurrentlyVector = (currentRenderingType === google.maps.RenderingType.VECTOR);
+                
+                if (isCurrentlyVector && currentHeading !== null && !isNaN(currentHeading)) {
+                    console.log(`ヘッドアップ回転実行: ${currentHeading.toFixed(1)}° (レンダリング: ${currentRenderingType})`);
+                    map.setHeading(currentHeading);
+                } else {
+                    console.log(`回転スキップ: ベクター=${isCurrentlyVector}, 方位=${currentHeading}, レンダリング=${currentRenderingType}`);
+                }
+            }
+        }
+
+        // 走行軌跡の更新
+        function updatePath() {
+            if (pathPolyline) {
+                pathPolyline.setPath(pathCoordinates);
+            }
+        }
+
+        // 方位インジケーターの更新
+        function updateHeadingIndicator() {
+            const directions = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
+            const directionIndex = Math.round(currentHeading / 45) % 8;
+            document.getElementById('headingIndicator').textContent = 
+                `方位: ${Math.round(currentHeading)}° (${directions[directionIndex]})`;
+        }
+
+        // 位置情報の表示更新
+        function updateLocationInfo(position) {
+            const lat = position.coords.latitude.toFixed(6);
+            const lng = position.coords.longitude.toFixed(6);
+            const accuracy = Math.round(position.coords.accuracy);
+            const speed = currentSpeed.toFixed(1);
+            const gpsHeading = position.coords.heading !== null ? position.coords.heading.toFixed(1) : '--';
+            
+            document.getElementById('locationInfo').innerHTML = 
+                `緯度: ${lat}<br>経度: ${lng}<br>精度: ${accuracy}m<br>速度: ${speed}km/h<br>GPS方位: ${gpsHeading}°`;
+        }
+
+        // ボタンクリック処理
+        async function handleButtonClick(action) {
+            const button = event.target;
+            if (button.classList.contains('disabled')) {
+                showToast('この操作は現在利用できません');
+                return;
+            }
+
+            showToast(`${action}を記録しました`);
+            
+            try {
+                // 運行記録APIに送信
+                const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+                const userData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_DATA) || '{}');
+                
+                const operationData = {
+                    operationId: currentOperation.id,
+                    action: action,
+                    timestamp: new Date().toISOString(),
+                    location: currentPosition ? {
+                        latitude: currentPosition.coords.latitude,
+                        longitude: currentPosition.coords.longitude
+                    } : null
+                };
+
+                // 実際のAPI呼び出し（開発中はコメントアウト）
+                /*
+                const response = await fetch(`${API_BASE_URL}/operations/action`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(operationData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('運行記録の送信に失敗しました');
+                }
+                */
+
+                console.log('運行記録送信:', operationData);
+
+            } catch (error) {
+                console.error('運行記録送信エラー:', error);
+                showToast('記録の送信に失敗しました');
+            }
+            
+            // ボタンの状態を更新
+            if (action === '積込場所到着') {
+                document.getElementById('btnLoad').classList.remove('enabled');
+                document.getElementById('btnLoad').classList.add('disabled');
+                document.getElementById('btnUnload').classList.remove('disabled');
+                document.getElementById('btnUnload').classList.add('enabled');
+                document.getElementById('statusIndicator').textContent = '積荷確認中';
+            } else if (action === '積降場所到着') {
+                document.getElementById('btnUnload').classList.remove('enabled');
+                document.getElementById('btnUnload').classList.add('disabled');
+                document.getElementById('btnLoad').classList.remove('disabled');
+                document.getElementById('btnLoad').classList.add('enabled');
+                document.getElementById('statusIndicator').textContent = '空車運行中';
+            }
+        }
+
+        // ログアウト処理
+        function handleLogout() {
+            if (confirm('ログアウトしますか？\n運行データは自動保存されます。')) {
+                // GPS監視を停止
+                if (watchId) {
+                    navigator.geolocation.clearWatch(watchId);
+                }
+
+                // 運行終了をサーバーに通知（開発中はコメントアウト）
+                /*
+                const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+                fetch(`${API_BASE_URL}/operations/${currentOperation.id}/end`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        endTime: new Date().toISOString(),
+                        totalDistance: totalDistance,
+                        finalLocation: currentPosition ? {
+                            latitude: currentPosition.coords.latitude,
+                            longitude: currentPosition.coords.longitude
+                        } : null
+                    })
+                }).catch(error => console.error('運行終了通知エラー:', error));
+                */
+
+                // ログアウト処理
+                localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+                const rememberLogin = localStorage.getItem(STORAGE_KEYS.REMEMBER_LOGIN);
+                if (rememberLogin !== 'true') {
+                    localStorage.removeItem(STORAGE_KEYS.USER_DATA);
+                }
+
+                showToast('ログアウトしました');
+                
+                setTimeout(() => {
+                    // ログイン画面に戻る（実際の運用では login.html に遷移）
+                    // window.location.href = 'login.html';
+                    alert('ログイン画面に戻ります（login.html）');
+                    window.location.reload();
+                }, 1500);
+            }
+        }
+
+        // トースト通知の表示
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // 運行開始処理
+        async function startOperation() {
+            try {
+                const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+                const userData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_DATA) || '{}');
+
+                const operationData = {
+                    vehicleId: userData.vehicleId,
+                    driverId: userData.id,
+                    startTime: new Date().toISOString(),
+                    startLocation: currentPosition ? {
+                        latitude: currentPosition.coords.latitude,
+                        longitude: currentPosition.coords.longitude
+                    } : null
+                };
+
+                // 実際のAPI呼び出し（開発中はコメントアウト）
+                /*
+                const response = await fetch(`${API_BASE_URL}/operations/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(operationData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('運行開始の登録に失敗しました');
+                }
+
+                const result = await response.json();
+                currentOperation.id = result.data.id;
+                */
+
+                // 開発中はダミーIDを設定
+                currentOperation.id = 'operation_' + Date.now();
+                currentOperation.vehicleId = userData.vehicleId;
+                currentOperation.driverId = userData.id;
+
+                console.log('運行開始:', currentOperation);
+                showToast('運行を開始しました');
+
+            } catch (error) {
+                console.error('運行開始エラー:', error);
+                showToast('運行開始の登録に失敗しました');
+            }
+        }
+
+        // 運行情報の取得
+        async function loadOperationInfo() {
+            try {
+                const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+                const userData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_DATA) || '{}');
+
+                // 実際のAPI呼び出し（開発中はコメントアウト）
+                /*
+                const response = await fetch(`${API_BASE_URL}/operations/current/${userData.id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.data) {
+                        // 既存の運行がある場合
+                        currentOperation = result.data;
+                        startTime = new Date(currentOperation.startTime);
+                        
+                        // 運行情報を画面に反映
+                        updateOperationDisplay(result.data);
+                        showToast('前回の運行を継続します');
+                        return;
+                    }
+                }
+                */
+
+                // 開発中はダミーデータを設定
+                const dummyOperationInfo = {
+                    loadingLocation: '○○建設資材置場',
+                    unloadingLocation: '△△工事現場',
+                    cargoInfo: '砂利 12t',
+                    clientName: '○○建設株式会社'
+                };
+
+                updateOperationDisplay(dummyOperationInfo);
+
+                // 新規運行開始
+                await startOperation();
+
+            } catch (error) {
+                console.error('運行情報取得エラー:', error);
+                // エラーでも運行は開始
+                await startOperation();
+            }
+        }
+
+        // 運行情報の画面更新
+        function updateOperationDisplay(operationData) {
+            if (operationData.loadingLocation) {
+                document.getElementById('loadingLocation').textContent = operationData.loadingLocation;
+            }
+            if (operationData.unloadingLocation) {
+                document.getElementById('unloadingLocation').textContent = operationData.unloadingLocation;
+            }
+            if (operationData.cargoInfo) {
+                document.getElementById('cargoInfo').textContent = operationData.cargoInfo;
+            }
+        }
+
+        // 初期化
+        function initialize() {
+            updateTime();
+            setInterval(updateTime, 1000);
+            
+            // 日付表示の設定
+            const now = new Date();
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('dateDisplay').textContent = 
+                now.toLocaleDateString('ja-JP', options);
+            
+            // 認証チェック
+            const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+            const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+            
+            if (!token || !userData) {
+                alert('認証が必要です。ログイン画面に戻ります。');
+                window.location.href = 'login.html';
+                return;
+            }
+
+            console.log('認証OK:', JSON.parse(userData));
+            
+            // 運行情報を読み込み
+            loadOperationInfo();
+            
+            // 位置情報初期化
+            initializeLocation();
+        }
+
+        // Google Maps API の読み込み完了後に初期化
+        function initMap() {
+            initialize();
+        }
+
+        // ページ読み込み時の処理
+        window.addEventListener('load', function() {
+            // Google Maps API がまだ読み込まれていない場合
+            if (typeof google === 'undefined') {
+                // WebGL対応のベータ版APIを読み込み
+                const script = document.createElement('script');
+                script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY&callback=initMap&v=weekly';
+                script.async = true;
+                script.defer = true;
+                document.head.appendChild(script);
+                
+                // API key が設定されていない場合の代替処理
+                script.onerror = function() {
+                    document.getElementById('mapLoading').innerHTML = 
+                        '<div style="color: #ff6b6b;">Google Maps API の読み込みに失敗しました<br><small>本番環境では有効なAPIキーとMap IDが必要です</small></div>';
+                    initialize();
+                };
+            } else {
+                initMap();
+            }
+        });
+
+        // ページを離れる際の位置監視停止
+        window.addEventListener('beforeunload', function() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        });
+
+        // バックグラウンド処理の継続（PWA対応時に使用）
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                console.log('アプリがバックグラウンドに移行しました');
+                // バックグラウンドでもGPS記録を継続
+            } else {
+                console.log('アプリがフォアグラウンドに復帰しました');
+                // フォアグラウンド復帰時の処理
+            }
+        });
+
+        // エラーハンドリング
+        window.addEventListener('error', function(event) {
+            console.error('アプリケーションエラー:', event.error);
+            showToast('アプリケーションエラーが発生しました');
+        });
+
+        // 開発用デバッグ情報
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log('=== ダンプ運行記録アプリ - デバッグモード ===');
+            console.log('API Base URL:', API_BASE_URL);
+            console.log('現在時刻:', new Date().toISOString());
+            
+            // デバッグ用の追加情報をコンソールに出力
+            setInterval(() => {
+                if (currentPosition) {
+                    console.log('GPS Status:', {
+                        latitude: currentPosition.coords.latitude,
+                        longitude: currentPosition.coords.longitude,
+                        speed: currentSpeed.toFixed(2) + ' km/h',
+                        heading: currentHeading.toFixed(1) + '°',
+                        distance: totalDistance.toFixed(3) + ' km',
+                        accuracy: currentPosition.coords.accuracy + 'm'
+                    });
+                }
+            }, 10000); // 10秒間隔でデバッグ情報を出力
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ダンプ運行記録アプリ - 運行中</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            width: 390px;
+            height: 844px;
+            max-width: 100vw;
+            max-height: 100vh;
+            margin: 0 auto;
+            background: white;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c5aa0, #1e3d6f);
+            color: white;
+            padding: 20px 20px 10px;
+            text-align: center;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .status-indicator {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            display: inline-block;
+            animation: pulse 2s infinite;
+            min-width: 120px;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .time-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .time-display {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .date-display {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+
+        .map-container {
+            height: 220px;
+            position: relative;
+            background: #e0e0e0;
+            border-bottom: 2px solid #ddd;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .heading-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .map-type-indicator {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255,0,0,0.8);
+            color: white;
+            padding: 5px 8px;
+            border-radius: 5px;
+            font-size: 10px;
+            z-index: 1000;
+        }
+
+        .controls-section {
+            padding: 15px;
+            height: calc(100% - 220px - 60px - 80px);
+            overflow-y: auto;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #2c5aa0;
+        }
+
+        .info-card.distance {
+            border-left-color: #FF5722;
+        }
+
+        .info-label {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .action-button {
+            padding: 16px 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .action-button.enabled {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        .action-button.enabled:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        .action-button.disabled {
+            background: #e0e0e0;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        .action-button.special {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+            color: white;
+            box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+        }
+
+        .action-button.special:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(255, 152, 0, 0.4);
+        }
+
+        .bottom-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .gps-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .gps-icon {
+            width: 16px;
+            height: 16px;
+            background: #4CAF50;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .gps-icon::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .location-info {
+            font-size: 11px;
+            color: #888;
+            text-align: right;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        .logout-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-button:hover {
+            background: rgba(255,255,255,0.3);
+        }

@@ -1,13 +1,18 @@
-// backend/src/app.ts
+// backend/src/app.ts - 修正版: HTTPS対応強化版
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
+const rateLimit: any = require('express-rate-limit');
 import path from 'path';
+import mobileRoutes from './routes/mobile';
 
 const app = express();
+
+// モバイルルート設定
+app.use('/api/mobile', mobileRoutes);  // フルパス
+app.use('/api/m', mobileRoutes);       // エイリアス
 
 // 安全な設定読み込み
 let config: any;
@@ -17,7 +22,7 @@ try {
 } catch (error) {
   console.warn('Config not found, using defaults:', (error instanceof Error ? error.message : String(error)));
   config = {
-    CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    CORS_ORIGIN: process.env.CORS_ORIGIN || 'https://10.1.119.244:3001',
     NODE_ENV: process.env.NODE_ENV || 'development'
   };
 }
@@ -35,37 +40,69 @@ try {
   logger = console;
 }
 
-// セキュリティミドルウェア
+// セキュリティミドルウェア（HTTPS対応強化）
 try {
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
+        imgSrc: ["'self'", "data:", "https:", "http:"],
+        fontSrc: ["'self'", "data:", "https:", "http:"],
+        connectSrc: ["'self'", "https:", "http:"],
+        frameSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        workerSrc: ["'self'", "blob:"],
+        childSrc: ["'self'"],
+        formAction: ["'self'"]
       },
     },
+    crossOriginOpenerPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    // HTTPS強制設定（本番環境用）
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    }
   }));
 } catch (error) {
   console.warn('Helmet setup failed:', error instanceof Error ? error.message : String(error));
 }
 
-// CORS設定
+// CORS設定（HTTPS対応）
 try {
   app.use(cors({
-    origin: config.CORS_ORIGIN || 'http://localhost:3000',
+    origin: [
+      'https://10.1.119.244:3001',
+      'http://10.1.119.244:3001', 
+      'https://localhost:3001',
+      'http://localhost:3001',
+      'https://10.1.119.244:8443',
+      'http://10.1.119.244:8000'
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Type', 'Authorization']
   }));
 } catch (error) {
   console.warn('CORS setup failed:', error instanceof Error ? error.message : String(error));
 }
 
+// プリフライトリクエスト対応
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
+
 // 基本ミドルウェア
 try {
-  // Cast to unknown first to avoid incompatible @types/express versions causing a direct cast error.
   app.use(compression() as unknown as express.RequestHandler);
 } catch (error) {
   console.warn(
@@ -99,11 +136,11 @@ try {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// レート制限（安全版）
+// レート制限（HTTPS対応）
 try {
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15分
-    max: 100, // 最大100リクエスト
+    max: 1000, // HTTPS環境では制限を緩和
     message: {
       success: false,
       message: 'レート制限に達しました。しばらくしてから再試行してください。',
@@ -111,6 +148,7 @@ try {
     },
     standardHeaders: true,
     legacyHeaders: false,
+    trustProxy: true // HTTPSプロキシ対応
   });
   app.use('/api/', limiter as unknown as express.RequestHandler);
 } catch (error) {
@@ -167,7 +205,8 @@ app.get('/health', (req, res) => {
     message: 'Server is running',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    environment: config.NODE_ENV || 'unknown'
+    environment: config.NODE_ENV || 'unknown',
+    secure: req.secure || req.headers['x-forwarded-proto'] === 'https'
   });
 });
 
@@ -177,9 +216,11 @@ app.get('/', (req, res) => {
     name: 'ダンプ運行記録システム API',
     version: '1.0.0',
     status: 'running',
+    secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
     endpoints: {
       health: '/health',
       api: '/api/v1',
+      auth: '/api/v1/auth',
       docs: '/api/docs'
     },
     timestamp: new Date().toISOString()
@@ -202,7 +243,8 @@ try {
     res.status(404).json({
       success: false,
       message: `要求されたリソースが見つかりません: ${req.originalUrl}`,
-      error: 'NOT_FOUND'
+      error: 'NOT_FOUND',
+      timestamp: new Date().toISOString()
     });
   });
   
@@ -212,7 +254,8 @@ try {
     res.status(500).json({
       success: false,
       message: 'サーバー内部エラーが発生しました',
-      error: 'INTERNAL_SERVER_ERROR'
+      error: 'INTERNAL_SERVER_ERROR',
+      timestamp: new Date().toISOString()
     });
   });
 }

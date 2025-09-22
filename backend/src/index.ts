@@ -1,4 +1,4 @@
-// backend/src/index.ts - Swaggerアノテーション完全版
+// backend/src/index.ts - 修正版: authRoutes統合完全版
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -11,12 +11,10 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import fs from 'fs';
+import authRoutes from './routes/authRoutes';
 
 // 環境変数読み込み
 dotenv.config();
-
-// ルートのプレースホルダー
-const apiRouter = express.Router();
 
 const app = express();
 const HOST = process.env.HOST || '0.0.0.0';
@@ -69,8 +67,8 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: '*',
-  credentials: false,
+  origin: ['https://10.1.119.244:3001', 'http://10.1.119.244:3001', 'http://localhost:3001'],
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Type', 'Authorization']
@@ -151,51 +149,21 @@ const swaggerOptions = {
             isActive: { type: 'boolean', example: true }
           }
         },
-        Vehicle: {
+        LoginRequest: {
           type: 'object',
+          required: ['username', 'password'],
           properties: {
-            id: { type: 'string', example: 'vehicle-123' },
-            plateNumber: { type: 'string', example: 'D-001' },
-            vehicleType: { type: 'string', example: 'ダンプトラック' },
-            model: { type: 'string', example: 'いすゞ ギガ' },
-            status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'MAINTENANCE'] }
+            username: { type: 'string', example: 'driver001' },
+            password: { type: 'string', example: 'password123' },
+            rememberMe: { type: 'boolean', example: false }
           }
         },
-        Operation: {
+        LoginResponse: {
           type: 'object',
           properties: {
-            id: { type: 'string', example: 'operation-123' },
-            operationNumber: { type: 'string', example: 'OP-2025-001' },
-            vehicleId: { type: 'string', example: 'vehicle-123' },
-            driverId: { type: 'string', example: 'user-123' },
-            status: { type: 'string', enum: ['PLANNING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] }
-          }
-        },
-        Location: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', example: 'location-123' },
-            name: { type: 'string', example: '積込場所A' },
-            address: { type: 'string', example: '東京都千代田区...' },
-            locationType: { type: 'string', enum: ['LOADING', 'UNLOADING', 'STORAGE', 'MAINTENANCE'] }
-          }
-        },
-        Item: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', example: 'item-123' },
-            name: { type: 'string', example: '砂利' },
-            category: { type: 'string', example: '建設資材' },
-            unit: { type: 'string', example: 'トン' },
-            hazardous: { type: 'boolean', example: false }
-          }
-        },
-        ApiResponse: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'object' },
-            message: { type: 'string' },
+            success: { type: 'boolean', example: true },
+            token: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            user: { '$ref': '#/components/schemas/User' },
             timestamp: { type: 'string', format: 'date-time' }
           }
         },
@@ -207,29 +175,6 @@ const swaggerOptions = {
             error: { type: 'string', example: 'ERROR_CODE' },
             timestamp: { type: 'string', format: 'date-time' }
           }
-        },
-        LoginRequest: {
-          type: 'object',
-          required: ['username', 'password'],
-          properties: {
-            username: { type: 'string', example: 'driver001' },
-            password: { type: 'string', example: 'password123' }
-          }
-        },
-        LoginResponse: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                token: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
-                user: { '$ref': '#/components/schemas/User' }
-              }
-            },
-            message: { type: 'string', example: 'ログインに成功しました' },
-            timestamp: { type: 'string', format: 'date-time' }
-          }
         }
       }
     },
@@ -237,7 +182,7 @@ const swaggerOptions = {
       bearerAuth: []
     }]
   },
-  apis: [__filename] // 現在のファイルからSwaggerコメントを読み込み
+  apis: [__filename]
 };
 
 // Swagger設定（安全な実装）
@@ -251,82 +196,152 @@ try {
 } catch (error: unknown) {
   const errorMessage = error instanceof Error ? error.message : String(error);
   console.warn('⚠️ Swagger documentation failed to load:', errorMessage);
-  console.warn('⚠️ API will run without documentation');
 }
 
-// Swagger UI設定（型安全・シンプル版）
+// Swagger UI設定
 if (swaggerEnabled && swaggerSpec) {
   app.use('/docs', swaggerUi.serve);
-  
-  // 型安全なSwagger UI設定
   app.get('/docs', swaggerUi.setup(swaggerSpec, {
     customCss: `
       .swagger-ui .topbar { display: none }
       .swagger-ui .info .title { color: #1f2937; }
-      .swagger-ui .info .description { color: #374151; }
-      .swagger-ui .scheme-container { background: #f3f4f6; padding: 10px; border-radius: 4px; }
     `,
     customSiteTitle: 'Dump Tracker API Documentation',
     swaggerOptions: {
       docExpansion: 'list',
       filter: true,
-      showRequestHeaders: true,
-      supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
-      validatorUrl: null,
       tryItOutEnabled: true
-    },
-    explorer: true
+    }
   }));
   
-  // Swagger JSON（完全CORS対応）
   app.get('/api-docs', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Authorization');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
     res.send(swaggerSpec);
   });
 }
 
-/**
- * @swagger
- * /:
- *   get:
- *     summary: API情報取得
- *     description: APIサーバーの基本情報を取得します
- *     tags: [System]
- *     responses:
- *       200:
- *         description: API情報
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 name:
- *                   type: string
- *                   example: Dump Tracker API Server
- *                 version:
- *                   type: string
- *                   example: 1.0.0
- *                 status:
- *                   type: string
- *                   example: running
- */
-apiRouter.get('/reports', (req, res) => {
+// ===== ★ 重要: authRoutesの正しい使用 ★ =====
+app.use('/api/v1/auth', authRoutes);
+
+// ルートエンドポイント
+app.get('/', (req, res) => {
+  res.json({ 
+    name: 'Dump Tracker API Server',
+    version: '1.0.0',
+    status: 'running',
+    environment: process.env.NODE_ENV || 'development',
+    protocol: PROTOCOL,
+    secure: useHttps,
+    endpoints: {
+      health: '/health',
+      api: '/api/v1',
+      auth: '/api/v1/auth',
+      documentation: swaggerEnabled ? '/docs' : null
+    },
+    features: [
+      '🚛 車両管理',
+      '👥 ユーザー管理', 
+      '📍 GPS追跡',
+      '📊 運行記録',
+      '📄 レポート生成',
+      '🔧 点検管理',
+      '📦 品目管理',
+      '📍 場所管理'
+    ],
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ヘルスチェック
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    system: {
+      platform: process.platform,
+      nodeVersion: process.version,
+      protocol: PROTOCOL,
+      port: PORT,
+      secure: useHttps
+    },
+    services: {
+      swagger: swaggerEnabled,
+      auth: 'active',
+      database: 'pending',
+      api: 'active',
+      ssl: useHttps ? 'enabled' : 'disabled'
+    }
+  });
+});
+
+// APIルート
+const apiRouter = express.Router();
+
+// API情報エンドポイント
+apiRouter.get('/', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      apiVersion: '1.0.0',
+      protocol: PROTOCOL,
+      availableEndpoints: [
+        'GET /api/v1/health - ヘルスチェック',
+        'POST /api/v1/auth/login - ログイン',
+        'GET /api/v1/auth/me - 現在のユーザー情報',
+        'POST /api/v1/auth/logout - ログアウト',
+        'GET /api/v1/users - ユーザー一覧',
+        'GET /api/v1/vehicles - 車両一覧'
+      ],
+      documentation: swaggerEnabled ? '/docs' : 'Swagger documentation is disabled',
+      security: {
+        https: useHttps,
+        authentication: 'JWT Bearer Token required for most endpoints'
+      }
+    },
+    message: 'Dump Tracker API v1.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API ヘルスチェック
+apiRouter.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      secure: useHttps
+    },
+    message: 'API is running successfully'
+  });
+});
+
+// 他のAPIエンドポイント（501実装中）
+apiRouter.get('/users', (req, res) => {
   res.status(501).json({
     success: false,
-    message: 'レポート機能は実装中です',
+    message: 'ユーザー管理機能は実装中です',
     error: 'NOT_IMPLEMENTED',
     timestamp: new Date().toISOString()
   });
 });
 
-// APIルーター登録
+apiRouter.get('/vehicles', (req, res) => {
+  res.status(501).json({
+    success: false,
+    message: '車両管理機能は実装中です',
+    error: 'NOT_IMPLEMENTED',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// APIルート登録
 app.use('/api/v1', apiRouter);
 
 // 静的ファイル配信（本番環境用）
@@ -337,16 +352,15 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-// エラーハンドリング（完全型安全）
+// エラーハンドリング
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('❌ Unhandled error:', err);
+  console.error('⛔ Unhandled error:', err);
   
   let statusCode = 500;
   let message = 'サーバーエラーが発生しました';
   let errorCode = 'INTERNAL_SERVER_ERROR';
   let stack: string | undefined;
 
-  // 型安全なエラー処理
   if (err instanceof Error) {
     message = err.message;
     stack = err.stack;
@@ -356,30 +370,15 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
     } else if ('status' in err && typeof err.status === 'number') {
       statusCode = err.status;
     }
-    
-    if ('code' in err && typeof err.code === 'string') {
-      errorCode = err.code;
-    }
-  } else if (typeof err === 'object' && err !== null) {
-    const errorObj = err as Record<string, any>;
-    message = errorObj.message || String(err);
-    statusCode = errorObj.statusCode || errorObj.status || 500;
-    errorCode = errorObj.code || 'INTERNAL_SERVER_ERROR';
-  } else {
-    message = String(err);
   }
   
-  // レスポンス送信（安全な実装）
   try {
     res.status(statusCode).json({
       success: false,
       message,
       error: errorCode,
       timestamp: new Date().toISOString(),
-      ...(process.env.NODE_ENV === 'development' && { 
-        stack,
-        details: err 
-      })
+      ...(process.env.NODE_ENV === 'development' && { stack })
     });
   } catch (responseError) {
     console.error('Failed to send error response:', responseError);
@@ -406,7 +405,8 @@ app.use('*', (req, res) => {
       'GET /health (ヘルスチェック)', 
       'GET /docs (API文書)',
       'GET /api/v1 (API エンドポイント一覧)',
-      'GET /api/v1/health (API ヘルスチェック)'
+      'POST /api/v1/auth/login (ログイン)',
+      'GET /api/v1/auth/me (ユーザー情報)'
     ],
     documentation: swaggerEnabled ? `${PROTOCOL}://10.1.119.244:${PORT}/docs` : null,
     timestamp: new Date().toISOString()
@@ -431,6 +431,7 @@ server.listen(PORT, HOST, () => {
   }
   console.log(`🏥 Health Check: ${PROTOCOL}://10.1.119.244:${PORT}/health`);
   console.log(`🔗 API Base URL: ${PROTOCOL}://10.1.119.244:${PORT}/api/v1`);
+  console.log(`🔐 Auth Endpoints: ${PROTOCOL}://10.1.119.244:${PORT}/api/v1/auth/*`);
   console.log('');
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 Protocol: ${PROTOCOL.toUpperCase()}`);
@@ -443,10 +444,10 @@ server.listen(PORT, HOST, () => {
   console.log('   - GET /health     (Health Check)');
   if (swaggerEnabled) {
     console.log('   - GET /docs       (API Documentation)');
-    console.log('   - GET /api-docs   (Swagger JSON)');
   }
   console.log('   - GET /api/v1     (API Endpoints List)');
-  console.log('   - GET /api/v1/*   (REST API)');
+  console.log('   - POST /api/v1/auth/login  (User Login)');
+  console.log('   - GET /api/v1/auth/me      (Current User)');
   console.log('');
   if (useHttps) {
     console.log('🔐 HTTPS証明書情報:');
@@ -459,24 +460,20 @@ server.listen(PORT, HOST, () => {
   console.log('============================================');
 });
 
-// プロセス終了処理（安全な実装）
+// プロセス終了処理
 const gracefulShutdown = (signal: string) => {
-  console.log('');
   console.log(`🛑 ${signal} received, shutting down gracefully`);
-  
   server.close((err) => {
     if (err) {
-      console.error('❌ Error during server shutdown:', err);
+      console.error('⛔ Error during server shutdown:', err);
       process.exit(1);
     }
-    
     console.log('✅ Server closed successfully');
     process.exit(0);
   });
   
-  // 強制終了のタイムアウト（10秒）
   setTimeout(() => {
-    console.error('❌ Could not close connections in time, forcefully shutting down');
+    console.error('⛔ Could not close connections in time, forcefully shutting down');
     process.exit(1);
   }, 10000);
 };
@@ -484,527 +481,4 @@ const gracefulShutdown = (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// 未処理の例外キャッチ
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  gracefulShutdown('UNCAUGHT_EXCEPTION');
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION');
-});
-
 export default app;
-app.get('/', (req, res) => {
-  res.json({ 
-    name: 'Dump Tracker API Server',
-    version: '1.0.0',
-    status: 'running',
-    environment: process.env.NODE_ENV || 'development',
-    protocol: PROTOCOL,
-    secure: useHttps,
-    endpoints: {
-      health: '/health',
-      api: '/api/v1',
-      documentation: swaggerEnabled ? '/docs' : null,
-      apiDocs: swaggerEnabled ? '/api-docs' : null
-    },
-    features: [
-      '🚛 車両管理',
-      '👥 ユーザー管理', 
-      '📍 GPS追跡',
-      '📊 運行記録',
-      '📄 レポート生成',
-      '🔧 点検管理',
-      '📦 品目管理',
-      '📍 場所管理'
-    ],
-    links: {
-      documentation: swaggerEnabled ? `${PROTOCOL}://10.1.119.244:${PORT}/docs` : null,
-      apiHealth: `${PROTOCOL}://10.1.119.244:${PORT}/health`,
-      apiBase: `${PROTOCOL}://10.1.119.244:${PORT}/api/v1`
-    },
-    security: {
-      https: useHttps,
-      cors: 'enabled',
-      helmet: 'enabled',
-      compression: 'enabled'
-    },
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: ヘルスチェック
- *     description: サーバーの稼働状況とシステム情報を取得します
- *     tags: [System]
- *     responses:
- *       200:
- *         description: システム状況
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: ok
- *                 uptime:
- *                   type: number
- *                   example: 3600.5
- *                 memory:
- *                   type: object
- *                 services:
- *                   type: object
- */
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development',
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    system: {
-      platform: process.platform,
-      nodeVersion: process.version,
-      protocol: PROTOCOL,
-      port: PORT,
-      secure: useHttps
-    },
-    services: {
-      swagger: swaggerEnabled,
-      database: 'pending',
-      api: 'active',
-      ssl: useHttps ? 'enabled' : 'disabled'
-    }
-  });
-});
-
-/**
- * @swagger
- * /api/v1/health:
- *   get:
- *     summary: API ヘルスチェック
- *     description: API の稼働状況を確認します
- *     tags: [System]
- *     responses:
- *       200:
- *         description: API稼働中
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiResponse'
- */
-app.use('/api/v1/health', (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      secure: useHttps
-    },
-    message: 'API is running successfully'
-  });
-});
-
-/**
- * @swagger
- * /api/v1:
- *   get:
- *     summary: API エンドポイント一覧
- *     description: 利用可能なAPIエンドポイントの一覧を取得します
- *     tags: [System]
- *     responses:
- *       200:
- *         description: エンドポイント一覧
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiResponse'
- */
-app.get('/api/v1', (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      apiVersion: '1.0.0',
-      protocol: PROTOCOL,
-      availableEndpoints: [
-        'GET /api/v1/health - ヘルスチェック',
-        'POST /api/v1/auth/login - ログイン',
-        'GET /api/v1/users - ユーザー一覧',
-        'GET /api/v1/vehicles - 車両一覧',
-        'GET /api/v1/operations - 運行記録一覧',
-        'GET /api/v1/locations - 場所一覧',
-        'GET /api/v1/items - 品目一覧'
-      ],
-      documentation: swaggerEnabled ? '/docs' : 'Swagger documentation is disabled',
-      security: {
-        https: useHttps,
-        authentication: 'JWT Bearer Token required for most endpoints'
-      }
-    },
-    message: 'Dump Tracker API v1.0',
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /api/v1/auth/login:
- *   post:
- *     summary: ユーザーログイン
- *     description: ユーザー名とパスワードでログインし、JWTトークンを取得します
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/LoginRequest'
- *     responses:
- *       200:
- *         description: ログイン成功
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/LoginResponse'
- *       401:
- *         description: 認証失敗
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       501:
- *         description: 実装中
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-apiRouter.post('/auth/login', (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: '認証機能は実装中です',
-    error: 'NOT_IMPLEMENTED',
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /api/v1/users:
- *   get:
- *     summary: ユーザー一覧取得
- *     description: システム内の全ユーザーの一覧を取得します（管理者権限必要）
- *     tags: [Users]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: ページ番号
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 1ページあたりの件数
- *       - in: query
- *         name: role
- *         schema:
- *           type: string
- *           enum: [ADMIN, MANAGER, DRIVER]
- *         description: 役割でフィルター
- *     responses:
- *       200:
- *         description: ユーザー一覧
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/User'
- *       401:
- *         description: 認証が必要
- *       403:
- *         description: 権限不足
- *       501:
- *         description: 実装中
- */
-apiRouter.get('/users', (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: 'ユーザー管理機能は実装中です',
-    error: 'NOT_IMPLEMENTED',
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /api/v1/vehicles:
- *   get:
- *     summary: 車両一覧取得
- *     description: 登録されている車両の一覧を取得します
- *     tags: [Vehicles]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [ACTIVE, INACTIVE, MAINTENANCE]
- *         description: 車両ステータスでフィルター
- *       - in: query
- *         name: vehicleType
- *         schema:
- *           type: string
- *         description: 車両タイプでフィルター
- *     responses:
- *       200:
- *         description: 車両一覧
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Vehicle'
- *       401:
- *         description: 認証が必要
- *       501:
- *         description: 実装中
- */
-apiRouter.get('/vehicles', (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: '車両管理機能は実装中です',
-    error: 'NOT_IMPLEMENTED',
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /api/v1/operations:
- *   get:
- *     summary: 運行記録一覧取得
- *     description: 運行記録の一覧を取得します
- *     tags: [Operations]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [PLANNING, IN_PROGRESS, COMPLETED, CANCELLED]
- *         description: 運行ステータスでフィルター
- *       - in: query
- *         name: vehicleId
- *         schema:
- *           type: string
- *         description: 車両IDでフィルター
- *       - in: query
- *         name: startDate
- *         schema:
- *           type: string
- *           format: date
- *         description: 開始日でフィルター
- *       - in: query
- *         name: endDate
- *         schema:
- *           type: string
- *           format: date
- *         description: 終了日でフィルター
- *     responses:
- *       200:
- *         description: 運行記録一覧
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Operation'
- *       401:
- *         description: 認証が必要
- *       501:
- *         description: 実装中
- */
-apiRouter.get('/operations', (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: '運行管理機能は実装中です',
-    error: 'NOT_IMPLEMENTED',
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /api/v1/locations:
- *   get:
- *     summary: 場所一覧取得
- *     description: 積込・積下場所の一覧を取得します
- *     tags: [Locations]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: locationType
- *         schema:
- *           type: string
- *           enum: [LOADING, UNLOADING, STORAGE, MAINTENANCE]
- *         description: 場所タイプでフィルター
- *     responses:
- *       200:
- *         description: 場所一覧
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Location'
- *       401:
- *         description: 認証が必要
- *       501:
- *         description: 実装中
- */
-apiRouter.get('/locations', (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: '場所管理機能は実装中です',
-    error: 'NOT_IMPLEMENTED',
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /api/v1/items:
- *   get:
- *     summary: 品目一覧取得
- *     description: 積載可能な品目の一覧を取得します
- *     tags: [Items]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: category
- *         schema:
- *           type: string
- *         description: カテゴリでフィルター
- *       - in: query
- *         name: hazardous
- *         schema:
- *           type: boolean
- *         description: 危険物フラグでフィルター
- *     responses:
- *       200:
- *         description: 品目一覧
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Item'
- *       401:
- *         description: 認証が必要
- *       501:
- *         description: 実装中
- */
-apiRouter.get('/items', (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: '品目管理機能は実装中です',
-    error: 'NOT_IMPLEMENTED',
-    timestamp: new Date().toISOString()
-  });
-});
-
-/**
- * @swagger
- * /api/v1/reports:
- *   get:
- *     summary: レポート一覧取得
- *     description: 各種レポートと統計情報を取得します
- *     tags: [Reports]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: reportType
- *         schema:
- *           type: string
- *           enum: [DAILY, WEEKLY, MONTHLY, CUSTOM]
- *         description: レポートタイプ
- *       - in: query
- *         name: startDate
- *         schema:
- *           type: string
- *           format: date
- *         description: 対象期間開始日
- *       - in: query
- *         name: endDate
- *         schema:
- *           type: string
- *           format: date
- *         description: 対象期間終了日
- *     responses:
- *       200:
- *         description: レポート一覧
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     reportType:
- *                       type: string
- *                     period:
- *                       type: string
- *                     statistics:
- *                       type: object
- *       401:
- *         description: 認証が必要
- *       501:
- *         description: 実装中
- */
