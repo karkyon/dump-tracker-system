@@ -1,17 +1,10 @@
 // 認証関連
 export interface User {
   id: string;
-  username: string;
-  email: string;
+  userId: string;
   name: string;
-  role: 'ADMIN' | 'MANAGER' | 'DRIVER';
-  status?: 'active' | 'inactive';
-  isActive?: boolean;
-  createdAt: string;
-  lastLogin?: string;
-  lastLoginAt?: string;
-  employeeId?: string;
-  phone?: string;
+  role: string;
+  vehicleId: string;
 }
 
 // ログイン情報
@@ -125,8 +118,47 @@ export interface ReportFilter {
   status?: string[];
 }
 
+// 地図関連
+export interface Position {
+  coords: {
+    latitude: number;
+    longitude: number;
+    altitude?: number;
+    speed?: number;
+    heading?: number;
+    accuracy: number;
+  };
+  timestamp: number;
+}
+
+// 運行情報関連
+export interface OperationInfo {
+  id: string;
+  vehicleId: string;
+  driverId: string;
+  startTime: string;
+  endTime?: string;
+  loadingLocation?: string;
+  unloadingLocation?: string;
+  cargoInfo?: string;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  totalDistance?: number;
+}
+
+// GPS ログデータ
+export interface GPSLogData {
+  operationId: string;
+  latitude: number;
+  longitude: number;
+  altitude?: number | null;
+  speedKmh?: number | null;
+  heading?: number | null;
+  accuracyMeters?: number | null;
+  timestamp: string;
+}
+
 // API レスポンス
-export interface ApiResponse<T> {
+export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   message?: string;

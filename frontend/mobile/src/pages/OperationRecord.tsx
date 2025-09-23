@@ -1,25 +1,49 @@
+// frontend/mobile/src/pages/OperationRecord.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { 
   LogOut, 
+  Navigation, 
+  MapPin, 
+  Clock, 
   Truck,
   Package,
+  Play,
+  Square,
   Coffee,
   Fuel
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { mobileApi } from '../services/api';
-import { Position, OperationInfo } from '../types';
-import { GPS_CONFIG } from '../utils/constants';
-import { calculateDistance, calculateBearing, smoothHeading, smoothSpeed } from '../utils/helpers';
 
-// Google Maps types
+// Google Maps types (簡易版)
 declare global {
   interface Window {
     google: any;
     initMap: () => void;
   }
+}
+
+interface Position {
+  coords: {
+    latitude: number;
+    longitude: number;
+    altitude?: number;
+    speed?: number;
+    heading?: number;
+    accuracy: number;
+  };
+  timestamp: number;
+}
+
+interface OperationInfo {
+  id: string;
+  loadingLocation: string;
+  unloadingLocation: string;
+  cargoInfo: string;
+  vehicleId: string;
+  startTime: Date;
 }
 
 const OperationRecord: React.FC = () => {
@@ -54,8 +78,7 @@ const OperationRecord: React.FC = () => {
 
   // GPS更新頻度制御
   const lastGPSUpdate = useRef<number>(0);
-  const headingBufferRef = useRef<number[]>([]);
-  const speedBufferRef = useRef<number[]>([]);
+  const GPS_UPDATE_INTERVAL = 5000; // 5秒間隔でサーバーに送信
 
   // 認証チェック
   useEffect(() => {
@@ -72,6 +95,32 @@ const OperationRecord: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
+  }, []);
+
+  // 距離計算（ハーバーサイン公式）
+  const calculateDistance = useCallback((lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371; // 地球の半径（km）
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }, []);
+
+  // 方位角計算
+  const calculateBearing = useCallback((lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const lat1Rad = lat1 * Math.PI / 180;
+    const lat2Rad = lat2 * Math.PI / 180;
+    
+    const y = Math.sin(dLng) * Math.cos(lat2Rad);
+    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - 
+             Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+    
+    let bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360;
   }, []);
 
   // カスタムマーカーSVG生成
@@ -153,6 +202,7 @@ const OperationRecord: React.FC = () => {
     const newPosition = { lat, lng };
     markerRef.current.setPosition(newPosition);
     
+    // マーカーアイコン更新（パフォーマンス考慮で確率的に更新）
     if (Math.random() < 0.3) {
       const markerSVG = createCustomMarkerSVG(totalDistance, currentSpeed);
       const markerIcon = {
@@ -165,6 +215,7 @@ const OperationRecord: React.FC = () => {
     
     mapInstanceRef.current.panTo(newPosition);
     
+    // ヘッドアップ回転
     const renderingType = mapInstanceRef.current.getRenderingType();
     if (renderingType === window.google.maps.RenderingType.VECTOR && !isNaN(currentHeading)) {
       mapInstanceRef.current.setHeading(currentHeading);
@@ -198,6 +249,7 @@ const OperationRecord: React.FC = () => {
       console.log('GPS データ送信:', gpsData);
     } catch (error) {
       console.error('GPS データ送信エラー:', error);
+      // エラーが発生してもGPS記録は継続
     }
   }, [operationInfo, currentSpeed, currentHeading]);
 
@@ -210,11 +262,12 @@ const OperationRecord: React.FC = () => {
     }
 
     const options = {
-      enableHighAccuracy: GPS_CONFIG.HIGH_ACCURACY,
-      timeout: GPS_CONFIG.TIMEOUT,
-      maximumAge: GPS_CONFIG.MAXIMUM_AGE
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
     };
 
+    // 初回位置取得
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const pos = position as Position;
@@ -236,6 +289,7 @@ const OperationRecord: React.FC = () => {
       },
       (error) => {
         console.error('位置情報取得エラー:', error);
+        // エラー時は大阪の座標をデフォルトとして使用
         const defaultLat = 34.6937;
         const defaultLng = 135.5023;
         initializeMap(defaultLat, defaultLng);
@@ -244,6 +298,7 @@ const OperationRecord: React.FC = () => {
       options
     );
 
+    // 継続的な位置監視
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const now = Date.now();
@@ -258,13 +313,12 @@ const OperationRecord: React.FC = () => {
           );
           
           const rawSpeed = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
-          const smoothedSpeed = smoothSpeed(speedBufferRef.current, rawSpeed);
-          setCurrentSpeed(smoothedSpeed);
+          setCurrentSpeed(rawSpeed);
           
-          if (distance > GPS_CONFIG.MIN_DISTANCE_FOR_UPDATE) {
+          if (distance > 0.001) { // 1m以上の移動
             setTotalDistance(prev => prev + distance);
 
-            if (smoothedSpeed >= GPS_CONFIG.MIN_SPEED_FOR_HEADING) {
+            if (rawSpeed >= 1.0) { // 速度が1km/h以上の場合
               let newHeading = currentHeading;
               
               if (pos.coords.heading !== null && pos.coords.heading !== undefined && pos.coords.heading >= 0) {
@@ -278,8 +332,7 @@ const OperationRecord: React.FC = () => {
                 );
               }
               
-              const smoothedHeading = smoothHeading(headingBufferRef.current, newHeading);
-              setCurrentHeading(smoothedHeading);
+              setCurrentHeading(newHeading);
             }
             
             pathCoordinates.current.push({
@@ -295,7 +348,8 @@ const OperationRecord: React.FC = () => {
         
         updateMapLocation(pos.coords.latitude, pos.coords.longitude);
         
-        if (now - lastGPSUpdate.current > GPS_CONFIG.GPS_UPDATE_INTERVAL) {
+        // 定期的にGPSデータを送信
+        if (now - lastGPSUpdate.current > GPS_UPDATE_INTERVAL) {
           sendGPSData(pos);
           lastGPSUpdate.current = now;
         }
@@ -325,6 +379,7 @@ const OperationRecord: React.FC = () => {
       if (response.success && response.data) {
         setOperationInfo(response.data);
       } else {
+        // 新規運行開始
         const startResponse = await mobileApi.startOperation({
           vehicleId: user?.vehicleId || '',
           startTime: new Date().toISOString(),
@@ -340,18 +395,17 @@ const OperationRecord: React.FC = () => {
       }
     } catch (error) {
       console.error('運行情報取得エラー:', error);
+      // ダミーデータで継続
       setOperationInfo({
         id: 'operation_' + Date.now(),
         loadingLocation: '○○建設資材置場',
         unloadingLocation: '△△工事現場',
         cargoInfo: '砂利 12t',
         vehicleId: user?.vehicleId || '',
-        driverId: user?.id || '',
-        startTime: new Date().toISOString(),
-        status: 'IN_PROGRESS'
+        startTime: new Date()
       });
     }
-  }, [user?.vehicleId, user?.id, currentPosition]);
+  }, [user?.vehicleId, currentPosition]);
 
   // Google Maps API読み込み
   useEffect(() => {
@@ -401,6 +455,7 @@ const OperationRecord: React.FC = () => {
 
       toast.success(`${action}を記録しました`);
 
+      // ボタンの状態を更新
       if (action === '積込場所到着') {
         setButtonStates(prev => ({
           ...prev,
@@ -429,10 +484,12 @@ const OperationRecord: React.FC = () => {
     }
 
     try {
+      // GPS監視停止
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
 
+      // 運行終了をサーバーに通知
       if (operationInfo) {
         await mobileApi.endOperation(operationInfo.id, {
           endTime: new Date().toISOString(),
@@ -449,6 +506,7 @@ const OperationRecord: React.FC = () => {
       navigate('/login', { replace: true });
     } catch (error) {
       console.error('ログアウトエラー:', error);
+      // エラーが発生してもログアウト処理は継続
       logout();
       navigate('/login', { replace: true });
     }

@@ -116,6 +116,64 @@ export const calculatePercentage = (value: number, total: number): number => {
   return roundToDecimal((value / total) * 100);
 };
 
+export const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+           Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+           Math.sin(dLng/2) * Math.sin(dLng/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+
+export const calculateBearing = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const lat1Rad = lat1 * Math.PI / 180;
+  const lat2Rad = lat2 * Math.PI / 180;
+  
+  const y = Math.sin(dLng) * Math.cos(lat2Rad);
+  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - 
+           Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+  
+  let bearing = Math.atan2(y, x) * 180 / Math.PI;
+  return (bearing + 360) % 360;
+};
+
+export const smoothHeading = (headingBuffer: number[], newHeading: number): number => {
+  headingBuffer.push(newHeading);
+  if (headingBuffer.length > 3) {
+    headingBuffer.shift();
+  }
+
+  if (headingBuffer.length > 1) {
+    const lastHeading = headingBuffer[headingBuffer.length - 2];
+    const diff = Math.abs(newHeading - lastHeading);
+    const adjustedDiff = Math.min(diff, 360 - diff);
+    
+    if (adjustedDiff > 30) {
+      return newHeading;
+    }
+  }
+
+  let sumX = 0, sumY = 0;
+  headingBuffer.forEach(heading => {
+    sumX += Math.cos(heading * Math.PI / 180);
+    sumY += Math.sin(heading * Math.PI / 180);
+  });
+
+  let avgHeading = Math.atan2(sumY, sumX) * 180 / Math.PI;
+  return (avgHeading + 360) % 360;
+};
+
+export const smoothSpeed = (speedBuffer: number[], newSpeed: number): number => {
+  speedBuffer.push(newSpeed);
+  if (speedBuffer.length > 2) {
+    speedBuffer.shift();
+  }
+  return speedBuffer.reduce((sum, speed) => sum + speed, 0) / speedBuffer.length;
+};
+
 // ファイル操作
 export const downloadFile = (blob: Blob, filename: string): void => {
   const url = window.URL.createObjectURL(blob);

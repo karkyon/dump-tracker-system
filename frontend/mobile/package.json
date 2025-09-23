@@ -1,0 +1,44 @@
+{
+  "name": "dump-tracker-mobile",
+  "displayName": "ダンプ運行記録モバイル",
+  "description": "ダンプトラック運行記録・GPS追跡・運行管理モバイルアプリ",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3002 --host",
+    "build": "tsc && vite build",
+    "preview": "vite preview --port 3002 --host",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "type-check": "tsc --noEmit",
+    "pwa:build": "vite build && workbox generateSW workbox-config.js"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.30.1",
+    "react-hot-toast": "^2.4.0",
+    "axios": "^1.11.0",
+    "zustand": "^4.5.7",
+    "lucide-react": "^0.263.1",
+    "date-fns": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "@typescript-eslint/eslint-plugin": "^5.57.1",
+    "@typescript-eslint/parser": "^5.57.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.14",
+    "eslint": "^8.38.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.3.4",
+    "postcss": "^8.4.23",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5.0.2",
+    "vite": "^4.3.2",
+    "vite-plugin-pwa": "^0.16.4",
+    "workbox-cli": "^7.0.0"
+  }
+}

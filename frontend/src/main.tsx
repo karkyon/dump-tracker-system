@@ -1,11 +1,11 @@
-// frontend/src/main.tsx - 修正版: HTTPS証明書対応強化版
+// frontend/mobile/src/main.tsx - 修正版: HTTPS証明書対応強化版
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 
 // Initialize auth store on app start
-import { useAuthStore } from './store/authStore';
+import { useAuthStore } from './stores/authStore';
 
 // HTTPS証明書エラーハンドリング
 const handleCertificateError = () => {
