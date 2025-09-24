@@ -1,11 +1,5 @@
 import { PrismaClient, LocationType } from '@prisma/client';
-import { 
-  LocationModel,
-  LocationCreateInput,
-  LocationUpdateInput,
-  LocationResponseDTO,
-  OperationDetailModel 
-} from '../types';
+import { LocationModel } from '../types';
 import { PaginatedResponse } from '../utils/asyncHandler';
 import { isValidCoordinate } from '../utils/gpsCalculations';
 import { LocationFilter, CreateLocationRequest, UpdateLocationRequest } from '../types/location';
@@ -292,19 +286,35 @@ export class LocationService {
    * @param isActive アクティブフラグ
    * @returns 場所一覧
    */
-  async getLocationsByType(
-    locationType: LocationType,
-    isActive: boolean = true
-  ): Promise<Array<{ id: string; clientName: string; name: string; address: string }>> {
-    const locations = await prisma.location.findMany({
-      where: {
-        locationType: {
-          in: locationType === LocationType.BOTH 
-            ? [LocationType.LOADING, LocationType.UNLOADING, LocationType.BOTH]
-            : [locationType, LocationType.BOTH]
-        },
-        isActive
+    async getLocationsByType(
+      locationType: LocationType,
+      options?: { search?: string; clientName?: string; limit?: number; isActive?: boolean }
+    ): Promise<Array<{ id: string; clientName: string; name: string; address: string }>> {
+    const { search, clientName, limit = 50, isActive = true } = options || {};
+
+    const where: any = {
+      locationType: {
+        in: locationType === LocationType.BOTH 
+          ? [LocationType.LOADING, LocationType.UNLOADING, LocationType.BOTH]
+          : [locationType, LocationType.BOTH]
       },
+      isActive
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { address: { contains: search, mode: 'insensitive' } },
+        { clientName: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    if (clientName) {
+      where.clientName = { contains: clientName, mode: 'insensitive' };
+    }
+
+    const locations = await prisma.location.findMany({
+      where,
       select: {
         id: true,
         clientName: true,
@@ -627,5 +637,74 @@ export class LocationService {
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  /**
+   * 住所からGPS座標を取得（ジオコーディング）
+   * @param address 住所
+   * @returns GPS座標
+   */
+  async geocodeAddress(address: string): Promise<{ latitude: number; longitude: number }> {
+    // 外部ジオコーディングサービス（GoogleMaps API等）との連携が必要
+    // 現在は機能未実装のためエラーを返す
+    throw new AppError('ジオコーディング機能は現在利用できません', 501);
+  }
+
+  /**
+   * GPS座標から住所を取得（逆ジオコーディング）
+   * @param coordinates GPS座標
+   * @returns 住所
+   */
+  async reverseGeocode(coordinates: { latitude: number; longitude: number }): Promise<string> {
+    // 外部逆ジオコーディングサービス（GoogleMaps API等）との連携が必要
+    // 現在は機能未実装のためエラーを返す
+    throw new AppError('逆ジオコーディング機能は現在利用できません', 501);
+  }
+
+  /**
+   * 顧客名一覧取得（検索対応）
+   * @param search 検索クエリ
+   * @returns 顧客名一覧
+   */
+  async getClientNames(search?: string): Promise<string[]> {
+    const where: any = { 
+      isActive: true,
+      clientName: { not: null }
+    };
+
+    if (search) {
+      where.clientName = { contains: search, mode: 'insensitive' };
+    }
+
+    const result = await prisma.location.findMany({
+      where,
+      select: { clientName: true },
+      distinct: ['clientName'],
+      orderBy: { clientName: 'asc' }
+    });
+
+    return result.map(customer => customer.clientName!).filter(Boolean);
+  }
+
+  /**
+   * 場所のアクティブ状態切り替え
+   * @param locationId 場所ID
+   * @returns 更新された場所
+   */
+  async toggleLocationStatus(locationId: string): Promise<LocationModel> {
+    const location = await prisma.location.findUnique({
+      where: { id: locationId }
+    });
+
+    if (!location) {
+      throw new AppError('場所が見つかりません', 404);
+    }
+
+    const updatedLocation = await prisma.location.update({
+      where: { id: locationId },
+      data: { isActive: !location.isActive }
+    });
+
+    return updatedLocation;
   }
 }

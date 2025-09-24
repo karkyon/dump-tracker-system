@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
-import { apiUtils } from './services/api';
+import { apiService as apiUtils } from './services/api';
 import Login from './pages/Login';
 import OperationRecord from './pages/OperationRecord';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -21,13 +21,14 @@ const App: React.FC = () => {
           const user = JSON.parse(userData);
           
           // トークンの有効性チェック
-          const isValidAuth = await apiUtils.checkAuth();
+          const response = await apiUtils.getCurrentUser();
+          const isValidAuth = response.success;
           
           if (isValidAuth) {
-            login(token, user);
+            await login({ username: user.username, password: '' });
             
             // オフラインデータがあれば同期
-            await apiUtils.syncOfflineData();
+            await apiUtils.forceSyncOfflineData();
           } else {
             // 無効なトークンの場合はログアウト
             logout();

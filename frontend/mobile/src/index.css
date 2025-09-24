@@ -1,8 +1,8 @@
-/*
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* カスタムCSS */
 @layer base {
   html {
     font-family: 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif;
@@ -16,10 +16,12 @@
 }
 
 @layer components {
+  /* モバイル専用スタイル */
   .mobile-container {
     @apply max-w-sm mx-auto min-h-screen bg-white;
   }
   
+  /* カスタムボタンスタイル */
   .btn-primary {
     @apply px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg 
            hover:bg-blue-700 active:scale-95 transition-all duration-200
@@ -32,6 +34,7 @@
            disabled:bg-gray-100 disabled:cursor-not-allowed;
   }
   
+  /* アニメーション */
   .fade-in {
     animation: fadeIn 0.5s ease-out;
   }
@@ -46,6 +49,7 @@
 }
 
 @layer utilities {
+  /* スクロールバーのカスタマイズ */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -55,10 +59,12 @@
     display: none;
   }
   
+  /* タッチ操作の最適化 */
   .touch-action-manipulation {
     touch-action: manipulation;
   }
   
+  /* セーフエリア対応 */
   .safe-area-inset-top {
     padding-top: env(safe-area-inset-top);
   }
@@ -68,6 +74,7 @@
   }
 }
 
+/* キーフレームアニメーション */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -90,12 +97,14 @@
   }
 }
 
+/* PWA関連スタイル */
 @media (display-mode: standalone) {
   body {
     @apply bg-white;
   }
 }
 
+/* iOS Safari対応 */
 @supports (-webkit-touch-callout: none) {
   .ios-safe-area {
     padding-top: env(safe-area-inset-top);
@@ -103,10 +112,10 @@
   }
 }
 
+/* Android Chrome対応 */
 @media screen and (max-width: 414px) {
   .mobile-viewport {
     min-height: 100vh;
     min-height: -webkit-fill-available;
   }
 }
-*/

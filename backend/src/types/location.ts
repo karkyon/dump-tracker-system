@@ -1,4 +1,3 @@
-// backend/src/types/location.ts
 import { LocationType } from '@prisma/client';
 
 export interface LocationFilter {

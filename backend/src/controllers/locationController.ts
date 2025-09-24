@@ -1,21 +1,14 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { LocationService } from '../services/locationService';
-import { 
-  LocationModel,
-  LocationCreateInput,
-  LocationUpdateInput,
-  LocationResponseDTO,
-  OperationDetailModel 
-} from '../types';
+import { CreateLocationRequest, UpdateLocationRequest } from '../types/location';
 import { AuthenticatedRequest } from '../types/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../middleware/errorHandler';
 
-const prisma = new PrismaClient();
 const locationService = new LocationService();
 
-// 既存のコードを維持
+// 場所一覧取得
+export const getAllLocations = asyncHandler(async (req: Request, res: Response) => {
   const {
     page = 1,
     limit = 10,
@@ -26,14 +19,14 @@ const locationService = new LocationService();
     sortBy = 'name'
   } = req.query;
   
-  const locations = await locationService.getAllLocations({
+  const locations = await locationService.getLocations({
     page: Number(page),
     limit: Number(limit),
     search: search as string,
-    type: type as 'LOADING' | 'UNLOADING',
-    clientName: clientName as string,
+    locationType: type as any,
     isActive: isActive ? Boolean(isActive) : undefined,
-    sortBy: sortBy as string
+    sortBy: sortBy as string,
+    sortOrder: 'asc'
   });
   
   res.json({
@@ -42,9 +35,7 @@ const locationService = new LocationService();
   });
 });
 
-/**
- * 場所詳細取得
- */
+// IDで場所取得
 export const getLocationById = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   
@@ -60,16 +51,11 @@ export const getLocationById = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
-/**
- * 場所新規作成
- */
+// 場所作成リクエスト型
 export const createLocation = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const locationData: CreateLocationRequest = req.body;
   
-  const location = await locationService.createLocation({
-    ...locationData,
-    createdById: req.user.id
-  });
+  const location = await locationService.createLocation(locationData);
   
   res.status(201).json({
     success: true,
@@ -164,12 +150,12 @@ export const getNearbyLocations = asyncHandler(async (req: Request, res: Respons
     throw new AppError('緯度・経度が指定されていません', 400);
   }
   
-  const locations = await locationService.getNearbyLocations({
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-    radius: Number(radius),
-    type: type as 'LOADING' | 'UNLOADING'
-  });
+  const locations = await locationService.findNearbyLocations(
+    Number(latitude),
+    Number(longitude),
+    Number(radius) / 1000, // metersをkmに変換
+    50
+  );
   
   res.json({
     success: true,
@@ -231,10 +217,10 @@ export const getLocationUsageStats = asyncHandler(async (req: Request, res: Resp
   const { id } = req.params;
   const { startDate, endDate } = req.query;
   
-  const stats = await locationService.getLocationUsageStats(id, {
-    startDate: startDate as string,
-    endDate: endDate as string
-  });
+  const stats = await locationService.getLocationStats(id, 
+    startDate as string, 
+    endDate as string
+  );
   
   res.json({
     success: true,

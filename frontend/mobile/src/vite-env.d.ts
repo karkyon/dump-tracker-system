@@ -7,6 +7,9 @@ interface ImportMetaEnv {
   readonly VITE_DEBUG: string
   readonly VITE_GPS_UPDATE_INTERVAL: string
   readonly VITE_OFFLINE_DATA_RETENTION: string
+  readonly DEV: boolean
+  readonly PROD: boolean
+  readonly NODE_ENV: string
 }
 
 interface ImportMeta {

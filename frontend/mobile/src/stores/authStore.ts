@@ -1,71 +1,182 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { apiService as authAPI } from '../services/api';
+import { User } from '../types';
+import toast from 'react-hot-toast';
 
-interface User {
-  id: string;
-  userId: string;
-  name: string;
-  role: string;
-  vehicleId: string;
-}
-
-interface AuthState {
-  user: User | null;
-  token: string | null;
+// AuthState interface
+export interface AuthState {
+  // State properties
   isAuthenticated: boolean;
-  login: (token: string, user: User) => void;
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+  
+  // Actions
+  login: (credentials: { username: string; password: string }) => Promise<void>;
   logout: () => void;
-  updateUser: (user: Partial<User>) => void;
+  checkServerConnection: () => Promise<void>;
+  clearError: () => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
 }
 
+// Create the auth store
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
-      user: null,
-      token: null,
+    (set) => ({
+      // Initial state
       isAuthenticated: false,
+      user: null,
+      loading: false,
+      error: null,
 
-      login: (token: string, user: User) => {
-        set({
-          token,
-          user,
-          isAuthenticated: true,
-        });
+      // Actions
+      login: async (credentials) => {
+        set({ loading: true, error: null });
         
-        localStorage.setItem('auth_token', token);
-        localStorage.setItem('user_data', JSON.stringify(user));
+        try {
+          console.log('[Auth Store] Login attempt started');
+          
+          const response = await authAPI.login(credentials);
+          
+          if (response.success && response.data) {
+            const { user, accessToken } = response.data;
+            
+            // Store token in localStorage
+            localStorage.setItem('auth_token', accessToken);
+            
+            set({
+              isAuthenticated: true,
+              user,
+              loading: false,
+              error: null
+            });
+            
+            toast.success('ログインに成功しました');
+            console.log('[Auth Store] Login successful');
+          } else {
+            throw new Error(response.error || response.message || 'ログインに失敗しました');
+          }
+        } catch (error: any) {
+          console.error('[Auth Store] Login error:', error);
+          
+          let errorMessage = 'ログインに失敗しました';
+          
+          if (error.message) {
+            if (error.message.includes('INVALID_CREDENTIALS')) {
+              errorMessage = 'ユーザー名またはパスワードが正しくありません';
+            } else if (error.message.includes('Network Error')) {
+              errorMessage = 'サーバーに接続できません。HTTPS証明書を確認してください。';
+            } else {
+              errorMessage = error.message;
+            }
+          }
+          
+          set({
+            isAuthenticated: false,
+            user: null,
+            loading: false,
+            error: errorMessage
+          });
+          
+          toast.error(errorMessage);
+        }
       },
 
       logout: () => {
+        // Clear token from localStorage
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_data');
+        
         set({
-          user: null,
-          token: null,
           isAuthenticated: false,
+          user: null,
+          loading: false,
+          error: null
         });
         
-        localStorage.removeItem('auth_token');
-        const rememberLogin = localStorage.getItem('remember_login');
-        if (rememberLogin !== 'true') {
-          localStorage.removeItem('user_data');
+        toast.success('ログアウトしました');
+        console.log('[Auth Store] User logged out');
+      },
+
+      checkServerConnection: async () => {
+        set({ loading: true, error: null });
+        
+        try {
+          // Check if we have a stored token
+          const token = localStorage.getItem('auth_token');
+          
+          if (token) {
+            // Verify the token with the server
+            const response = await authAPI.getCurrentUser();
+            
+            if (response.success && response.data) {
+              set({
+                isAuthenticated: true,
+                user: response.data,
+                loading: false,
+                error: null
+              });
+              console.log('[Auth Store] Server connection verified, user authenticated');
+            } else {
+              // Token is invalid, clear it
+              localStorage.removeItem('auth_token');
+              set({
+                isAuthenticated: false,
+                user: null,
+                loading: false,
+                error: null
+              });
+              console.log('[Auth Store] Token invalid, user logged out');
+            }
+          } else {
+            set({
+              isAuthenticated: false,
+              user: null,
+              loading: false,
+              error: null
+            });
+            console.log('[Auth Store] No token found, user not authenticated');
+          }
+        } catch (error: any) {
+          console.error('[Auth Store] Server connection check failed:', error);
+          
+          let errorMessage = '';
+          
+          if (error.message && error.message.includes('certificate')) {
+            errorMessage = 'HTTPS証明書エラー: サーバー証明書を信頼する必要があります';
+          } else if (error.message && error.message.includes('Network Error')) {
+            errorMessage = 'ネットワークエラー: サーバーに接続できません';
+          }
+          
+          set({
+            isAuthenticated: false,
+            user: null,
+            loading: false,
+            error: errorMessage
+          });
         }
       },
 
-      updateUser: (userData: Partial<User>) => {
-        const currentUser = get().user;
-        if (currentUser) {
-          const updatedUser = { ...currentUser, ...userData };
-          set({ user: updatedUser });
-          localStorage.setItem('user_data', JSON.stringify(updatedUser));
-        }
+      clearError: () => {
+        set({ error: null });
       },
+
+      setLoading: (loading) => {
+        set({ loading });
+      },
+
+      setError: (error) => {
+        set({ error });
+      }
     }),
     {
       name: 'auth-storage',
       partialize: (state) => ({
-        user: state.user,
-        token: state.token,
         isAuthenticated: state.isAuthenticated,
-      }),
+        user: state.user
+      })
     }
   )
 );

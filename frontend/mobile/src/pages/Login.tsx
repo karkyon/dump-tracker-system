@@ -1,9 +1,6 @@
-// frontend/mobile/src/pages/Login.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
 import { Eye, EyeOff, Truck, Loader } from 'lucide-react';
-import { authApi } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 
 const Login: React.FC = () => {
@@ -63,38 +60,21 @@ const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await authApi.login({
-        userId: formData.userId,
-        password: formData.password
-      });
-
-      if (response.success && response.data) {
-        // Zustand storeにログイン情報を保存
-        login(response.data.token, response.data.user);
-        
-        // ローカルストレージに保存
-        localStorage.setItem('auth_token', response.data.token);
-        localStorage.setItem('user_data', JSON.stringify(response.data.user));
-        
-        if (rememberLogin) {
-          localStorage.setItem('remember_login', 'true');
-        } else {
-          localStorage.removeItem('remember_login');
-        }
-
-        toast.success('ログインに成功しました');
-        
-        // 運行記録画面に遷移
-        navigate('/operation', { replace: true });
+      await login({ username: formData.userId, password: formData.password });
+      
+      if (rememberLogin) {
+        localStorage.setItem('remember_login', 'true');
       } else {
-        throw new Error(response.message || 'ログインに失敗しました');
+        localStorage.removeItem('remember_login');
       }
+      
+      // 運行記録画面に遷移
+      navigate('/operation', { replace: true });
     } catch (error: any) {
       console.error('ログインエラー:', error);
       setErrors({ 
         password: error.message || 'ログインに失敗しました。ユーザーIDとパスワードを確認してください。' 
       });
-      toast.error('ログインに失敗しました');
     } finally {
       setIsLoading(false);
     }
