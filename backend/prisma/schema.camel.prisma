@@ -140,8 +140,8 @@ model InspectionRecord {
 model Item {
   id                         String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name                       String              @unique @db.VarChar(255)
-  category                   String?             @db.VarChar(100)
-  unit                       String?             @default("トン") @db.VarChar(20)
+  type                        ItemType?
+  unit                       String?             @default("ãƒˆãƒ³") @db.VarChar(20)
   standardWeight Decimal? @map("standard_weight")            @db.Decimal(5, 2)
   hazardous                  Boolean?            @default(false)
   description                String?
@@ -213,16 +213,16 @@ model MaintenanceRecord {
   description              String?
   nextMaintenanceDate DateTime? @map("next_maintenance_date")        @db.Date
   nextMaintenanceMileage Int? @map("next_maintenance_mileage")
-  isCompleted Boolean? @map("is_completed")         @default(false)
+  status    MaintenanceStatus @default(SCHEDULED)
   createdBy String? @map("created_by")          @db.Uuid
   createdAt DateTime? @map("created_at")        @default(now()) @db.Timestamptz(6)
   updatedAt DateTime? @map("updated_at")        @default(now()) @db.Timestamptz(6)
   users User?           @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   vehicles Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-@@index([isCompleted], map: "idx_maintenance_completed")
-@@index([maintenanceType], map: "idx_maintenance_type")
-@@index([vehicleId], map: "idx_maintenance_vehicle")
+  @@index([status], map: "idx_maintenance_status")
+  @@index([maintenanceType], map: "idx_maintenance_type")
+  @@index([vehicleId], map: "idx_maintenance_vehicle")
   @@map("maintenance_records")
 }
 
@@ -231,7 +231,8 @@ model Notification {
   userId String? @map("user_id")  @db.Uuid
   title   String?  @db.VarChar(255)
   message String?
-  isRead Boolean? @map("is_read") @default(false)
+  type   NotificationType @default(INFO)
+  status NotificationStatus @default(UNREAD)
   users User?   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@map("notifications")
 }
@@ -417,6 +418,66 @@ enum MaintenanceType {
   EMERGENCY
 
   @@map("maintenance_type")
+}
+
+// ãƒ¡ãƒ³ãƒ†ãƒŠãƒ³ã‚¹ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DELAYED
+
+  @@map("maintenance_status")
+}
+
+// é€šçŸ¥ã‚¿ã‚¤ãƒ—
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
+  SUCCESS
+  MAINTENANCE
+  INSPECTION
+  TRIP
+  SYSTEM
+
+  @@map("notification_type")
+}
+
+// é€šçŸ¥ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+  DELETED
+
+  @@map("notification_status")
+}
+
+// å“ç›®ã‚¿ã‚¤ãƒ—
+enum ItemType {
+  MATERIAL
+  EQUIPMENT
+  TOOL
+  CONSUMABLE
+  SPARE_PART
+
+  @@map("item_type")
+}
+
+// æ´»å‹•ã‚¿ã‚¤ãƒ—
+enum ActivityType {
+  LOADING
+  UNLOADING
+  TRANSPORTING
+  WAITING
+  MAINTENANCE
+  REFUELING
+  BREAK
+  OTHER
+
+  @@map("activity_type")
 }
 
 enum OperationStatus {
