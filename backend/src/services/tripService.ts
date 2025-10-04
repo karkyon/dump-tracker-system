@@ -96,7 +96,6 @@ import type { TripOperationModel, OperationStatistics, OperationTripFilter, Star
 // =====================================
 
 export class TripService {
-export class TripService {
   private readonly db: typeof DatabaseService;
   private readonly operationService: OperationService;
   private readonly operationDetailService: OperationDetailService;

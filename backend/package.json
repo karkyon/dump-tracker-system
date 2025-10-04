@@ -16,7 +16,10 @@
     "lint:critical": "eslint 'src/**/*.ts' --max-warnings 0",
     "check:circular": "madge --circular --extensions ts src/",
     "check:circular:graph": "madge --circular --extensions ts --image graph.png src/",
+    "check:default-exports": "node scripts/check-default-exports.js",
+    "validate:priority": "npm run check:circular && npm run check:default-exports",
     "validate:critical": "npm run check:critical && npm run lint:critical && npm run check:circular",
+    "validate:all": "npm run validate:priority && npm run check:critical && npm run lint:critical",
     "fix:critical": "eslint 'src/**/*.ts' --fix",
     "watch:check": "tsc --noEmit --watch",
     "prebuild": "npm run validate:critical"
