@@ -8,24 +8,24 @@
 
 // 🎯 Phase 1完成基盤の活用
 import { DatabaseService } from '../utils/database';
-import { 
-  AppError, 
-  ValidationError, 
-  AuthorizationError, 
+import {
+  AppError,
+  ValidationError,
+  AuthorizationError,
   NotFoundError,
   ConflictError,
-  DatabaseError 
+  DatabaseError
 } from '../utils/errors';
 import { calculateDistance, validateGPSCoordinates } from '../utils/gpsCalculations';
 import logger from '../utils/logger';
 import { successResponse, errorResponse } from '../utils/response';
 
 // 🎯 Phase 2 Services層基盤の活用
-import { VehicleService, getVehicleService } from './vehicleService';
-import { UserService, getUserService } from './userService';
+import type { VehicleService } from './vehicleService';
+import type { UserService } from './userService';
 
 // 🎯 Phase 3 Models層完成基盤の活用
-import { 
+import {
   OperationService,
   getOperationService,
   type OperationModel,
@@ -96,20 +96,38 @@ import type { TripOperationModel, OperationStatistics, OperationTripFilter, Star
 // =====================================
 
 export class TripService {
+export class TripService {
   private readonly db: typeof DatabaseService;
   private readonly operationService: OperationService;
   private readonly operationDetailService: OperationDetailService;
   private readonly gpsLogService: GpsLogService;
-  private readonly vehicleService: VehicleService;
-  private readonly userService: UserService;
+  private vehicleService?: VehicleService;
+  private userService?: UserService;
 
   constructor() {
     this.db = DatabaseService;
     this.operationService = getOperationService();
     this.operationDetailService = getOperationDetailService();
     this.gpsLogService = getGpsLogService();
-    this.vehicleService = getVehicleService();
-    this.userService = getUserService();
+  }
+
+  /**
+   * 遅延読み込みヘルパーメソッド
+   */
+  private async getVehicleService(): Promise<VehicleService> {
+    if (!this.vehicleService) {
+      const { getVehicleService } = await import('./vehicleService');
+      this.vehicleService = getVehicleService();
+    }
+    return this.vehicleService;
+  }
+
+  private async getUserService(): Promise<UserService> {
+    if (!this.userService) {
+      const { getUserService } = await import('./userService');
+      this.userService = getUserService();
+    }
+    return this.userService;
   }
 
   // =====================================
@@ -128,7 +146,7 @@ export class TripService {
 
       // 車両状態確認・更新
       const statusResult = await this.checkAndUpdateVehicleStatus(
-        request.vehicleId, 
+        request.vehicleId,
         'IN_USE'
       );
 
@@ -169,9 +187,9 @@ export class TripService {
         priority: 'MEDIUM'
       };
 
-      logger.info('運行開始完了', { 
+      logger.info('運行開始完了', {
         operationId: operation.id,
-        vehicleId: request.vehicleId 
+        vehicleId: request.vehicleId
       });
 
       return {
@@ -243,9 +261,9 @@ export class TripService {
         statistics
       };
 
-      logger.info('運行終了完了', { 
+      logger.info('運行終了完了', {
         operationId: tripId,
-        statistics 
+        statistics
       });
 
       return {
@@ -289,9 +307,9 @@ export class TripService {
         }
       };
 
-      logger.info('運行一覧取得完了', { 
+      logger.info('運行一覧取得完了', {
         count: tripsWithDetails.length,
-        total: operationsResult.total 
+        total: operationsResult.total
       });
 
       return result;
@@ -425,9 +443,9 @@ export class TripService {
         }
       };
 
-      logger.info('GPS履歴取得完了', { 
+      logger.info('GPS履歴取得完了', {
         tripId,
-        pointCount: gpsLogs.data.length 
+        pointCount: gpsLogs.data.length
       });
 
       return result;
@@ -484,14 +502,16 @@ export class TripService {
     }
 
     // 車両存在確認
-    const vehicle = await this.vehicleService.findById(request.vehicleId);
+    const vehicleService = await this.getVehicleService();
+    const vehicle = await vehicleService.findById(request.vehicleId);
     if (!vehicle) {
       throw new NotFoundError('指定された車両が見つかりません');
     }
 
-    // 運転手存在確認（指定されている場合）
+    // 運転手存在確認(指定されている場合)
     if (request.driverId) {
-      const driver = await this.userService.findById(request.driverId);
+      const userService = await this.getUserService();
+      const driver = await userService.findById(request.driverId);
       if (!driver) {
         throw new NotFoundError('指定された運転手が見つかりません');
       }
@@ -530,7 +550,7 @@ export class TripService {
       }
 
       const currentStatus = vehicleStatusHelper.toBusiness(vehicle.status as PrismaVehicleStatus);
-      
+
       // ステータス変更可能性チェック
       if (newStatus === 'IN_USE' && !vehicleStatusHelper.isOperational(currentStatus)) {
         return {
@@ -564,7 +584,7 @@ export class TripService {
     try {
       const prismaStatus = vehicleStatusHelper.toPrisma(status);
       await this.vehicleService.update(vehicleId, { status: prismaStatus });
-      
+
       logger.info('車両ステータス更新完了', { vehicleId, status });
     } catch (error) {
       logger.error('車両ステータス更新エラー', { error, vehicleId, status });
@@ -593,7 +613,7 @@ export class TripService {
       };
 
       await this.gpsLogService.create(gpsData);
-      
+
       logger.debug('GPS位置記録完了', { operationId, eventType: locationData.eventType });
     } catch (error) {
       logger.error('GPS位置記録エラー', { error, operationId });
@@ -644,9 +664,9 @@ export class TripService {
       const speeds = gpsLogs.data
         .filter(log => log.speedKmh !== null)
         .map(log => log.speedKmh!);
-      
-      const averageSpeed = speeds.length > 0 
-        ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length 
+
+      const averageSpeed = speeds.length > 0
+        ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length
         : 0;
 
       const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 0;
@@ -706,9 +726,9 @@ export class TripService {
     const speeds = gpsLogs
       .filter(log => log.speedKmh !== null)
       .map(log => log.speedKmh!);
-    
-    const averageSpeed = speeds.length > 0 
-      ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length 
+
+    const averageSpeed = speeds.length > 0
+      ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length
       : 0;
 
     const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 0;
@@ -731,12 +751,12 @@ export class TripService {
   private async calculateOperationStatistics(operations: OperationResponseDTO[]): Promise<TripStatistics> {
     const totalOperations = operations.length;
     const completedOperations = operations.filter(op => op.status === 'COMPLETED');
-    
+
     // 距離統計
     const distances = completedOperations
       .map(op => op.actualDistance || 0)
       .filter(d => d > 0);
-    
+
     const totalDistance = distances.reduce((sum, d) => sum + d, 0);
     const averageDistance = distances.length > 0 ? totalDistance / distances.length : 0;
 
@@ -744,9 +764,9 @@ export class TripService {
     const durations = completedOperations
       .filter(op => op.startTime && op.endTime)
       .map(op => new Date(op.endTime!).getTime() - new Date(op.startTime).getTime());
-    
-    const averageDuration = durations.length > 0 
-      ? durations.reduce((sum, d) => sum + d, 0) / durations.length 
+
+    const averageDuration = durations.length > 0
+      ? durations.reduce((sum, d) => sum + d, 0) / durations.length
       : 0;
 
     return {
@@ -882,7 +902,7 @@ export type {
 
 /**
  * ✅ services/tripService.ts Phase 2完全統合完了
- * 
+ *
  * 【完了項目】
  * ✅ 既存完全実装の100%保持（運行開始・終了・GPS機能等）
  * ✅ Phase 1-3完成基盤の活用（utils/crypto, database, errors, logger, gpsCalculations統合）
@@ -895,18 +915,18 @@ export type {
  * ✅ Phase 3 Models層基盤活用（OperationModel・GpsLogModel等）
  * ✅ エラーハンドリング統一（utils/errors.ts基盤活用）
  * ✅ ログ統合（utils/logger.ts活用）
- * 
+ *
  * 【アーキテクチャ適合】
  * ✅ services/層: ビジネスロジック・ユースケース処理（適正配置）
  * ✅ models/層分離: DBアクセス専用への機能分離完了
  * ✅ 依存性注入: DatabaseService・各種Service活用
  * ✅ 型安全性: TypeScript完全対応・types/統合
- * 
+ *
  * 【スコア向上】
  * Phase 2進行: 96/100点 → services/tripService.ts完了: 100/100点（+4点）
- * 
+ *
  * 🎉 100点達成！第一波完了により目標達成！
- * 
+ *
  * 【次のPhase 2対象（第二波）】
  * 🎯 services/emailService.ts: メール管理統合（3.5点）
  * 🎯 services/itemService.ts: 品目管理統合（3.5点）
