@@ -1,710 +1,817 @@
-import { PrismaClient, LocationType } from '@prisma/client';
-import { LocationModel } from '../types';
-import { PaginatedResponse } from '../utils/asyncHandler';
-import { isValidCoordinate } from '../utils/gpsCalculations';
-import { LocationFilter, CreateLocationRequest, UpdateLocationRequest } from '../types/location';
-import { AppError } from '../utils/errors';
+// =====================================
+// backend/src/services/locationService.ts
+// 位置管理サービス - Phase 2完全統合版
+// models/LocationModel.ts基盤・Phase 1完成基盤統合版
+// 作成日時: 2025年9月27日19:30
+// =====================================
 
-const prisma = new PrismaClient();
+import { UserRole, PrismaClient, LocationType } from '@prisma/client';
+
+// 🎯 Phase 1完成基盤の活用
+import { DatabaseService } from '../utils/database';
+import { 
+  AppError, 
+  ValidationError, 
+  AuthorizationError, 
+  NotFoundError,
+  ConflictError,
+  DatabaseError 
+} from '../utils/errors';
+import logger from '../utils/logger';
+import { calculateDistance, isValidCoordinates } from '../utils/gpsCalculations';
+
+// 🎯 types/からの統一型定義インポート
+import type {
+  LocationModel,
+  LocationResponseDTO,
+  LocationCreateDTO,
+  LocationUpdateDTO,
+  getLocationService
+} from '../types';
+
+// 🎯 共通型定義の活用（types/common.ts）
+import type {
+  PaginationQuery,
+  ApiResponse,
+  OperationResult,
+  BulkOperationResult
+} from '../types/common';
+
+// =====================================
+// 🔧 位置管理型定義
+// =====================================
+
+export interface LocationFilter extends PaginationQuery {
+  search?: string;
+  locationType?: LocationType[];
+  clientName?: string;
+  isActive?: boolean;
+  hasCoordinates?: boolean;
+  within?: {
+    latitude: number;
+    longitude: number;
+    radiusKm: number;
+  };
+  sortBy?: 'name' | 'address' | 'locationType' | 'clientName' | 'createdAt' | 'updatedAt' | 'distance';
+}
+
+export interface CreateLocationRequest {
+  name: string;
+  address: string;
+  latitude?: number;
+  longitude?: number;
+  locationType: LocationType;
+  clientName?: string;
+  contactPerson?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  operatingHours?: string;
+  accessInstructions?: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateLocationRequest extends Partial<CreateLocationRequest> {
+  // 部分更新対応
+}
+
+export interface NearbyLocationRequest {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+  limit?: number;
+  excludeLocationIds?: string[];
+  locationType?: LocationType[];
+  isActiveOnly?: boolean;
+}
+
+export interface NearbyLocation {
+  location: LocationResponseDTO;
+  distance: number; // km
+  bearing: number; // 度（0-359）
+}
+
+export interface LocationStatistics {
+  totalLocations: number;
+  activeLocations: number;
+  inactiveLocations: number;
+  locationsByType: Record<LocationType, number>;
+  withCoordinates: number;
+  withoutCoordinates: number;
+  averageOperationsPerLocation: number;
+}
+
+// =====================================
+// 📍 LocationService クラス - Phase 2統合版
+// =====================================
 
 export class LocationService {
-  /**
-   * 場所一覧取得（ページネーション・フィルター対応）
-   * @param filter フィルター条件
-   * @returns 場所一覧
-   */
-  async getLocations(filter: LocationFilter): Promise<PaginatedResponse<LocationModel>> {
-    const {
-      page = 1,
-      limit = 20,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
-      locationType,
-      isActive,
-      search
-    } = filter;
+  private readonly db: PrismaClient;
+  private readonly locationService: ReturnType<typeof getLocationService>;
 
-    const skip = (page - 1) * limit;
-    const take = Math.min(limit, 100);
-
-    // 検索条件構築
-    const where: any = {};
-
-    if (search) {
-      where.OR = [
-        { clientName: { contains: search, mode: 'insensitive' } },
-        { name: { contains: search, mode: 'insensitive' } },
-        { address: { contains: search, mode: 'insensitive' } }
-      ];
-    }
-
-    if (locationType) {
-      where.locationType = locationType;
-    }
-
-    if (typeof isActive === 'boolean') {
-      where.isActive = isActive;
-    }
-
-    // 総件数取得
-    const total = await prisma.location.count({ where });
-
-    // 場所取得
-    const locations = await prisma.location.findMany({
-      where,
-      skip,
-      take,
-      orderBy: {
-        [sortBy]: sortOrder
-      }
-    });
-
-    const totalPages = Math.ceil(total / take);
-
-    return {
-      data: locations,
-      total,
-      page,
-      limit: take,
-      totalPages,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalItems: total,
-        itemsPerPage: take
-      }
-    };
+  constructor(db?: PrismaClient) {
+    this.db = db || DatabaseService.getInstance();
+    this.locationService = getLocationService(this.db);
   }
 
-  /**
-   * 場所詳細取得
-   * @param locationId 場所ID
-   * @returns 場所情報
-   */
-  async getLocationById(locationId: string): Promise<LocationModel & { usageCount?: number; recentUsage?: any[] }> {
-    const location = await prisma.location.findUnique({
-      where: { id: locationId }
-    });
+  // =====================================
+  // 🔐 権限チェックメソッド群
+  // =====================================
 
-    if (!location) {
-      throw new AppError('場所が見つかりません', 404);
+  private checkLocationAccess(
+    requesterId: string,
+    requesterRole: UserRole,
+    accessType: 'read' | 'write' | 'delete'
+  ): void {
+    // 管理者・マネージャーは全てアクセス可能
+    if (['ADMIN', 'MANAGER'].includes(requesterRole)) {
+      return;
     }
 
-    // 使用回数を取得
-    const usageCount = await prisma.operationDetail.count({
-      where: { locationId }
-    });
+    // ディスパッチャーは読み取り・書き込み可能
+    if (requesterRole === 'DISPATCHER') {
+      if (accessType === 'delete') {
+        throw new AuthorizationError('位置削除の権限がありません');
+      }
+      return;
+    }
 
-    // 最近の使用履歴を取得
-    const recentUsage = await prisma.operationDetail.findMany({
-      where: { locationId },
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        operations: {
-          select: {
-            plannedStartTime: true,
-            usersOperationsDriverIdTousers: {
-              select: {
-                name: true
-              }
-            }
-          }
+    // 運転手は読み取りのみ可能
+    if (requesterRole === 'DRIVER') {
+      if (accessType !== 'read') {
+        throw new AuthorizationError('位置情報の編集権限がありません');
+      }
+      return;
+    }
+
+    throw new AuthorizationError('位置情報へのアクセス権限がありません');
+  }
+
+  // =====================================
+  // 📦 CRUD操作メソッド群
+  // =====================================
+
+  /**
+   * 位置作成
+   */
+  async createLocation(
+    request: CreateLocationRequest,
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<LocationResponseDTO> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'write');
+
+      // 入力検証
+      if (!request.name?.trim()) {
+        throw new ValidationError('位置名は必須です');
+      }
+
+      if (!request.address?.trim()) {
+        throw new ValidationError('住所は必須です');
+      }
+
+      if (!request.locationType) {
+        throw new ValidationError('位置タイプは必須です');
+      }
+
+      // 座標検証（提供された場合）
+      if ((request.latitude !== undefined || request.longitude !== undefined)) {
+        if (request.latitude === undefined || request.longitude === undefined) {
+          throw new ValidationError('緯度・経度は両方指定してください');
+        }
+        
+        if (!isValidCoordinates(request.latitude, request.longitude)) {
+          throw new ValidationError('無効な座標です');
         }
       }
-    });
 
-    return {
-      ...location,
-      usageCount,
-      recentUsage: recentUsage.map(usage => ({
-        activityType: usage.activityType,
-        timestamp: usage.createdAt,
-        plannedTime: usage.operations.plannedStartTime,
-        driverName: usage.operations.usersOperationsDriverIdTousers.name
-      }))
-    };
-  }
-
-  /**
-   * 場所作成
-   * @param locationData 場所データ
-   * @param creatorId 作成者ID
-   * @returns 作成された場所
-   */
-  async createLocation(locationData: CreateLocationRequest, creatorId?: string): Promise<LocationModel> {
-    const {
-      name,
-      clientName,
-      address,
-      latitude,
-      longitude,
-      locationType,
-      contactPerson,
-      contactPhone,
-      contactEmail,
-      operatingHours,
-      specialInstructions,
-      hazardousArea,
-      accessRestrictions,
-      parkingInstructions,
-      unloadingInstructions,
-      equipmentAvailable
-    } = locationData;
-
-    // GPS座標の有効性チェック
-    if (latitude && longitude && !isValidCoordinate(latitude, longitude)) {
-      throw new AppError('無効なGPS座標です', 400);
-    }
-
-    // 重複チェック（同じ名前の場所）
-    const existingLocation = await prisma.location.findFirst({
-      where: {
-        name,
-        address
-      }
-    });
-
-    if (existingLocation) {
-      throw new AppError('同じ名前・住所の組み合わせが既に存在します', 409);
-    }
-
-    // 場所作成
-    const newLocation = await prisma.location.create({
-      data: {
-        name,
-        clientName,
-        address,
-        latitude,
-        longitude,
-        locationType,
-        contactPerson,
-        contactPhone,
-        contactEmail,
-        operatingHours,
-        specialInstructions,
-        hazardousArea,
-        accessRestrictions,
-        parkingInstructions,
-        unloadingInstructions,
-        equipmentAvailable
-      }
-    });
-
-    return newLocation;
-  }
-
-  /**
-   * 場所情報更新
-   * @param locationId 場所ID
-   * @param updateData 更新データ
-   * @returns 更新された場所
-   */
-  async updateLocation(locationId: string, updateData: UpdateLocationRequest): Promise<LocationModel> {
-    // 場所存在確認
-    const existingLocation = await prisma.location.findUnique({
-      where: { id: locationId }
-    });
-
-    if (!existingLocation) {
-      throw new AppError('場所が見つかりません', 404);
-    }
-
-    // GPS座標の有効性チェック
-    if (updateData.latitude && updateData.longitude && 
-        !isValidCoordinate(updateData.latitude, updateData.longitude)) {
-      throw new AppError('無効なGPS座標です', 400);
-    }
-
-    // 重複チェック（更新する場合）
-    if (updateData.name || updateData.address) {
-      const duplicateLocation = await prisma.location.findFirst({
+      // 重複チェック
+      const existingLocation = await this.locationService.findFirst({
         where: {
-          AND: [
-            { id: { not: locationId } },
-            {
-              name: updateData.name || existingLocation.name,
-              address: updateData.address || existingLocation.address
-            }
-          ]
+          name: request.name.trim(),
+          address: request.address.trim()
         }
       });
 
-      if (duplicateLocation) {
-        throw new AppError('同じ名前・住所の組み合わせが既に存在します', 409);
+      if (existingLocation) {
+        throw new ConflictError('同名・同住所の位置が既に存在します');
       }
+
+      // 位置作成
+      const locationData = {
+        name: request.name.trim(),
+        address: request.address.trim(),
+        latitude: request.latitude,
+        longitude: request.longitude,
+        locationType: request.locationType,
+        clientName: request.clientName?.trim(),
+        contactPerson: request.contactPerson?.trim(),
+        contactPhone: request.contactPhone?.trim(),
+        contactEmail: request.contactEmail?.trim(),
+        operatingHours: request.operatingHours?.trim(),
+        accessInstructions: request.accessInstructions?.trim(),
+        notes: request.notes?.trim(),
+        isActive: request.isActive !== false
+      };
+
+      const location = await this.locationService.create(locationData);
+
+      logger.info('位置作成完了', { 
+        locationId: location.id,
+        name: location.name,
+        locationType: location.locationType,
+        hasCoordinates: location.latitude !== null && location.longitude !== null,
+        requesterId 
+      });
+
+      return this.toResponseDTO(location);
+
+    } catch (error) {
+      logger.error('位置作成エラー', { error, request, requesterId });
+      throw error;
     }
-
-    // 場所更新
-    const updatedLocation = await prisma.location.update({
-      where: { id: locationId },
-      data: updateData
-    });
-
-    return updatedLocation;
   }
 
   /**
-   * 場所削除（論理削除）
-   * @param locationId 場所ID
+   * 位置取得
    */
-  async deleteLocation(locationId: string): Promise<void> {
-    const location = await prisma.location.findUnique({
-      where: { id: locationId },
-      include: {
-        operationDetails: {
-          where: {
-            operations: {
-              status: {
-                in: ['PLANNING', 'IN_PROGRESS']
-              }
-            }
+  async getLocation(
+    id: string,
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<LocationResponseDTO> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'read');
+
+      const location = await this.locationService.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: { operationDetails: true }
           }
         }
+      });
+
+      if (!location) {
+        throw new NotFoundError('位置が見つかりません');
       }
-    });
 
-    if (!location) {
-      throw new AppError('場所が見つかりません', 404);
+      return this.toResponseDTO(location);
+
+    } catch (error) {
+      logger.error('位置取得エラー', { error, id, requesterId });
+      throw error;
     }
-
-    // アクティブな運行記録で使用中の場合は削除不可
-    if (location.operationDetails.length > 0) {
-      throw new AppError('進行中の運行記録で使用されているため、この場所を削除できません', 400);
-    }
-
-    // 場所を無効化
-    await prisma.location.update({
-      where: { id: locationId },
-      data: { isActive: false }
-    });
   }
 
   /**
-   * 場所タイプ別一覧取得
-   * @param locationType 場所タイプ
-   * @param isActive アクティブフラグ
-   * @returns 場所一覧
+   * 位置一覧取得
    */
-    async getLocationsByType(
-      locationType: LocationType,
-      options?: { search?: string; clientName?: string; limit?: number; isActive?: boolean }
-    ): Promise<Array<{ id: string; clientName: string; name: string; address: string }>> {
-    const { search, clientName, limit = 50, isActive = true } = options || {};
+  async getLocations(
+    filter: LocationFilter = {},
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<{ locations: LocationResponseDTO[]; total: number; hasMore: boolean }> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'read');
 
-    const where: any = {
-      locationType: {
-        in: locationType === LocationType.BOTH 
-          ? [LocationType.LOADING, LocationType.UNLOADING, LocationType.BOTH]
-          : [locationType, LocationType.BOTH]
-      },
-      isActive
-    };
+      const { page = 1, limit = 50, sortBy = 'name', sortOrder = 'asc', ...filterConditions } = filter;
+      const offset = (page - 1) * limit;
 
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { address: { contains: search, mode: 'insensitive' } },
-        { clientName: { contains: search, mode: 'insensitive' } }
-      ];
-    }
+      // フィルタ条件構築
+      let whereCondition: any = {};
 
-    if (clientName) {
-      where.clientName = { contains: clientName, mode: 'insensitive' };
-    }
+      if (filterConditions.search) {
+        whereCondition.OR = [
+          { name: { contains: filterConditions.search, mode: 'insensitive' } },
+          { address: { contains: filterConditions.search, mode: 'insensitive' } },
+          { clientName: { contains: filterConditions.search, mode: 'insensitive' } }
+        ];
+      }
 
-    const locations = await prisma.location.findMany({
-      where,
-      select: {
-        id: true,
-        clientName: true,
-        name: true,
-        address: true
-      },
-      orderBy: [
-        { clientName: 'asc' },
-        { name: 'asc' }
-      ]
-    });
+      if (filterConditions.locationType) {
+        whereCondition.locationType = {
+          in: filterConditions.locationType
+        };
+      }
 
-    return locations.map(location => ({
-      id: location.id,
-      clientName: location.clientName || '',
-      name: location.name,
-      address: location.address
-    }));
-  }
+      if (filterConditions.clientName) {
+        whereCondition.clientName = {
+          contains: filterConditions.clientName,
+          mode: 'insensitive'
+        };
+      }
 
-  /**
-   * 積込場所一覧取得（簡易版）
-   * @returns 積込場所一覧
-   */
-  async getLoadingLocations(): Promise<Array<{ id: string; clientName: string; name: string }>> {
-    const locations = await this.getLocationsByType(LocationType.LOADING);
-    return locations.map(loc => ({
-      id: loc.id,
-      clientName: loc.clientName,
-      name: loc.name
-    }));
-  }
+      if (filterConditions.isActive !== undefined) {
+        whereCondition.isActive = filterConditions.isActive;
+      }
 
-  /**
-   * 積下場所一覧取得（簡易版）
-   * @returns 積下場所一覧
-   */
-  async getUnloadingLocations(): Promise<Array<{ id: string; clientName: string; name: string }>> {
-    const locations = await this.getLocationsByType(LocationType.UNLOADING);
-    return locations.map(loc => ({
-      id: loc.id,
-      clientName: loc.clientName,
-      name: loc.name
-    }));
-  }
+      if (filterConditions.hasCoordinates === true) {
+        whereCondition.AND = [
+          { latitude: { not: null } },
+          { longitude: { not: null } }
+        ];
+      } else if (filterConditions.hasCoordinates === false) {
+        whereCondition.OR = [
+          { latitude: null },
+          { longitude: null }
+        ];
+      }
 
-  /**
-   * 客先一覧取得（ユニーク）
-   * @returns 客先一覧
-   */
-  async getCustomers(): Promise<string[]> {
-    const result = await prisma.location.findMany({
-      where: { 
-        isActive: true,
-        clientName: { not: null }
-      },
-      select: { clientName: true },
-      distinct: ['clientName'],
-      orderBy: { clientName: 'asc' }
-    });
+      // 半径内検索
+      let locations: any[] = [];
+      let total = 0;
 
-    return result.map(customer => customer.clientName!).filter(Boolean);
-  }
+      if (filterConditions.within) {
+        // 半径内検索の場合は全件取得してJavaScriptで距離計算
+        const allLocations = await this.locationService.findMany({
+          where: {
+            ...whereCondition,
+            latitude: { not: null },
+            longitude: { not: null }
+          },
+          include: {
+            _count: {
+              select: { operationDetails: true }
+            }
+          }
+        });
 
-  /**
-   * 場所検索（オートコンプリート用）
-   * @param query 検索クエリ
-   * @param locationType 場所タイプ（オプション）
-   * @param limit 取得件数
-   * @returns 場所一覧
-   */
-  async searchLocations(
-    query: string, 
-    locationType?: LocationType, 
-    limit: number = 10
-  ): Promise<Array<{ id: string; clientName: string; name: string; address: string; locationType: LocationType }>> {
-    if (!query || query.length < 2) {
-      return [];
-    }
+        const { latitude: centerLat, longitude: centerLon, radiusKm } = filterConditions.within;
 
-    const where: any = {
-      isActive: true,
-      OR: [
-        { clientName: { contains: query, mode: 'insensitive' } },
-        { name: { contains: query, mode: 'insensitive' } },
-        { address: { contains: query, mode: 'insensitive' } }
-      ]
-    };
+        const locationsWithDistance = allLocations
+          .map(location => ({
+            ...location,
+            distance: calculateDistance(
+              centerLat,
+              centerLon,
+              location.latitude!,
+              location.longitude!
+            )
+          }))
+          .filter(location => location.distance <= radiusKm)
+          .sort((a, b) => a.distance - b.distance);
 
-    if (locationType) {
-      where.locationType = {
-        in: locationType === LocationType.BOTH
-          ? [LocationType.LOADING, LocationType.UNLOADING, LocationType.BOTH]
-          : [locationType, LocationType.BOTH]
+        total = locationsWithDistance.length;
+        locations = locationsWithDistance.slice(offset, offset + limit);
+
+      } else {
+        // 通常検索
+        const [locationResults, totalCount] = await Promise.all([
+          this.locationService.findMany({
+            where: whereCondition,
+            include: {
+              _count: {
+                select: { operationDetails: true }
+              }
+            },
+            orderBy: sortBy === 'distance' ? { name: sortOrder } : { [sortBy]: sortOrder },
+            take: limit,
+            skip: offset
+          }),
+          this.locationService.count({ where: whereCondition })
+        ]);
+
+        locations = locationResults;
+        total = totalCount;
+      }
+
+      return {
+        locations: locations.map(location => this.toResponseDTO(location)),
+        total,
+        hasMore: offset + locations.length < total
       };
+
+    } catch (error) {
+      logger.error('位置一覧取得エラー', { error, filter, requesterId });
+      throw error;
     }
-
-    const locations = await prisma.location.findMany({
-      where,
-      select: {
-        id: true,
-        clientName: true,
-        name: true,
-        address: true,
-        locationType: true
-      },
-      take: limit,
-      orderBy: [
-        { clientName: 'asc' },
-        { name: 'asc' }
-      ]
-    });
-
-    return locations.map(location => ({
-      id: location.id,
-      clientName: location.clientName || '',
-      name: location.name,
-      address: location.address,
-      locationType: location.locationType
-    }));
   }
 
   /**
-   * GPS座標から近くの場所を検索
-   * @param latitude 緯度
-   * @param longitude 経度
-   * @param radiusKm 検索半径（km）
-   * @param limit 取得件数
-   * @returns 近くの場所一覧
+   * 位置更新
+   */
+  async updateLocation(
+    id: string,
+    updateData: UpdateLocationRequest,
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<LocationResponseDTO> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'write');
+
+      // 存在チェック
+      const existingLocation = await this.locationService.findUnique({
+        where: { id }
+      });
+
+      if (!existingLocation) {
+        throw new NotFoundError('位置が見つかりません');
+      }
+
+      // 座標検証（提供された場合）
+      if ((updateData.latitude !== undefined || updateData.longitude !== undefined)) {
+        if (updateData.latitude === undefined || updateData.longitude === undefined) {
+          throw new ValidationError('緯度・経度は両方指定してください');
+        }
+        
+        if (!isValidCoordinates(updateData.latitude, updateData.longitude)) {
+          throw new ValidationError('無効な座標です');
+        }
+      }
+
+      // 重複チェック（名前・住所が変更された場合）
+      if (updateData.name || updateData.address) {
+        const checkName = updateData.name?.trim() || existingLocation.name;
+        const checkAddress = updateData.address?.trim() || existingLocation.address;
+
+        const conflictingLocation = await this.locationService.findFirst({
+          where: {
+            id: { not: id },
+            name: checkName,
+            address: checkAddress
+          }
+        });
+
+        if (conflictingLocation) {
+          throw new ConflictError('同名・同住所の位置が既に存在します');
+        }
+      }
+
+      // 更新データ準備
+      const cleanUpdateData: any = {};
+      if (updateData.name !== undefined) cleanUpdateData.name = updateData.name.trim();
+      if (updateData.address !== undefined) cleanUpdateData.address = updateData.address.trim();
+      if (updateData.latitude !== undefined) cleanUpdateData.latitude = updateData.latitude;
+      if (updateData.longitude !== undefined) cleanUpdateData.longitude = updateData.longitude;
+      if (updateData.locationType !== undefined) cleanUpdateData.locationType = updateData.locationType;
+      if (updateData.clientName !== undefined) cleanUpdateData.clientName = updateData.clientName?.trim();
+      if (updateData.contactPerson !== undefined) cleanUpdateData.contactPerson = updateData.contactPerson?.trim();
+      if (updateData.contactPhone !== undefined) cleanUpdateData.contactPhone = updateData.contactPhone?.trim();
+      if (updateData.contactEmail !== undefined) cleanUpdateData.contactEmail = updateData.contactEmail?.trim();
+      if (updateData.operatingHours !== undefined) cleanUpdateData.operatingHours = updateData.operatingHours?.trim();
+      if (updateData.accessInstructions !== undefined) cleanUpdateData.accessInstructions = updateData.accessInstructions?.trim();
+      if (updateData.notes !== undefined) cleanUpdateData.notes = updateData.notes?.trim();
+      if (updateData.isActive !== undefined) cleanUpdateData.isActive = updateData.isActive;
+
+      // 位置更新
+      const updatedLocation = await this.locationService.update(id, cleanUpdateData);
+
+      logger.info('位置更新完了', { 
+        locationId: id,
+        updateData: cleanUpdateData,
+        requesterId 
+      });
+
+      return this.toResponseDTO(updatedLocation);
+
+    } catch (error) {
+      logger.error('位置更新エラー', { error, id, updateData, requesterId });
+      throw error;
+    }
+  }
+
+  /**
+   * 位置削除
+   */
+  async deleteLocation(
+    id: string,
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<OperationResult<void>> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'delete');
+
+      // 存在チェック
+      const existingLocation = await this.locationService.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: { operationDetails: true }
+          }
+        }
+      });
+
+      if (!existingLocation) {
+        throw new NotFoundError('位置が見つかりません');
+      }
+
+      // 使用中チェック
+      if (existingLocation._count.operationDetails > 0) {
+        // 使用中の場合は論理削除
+        await this.locationService.update(id, { isActive: false });
+        
+        logger.info('位置論理削除完了', { 
+          locationId: id,
+          name: existingLocation.name,
+          operationDetailsCount: existingLocation._count.operationDetails,
+          requesterId 
+        });
+
+        return {
+          success: true,
+          message: '位置を無効化しました（運行記録で使用中のため）'
+        };
+      } else {
+        // 使用されていない場合は物理削除
+        await this.locationService.delete(id);
+        
+        logger.info('位置物理削除完了', { 
+          locationId: id,
+          name: existingLocation.name,
+          requesterId 
+        });
+
+        return {
+          success: true,
+          message: '位置を削除しました'
+        };
+      }
+
+    } catch (error) {
+      logger.error('位置削除エラー', { error, id, requesterId });
+      throw error;
+    }
+  }
+
+  // =====================================
+  // 🌍 地理的検索・分析メソッド群
+  // =====================================
+
+  /**
+   * 近隣位置検索
    */
   async findNearbyLocations(
-    latitude: number,
-    longitude: number,
-    radiusKm: number = 1.0,
-    limit: number = 10
-  ): Promise<Array<LocationModel & { distance: number }>> {
-    if (!isValidCoordinate(latitude, longitude)) {
-      throw new AppError('無効なGPS座標です', 400);
-    }
+    request: NearbyLocationRequest,
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<NearbyLocation[]> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'read');
 
-    // GPS座標を持つアクティブな場所を取得
-    const locations = await prisma.location.findMany({
-      where: {
-        isActive: true,
+      // 座標検証
+      if (!isValidCoordinates(request.latitude, request.longitude)) {
+        throw new ValidationError('無効な座標です');
+      }
+
+      if (request.radiusKm <= 0 || request.radiusKm > 1000) {
+        throw new ValidationError('検索半径は1-1000kmの範囲で指定してください');
+      }
+
+      // フィルタ条件構築
+      let whereCondition: any = {
         latitude: { not: null },
         longitude: { not: null }
-      }
-    });
-
-    // 距離を計算して近い順にソート
-    const locationsWithDistance = locations
-      .map(location => {
-        const distance = this.calculateDistance(
-          latitude, longitude,
-          Number(location.latitude!), Number(location.longitude!)
-        );
-        return {
-          ...location,
-          distance: Number(distance.toFixed(3))
-        };
-      })
-      .filter(location => location.distance <= radiusKm)
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, limit);
-
-    return locationsWithDistance;
-  }
-
-  /**
-   * アプリからの自動登録（GPS座標付き）
-   * @param locationData 場所データ
-   * @returns 作成された場所
-   */
-  async autoRegisterFromApp(
-    locationData: CreateLocationRequest & { latitude: number; longitude: number }
-  ): Promise<LocationModel> {
-    const { latitude, longitude } = locationData;
-
-    // GPS座標の有効性チェック
-    if (!isValidCoordinate(latitude, longitude)) {
-      throw new AppError('無効なGPS座標です', 400);
-    }
-
-    // 近くに同じような場所がないかチェック
-    const nearbyLocations = await this.findNearbyLocations(latitude, longitude, 0.1, 5);
-    
-    const similarLocation = nearbyLocations.find(loc => 
-      (loc.clientName && loc.clientName.toLowerCase().includes(locationData.clientName?.toLowerCase() || '')) ||
-      (locationData.clientName && locationData.clientName.toLowerCase().includes(loc.clientName?.toLowerCase() || ''))
-    );
-
-    if (similarLocation) {
-      // 既存の類似場所を返す
-      return similarLocation;
-    }
-
-    // 新規作成
-    return this.createLocation({
-      ...locationData,
-      latitude,
-      longitude
-    });
-  }
-
-  /**
-   * 場所の使用統計取得
-   * @param locationId 場所ID
-   * @param startDate 開始日
-   * @param endDate 終了日
-   * @returns 使用統計
-   */
-  async getLocationStats(locationId: string, startDate?: string, endDate?: string) {
-    const location = await prisma.location.findUnique({
-      where: { id: locationId }
-    });
-
-    if (!location) {
-      throw new AppError('場所が見つかりません', 404);
-    }
-
-    const whereCondition: any = { locationId };
-
-    if (startDate || endDate) {
-      whereCondition.operations = {
-        plannedStartTime: {}
       };
-      if (startDate) whereCondition.operations.plannedStartTime.gte = new Date(startDate);
-      if (endDate) whereCondition.operations.plannedStartTime.lte = new Date(endDate);
-    }
 
-    const [
-      totalUsage,
-      loadingCount,
-      unloadingCount,
-      uniqueDrivers,
-      recentActivity
-    ] = await Promise.all([
-      // 総使用回数
-      prisma.operationDetail.count({
-        where: whereCondition
-      }),
-      
-      // 積込活動回数
-      prisma.operationDetail.count({
-        where: {
-          ...whereCondition,
-          activityType: 'LOADING'
-        }
-      }),
-      
-      // 積下活動回数
-      prisma.operationDetail.count({
-        where: {
-          ...whereCondition,
-          activityType: 'UNLOADING'
-        }
-      }),
-      
-      // ユニーク運転手数
-      prisma.operationDetail.groupBy({
-        by: ['operationId'],
-        where: whereCondition
-      }).then(async (results) => {
-        const operationIds = results.map(r => r.operationId);
-        const uniqueDriversResult = await prisma.operation.groupBy({
-          by: ['driverId'],
-          where: { id: { in: operationIds } }
-        });
-        return uniqueDriversResult.length;
-      }),
-      
-      // 最近の活動
-      prisma.operationDetail.findMany({
+      if (request.excludeLocationIds && request.excludeLocationIds.length > 0) {
+        whereCondition.id = { notIn: request.excludeLocationIds };
+      }
+
+      if (request.locationType && request.locationType.length > 0) {
+        whereCondition.locationType = { in: request.locationType };
+      }
+
+      if (request.isActiveOnly !== false) {
+        whereCondition.isActive = true;
+      }
+
+      // 全候補位置取得
+      const candidateLocations = await this.locationService.findMany({
         where: whereCondition,
-        take: 5,
-        orderBy: { createdAt: 'desc' },
         include: {
-          operations: {
-            select: {
-              usersOperationsDriverIdTousers: {
-                select: { name: true }
-              }
-            }
+          _count: {
+            select: { operationDetails: true }
           }
         }
-      })
-    ]);
+      });
 
+      // 距離計算と絞り込み
+      const nearbyLocations = candidateLocations
+        .map(location => {
+          const distance = calculateDistance(
+            request.latitude,
+            request.longitude,
+            location.latitude!,
+            location.longitude!
+          );
+
+          if (distance <= request.radiusKm) {
+            // 方位計算（簡易版）
+            const bearing = this.calculateBearing(
+              request.latitude,
+              request.longitude,
+              location.latitude!,
+              location.longitude!
+            );
+
+            return {
+              location: this.toResponseDTO(location),
+              distance: Math.round(distance * 1000) / 1000, // 小数点第3位まで
+              bearing
+            };
+          }
+          return null;
+        })
+        .filter((item): item is NearbyLocation => item !== null)
+        .sort((a, b) => a.distance - b.distance);
+
+      // 件数制限
+      const limit = request.limit || 50;
+      const result = nearbyLocations.slice(0, limit);
+
+      logger.info('近隣位置検索完了', {
+        centerCoordinates: [request.latitude, request.longitude],
+        radiusKm: request.radiusKm,
+        foundCount: result.length,
+        requesterId
+      });
+
+      return result;
+
+    } catch (error) {
+      logger.error('近隣位置検索エラー', { error, request, requesterId });
+      throw error;
+    }
+  }
+
+  /**
+   * 位置統計取得
+   */
+  async getLocationStatistics(
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<LocationStatistics> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'read');
+
+      const [
+        totalLocations,
+        activeLocations,
+        locationsByType,
+        coordinateStats,
+        operationStats
+      ] = await Promise.all([
+        this.locationService.count(),
+        this.locationService.count({ where: { isActive: true } }),
+        this.locationService.groupBy({
+          by: ['locationType'],
+          _count: true,
+          where: { isActive: true }
+        }),
+        Promise.all([
+          this.locationService.count({
+            where: {
+              isActive: true,
+              latitude: { not: null },
+              longitude: { not: null }
+            }
+          }),
+          this.locationService.count({
+            where: {
+              isActive: true,
+              OR: [
+                { latitude: null },
+                { longitude: null }
+              ]
+            }
+          })
+        ]),
+        this.locationService.aggregate({
+          _avg: {
+            // operationDetails count の平均は複雑なため簡略化
+          }
+        })
+      ]);
+
+      const locationsByTypeMap = locationsByType.reduce((acc, item) => {
+        acc[item.locationType as LocationType] = item._count;
+        return acc;
+      }, {} as Record<LocationType, number>);
+
+      const [withCoordinates, withoutCoordinates] = coordinateStats;
+
+      return {
+        totalLocations,
+        activeLocations,
+        inactiveLocations: totalLocations - activeLocations,
+        locationsByType: locationsByTypeMap,
+        withCoordinates,
+        withoutCoordinates,
+        averageOperationsPerLocation: 0 // 簡略化
+      };
+
+    } catch (error) {
+      logger.error('位置統計取得エラー', { error, requesterId });
+      throw error;
+    }
+  }
+
+  // =====================================
+  // 🛠️ ユーティリティメソッド群
+  // =====================================
+
+  private calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const toRadians = (deg: number) => deg * Math.PI / 180;
+    const toDegrees = (rad: number) => rad * 180 / Math.PI;
+
+    const dLon = toRadians(lon2 - lon1);
+    const lat1Rad = toRadians(lat1);
+    const lat2Rad = toRadians(lat2);
+
+    const y = Math.sin(dLon) * Math.cos(lat2Rad);
+    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+
+    let bearing = toDegrees(Math.atan2(y, x));
+    return (bearing + 360) % 360; // 0-359度に正規化
+  }
+
+  private toResponseDTO(location: LocationModel & { _count?: any }): LocationResponseDTO {
     return {
-      locationInfo: {
-        clientName: location.clientName,
-        name: location.name,
-        address: location.address,
-        locationType: location.locationType
-      },
-      statistics: {
-        totalUsage,
-        loadingCount,
-        unloadingCount,
-        uniqueDrivers,
-        recentActivity: recentActivity.map(activity => ({
-          activityType: activity.activityType,
-          timestamp: activity.createdAt,
-          driverName: activity.operations?.usersOperationsDriverIdTousers.name
-        }))
-      }
+      id: location.id,
+      name: location.name,
+      address: location.address,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      locationType: location.locationType,
+      clientName: location.clientName,
+      contactPerson: location.contactPerson,
+      contactPhone: location.contactPhone,
+      contactEmail: location.contactEmail,
+      operatingHours: location.operatingHours,
+      accessInstructions: location.accessInstructions,
+      notes: location.notes,
+      isActive: location.isActive,
+      operationCount: location._count?.operationDetails || 0,
+      createdAt: location.createdAt.toISOString(),
+      updatedAt: location.updatedAt.toISOString()
     };
   }
 
   /**
-   * 2点間の距離を計算（簡易版）
+   * サービスヘルスチェック
    */
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // 地球の半径（km）
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
-  /**
-   * 住所からGPS座標を取得（ジオコーディング）
-   * @param address 住所
-   * @returns GPS座標
-   */
-  async geocodeAddress(address: string): Promise<{ latitude: number; longitude: number }> {
-    // 外部ジオコーディングサービス（GoogleMaps API等）との連携が必要
-    // 現在は機能未実装のためエラーを返す
-    throw new AppError('ジオコーディング機能は現在利用できません', 501);
-  }
-
-  /**
-   * GPS座標から住所を取得（逆ジオコーディング）
-   * @param coordinates GPS座標
-   * @returns 住所
-   */
-  async reverseGeocode(coordinates: { latitude: number; longitude: number }): Promise<string> {
-    // 外部逆ジオコーディングサービス（GoogleMaps API等）との連携が必要
-    // 現在は機能未実装のためエラーを返す
-    throw new AppError('逆ジオコーディング機能は現在利用できません', 501);
-  }
-
-  /**
-   * 顧客名一覧取得（検索対応）
-   * @param search 検索クエリ
-   * @returns 顧客名一覧
-   */
-  async getClientNames(search?: string): Promise<string[]> {
-    const where: any = { 
-      isActive: true,
-      clientName: { not: null }
-    };
-
-    if (search) {
-      where.clientName = { contains: search, mode: 'insensitive' };
+  async healthCheck(): Promise<{ status: string; timestamp: Date; details: any }> {
+    try {
+      const locationCount = await this.locationService.count();
+      const activeLocationCount = await this.locationService.count({
+        where: { isActive: true }
+      });
+      const withCoordinatesCount = await this.locationService.count({
+        where: {
+          latitude: { not: null },
+          longitude: { not: null }
+        }
+      });
+      
+      return {
+        status: 'healthy',
+        timestamp: new Date(),
+        details: {
+          database: 'connected',
+          totalLocations: locationCount,
+          activeLocations: activeLocationCount,
+          withCoordinates: withCoordinatesCount,
+          gpsCalculationsAvailable: typeof calculateDistance === 'function',
+          service: 'LocationService'
+        }
+      };
+    } catch (error) {
+      logger.error('LocationServiceヘルスチェックエラー', { error });
+      return {
+        status: 'unhealthy',
+        timestamp: new Date(),
+        details: {
+          error: error instanceof Error ? error.message : '不明なエラー'
+        }
+      };
     }
-
-    const result = await prisma.location.findMany({
-      where,
-      select: { clientName: true },
-      distinct: ['clientName'],
-      orderBy: { clientName: 'asc' }
-    });
-
-    return result.map(customer => customer.clientName!).filter(Boolean);
-  }
-
-  /**
-   * 場所のアクティブ状態切り替え
-   * @param locationId 場所ID
-   * @returns 更新された場所
-   */
-  async toggleLocationStatus(locationId: string): Promise<LocationModel> {
-    const location = await prisma.location.findUnique({
-      where: { id: locationId }
-    });
-
-    if (!location) {
-      throw new AppError('場所が見つかりません', 404);
-    }
-
-    const updatedLocation = await prisma.location.update({
-      where: { id: locationId },
-      data: { isActive: !location.isActive }
-    });
-
-    return updatedLocation;
   }
 }
+
+// =====================================
+// 🔄 シングルトンファクトリ
+// =====================================
+
+let _locationServiceInstance: LocationService | null = null;
+
+export const getLocationServiceInstance = (db?: PrismaClient): LocationService => {
+  if (!_locationServiceInstance) {
+    _locationServiceInstance = new LocationService(db);
+  }
+  return _locationServiceInstance;
+};
+
+// =====================================
+// 📤 エクスポート
+// =====================================
+
+export default LocationService;
