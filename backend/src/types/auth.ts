@@ -7,10 +7,6 @@
 // =====================================
 
 import { Request } from 'express';
-import { UserRole } from '@prisma/client';
-
-// 🎯 Phase 1完成基盤との整合性確保
-// types/index.ts、types/common.ts、types/aliases.tsとの統一
 
 // 🎯 共通型のインポート
 import type {
@@ -18,9 +14,8 @@ import type {
   PaginationQuery
 } from './common';
 
-import type {
-  UserModel
-} from './index';
+// types/index.ts経由でインポート（ハブ設計）
+import { UserRole } from '@prisma/client'
 
 // =====================================
 // 認証済みリクエスト型（統一版）
@@ -226,27 +221,27 @@ export interface RolePermissions {
   canCreateUsers: boolean;
   canUpdateUsers: boolean;
   canDeleteUsers: boolean;
-  
+
   // 車両管理権限
   canViewVehicles: boolean;
   canCreateVehicles: boolean;
   canUpdateVehicles: boolean;
   canDeleteVehicles: boolean;
-  
+
   // 運行管理権限
   canViewOperations: boolean;
   canCreateOperations: boolean;
   canUpdateOperations: boolean;
   canDeleteOperations: boolean;
-  
+
   // レポート権限
   canViewReports: boolean;
   canExportReports: boolean;
-  
+
   // システム設定権限
   canViewSystemSettings: boolean;
   canUpdateSystemSettings: boolean;
-  
+
   // 監査ログ権限
   canViewAuditLogs: boolean;
 }

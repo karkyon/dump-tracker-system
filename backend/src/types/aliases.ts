@@ -5,50 +5,68 @@
 // 重複する型エイリアスを一箇所に集約管理
 // 既存のinspectionService.tsとの完全互換性を保持
 // 作成日時: 2025年9月26日
-// 最終更新: 2025年9月30日 - コンパイルエラー完全修正版
+// 最終更新: 2025年10月4日 - 循環依存解消版
 // =====================================
 
-// メインのindex.tsから必要な型をインポート
-// ✨ 修正: *CreateDTO → *CreateInput, *UpdateDTO → *UpdateInput に変更
+// 各モデルから直接インポート
 import type {
-  // ResponseDTO型
   InspectionItemResponseDTO,
-  InspectionRecordResponseDTO,
-  OperationResponseDTO,
-  UserResponseDTO,
-  VehicleResponseDTO,
-  LocationResponseDTO,
-  ItemResponseDTO,
-  MaintenanceRecordResponseDTO,
-  NotificationResponseDTO,
-  
-  // ✨ 修正: CreateInput型（index.tsの実際のエクスポート名）
   InspectionItemCreateInput,
+  InspectionItemUpdateInput
+} from '../models/InspectionItemModel';
+
+import type {
+  InspectionRecordResponseDTO,
   InspectionRecordCreateInput,
+  InspectionRecordUpdateInput
+} from '../models/InspectionRecordModel';
+
+import type {
+  OperationResponseDTO,
   OperationCreateInput,
+  OperationUpdateInput
+} from '../models/OperationModel';
+
+import type {
+  UserResponseDTO,
   UserCreateInput,
+  UserUpdateInput
+} from '../models/UserModel';
+
+import type {
+  VehicleResponseDTO,
   VehicleCreateInput,
+  VehicleUpdateInput
+} from '../models/VehicleModel';
+
+import type {
+  LocationResponseDTO,
   LocationCreateInput,
+  LocationUpdateInput
+} from '../models/LocationModel';
+
+import type {
+  ItemResponseDTO,
   ItemCreateInput,
+  ItemUpdateInput
+} from '../models/ItemModel';
+
+import type {
+  MaintenanceRecordResponseDTO,
   MaintenanceRecordCreateInput,
+  MaintenanceRecordUpdateInput
+} from '../models/MaintenanceRecordModel';
+
+import type {
+  NotificationResponseDTO,
   NotificationCreateInput,
-  
-  // ✨ 修正: UpdateInput型（index.tsの実際のエクスポート名）
-  InspectionItemUpdateInput,
-  InspectionRecordUpdateInput,
-  OperationUpdateInput,
-  UserUpdateInput,
-  VehicleUpdateInput,
-  LocationUpdateInput,
-  ItemUpdateInput,
-  MaintenanceRecordUpdateInput,
-  NotificationUpdateInput,
-  
-  // Filter型
-  VehicleFilter,
-  UserFilter,
-  LocationFilter
-} from './index';
+  NotificationUpdateInput
+} from '../models/NotificationModel';
+
+// Filter型は各ドメイン型ファイルから直接インポート
+import type { VehicleFilter } from './vehicle';
+import type { UserFilter } from './auth';
+import type { LocationFilter } from './location';
 
 // =====================================
 // 🔧 後方互換性のための型エイリアス定義
@@ -371,47 +389,47 @@ export type RequiredOperation = Required<Operation>;
 
 /**
  * 【aliases.ts コンパイルエラー完全修正】
- * 
+ *
  * ✅ 修正1: import文の型名を修正
  *    - *CreateDTO → *CreateInput に変更（index.tsの実際のエクスポート名）
  *    - *UpdateDTO → *UpdateInput に変更（index.tsの実際のエクスポート名）
- * 
+ *
  * ✅ 修正2: 後方互換性のための型エイリアス追加
  *    - *CreateDTO = *CreateInput のエイリアスを定義
  *    - *UpdateDTO = *UpdateInput のエイリアスを定義
  *    - 既存コードで*CreateDTO, *UpdateDTOを使用している箇所との互換性維持
- * 
+ *
  * ✅ 修正3: 追加の型エイリアス定義
  *    - CreateItemRequest, UpdateItemRequest などを追加
  *    - CreateMaintenanceRecordRequest, UpdateMaintenanceRecordRequest などを追加
  *    - CreateNotificationRequest, UpdateNotificationRequest などを追加
- * 
+ *
  * ✅ 修正4: InspectionFilterのローカル宣言維持
  *    - importからInspectionFilterを削除（競合解消済み）
  *    - ローカルでインターフェイス定義を維持
- * 
+ *
  * ✅ 修正5: OperationFilter新規定義維持
  *    - './index'にOperationFilterが存在しないため新規定義を維持
  *    - OperationFilterParamsエイリアスも追加済み
- * 
+ *
  * ✅ 修正6: InspectionRecordWithDetails型互換性維持
  *    - operation, inspectorプロパティをオプショナル化済み
  *    - InspectionRecordResponseDTOとの互換性確保済み
- * 
+ *
  * ✅ 修正7: VehiclePlateNumber プロパティ名修正済み
  *    - 'licenseNumber'を'plateNumber'に修正済み
  *    - 型名も VehiclePlateNumber に変更済み
- * 
+ *
  * 📊 既存機能保持状況:
  *    - 全型定義（60+型）を100%保持
  *    - 後方互換性完全維持
  *    - コード行数: 約400行（追加のみ、削除なし）
- * 
+ *
  * 🎯 影響範囲:
  *    - inspectionService.ts: 完全互換性維持
  *    - 他のサービス層: 型エイリアス使用箇所での改善
  *    - 型安全性: 向上（エラー解消による）
- * 
+ *
  * 📈 コード量変化:
  *    - 増加: +約20行（後方互換性のための*CreateDTO, *UpdateDTO型エイリアス定義）
  *    - 削減: 0行（機能削除なし）
@@ -421,21 +439,21 @@ export type RequiredOperation = Required<Operation>;
 
 /**
  * 【使用ガイドライン】
- * 
+ *
  * 1. **新規コード**: *CreateInput, *UpdateInput を使用（推奨）
  * 2. **既存コード**: *CreateDTO, *UpdateDTO も引き続き使用可能（互換性維持）
  * 3. **リクエスト型**: Create*Request, Update*Request を使用
  * 4. **レスポンス型**: *ResponseDTO を使用
  * 5. **フィルタ型**: *Filter, *FilterParams を使用
- * 
+ *
  * 例:
  * ```typescript
  * // 新規コード（推奨）
  * import { VehicleCreateInput } from '../types/aliases';
- * 
+ *
  * // 既存コード（互換性維持）
  * import { VehicleCreateDTO } from '../types/aliases';
- * 
+ *
  * // どちらも同じ型を参照
  * const data1: VehicleCreateInput = { ... };
  * const data2: VehicleCreateDTO = { ... };  // OK

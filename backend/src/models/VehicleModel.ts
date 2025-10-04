@@ -6,7 +6,7 @@
 // アーキテクチャ指針準拠版 - Phase 1-B対応
 // =====================================
 
-import type { 
+import type {
   Vehicle as PrismaVehicle,
   Prisma,
   GpsLog,
@@ -22,12 +22,12 @@ import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完成基盤の活用
 import { DatabaseService } from '../utils/database';
-import { 
-  AppError, 
-  ValidationError, 
-  AuthorizationError, 
+import {
+  AppError,
+  ValidationError,
+  AuthorizationError,
   NotFoundError,
-  ConflictError 
+  ConflictError
 } from '../utils/errors';
 import logger from '../utils/logger';
 
@@ -59,7 +59,11 @@ import type {
   VehicleMaintenanceSummary,
   VehicleFuelRecord,
   VehicleCostAnalysis,
-  VehicleReportConfig,
+  VehicleReportConfig
+} from '../types/vehicle';
+
+// 型ガード関数は使用時に直接インポート
+import {
   isValidVehicleStatus,
   isValidFuelType,
   isVehicleOperational,
@@ -73,7 +77,7 @@ import type {
 
 export type VehicleModel = PrismaVehicle;
 export type VehicleCreateInput = Prisma.VehicleCreateInput;
-export type VehicleUpdateInput = Prisma.VehicleUpdateInput;  
+export type VehicleUpdateInput = Prisma.VehicleUpdateInput;
 export type VehicleWhereInput = Prisma.VehicleWhereInput;
 export type VehicleWhereUniqueInput = Prisma.VehicleWhereUniqueInput;
 export type VehicleOrderByInput = Prisma.VehicleOrderByWithRelationInput;
@@ -177,7 +181,7 @@ export class VehicleService {
       });
 
       // 🎯 Phase 1-A基盤: ログ統合
-      logger.info('Vehicle created successfully', { 
+      logger.info('Vehicle created successfully', {
         vehicleId: vehicle.id,
         plateNumber: vehicle.plateNumber,
         model: vehicle.model,
@@ -193,11 +197,11 @@ export class VehicleService {
     } catch (error) {
       // 🎯 Phase 1-A基盤: エラーハンドリング統合
       logger.error('Failed to create vehicle', { error, data });
-      
+
       if (error instanceof ValidationError || error instanceof ConflictError) {
         throw error;
       }
-      
+
       throw new AppError('車両の作成に失敗しました', 500, error);
     }
   }
@@ -263,7 +267,7 @@ export class VehicleService {
         availability = await this.checkVehicleAvailability(id);
       }
 
-      logger.debug('Vehicle found with enhanced details', { 
+      logger.debug('Vehicle found with enhanced details', {
         vehicleId: id,
         includeStatistics: !!statistics,
         includeMaintenanceHistory: !!maintenanceSummary,
@@ -280,11 +284,11 @@ export class VehicleService {
 
     } catch (error) {
       logger.error('Failed to find vehicle by key', { error, id });
-      
+
       if (error instanceof ValidationError) {
         throw error;
       }
-      
+
       throw new AppError('車両情報の取得に失敗しました', 500, error);
     }
   }
@@ -306,9 +310,9 @@ export class VehicleService {
         take: params?.take
       });
 
-      logger.debug('Vehicles found', { 
+      logger.debug('Vehicles found', {
         count: vehicles.length,
-        params 
+        params
       });
 
       return vehicles;
@@ -332,7 +336,7 @@ export class VehicleService {
   }): Promise<VehicleListResponseExtended> {
     try {
       const { page, pageSize, where, orderBy, filter, includeFleetStatistics } = params;
-      
+
       // 🎯 Phase 1-A基盤: バリデーション強化
       if (page < 1 || pageSize < 1) {
         throw new ValidationError('ページ番号とページサイズは1以上である必要があります');
@@ -405,7 +409,7 @@ export class VehicleService {
         fleetStatistics
       };
 
-      logger.debug('Vehicles paginated with advanced features', { 
+      logger.debug('Vehicles paginated with advanced features', {
         page,
         pageSize,
         total,
@@ -417,11 +421,11 @@ export class VehicleService {
 
     } catch (error) {
       logger.error('Failed to find vehicles with pagination', { error, params });
-      
+
       if (error instanceof ValidationError) {
         throw error;
       }
-      
+
       throw new AppError('車両ページネーション取得に失敗しました', 500, error);
     }
   }
@@ -444,7 +448,7 @@ export class VehicleService {
       // 🎯 新機能: 車両ナンバー重複チェック（変更時）
       if (data.plateNumber && data.plateNumber !== existing.plateNumber) {
         const existingWithPlate = await this.prisma.vehicle.findFirst({
-          where: { 
+          where: {
             plateNumber: data.plateNumber,
             id: { not: id }
           }
@@ -472,7 +476,7 @@ export class VehicleService {
         }
       });
 
-      logger.info('Vehicle updated successfully', { 
+      logger.info('Vehicle updated successfully', {
         vehicleId: id,
         changes: Object.keys(data),
         statusChanged: !!(data.status && data.status !== existing.status)
@@ -486,11 +490,11 @@ export class VehicleService {
 
     } catch (error) {
       logger.error('Failed to update vehicle', { error, id, data });
-      
+
       if (error instanceof ValidationError || error instanceof NotFoundError || error instanceof ConflictError) {
         throw error;
       }
-      
+
       throw new AppError('車両の更新に失敗しました', 500, error);
     }
   }
@@ -526,7 +530,7 @@ export class VehicleService {
         where: { id }
       });
 
-      logger.info('Vehicle deleted successfully', { 
+      logger.info('Vehicle deleted successfully', {
         vehicleId: id,
         plateNumber: existing.plateNumber,
         maintenanceRecordsCount: maintenanceCount
@@ -540,11 +544,11 @@ export class VehicleService {
 
     } catch (error) {
       logger.error('Failed to delete vehicle', { error, id });
-      
+
       if (error instanceof ValidationError || error instanceof NotFoundError || error instanceof ConflictError) {
         throw error;
       }
-      
+
       throw new AppError('車両の削除に失敗しました', 500, error);
     }
   }
@@ -576,9 +580,9 @@ export class VehicleService {
   async count(where?: VehicleWhereInput): Promise<number> {
     try {
       const count = await this.prisma.vehicle.count({ where });
-      
+
       logger.debug('Vehicle count retrieved', { count, where });
-      
+
       return count;
 
     } catch (error) {
@@ -636,7 +640,7 @@ export class VehicleService {
       // 距離・時間統計
       const totalDistance = operations.reduce((sum, op) => sum + (op.distance || 0), 0);
       const averageDistance = totalOperations > 0 ? totalDistance / totalOperations : 0;
-      
+
       const operationTimes = operations
         .filter(op => op.startTime && op.endTime)
         .map(op => {
@@ -644,7 +648,7 @@ export class VehicleService {
           const end = new Date(op.endTime!).getTime();
           return (end - start) / (1000 * 60); // 分単位
         });
-      
+
       const totalOperationTime = operationTimes.reduce((sum, time) => sum + time, 0);
       const averageOperationTime = operationTimes.length > 0 ? totalOperationTime / operationTimes.length : 0;
 
@@ -655,14 +659,14 @@ export class VehicleService {
       const fuelCostPerKm = totalDistance > 0 ? totalFuelCost / totalDistance : 0;
 
       // 稼働統計
-      const periodDays = period ? 
-        Math.ceil((period.to.getTime() - period.from.getTime()) / (1000 * 60 * 60 * 24)) : 
+      const periodDays = period ?
+        Math.ceil((period.to.getTime() - period.from.getTime()) / (1000 * 60 * 60 * 24)) :
         30; // デフォルト30日
-      
+
       const operationDays = new Set(
         operations.map(op => new Date(op.createdAt).toDateString())
       ).size;
-      
+
       const utilizationRate = periodDays > 0 ? (operationDays / periodDays) * 100 : 0;
       const availabilityRate = isVehicleOperational(vehicle) ? 100 : 80; // 簡易計算
 
@@ -711,11 +715,11 @@ export class VehicleService {
 
     } catch (error) {
       logger.error('Failed to generate vehicle statistics', { error, vehicleId });
-      
+
       if (error instanceof NotFoundError) {
         throw error;
       }
-      
+
       throw new AppError('車両統計の生成に失敗しました', 500, error);
     }
   }
@@ -777,11 +781,11 @@ export class VehicleService {
 
     } catch (error) {
       logger.error('Failed to check vehicle availability', { error, vehicleId });
-      
+
       if (error instanceof NotFoundError) {
         throw error;
       }
-      
+
       throw new AppError('車両可用性チェックに失敗しました', 500, error);
     }
   }
@@ -914,15 +918,15 @@ export class VehicleService {
       }
     });
 
-    const totalDistance = vehicles.reduce((sum, vehicle) => 
+    const totalDistance = vehicles.reduce((sum, vehicle) =>
       sum + vehicle.operations.reduce((opSum, op) => opSum + (op.distance || 0), 0), 0
     );
 
-    const totalFuelConsumed = vehicles.reduce((sum, vehicle) => 
+    const totalFuelConsumed = vehicles.reduce((sum, vehicle) =>
       sum + vehicle.operations.reduce((opSum, op) => opSum + (op.fuelConsumed || 0), 0), 0
     );
 
-    const totalOperationTime = vehicles.reduce((sum, vehicle) => 
+    const totalOperationTime = vehicles.reduce((sum, vehicle) =>
       sum + vehicle.operations.reduce((opSum, op) => {
         if (op.startTime && op.endTime) {
           return opSum + ((new Date(op.endTime).getTime() - new Date(op.startTime).getTime()) / (1000 * 60));
@@ -956,11 +960,11 @@ export class VehicleService {
 
   private calculateNextMaintenanceDate(vehicle: VehicleModel, lastMaintenanceDate?: Date): Date | undefined {
     if (!lastMaintenanceDate) return undefined;
-    
+
     // 簡易計算: 前回メンテナンスから90日後
     const nextDate = new Date(lastMaintenanceDate);
     nextDate.setDate(nextDate.getDate() + 90);
-    
+
     return nextDate;
   }
 
@@ -968,7 +972,7 @@ export class VehicleService {
    * 🎯 新機能: 一括操作（既存機能を損なわない追加）
    */
   async bulkUpdate(
-    ids: string[], 
+    ids: string[],
     data: Partial<VehicleUpdateInput>
   ): Promise<BulkOperationResult> {
     try {
@@ -980,7 +984,7 @@ export class VehicleService {
         ids.map(id => this.update(id, data))
       );
 
-      const successful = results.filter((r): r is PromiseFulfilledResult<OperationResult<VehicleModel>> => 
+      const successful = results.filter((r): r is PromiseFulfilledResult<OperationResult<VehicleModel>> =>
         r.status === 'fulfilled'
       );
       const failed = results.filter(r => r.status === 'rejected');

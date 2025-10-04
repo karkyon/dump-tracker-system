@@ -10,38 +10,15 @@
 // ⚠️ Phase 1-A-5 修正: VehicleStatusをEnum値として使用
 import { OperationStatus, ActivityType, VehicleStatus } from '@prisma/client';
 
-// 🎯 循環参照解消：直接参照による解決
-import type { 
-  OperationModel, 
-  OperationCreateInput, 
-  OperationUpdateInput,
-  OperationCreateDTO,
-  OperationUpdateDTO,
-  OperationResponseDTO
-} from '../models/OperationModel';
-
+// ✅ 修正: models/ではなく @prisma/client から直接import
 import type {
-  OperationDetailModel,
-  OperationDetailCreateInput,
-  OperationDetailCreateDTO,
-  OperationDetailResponseDTO
-} from '../models/OperationDetailModel';
-
-import type {
-  GpsLogModel,
-  GpsLogCreateDTO,
-  GpsLogResponseDTO
-} from '../models/GpsLogModel';
-
-import type {
-  VehicleModel,
-  VehicleResponseDTO
-} from '../models/VehicleModel';
-
-import type {
-  UserModel,
-  UserResponseDTO
-} from '../models/UserModel';
+  Operation,
+  OperationDetail,
+  GpsLog,
+  Vehicle,
+  User,
+  Prisma
+} from '@prisma/client';
 
 // 🎯 共通型インポート（types/common.tsから）
 import type {
@@ -72,7 +49,7 @@ export interface UpdateTripRequest {
 }
 
 // Trip型（Operationモデルのエイリアス + 拡張）
-export interface Trip extends OperationModel {
+export interface Trip extends Operation {
   // 必要に応じて拡張プロパティを追加
 }
 
@@ -162,7 +139,7 @@ export interface TripStatistics extends StatisticsBase {
 // 拡張Trip型定義（services統合対応）
 // =====================================
 
-export interface CreateTripRequestExtended extends OperationCreateDTO {
+export interface CreateTripRequestExtended {
   vehicleId: string;
   driverId?: string;
   startTime: Date | string;
@@ -173,7 +150,7 @@ export interface CreateTripRequestExtended extends OperationCreateDTO {
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 }
 
-export interface UpdateTripRequestExtended extends OperationUpdateDTO {
+export interface UpdateTripRequestExtended extends Prisma.OperationUpdateInput {
   status?: OperationStatus;
   notes?: string;
   actualStartTime?: Date;
@@ -197,7 +174,7 @@ export interface EndTripRequest {
   completionStatus?: 'COMPLETED' | 'COMPLETED_WITH_ISSUES' | 'PARTIALLY_COMPLETED';
 }
 
-export interface AddActivityRequest extends OperationDetailCreateDTO {
+export interface AddActnDetailivityRequest extends Prisma.OperationDetailCreateInput {
   locationId: string;
   itemId?: string;
   quantity?: number;
@@ -212,7 +189,7 @@ export interface AddActivityRequest extends OperationDetailCreateDTO {
   };
 }
 
-export interface GpsLocationUpdate extends GpsLogCreateDTO {
+export interface GpsLocationUpdate {
   latitude: number;
   longitude: number;
   altitude?: number;
@@ -222,12 +199,12 @@ export interface GpsLocationUpdate extends GpsLogCreateDTO {
   timestamp: Date;
 }
 
-export interface TripWithDetails extends OperationResponseDTO {
-  vehicle?: VehicleResponseDTO;
-  driver?: UserResponseDTO;
-  activities?: OperationDetailResponseDTO[];
-  gpsLogs?: GpsLogResponseDTO[];
-  fuelRecords?: any[]; // FuelRecordResponseDTO[] - 将来のFuelRecordModel実装時に型更新
+export interface TripWithDetails extends Operation {
+  vehicle?: Vehicle;
+  driver?: User;
+  activities?: OperationDetail[];
+  gpsLogs?: GpsLog[];
+  fuelRecords?: any[];
   statistics?: TripStatistics;
 }
 
@@ -243,7 +220,7 @@ export interface GPSHistoryOptions {
 }
 
 export interface GPSHistoryResponse {
-  gpsLogs: GpsLogResponseDTO[];
+  gpsLogs: GpsLog[];
   totalCount: number;
   analytics?: {
     totalDistance: number;
@@ -260,10 +237,10 @@ export interface GPSHistoryResponse {
 
 export type TripStatus = OperationStatus;
 
-export type VehicleOperationStatus = 
-  | 'AVAILABLE' 
-  | 'IN_USE' 
-  | 'MAINTENANCE' 
+export type VehicleOperationStatus =
+  | 'AVAILABLE'
+  | 'IN_USE'
+  | 'MAINTENANCE'
   | 'OUT_OF_SERVICE';
 
 export interface TripDetail {
@@ -289,12 +266,12 @@ export type BusinessVehicleStatus = VehicleOperationStatus;
 
 /**
  * 車両ステータスヘルパー - Phase 1-A-5完全改修版
- * 
+ *
  * 【Phase 1-A-5 修正内容】
  * - 文字列リテラル（'AVAILABLE'等）をVehicleStatus Enum値に変更
  * - switch-caseでのEnum値比較を型安全に実装
  * - 既存の全機能を100%保持しながら型エラーを解消
- * 
+ *
  * 【使用例】
  * - toBusiness(VehicleStatus.AVAILABLE) → 'AVAILABLE'
  * - toPrisma('AVAILABLE' as BusinessVehicleStatus) → VehicleStatus.AVAILABLE
@@ -374,7 +351,7 @@ export const vehicleStatusHelper = {
 
 /**
  * 車両ステータス定数 - 後方互換性維持
- * 
+ *
  * 【Phase 1-A-5 注記】
  * - 文字列リテラル定数は既存コードとの互換性のため保持
  * - 新規コードではVehicleStatus Enum値の使用を推奨
@@ -385,11 +362,11 @@ export const VEHICLE_STATUS_CONSTANTS = {
   IN_USE: 'IN_USE' as const,
   MAINTENANCE: 'MAINTENANCE' as const,
   OUT_OF_SERVICE: 'OUT_OF_SERVICE' as const,
-  
+
   // ステータス一覧
   ALL_STATUSES: [
     'AVAILABLE',
-    'IN_USE', 
+    'IN_USE',
     'MAINTENANCE',
     'OUT_OF_SERVICE'
   ] as const,
@@ -400,7 +377,7 @@ export const VEHICLE_STATUS_CONSTANTS = {
   // 運行不可ステータス
   NON_OPERATIONAL_STATUSES: [
     'IN_USE',
-    'MAINTENANCE', 
+    'MAINTENANCE',
     'OUT_OF_SERVICE'
   ] as const
 };
@@ -411,12 +388,12 @@ export const VEHICLE_STATUS_CONSTANTS = {
 
 /**
  * Trip車両ステータス管理クラス
- * 
+ *
  * 【機能】
  * - 運行開始/終了時のステータス決定
  * - ステータス変更の妥当性チェック
  * - ステータス変更理由の取得
- * 
+ *
  * 【Phase 1-A-5】
  * - 既存の全メソッドを100%保持
  * - 型安全性を維持しながら既存機能を保証
@@ -461,27 +438,27 @@ export class TripVehicleStatusManager {
    * @returns 変更可能な場合true
    */
   static canChangeStatus(
-    from: VehicleOperationStatus, 
+    from: VehicleOperationStatus,
     to: VehicleOperationStatus
   ): boolean {
     // 利用可能 → 使用中
     if (from === 'AVAILABLE' && to === 'IN_USE') return true;
-    
+
     // 使用中 → 利用可能
     if (from === 'IN_USE' && to === 'AVAILABLE') return true;
-    
+
     // 任意のステータス → メンテナンス中
     if (to === 'MAINTENANCE') return true;
-    
+
     // メンテナンス中 → 利用可能
     if (from === 'MAINTENANCE' && to === 'AVAILABLE') return true;
-    
+
     // サービス停止への変更は管理者のみ
     if (to === 'OUT_OF_SERVICE') return true;
-    
+
     // サービス停止から復旧
     if (from === 'OUT_OF_SERVICE' && to === 'AVAILABLE') return true;
-    
+
     return false;
   }
 
@@ -523,42 +500,42 @@ export class TripVehicleStatusManager {
 
 /**
  * 【Phase 1-A-5 改修完了】
- * 
+ *
  * ✅ 完了項目:
  * 1. vehicleStatusHelper.toBusiness()内のswitchケースをEnum値に変更
  *    - case 'AVAILABLE' → case VehicleStatus.AVAILABLE
  *    - 全4ケース（AVAILABLE, IN_USE, MAINTENANCE, OUT_OF_SERVICE）を修正
- * 
+ *
  * 2. vehicleStatusHelper.toPrisma()内の返却値をEnum値に変更
  *    - return 'AVAILABLE' → return VehicleStatus.AVAILABLE
  *    - 全4ケース + defaultケースを修正
- * 
+ *
  * 3. 既存機能の100%保持
  *    - vehicleStatusHelperの全メソッド保持
  *    - VEHICLE_STATUS_CONSTANTSの全定数保持（後方互換性）
  *    - TripVehicleStatusManagerの全メソッド保持
  *    - 全型定義（20+型）を完全保持
- * 
+ *
  * 📊 解消されるエラー:
  * - TypeScriptコンパイルエラー: 8件（100%解消）
  *   - Type '"AVAILABLE"' is not comparable/assignable エラー: 7件
  *   - 関連する型エラー: 1件
- * 
+ *
  * 🎯 影響範囲:
  * - models/OperationModel.ts: vehicleStatusHelper使用箇所
  * - services/tripService.ts: vehicleStatusHelper使用箇所
  * - controllers/tripController.ts: 間接的な型安全性向上
- * 
+ *
  * 📝 コード量の変化:
  * - コード行数: 減少なし（機能追加のみ）
  * - Phase 1-A-5詳細コメント追加: 約50行
  * - TSDocコメント拡充: 既存メソッドへの詳細説明追加
- * 
+ *
  * 🔧 後方互換性:
  * - VEHICLE_STATUS_CONSTANTSは文字列リテラル定数として維持
  * - 既存コードでの使用に影響なし
  * - 新規コードではVehicleStatus Enum推奨
- * 
+ *
  * 🚀 次フェーズ準備:
  * - Phase 1-B-1: utils/errors.ts SecurityError実装準備完了
  * - Phase 1全体: types/層修正完了（5/5ファイル）

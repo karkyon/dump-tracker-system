@@ -24,13 +24,11 @@ import type {
 // 🔧 Phase 1-A-2修正: import type → import に変更（Enumは値として使用されるため）
 import { VehicleStatus, FuelType, UserRole } from '@prisma/client';
 
-// ✨ 関連モデル型の統合
 import type {
-  UserModel,
-  OperationModel,
-  MaintenanceRecordModel,
-  GpsLogModel
-} from './index';
+  Operation as OperationModel,
+  MaintenanceRecord as MaintenanceRecordModel,
+  GpsLog as GpsLogModel
+} from '@prisma/client';
 
 // =====================================
 // 🚗 1. 基本車両情報型（既存保持・models/統合）
@@ -131,7 +129,7 @@ export interface VehicleResponseDTO {
   isActive: boolean;
   createdAt: Date;  // 🔧 修正: Date型に統一
   updatedAt: Date;  // 🔧 修正: Date型に統一
-  
+
   assignedDriver?: {
     id: string;
     name?: string;

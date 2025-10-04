@@ -6,10 +6,6 @@
 // 最終更新: 2025年10月1日 - バリデーション型修正・Date型統一
 // =====================================
 
-// ⚠️ Phase 1-A-4 修正: AuthenticatedRequest再export追加
-// auth.tsで定義されているAuthenticatedRequestを再export
-export type { AuthenticatedRequest } from './auth';
-
 // =====================================
 // 📋 1. ページネーション関連型（既存完全保持・拡張）
 // =====================================
@@ -544,10 +540,10 @@ export type OptionalKeys<T> = {
 
 // ✅ 追加: Prisma互換の型変換ヘルパー
 export type ToPrismaInput<T> = {
-  [K in keyof T]: T[K] extends Date | undefined 
-    ? Date | null 
-    : T[K] extends Date 
-    ? Date | null 
+  [K in keyof T]: T[K] extends Date | undefined
+    ? Date | null
+    : T[K] extends Date
+    ? Date | null
     : T[K];
 };
 
@@ -585,7 +581,7 @@ export const toValidationError = (field: FieldValidation): ValidationError => ({
 
 /**
  * このファイルからエクスポートされるすべての型：
- * 
+ *
  * ✅ ページネーション: PaginationQuery, PaginationParams
  * ✅ APIレスポンス: ApiResponse, ListMeta, ApiListResponse, PaginatedResponse
  * ✅ 検索: SearchQuery, SortOptions, AdvancedSearchQuery
