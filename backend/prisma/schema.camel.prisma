@@ -227,16 +227,19 @@ model MaintenanceRecord {
 }
 
 model Notification {
-  id      String             @id @db.Uuid
-  userId  String?            @map("user_id") @db.Uuid
-  title   String?            @db.VarChar(255)
-  message String?
-  type    NotificationType   @default(INFO)
-  status  NotificationStatus @default(UNREAD)
-  users   User?              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id       String               @id @db.Uuid
+  userId   String?              @map("user_id") @db.Uuid
+  title    String?              @db.VarChar(255)
+  message  String?
+  type     NotificationType     @default(INFO)
+  status   NotificationStatus   @default(UNREAD)
+  priority NotificationPriority @default(MEDIUM)
+  users    User?                @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([status], map: "idx_notifications_status")
   @@index([type], map: "idx_notifications_type")
+  @@index([priority], map: "idx_notifications_priority")
+  @@index([status, priority], map: "idx_notifications_status_priority")
   @@map("notifications")
 }
 
@@ -454,6 +457,15 @@ enum NotificationStatus {
   DELETED
 
   @@map("notification_status")
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+
+  @@map("notification_priority")
 }
 
 enum ItemType {

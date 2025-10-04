@@ -16,6 +16,14 @@ import type {
   BulkOperationResult
 } from './common';
 
+// ✅ Prisma名前空間から型を抽出
+type PrismaNotificationWhereInput = Prisma.NotificationWhereInput;
+
+// typeとpriorityの型を抽出
+type NotificationTypeFilter = PrismaNotificationWhereInput['type'];
+type NotificationPriorityFilter = PrismaNotificationWhereInput['priority'];
+type NotificationStatusFilter = PrismaNotificationWhereInput['status'];
+
 // =====================================
 // 📋 1. Enum型定義（既存完全保持）
 // =====================================
@@ -127,27 +135,32 @@ export interface NotificationUpdateInput {
   metadata?: Record<string, any> | null;
   updatedAt?: Date;
   // Relations（optional）
-  users?: Prisma.UserUpdateOneRequiredWithoutNotificationsNestedInput;
+  users?: Prisma.UserUpdateOneWithoutNotificationsNestedInput;
 }
 
-// ✅ 修正: NotificationWhereInput（isReadフィールド追加）
+// NotificationWhereInput（isReadフィールド追加）
 export interface NotificationWhereInput {
   id?: string | Prisma.StringFilter;
   title?: string | Prisma.StringFilter;
   message?: string | Prisma.StringFilter;
-  type?: NotificationType | Prisma.EnumNotificationTypeFilter;
-  priority?: NotificationPriority | Prisma.EnumNotificationPriorityFilter;
-  status?: NotificationStatus | Prisma.EnumNotificationStatusFilter;
+
+  // Prismaから抽出した型を使用
+  type?: NotificationTypeFilter;
+  priority?: NotificationPriorityFilter;
+  status?: NotificationStatusFilter;
+
   userId?: string | Prisma.StringFilter;
-  isRead?: boolean | Prisma.BoolFilter; // ✅ 追加: フィルタリング対応
+  isRead?: boolean | Prisma.BoolFilter;
   readAt?: Date | null | Prisma.DateTimeNullableFilter;
   expiresAt?: Date | null | Prisma.DateTimeNullableFilter;
   createdAt?: Date | Prisma.DateTimeFilter;
   updatedAt?: Date | Prisma.DateTimeFilter;
+
   // Logical operators
   AND?: NotificationWhereInput | NotificationWhereInput[];
   OR?: NotificationWhereInput | NotificationWhereInput[];
   NOT?: NotificationWhereInput | NotificationWhereInput[];
+
   // Relations
   users?: Prisma.UserWhereInput;
 }
@@ -156,7 +169,7 @@ export interface NotificationWhereUniqueInput {
   id?: string;
 }
 
-// ✅ 修正: NotificationOrderByInput（isRead, createdAtフィールド追加）
+// NotificationOrderByInput（isRead, createdAtフィールド追加）
 export interface NotificationOrderByInput {
   id?: Prisma.SortOrder;
   title?: Prisma.SortOrder;
@@ -165,10 +178,10 @@ export interface NotificationOrderByInput {
   priority?: Prisma.SortOrder;
   status?: Prisma.SortOrder;
   userId?: Prisma.SortOrder;
-  isRead?: Prisma.SortOrder; // ✅ 追加: ソート対応
+  isRead?: Prisma.SortOrder; // ソート対応
   readAt?: Prisma.SortOrder;
   expiresAt?: Prisma.SortOrder;
-  createdAt?: Prisma.SortOrder; // ✅ 追加: ソート対応
+  createdAt?: Prisma.SortOrder; // ソート対応
   updatedAt?: Prisma.SortOrder;
   // Relations
   users?: Prisma.UserOrderByWithRelationInput;
@@ -187,13 +200,13 @@ export interface NotificationDetails {
   priority: NotificationPriority;
   channels: NotificationChannel[];
   status: NotificationStatus;
-  
+
   // コンテンツ情報
   subject?: string;
   body: string;
   htmlBody?: string;
   shortMessage?: string;                               // SMS用短縮メッセージ
-  
+
   // メディア・添付ファイル
   iconUrl?: string;
   imageUrl?: string;
@@ -203,7 +216,7 @@ export interface NotificationDetails {
     fileSize: number;
     downloadUrl: string;
   }>;
-  
+
   // アクション・リンク
   actionButtons?: Array<{
     label: string;
@@ -212,7 +225,7 @@ export interface NotificationDetails {
     apiEndpoint?: string;
     navigationPath?: string;
   }>;
-  
+
   // 配信設定
   scheduleType: 'IMMEDIATE' | 'SCHEDULED' | 'RECURRING';
   scheduledAt?: Date;
@@ -222,7 +235,7 @@ export interface NotificationDetails {
     endDate?: Date;
   };
   expiresAt?: Date;
-  
+
   // ターゲティング
   targetAudience: {
     userIds?: string[];
@@ -232,7 +245,7 @@ export interface NotificationDetails {
     vehicles?: string[];
     customFilters?: Record<string, any>;
   };
-  
+
   // 配信結果
   deliveryResults?: Array<{
     channel: NotificationChannel;
@@ -243,14 +256,14 @@ export interface NotificationDetails {
     errorMessage?: string;
     metadata?: Record<string, any>;
   }>;
-  
+
   // カスタマイズ・パーソナライゼーション
   personalization?: {
     variables: Record<string, string>;
     templateId?: string;
     locale?: string;
   };
-  
+
   // 分析・追跡
   analytics?: {
     sentCount: number;
@@ -259,7 +272,7 @@ export interface NotificationDetails {
     clickCount: number;
     conversionCount: number;
   };
-  
+
   // 関連情報
   relatedEntityType?: 'OPERATION' | 'VEHICLE' | 'USER' | 'INSPECTION' | 'MAINTENANCE';
   relatedEntityId?: string;
@@ -281,13 +294,13 @@ export interface NotificationStatistics extends StatisticsBase {
   deliveredNotifications: number;
   readNotifications: number;
   failedNotifications: number;
-  
+
   // 配信率・開封率
   deliveryRate: number;                                // 配信率（%）
   readRate: number;                                    // 開封率（%）
   clickThroughRate: number;                            // クリック率（%）
   conversionRate: number;                              // コンバージョン率（%）
-  
+
   // チャネル別統計
   channelPerformance: Record<NotificationChannel, {
     sentCount: number;
@@ -297,14 +310,14 @@ export interface NotificationStatistics extends StatisticsBase {
     readRate: number;
     averageDeliveryTime: number;                       // 平均配信時間（秒）
   }>;
-  
+
   // 種別別統計
   typeBreakdown: Record<NotificationType, {
     count: number;
     readRate: number;
     averageResponseTime: number;                       // 平均応答時間（秒）
   }>;
-  
+
   // 時間別分析
   timeAnalysis: {
     hourlyDistribution: Array<{
@@ -318,7 +331,7 @@ export interface NotificationStatistics extends StatisticsBase {
       readCount: number;
     }>;
   };
-  
+
   // 効果測定
   effectivenessMetrics: {
     averageTimeToRead: number;                         // 平均既読時間（秒）
@@ -327,7 +340,7 @@ export interface NotificationStatistics extends StatisticsBase {
     mostEffectiveChannel: NotificationChannel;
     recommendedSendTime: string;
   };
-  
+
   // 問題分析
   issueAnalysis: {
     topFailureReasons: Array<{
@@ -354,39 +367,39 @@ export interface NotificationStatistics extends StatisticsBase {
 export interface NotificationFilter extends SearchQuery {
   // ✅ 追加: 基本検索クエリ
   query?: string; // タイトル・メッセージの全文検索用
-  
+
   // 基本フィルタ
   types?: NotificationType[];
   channels?: NotificationChannel[];
   priorities?: NotificationPriority[];
   statuses?: NotificationStatus[];
-  
+
   // ユーザー・受信者フィルタ
   recipientIds?: string[];
   roles?: string[];
   departments?: string[];
-  
+
   // 日時フィルタ
   sentDateRange?: DateRange;
   scheduledDateRange?: DateRange;
   readDateRange?: DateRange;
-  
+
   // 関連エンティティフィルタ
   relatedEntityTypes?: string[];
   relatedEntityIds?: string[];
-  
+
   // ✅ 追加: ステータスフィルタ
   isRead?: boolean; // 既読/未読フィルタ
   isDelivered?: boolean;
   hasFailed?: boolean;
   isExpired?: boolean;
-  
+
   // 統計・分析オプション
   includeStatistics?: boolean;
   includeDeliveryResults?: boolean;
   includeAnalytics?: boolean;
   groupBy?: 'type' | 'channel' | 'priority' | 'recipient' | 'date';
-  
+
   // ✅ 追加: ページネーション・ソート（ExtendedFilterOptions互換）
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
@@ -403,7 +416,7 @@ export interface NotificationFilter extends SearchQuery {
  */
 export interface NotificationSettings {
   userId: string;
-  
+
   // チャネル別設定
   channelPreferences: Record<NotificationChannel, {
     enabled: boolean;
@@ -414,14 +427,14 @@ export interface NotificationSettings {
       timezone: string;
     };
   }>;
-  
+
   // 種別別設定
   typePreferences: Record<NotificationType, {
     enabled: boolean;
     preferredChannels: NotificationChannel[];
     customThresholds?: Record<string, number>;
   }>;
-  
+
   // 一般設定
   generalSettings: {
     language: string;
@@ -430,7 +443,7 @@ export interface NotificationSettings {
     autoMarkAsRead: boolean;
     retentionDays: number;
   };
-  
+
   // デバイス設定
   deviceSettings?: {
     pushTokens: Array<{
@@ -455,7 +468,7 @@ export interface NotificationTemplate {
   name: string;
   type: NotificationType;
   channels: NotificationChannel[];
-  
+
   // コンテンツテンプレート
   templates: Record<NotificationChannel, {
     subject?: string;
@@ -463,7 +476,7 @@ export interface NotificationTemplate {
     htmlBody?: string;
     variables: string[];                               // 使用可能変数一覧
   }>;
-  
+
   // デザイン設定
   styling?: {
     primaryColor: string;
@@ -471,7 +484,7 @@ export interface NotificationTemplate {
     fontFamily: string;
     logoUrl?: string;
   };
-  
+
   // 多言語対応
   localizations?: Record<string, {
     templates: Record<NotificationChannel, {
@@ -480,7 +493,7 @@ export interface NotificationTemplate {
       htmlBody?: string;
     }>;
   }>;
-  
+
   // 設定
   isActive: boolean;
   priority: NotificationPriority;
@@ -504,7 +517,7 @@ export interface NotificationValidationResult extends ValidationResult {
     message: string;
     details?: any;
   }[];
-  
+
   deliveryEstimate?: {
     estimatedDeliveryTime: Date;
     estimatedRecipientCount: number;
@@ -514,7 +527,7 @@ export interface NotificationValidationResult extends ValidationResult {
       resetTime: Date;
     };
   };
-  
+
   contentAnalysis?: {
     readabilityScore: number;
     sentimentScore: number;
@@ -535,16 +548,16 @@ export interface NotificationResponseDTO extends NotificationModel {
     email: string;
     role: string;
   };
-  
+
   // 拡張情報
   details?: NotificationDetails;
-  
+
   // 計算フィールド
   timeAgo?: string;
   isExpired?: boolean;
   deliveryStatus?: string;
   readStatus?: string;
-  
+
   // 統計情報
   interactionStats?: {
     viewCount: number;
@@ -552,7 +565,7 @@ export interface NotificationResponseDTO extends NotificationModel {
     shareCount: number;
     lastInteraction?: Date;
   };
-  
+
   // カウント情報
   _count?: {
     recipients: number;
@@ -569,16 +582,16 @@ export interface NotificationListResponse extends ApiListResponse<NotificationRe
     typeBreakdown: Record<NotificationType, number>;
     recentActivity: number;
   };
-  
+
   statistics?: NotificationStatistics;
-  
+
   // チャネル集計
   channelSummary?: Record<NotificationChannel, {
     count: number;
     deliveryRate: number;
     readRate: number;
   }>;
-  
+
   // 優先度分析
   priorityAnalysis?: {
     criticalPending: number;
@@ -590,7 +603,7 @@ export interface NotificationListResponse extends ApiListResponse<NotificationRe
 export interface NotificationCreateDTO extends Omit<NotificationCreateInput, 'id' | 'createdAt' | 'updatedAt'> {
   // 拡張フィールド
   details?: NotificationDetails;
-  
+
   // 配信オプション
   scheduleOptions?: {
     sendImmediately?: boolean;
@@ -598,7 +611,7 @@ export interface NotificationCreateDTO extends Omit<NotificationCreateInput, 'id
     timezone?: string;
     respectQuietHours?: boolean;
   };
-  
+
   // ターゲティングオプション
   audienceOptions?: {
     useUserPreferences?: boolean;
@@ -615,7 +628,7 @@ export interface NotificationUpdateDTO extends Partial<Omit<NotificationCreateDT
     interactionType?: 'VIEW' | 'CLICK' | 'SHARE' | 'DISMISS';
     metadata?: Record<string, any>;
   };
-  
+
   // 再送オプション
   resendOptions?: {
     channels?: NotificationChannel[];
@@ -645,27 +658,27 @@ export interface INotificationService {
   findMany(filter: NotificationFilter): Promise<NotificationListResponse>;
   update(id: string, data: NotificationUpdateInput): Promise<NotificationModel>;
   delete(id: string): Promise<void>;
-  
+
   // 通知配信
   send(notificationId: string): Promise<void>;
   sendBulk(notificationIds: string[]): Promise<BulkOperationResult>;
-  
+
   // ユーザー操作
   markAsRead(notificationId: string, userId: string): Promise<void>;
   markAllAsRead(userId: string): Promise<number>;
-  
+
   // 統計・分析
   getStatistics(filter?: NotificationFilter): Promise<NotificationStatistics>;
-  
+
   // 設定管理
   updateUserSettings(userId: string, settings: Partial<NotificationSettings>): Promise<NotificationSettings>;
-  
+
   // テンプレート管理
   createTemplate(template: Omit<NotificationTemplate, 'id' | 'createdAt' | 'updatedAt'>): Promise<NotificationTemplate>;
-  
+
   // 一括操作
   bulkCreate(data: NotificationBulkCreateDTO): Promise<BulkOperationResult>;
-  
+
   // バリデーション
   validateNotification(data: NotificationCreateInput): Promise<NotificationValidationResult>;
 }
@@ -684,7 +697,7 @@ export type NotificationValidator = (data: NotificationCreateInput) => Promise<N
 
 /**
  * このファイルからエクスポートされるすべての型：
- * 
+ *
  * ✅ Enum: NotificationType, NotificationChannel, NotificationPriority, NotificationStatus
  * ✅ 基本型: NotificationModel, NotificationCreateInput, NotificationUpdateInput
  * ✅ フィルタ: NotificationWhereInput, NotificationWhereUniqueInput, NotificationOrderByInput
