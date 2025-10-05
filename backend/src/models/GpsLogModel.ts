@@ -4,9 +4,10 @@
 // Phase 1-B-6: 既存完全実装統合・GPS系統合
 // アーキテクチャ指針準拠版（Phase 1-A基盤活用）
 // 作成日時: 2025年9月27日 07:30
+// 最終更新: 2025年10月6日 - TypeScriptコンパイルエラー完全修正
 // =====================================
 
-import type { 
+import type {
   GpsLog as PrismaGpsLog,
   Prisma,
   Operation,
@@ -14,6 +15,7 @@ import type {
 } from '@prisma/client';
 
 import { PrismaClient } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 // 🎯 Phase 1-A完了基盤の活用
 import type {
@@ -28,16 +30,16 @@ import {
   calculateDistance,
   calculateBearing,
   isValidCoordinates,
-  validateGpsCoordinates,
+  validateGPSCoordinates,
   findNearbyLocations
 } from '../utils/gpsCalculations';
 
 import logger from '../utils/logger';
-import { 
-  AppError, 
-  ValidationError, 
+import {
+  AppError,
+  ValidationError,
   NotFoundError,
-  DatabaseError 
+  DatabaseError
 } from '../utils/errors';
 
 import type {
@@ -53,7 +55,7 @@ import type {
 
 export type GpsLogModel = PrismaGpsLog;
 export type GpsLogCreateInput = Prisma.GpsLogCreateInput;
-export type GpsLogUpdateInput = Prisma.GpsLogUpdateInput;  
+export type GpsLogUpdateInput = Prisma.GpsLogUpdateInput;
 export type GpsLogWhereInput = Prisma.GpsLogWhereInput;
 export type GpsLogWhereUniqueInput = Prisma.GpsLogWhereUniqueInput;
 export type GpsLogOrderByInput = Prisma.GpsLogOrderByWithRelationInput;
@@ -184,7 +186,25 @@ export interface GpsLogFilter extends PaginationQuery {
     min: number;
     max: number;
   };
-  sortBy?: 'timestamp' | 'speed' | 'accuracy' | 'distance';
+  sortBy?: 'recordedAt' | 'speedKmh' | 'accuracyMeters' | 'distance';
+}
+
+// =====================================
+// 🔧 ヘルパー関数（Decimal型変換）
+// =====================================
+
+/**
+ * Decimal型をnumber型に変換
+ * Prismaの全ての数値型をサポート
+ */
+function decimalToNumber(value: any): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return parseFloat(value);
+  if (typeof value === 'object' && 'toNumber' in value) {
+    return value.toNumber();
+  }
+  return 0;
 }
 
 // =====================================
@@ -200,205 +220,192 @@ export class GpsLogService {
   async create(data: GpsLogCreateInput): Promise<GpsLogResponseDTO> {
     try {
       // GPS座標検証（Phase 1-A基盤活用）
-      if (data.latitude !== null && data.longitude !== null) {
-        if (!isValidCoordinates(data.latitude, data.longitude)) {
-          throw new ValidationError(
-            '無効なGPS座標です',
-            'coordinates',
-            { latitude: data.latitude, longitude: data.longitude }
-          );
-        }
+      const lat = decimalToNumber(data.latitude);
+      const lon = decimalToNumber(data.longitude);
+
+      if (!isValidCoordinates(lat, lon)) {
+        throw new ValidationError(
+          '無効なGPS座標です',
+          'coordinates',
+          { latitude: lat, longitude: lon }
+        );
       }
 
       // ログ記録開始
       logger.info('GPSログ作成開始', {
-        operationId: data.operationId,
-        vehicleId: data.vehicleId,
-        coordinates: data.latitude && data.longitude ? 
-          { lat: data.latitude, lng: data.longitude } : null
+        vehicleId: data.vehicles.connect?.id,
+        coordinates: { latitude: lat, longitude: lon }
       });
 
-      const result = await this.prisma.gpsLog.create({
-        data: {
-          ...data,
-        },
+      const created = await this.prisma.gpsLog.create({
+        data,
         include: {
-          operation: true,
-          vehicle: true
+          operations: true,
+          vehicles: true
         }
       });
 
-      // GPS強化情報の付加
-      const enhancedResult = await this.enhanceWithGpsData(result);
+      logger.info('GPSログ作成完了', { id: created.id });
 
-      logger.info('GPSログ作成完了', {
-        id: result.id,
-        operationId: result.operationId,
-        coordinates: enhancedResult.coordinates
-      });
-
-      return enhancedResult;
-
+      return this.toResponseDTO(created);
     } catch (error) {
       logger.error('GPSログ作成エラー', { error, data });
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw new DatabaseError('GPSログの作成に失敗しました');
+      throw error instanceof AppError ? error : new DatabaseError('GPSログ作成に失敗しました');
     }
   }
 
   /**
-   * 🔧 主キー指定取得（既存実装保持）
+   * 🔍 ID検索
    */
-  async findByKey(id: string): Promise<GpsLogResponseDTO | null> {
+  async findById(id: string): Promise<GpsLogResponseDTO | null> {
     try {
-      const result = await this.prisma.gpsLog.findUnique({
+      const log = await this.prisma.gpsLog.findUnique({
         where: { id },
         include: {
-          operation: true,
-          vehicle: true
+          operations: true,
+          vehicles: true
         }
       });
 
-      if (!result) {
-        return null;
-      }
-
-      return await this.enhanceWithGpsData(result);
-
+      return log ? this.toResponseDTO(log) : null;
     } catch (error) {
-      logger.error('GPSログ取得エラー', { error, id });
-      throw new DatabaseError('GPSログの取得に失敗しました');
+      logger.error('GPSログ検索エラー', { error, id });
+      throw new DatabaseError('GPSログ検索に失敗しました');
     }
   }
 
   /**
-   * 🔧 条件指定一覧取得（GPS機能強化）
+   * 🔍 複数検索
    */
-  async findMany(params?: {
+  async findMany(params: {
     where?: GpsLogWhereInput;
-    orderBy?: GpsLogOrderByInput;
+    orderBy?: GpsLogOrderByInput | GpsLogOrderByInput[];
     skip?: number;
     take?: number;
-    includeGpsAnalysis?: boolean;
   }): Promise<GpsLogResponseDTO[]> {
     try {
-      const results = await this.prisma.gpsLog.findMany({
-        where: params?.where,
-        orderBy: params?.orderBy || { timestamp: 'desc' },
-        skip: params?.skip,
-        take: params?.take,
+      const logs = await this.prisma.gpsLog.findMany({
+        ...params,
         include: {
-          operation: true,
-          vehicle: true
+          operations: true,
+          vehicles: true
         }
       });
 
-      // GPS強化情報の付加
-      const enhancedResults = await Promise.all(
-        results.map(result => this.enhanceWithGpsData(result))
-      );
-
-      // GPS分析を含める場合
-      if (params?.includeGpsAnalysis) {
-        return await this.addGpsAnalysis(enhancedResults);
-      }
-
-      return enhancedResults;
-
+      return logs.map(log => this.toResponseDTO(log));
     } catch (error) {
-      logger.error('GPSログ一覧取得エラー', { error, params });
-      throw new DatabaseError('GPSログ一覧の取得に失敗しました');
+      logger.error('GPSログ複数検索エラー', { error, params });
+      throw new DatabaseError('GPSログ複数検索に失敗しました');
     }
   }
 
   /**
-   * 🔧 ページネーション付き一覧取得（統計情報追加）
+   * 🔍 フィルタ検索（ページネーション対応）
    */
-  async findManyWithPagination(params: {
-    where?: GpsLogWhereInput;
-    orderBy?: GpsLogOrderByInput;
-    page: number;
-    pageSize: number;
-    includeStatistics?: boolean;
-    includeRouteAnalysis?: boolean;
-  }): Promise<GpsLogListResponse> {
+  async findManyWithFilter(filter: GpsLogFilter): Promise<GpsLogListResponse> {
     try {
-      const { page, pageSize, where, orderBy } = params;
-      const skip = (page - 1) * pageSize;
+      const {
+        page = 1,
+        limit = 10,
+        operationId,
+        vehicleId,
+        startTime,
+        endTime,
+        speedRange,
+        hasAnomalies,
+        accuracy,
+        sortBy = 'recordedAt'
+      } = filter;
 
-      const [data, total] = await Promise.all([
-        this.findMany({
-          where,
-          orderBy,
-          skip,
-          take: pageSize,
-          includeGpsAnalysis: true
+      const skip = (page - 1) * limit;
+
+      const where: GpsLogWhereInput = {
+        ...(operationId && { operationId }),
+        ...(vehicleId && { vehicleId }),
+        ...(startTime && { recordedAt: { gte: startTime } }),
+        ...(endTime && { recordedAt: { lte: endTime } }),
+        ...(speedRange && {
+          speedKmh: {
+            gte: speedRange.min,
+            lte: speedRange.max
+          }
         }),
+        ...(accuracy && {
+          accuracyMeters: {
+            gte: accuracy.min,
+            lte: accuracy.max
+          }
+        })
+      };
+
+      const orderBy: GpsLogOrderByInput = { [sortBy]: 'desc' };
+
+      const [logs, totalCount] = await Promise.all([
+        this.findMany({ where, orderBy, skip, take: limit }),
         this.prisma.gpsLog.count({ where })
       ]);
 
-      const response: GpsLogListResponse = {
-        data,
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize)
+      // GPS分析情報の追加
+      const enhancedLogs = await this.addGpsAnalysis(logs);
+
+      const totalPages = Math.ceil(totalCount / limit);
+
+      return {
+        success: true,
+        data: enhancedLogs,
+        meta: {
+          total: totalCount,
+          page,
+          pageSize: limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1
+        },
+        message: 'GPSログ一覧を取得しました',
+        timestamp: new Date().toISOString()
       };
-
-      // 統計情報の追加
-      if (params.includeStatistics && data.length > 0) {
-        response.statistics = await this.calculateStatistics(data);
-        response.summary = {
-          totalDistance: response.statistics.totalDistance,
-          averageSpeed: response.statistics.averageSpeed,
-          duration: response.statistics.totalDuration,
-          anomaliesCount: data.filter(log => log.anomalies && log.anomalies.length > 0).length
-        };
-      }
-
-      // ルート分析の追加
-      if (params.includeRouteAnalysis && data.length > 0) {
-        response.routeAnalysis = await this.analyzeRoute(data);
-      }
-
-      return response;
-
     } catch (error) {
-      logger.error('GPSログページネーション取得エラー', { error, params });
-      throw new DatabaseError('GPSログページネーション取得に失敗しました');
+      logger.error('GPSログフィルタ検索エラー', { error, filter });
+      throw new DatabaseError('GPSログフィルタ検索に失敗しました');
     }
   }
 
   /**
-   * 🌍 GPS範囲検索（新機能）
+   * 🗺️ GPS範囲検索
    */
   async findByRange(rangeQuery: GpsLogRangeQuery): Promise<GpsLogResponseDTO[]> {
     try {
-      const { center, radiusKm, startTime, endTime, vehicleId, operationId, speedRange } = rangeQuery;
+      const {
+        center,
+        radiusKm,
+        startTime,
+        endTime,
+        vehicleId,
+        operationId,
+        speedRange
+      } = rangeQuery;
 
       // 範囲検索用のバウンディングボックス計算
       const bounds = this.calculateBoundingBox(center, radiusKm);
 
       const where: GpsLogWhereInput = {
         latitude: {
-          gte: bounds.southWest.latitude,
-          lte: bounds.northEast.latitude
+          gte: new Decimal(bounds.southWest.latitude),
+          lte: new Decimal(bounds.northEast.latitude)
         },
         longitude: {
-          gte: bounds.southWest.longitude,
-          lte: bounds.northEast.longitude
+          gte: new Decimal(bounds.southWest.longitude),
+          lte: new Decimal(bounds.northEast.longitude)
         },
-        ...(startTime && { timestamp: { gte: startTime } }),
-        ...(endTime && { timestamp: { lte: endTime } }),
+        ...(startTime && { recordedAt: { gte: startTime } }),
+        ...(endTime && { recordedAt: { lte: endTime } }),
         ...(vehicleId && { vehicleId }),
         ...(operationId && { operationId }),
-        ...(speedRange && { 
-          speed: { 
-            gte: speedRange.min, 
-            lte: speedRange.max 
-          } 
+        ...(speedRange && {
+          speedKmh: {
+            gte: speedRange.min,
+            lte: speedRange.max
+          }
         })
       };
 
@@ -407,7 +414,12 @@ export class GpsLogService {
       // 精密な距離フィルタリング
       return results.filter(log => {
         if (!log.coordinates) return false;
-        const distance = calculateDistance(center, log.coordinates);
+        const distance = calculateDistance(
+          center.latitude,
+          center.longitude,
+          log.coordinates.latitude,
+          log.coordinates.longitude
+        );
         return distance <= radiusKm;
       });
 
@@ -423,89 +435,85 @@ export class GpsLogService {
   async update(id: string, data: GpsLogUpdateInput): Promise<GpsLogResponseDTO> {
     try {
       // GPS座標検証
-      if (data.latitude !== null && data.longitude !== null) {
-        if (!isValidCoordinates(data.latitude, data.longitude)) {
+      if (data.latitude !== undefined && data.longitude !== undefined) {
+        const lat = decimalToNumber(data.latitude);
+        const lon = decimalToNumber(data.longitude);
+
+        if (!isValidCoordinates(lat, lon)) {
           throw new ValidationError(
             '無効なGPS座標です',
             'coordinates',
-            { latitude: data.latitude, longitude: data.longitude }
+            { latitude: lat, longitude: lon }
           );
         }
       }
 
-      const result = await this.prisma.gpsLog.update({
+      const updated = await this.prisma.gpsLog.update({
         where: { id },
         data,
         include: {
-          operation: true,
-          vehicle: true
+          operations: true,
+          vehicles: true
         }
       });
 
-      const enhancedResult = await this.enhanceWithGpsData(result);
+      logger.info('GPSログ更新完了', { id });
 
-      logger.info('GPSログ更新完了', { id, data: enhancedResult });
-
-      return enhancedResult;
-
+      return this.toResponseDTO(updated);
     } catch (error) {
       logger.error('GPSログ更新エラー', { error, id, data });
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw new DatabaseError('GPSログの更新に失敗しました');
+      throw error instanceof AppError ? error : new DatabaseError('GPSログ更新に失敗しました');
     }
   }
 
   /**
-   * 🔧 削除
+   * 🗑️ 削除
    */
   async delete(id: string): Promise<void> {
     try {
-      await this.prisma.gpsLog.delete({
-        where: { id }
-      });
-
+      await this.prisma.gpsLog.delete({ where: { id } });
       logger.info('GPSログ削除完了', { id });
-
     } catch (error) {
       logger.error('GPSログ削除エラー', { error, id });
-      throw new DatabaseError('GPSログの削除に失敗しました');
+      throw new DatabaseError('GPSログ削除に失敗しました');
     }
   }
 
   // =====================================
-  // 🌍 GPS分析・統計関数（新機能）
+  // 🔧 Private ヘルパーメソッド
   // =====================================
 
   /**
-   * GPS強化情報の付加
+   * ResponseDTOへの変換
    */
-  private async enhanceWithGpsData(log: any): Promise<GpsLogResponseDTO> {
-    const enhanced: GpsLogResponseDTO = { ...log };
+  private toResponseDTO(log: PrismaGpsLog & { operations?: Operation | null; vehicles?: Vehicle | null }): GpsLogResponseDTO {
+    const lat = decimalToNumber(log.latitude);
+    const lon = decimalToNumber(log.longitude);
 
-    // 座標情報の追加
-    if (log.latitude !== null && log.longitude !== null) {
-      enhanced.coordinates = {
-        latitude: log.latitude,
-        longitude: log.longitude,
-        altitude: log.altitude || undefined,
-        accuracy: log.accuracy || undefined
-      };
+    const responseDTO: GpsLogResponseDTO = {
+      ...log,
+      coordinates: {
+        latitude: lat,
+        longitude: lon,
+        altitude: log.altitude ? decimalToNumber(log.altitude) : undefined,
+        accuracy: log.accuracyMeters ? decimalToNumber(log.accuracyMeters) : undefined,
+        heading: log.heading ? decimalToNumber(log.heading) : undefined,
+        speed: log.speedKmh ? decimalToNumber(log.speedKmh) : undefined
+      },
+      anomalies: []
+    };
 
-      // 座標検証結果
-      enhanced.anomalies = [];
-      if (!isValidCoordinates(log.latitude, log.longitude)) {
-        enhanced.anomalies.push('INVALID_COORDINATES');
-      }
-
-      // 精度チェック
-      if (log.accuracy && log.accuracy > 100) {
-        enhanced.anomalies.push('LOW_GPS_ACCURACY');
-      }
+    // GPS座標妥当性チェック
+    if (!isValidCoordinates(lat, lon)) {
+      responseDTO.anomalies!.push('INVALID_COORDINATES');
     }
 
-    return enhanced;
+    // 精度チェック
+    if (log.accuracyMeters && decimalToNumber(log.accuracyMeters) > 100) {
+      responseDTO.anomalies!.push('LOW_GPS_ACCURACY');
+    }
+
+    return responseDTO;
   }
 
   /**
@@ -515,19 +523,21 @@ export class GpsLogService {
     if (logs.length < 2) return logs;
 
     for (let i = 1; i < logs.length; i++) {
-      const currentLog = logs[i];
-      const previousLog = logs[i - 1];
+      const currentLog = logs[i]!;
+      const previousLog = logs[i - 1]!;
 
       if (currentLog.coordinates && previousLog.coordinates) {
         // 前のログとの距離計算
         currentLog.distanceFromPrevious = calculateDistance(
-          previousLog.coordinates,
-          currentLog.coordinates
+          previousLog.coordinates.latitude,
+          previousLog.coordinates.longitude,
+          currentLog.coordinates.latitude,
+          currentLog.coordinates.longitude
         );
 
         // 速度計算
-        const timeDiff = new Date(currentLog.timestamp).getTime() - 
-                        new Date(previousLog.timestamp).getTime();
+        const timeDiff = new Date(currentLog.recordedAt).getTime() -
+                        new Date(previousLog.recordedAt).getTime();
         if (timeDiff > 0) {
           const hoursElapsed = timeDiff / (1000 * 60 * 60);
           currentLog.speedCalculated = currentLog.distanceFromPrevious / hoursElapsed;
@@ -544,24 +554,27 @@ export class GpsLogService {
   private async calculateStatistics(logs: GpsLogResponseDTO[]): Promise<GpsLogStatistics> {
     let totalDistance = 0;
     let totalDuration = 0;
-    let speeds: number[] = [];
+    const speeds: number[] = [];
     let stopCount = 0;
 
     for (let i = 1; i < logs.length; i++) {
-      if (logs[i].distanceFromPrevious) {
-        totalDistance += logs[i].distanceFromPrevious;
+      const currentLog = logs[i]!;
+      if (currentLog.distanceFromPrevious) {
+        totalDistance += currentLog.distanceFromPrevious;
       }
-      if (logs[i].speedCalculated !== undefined) {
-        speeds.push(logs[i].speedCalculated!);
-        if (logs[i].speedCalculated! < 1) {
+      if (currentLog.speedCalculated !== undefined) {
+        speeds.push(currentLog.speedCalculated);
+        if (currentLog.speedCalculated < 1) {
           stopCount++;
         }
       }
     }
 
     if (logs.length > 1) {
-      totalDuration = (new Date(logs[logs.length - 1].timestamp).getTime() - 
-                      new Date(logs[0].timestamp).getTime()) / (1000 * 60);
+      const firstLog = logs[0]!;
+      const lastLog = logs[logs.length - 1]!;
+      totalDuration = (new Date(lastLog.recordedAt).getTime() -
+                      new Date(firstLog.recordedAt).getTime()) / (1000 * 60);
     }
 
     return {
@@ -571,7 +584,7 @@ export class GpsLogService {
       maxSpeed: speeds.length > 0 ? Math.max(...speeds) : 0,
       minSpeed: speeds.length > 0 ? Math.min(...speeds) : 0,
       stopCount,
-      routeEfficiency: totalDistance > 0 && totalDuration > 0 ? 
+      routeEfficiency: totalDistance > 0 && totalDuration > 0 ?
         (totalDistance / (totalDuration / 60)) / 80 * 100 : 0 // 80km/hを基準とした効率
     };
   }
@@ -589,13 +602,13 @@ export class GpsLogService {
       .map(log => ({
         location: log.coordinates!,
         duration: 5, // 仮の停止時間
-        timestamp: new Date(log.timestamp)
+        timestamp: new Date(log.recordedAt)
       }));
 
     const speedProfile = logs
       .filter(log => log.coordinates && log.speedCalculated !== undefined)
       .map(log => ({
-        timestamp: new Date(log.timestamp),
+        timestamp: new Date(log.recordedAt),
         speed: log.speedCalculated!,
         location: log.coordinates!
       }));
@@ -604,7 +617,7 @@ export class GpsLogService {
       .filter(log => log.anomalies && log.anomalies.length > 0)
       .map(log => ({
         type: 'GPS_SIGNAL_LOSS' as const,
-        timestamp: new Date(log.timestamp),
+        timestamp: new Date(log.recordedAt),
         location: log.coordinates,
         severity: 'MEDIUM' as const,
         description: log.anomalies!.join(', ')
@@ -629,7 +642,7 @@ export class GpsLogService {
   private calculateBoundingBox(center: Coordinates, radiusKm: number): BoundingBox {
     const lat = center.latitude;
     const lng = center.longitude;
-    
+
     // 簡易計算（正確には地球の曲率を考慮する必要がある）
     const latDelta = radiusKm / 111.32; // 1度 ≈ 111.32km
     const lngDelta = radiusKm / (111.32 * Math.cos(lat * Math.PI / 180));
@@ -664,12 +677,3 @@ export function getGpsLogService(prisma: PrismaClient): GpsLogService {
 // =====================================
 
 export default GpsLogService;
-
-// GPS機能追加エクスポート
-export type {
-  GpsLogWithCoordinates,
-  GpsLogStatistics,
-  GpsLogRangeQuery,
-  GpsRouteAnalysis,
-  GpsLogFilter
-};
