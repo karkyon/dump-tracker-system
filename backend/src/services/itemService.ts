@@ -9,13 +9,13 @@ import { UserRole, PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1完成基盤の活用
 import { DatabaseService } from '../utils/database';
-import { 
-  AppError, 
-  ValidationError, 
-  AuthorizationError, 
+import {
+  // AppError,
+  ValidationError,
+  AuthorizationError,
   NotFoundError,
   ConflictError,
-  DatabaseError 
+  // DatabaseError
 } from '../utils/errors';
 import logger from '../utils/logger';
 
@@ -23,20 +23,20 @@ import logger from '../utils/logger';
 import type {
   ItemModel,
   ItemResponseDTO,
-  ItemCreateDTO,
-  ItemUpdateDTO,
+  // ItemCreateDTO,
+  // ItemUpdateDTO,
   ItemSummary,
-  ItemWithUsage,
-  ItemUsageStats,
+  // ItemWithUsage,
+  // ItemUsageStats,
   getItemService
 } from '../types';
 
 // 🎯 共通型定義の活用（types/common.ts）
 import type {
   PaginationQuery,
-  ApiResponse,
+  // ApiResponse,
   OperationResult,
-  BulkOperationResult
+  // BulkOperationResult
 } from '../types/common';
 
 // =====================================
@@ -98,7 +98,7 @@ export class ItemService {
   // =====================================
 
   private checkItemAccess(
-    requesterId: string,
+    // requesterId: string,
     requesterRole: UserRole,
     accessType: 'read' | 'write' | 'delete'
   ): void {
@@ -190,11 +190,11 @@ export class ItemService {
 
       const item = await this.itemService.create(itemData);
 
-      logger.info('品目作成完了', { 
+      logger.info('品目作成完了', {
         itemId: item.id,
         name: item.name,
         category: item.category,
-        requesterId 
+        requesterId
       });
 
       return this.toResponseDTO(item);
@@ -369,10 +369,10 @@ export class ItemService {
       // 品目更新
       const updatedItem = await this.itemService.update(id, cleanUpdateData);
 
-      logger.info('品目更新完了', { 
+      logger.info('品目更新完了', {
         itemId: id,
         updateData: cleanUpdateData,
-        requesterId 
+        requesterId
       });
 
       return this.toResponseDTO(updatedItem);
@@ -410,10 +410,10 @@ export class ItemService {
       // 論理削除（isActive = false）
       await this.itemService.update(id, { isActive: false });
 
-      logger.info('品目削除完了', { 
+      logger.info('品目削除完了', {
         itemId: id,
         name: existingItem.name,
-        requesterId 
+        requesterId
       });
 
       return {
@@ -542,7 +542,7 @@ export class ItemService {
       const activeItemCount = await this.itemService.count({
         where: { isActive: true }
       });
-      
+
       return {
         status: 'healthy',
         timestamp: new Date(),

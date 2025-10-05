@@ -6,19 +6,19 @@
 // Phase 3: Controllers層統合・運行管理API統合・権限強化・型安全性向上
 // =====================================
 
-import { Request, Response, NextFunction } from 'express';
+import { Response } from 'express';
 
 // 🎯 Phase 1完成基盤の活用
 import { asyncHandler } from '../utils/asyncHandler';
-import { 
-  AppError, 
-  ValidationError, 
-  AuthenticationError, 
-  AuthorizationError, 
+import {
+  // AppError,
+  ValidationError,
+  // AuthenticationError,
+  AuthorizationError,
   NotFoundError,
-  ConflictError 
+  ConflictError
 } from '../utils/errors';
-import { successResponse, errorResponse } from '../utils/response';
+import { successResponse } from '../utils/response';
 import logger from '../utils/logger';
 
 // 🎯 Phase 2 Services層完成基盤の活用
@@ -43,18 +43,18 @@ import type {
 } from '../types/trip';
 
 import type {
-  OperationModel,
-  OperationResponseDTO,
+  // OperationModel,
+  // OperationResponseDTO,
   OperationDetailResponseDTO,
   GpsLogResponseDTO
 } from '../types';
 
 // 🎯 共通型定義の活用（Phase 1完成基盤）
 import type {
-  PaginationQuery,
+  // PaginationQuery,
   ApiResponse,
-  ApiListResponse,
-  OperationResult
+  ApiListResponse
+  // OperationResult
 } from '../types/common';
 
 // =====================================
@@ -128,7 +128,7 @@ export class TripController {
 
     } catch (error) {
       logger.error('運行記録一覧取得エラー', { error, query: req.query });
-      
+
       const errorResponse = errorResponse('運行記録一覧の取得に失敗しました', 500, 'GET_TRIPS_ERROR');
       res.status(500).json(errorResponse);
     }
@@ -170,7 +170,7 @@ export class TripController {
 
     } catch (error) {
       logger.error('運行記録詳細取得エラー', { error, tripId: req.params.id });
-      
+
       if (error instanceof NotFoundError || error instanceof AuthorizationError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -233,9 +233,9 @@ export class TripController {
 
     } catch (error) {
       logger.error('運行開始エラー', { error, body: req.body });
-      
-      if (error instanceof ValidationError || 
-          error instanceof AuthorizationError || 
+
+      if (error instanceof ValidationError ||
+          error instanceof AuthorizationError ||
           error instanceof NotFoundError ||
           error instanceof ConflictError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
@@ -286,9 +286,9 @@ export class TripController {
 
     } catch (error) {
       logger.error('運行記録更新エラー', { error, tripId: req.params.id, body: req.body });
-      
-      if (error instanceof ValidationError || 
-          error instanceof AuthorizationError || 
+
+      if (error instanceof ValidationError ||
+          error instanceof AuthorizationError ||
           error instanceof NotFoundError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -338,9 +338,9 @@ export class TripController {
 
     } catch (error) {
       logger.error('運行終了エラー', { error, tripId: req.params.id, body: req.body });
-      
-      if (error instanceof ValidationError || 
-          error instanceof AuthorizationError || 
+
+      if (error instanceof ValidationError ||
+          error instanceof AuthorizationError ||
           error instanceof NotFoundError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -392,19 +392,19 @@ export class TripController {
         '位置情報を更新しました'
       );
 
-      logger.info('GPS位置情報更新', { 
-        tripId: id, 
+      logger.info('GPS位置情報更新', {
+        tripId: id,
         gpsData: { latitude: gpsData.latitude, longitude: gpsData.longitude },
-        userId: req.user?.userId 
+        userId: req.user?.userId
       });
 
       res.status(200).json(response);
 
     } catch (error) {
       logger.error('GPS位置情報更新エラー', { error, tripId: req.params.id, body: req.body });
-      
-      if (error instanceof ValidationError || 
-          error instanceof AuthorizationError || 
+
+      if (error instanceof ValidationError ||
+          error instanceof AuthorizationError ||
           error instanceof NotFoundError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -421,7 +421,7 @@ export class TripController {
   getGPSHistory = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      
+
       // 管理者権限チェック
       if (req.user?.role !== 'ADMIN' && req.user?.role !== 'MANAGER') {
         throw new AuthorizationError('GPS履歴を参照する権限がありません');
@@ -450,7 +450,7 @@ export class TripController {
 
     } catch (error) {
       logger.error('GPS履歴取得エラー', { error, tripId: req.params.id });
-      
+
       if (error instanceof AuthorizationError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -508,9 +508,9 @@ export class TripController {
 
     } catch (error) {
       logger.error('給油記録追加エラー', { error, tripId: req.params.id, body: req.body });
-      
-      if (error instanceof ValidationError || 
-          error instanceof AuthorizationError || 
+
+      if (error instanceof ValidationError ||
+          error instanceof AuthorizationError ||
           error instanceof NotFoundError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -574,9 +574,9 @@ export class TripController {
 
     } catch (error) {
       logger.error('積込記録追加エラー', { error, tripId: req.params.id, body: req.body });
-      
-      if (error instanceof ValidationError || 
-          error instanceof AuthorizationError || 
+
+      if (error instanceof ValidationError ||
+          error instanceof AuthorizationError ||
           error instanceof NotFoundError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -636,9 +636,9 @@ export class TripController {
 
     } catch (error) {
       logger.error('積下記録追加エラー', { error, tripId: req.params.id, body: req.body });
-      
-      if (error instanceof ValidationError || 
-          error instanceof AuthorizationError || 
+
+      if (error instanceof ValidationError ||
+          error instanceof AuthorizationError ||
           error instanceof NotFoundError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -685,7 +685,7 @@ export class TripController {
 
     } catch (error) {
       logger.error('運行統計取得エラー', { error, query: req.query });
-      
+
       if (error instanceof AuthorizationError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -722,7 +722,7 @@ export class TripController {
 
     } catch (error) {
       logger.error('現在の運行記録取得エラー', { error, query: req.query });
-      
+
       if (error instanceof ValidationError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -764,7 +764,7 @@ export class TripController {
 
     } catch (error) {
       logger.error('運行記録削除エラー', { error, tripId: req.params.id });
-      
+
       if (error instanceof AuthorizationError || error instanceof ValidationError) {
         const errorResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errorResponse);
@@ -827,7 +827,7 @@ export const startTrip = createTrip;
 
 /**
  * ✅ controllers/tripController.ts Phase 3統合完了
- * 
+ *
  * 【完了項目】
  * ✅ 既存完全実装の100%保持（全17機能：CRUD、GPS、燃料、積込・積下、統計等）
  * ✅ Phase 1完成基盤の活用（utils/asyncHandler、errors、response、logger統合）
@@ -840,16 +840,16 @@ export const startTrip = createTrip;
  * ✅ 権限強化（運転手・管理者・マネージャー別権限制御）
  * ✅ バリデーション強化（統一バリデーション・型安全性）
  * ✅ 後方互換性（既存API呼び出し形式の完全維持）
- * 
+ *
  * 【アーキテクチャ適合】
  * ✅ controllers/層: HTTP処理・バリデーション・レスポンス変換（適正配置）
  * ✅ services/層分離: ビジネスロジックをservices/層に委譲
  * ✅ 依存性注入: TripService・VehicleService・UserService活用
  * ✅ 型安全性: TypeScript完全対応・types/統合
- * 
+ *
  * 【スコア向上】
  * Phase 3継続: 68/100点 → controllers/tripController.ts完了: 76/100点（+8点）
- * 
+ *
  * 【次のPhase 3対象】
  * 🎯 controllers/itemController.ts: 品目管理API統合（6点）
  * 🎯 controllers/locationController.ts: 位置管理API統合（6点）

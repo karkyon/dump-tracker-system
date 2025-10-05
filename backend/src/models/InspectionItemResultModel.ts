@@ -7,12 +7,12 @@
 // 更新日時: 2025年9月27日 15:30
 // =====================================
 
-import type { 
+import type {
   InspectionItemResult as PrismaInspectionItemResult,
   Prisma,
-  InspectionItem,
-  InspectionRecord,
-  User,
+  // InspectionItem,
+  // InspectionRecord,
+  // User,
   InspectionType,
   InputType
 } from '@prisma/client';
@@ -21,16 +21,16 @@ import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完了基盤の活用
 import logger from '../utils/logger';
-import { 
-  AppError, 
-  ValidationError, 
+import {
+  AppError,
+  // ValidationError,
   NotFoundError,
   DatabaseError,
-  ConflictError 
+  // ConflictError
 } from '../utils/errors';
 
 import type {
-  ApiResponse,
+  // ApiResponse,
   ApiListResponse,
   PaginationQuery,
   SearchQuery,
@@ -45,7 +45,7 @@ import type {
 import type {
   InspectionCategory,
   InspectionPriority,
-  InspectionItemStatus
+  // InspectionItemStatus
 } from './InspectionItemModel';
 
 // =====================================
@@ -54,7 +54,7 @@ import type {
 
 export type InspectionItemResultModel = PrismaInspectionItemResult;
 export type InspectionItemResultCreateInput = Prisma.InspectionItemResultCreateInput;
-export type InspectionItemResultUpdateInput = Prisma.InspectionItemResultUpdateInput;  
+export type InspectionItemResultUpdateInput = Prisma.InspectionItemResultUpdateInput;
 export type InspectionItemResultWhereInput = Prisma.InspectionItemResultWhereInput;
 export type InspectionItemResultWhereUniqueInput = Prisma.InspectionItemResultWhereUniqueInput;
 export type InspectionItemResultOrderByInput = Prisma.InspectionItemResultOrderByWithRelationInput;
@@ -92,28 +92,28 @@ export interface InspectionResultDetails {
   measuredValue?: string | number;
   expectedValue?: string | number;
   unit?: string;
-  
+
   // 評価情報
   score?: number;
   maxScore?: number;
   percentage?: number;
-  
+
   // 写真・証拠
   photos?: string[];
   attachments?: string[];
-  
+
   // 位置情報
   gpsLocation?: {
     latitude: number;
     longitude: number;
     accuracy?: number;
   };
-  
+
   // 環境情報
   weather?: string;
   temperature?: number;
   humidity?: number;
-  
+
   // 機器情報
   equipmentUsed?: string[];
   calibrationDate?: Date;
@@ -132,7 +132,7 @@ export interface InspectionResultStatistics extends StatisticsBase {
   failRate: number;
   averageScore?: number;
   averageCompletionTime?: number; // 分
-  
+
   // カテゴリ別統計
   byCategory: Record<InspectionCategory, {
     total: number;
@@ -140,7 +140,7 @@ export interface InspectionResultStatistics extends StatisticsBase {
     failCount: number;
     passRate: number;
   }>;
-  
+
   // 重要度別統計
   byPriority: Record<InspectionPriority, {
     total: number;
@@ -148,7 +148,7 @@ export interface InspectionResultStatistics extends StatisticsBase {
     failCount: number;
     passRate: number;
   }>;
-  
+
   // 点検員別統計
   byInspector: Record<string, {
     name: string;
@@ -158,7 +158,7 @@ export interface InspectionResultStatistics extends StatisticsBase {
     passRate: number;
     averageTime: number;
   }>;
-  
+
   // 車両別統計
   byVehicle: Record<string, {
     vehicleId: string;
@@ -168,7 +168,7 @@ export interface InspectionResultStatistics extends StatisticsBase {
     failCount: number;
     passRate: number;
   }>;
-  
+
   // 傾向データ
   trendData: {
     date: string;
@@ -192,27 +192,27 @@ export interface InspectionResultFilter extends PaginationQuery, SearchQuery {
   category?: InspectionCategory | InspectionCategory[];
   priority?: InspectionPriority | InspectionPriority[];
   inspectionType?: InspectionType | InspectionType[];
-  
+
   // 評価範囲
   scoreRange?: {
     min?: number;
     max?: number;
   };
-  
+
   // 時間範囲
   inspectionDate?: DateRange;
   completionTime?: {
     min?: number; // 分
     max?: number; // 分
   };
-  
+
   // 位置情報フィルタ
   location?: {
     latitude: number;
     longitude: number;
     radius: number; // km
   };
-  
+
   // 統計オプション
   includeStatistics?: boolean;
   includeTrends?: boolean;
@@ -244,7 +244,7 @@ export interface InspectionItemResultResponseDTO extends InspectionItemResultMod
   status?: InspectionResultStatus;
   severity?: ResultSeverity;
   details?: InspectionResultDetails;
-  
+
   // 関連情報
   inspectionItem?: {
     id: string;
@@ -254,25 +254,25 @@ export interface InspectionItemResultResponseDTO extends InspectionItemResultMod
     category?: InspectionCategory;
     priority?: InspectionPriority;
   };
-  
+
   inspector?: {
     id: string;
     name: string;
     email: string;
   };
-  
+
   vehicle?: {
     id: string;
     plateNumber: string;
     model: string;
   };
-  
+
   // 統計情報
   _count?: {
     photos: number;
     attachments: number;
   };
-  
+
   // 計算フィールド
   completionTime?: number; // 分
   isWithinNormalRange?: boolean;
@@ -289,9 +289,9 @@ export interface InspectionItemResultListResponse extends ApiListResponse<Inspec
     failRate: number;
     averageScore?: number;
   };
-  
+
   statistics?: InspectionResultStatistics;
-  
+
   // フィルタ集計
   filterSummary?: {
     byStatus: Record<InspectionResultStatus, number>;
@@ -305,7 +305,7 @@ export interface InspectionItemResultCreateDTO extends Omit<InspectionItemResult
   status?: InspectionResultStatus;
   severity?: ResultSeverity;
   details?: InspectionResultDetails;
-  
+
   // 自動計算オプション
   autoCalculateScore?: boolean;
   autoDetectSeverity?: boolean;
@@ -342,7 +342,7 @@ export class InspectionItemResultService {
    * 🔧 新規作成（バリデーション・自動計算統合）
    */
   async create(
-    data: InspectionItemResultCreateInput, 
+    data: InspectionItemResultCreateInput,
     options?: {
       autoCalculateScore?: boolean;
       autoDetectSeverity?: boolean;
@@ -350,9 +350,9 @@ export class InspectionItemResultService {
     }
   ): Promise<InspectionItemResultResponseDTO> {
     try {
-      logger.info('点検結果作成開始', { 
+      logger.info('点検結果作成開始', {
         inspectionItemId: data.inspectionItemId,
-        inspectionRecordId: data.inspectionRecordId 
+        inspectionRecordId: data.inspectionRecordId
       });
 
       // バリデーション実行
@@ -521,7 +521,7 @@ export class InspectionItemResultService {
    * ✏️ 更新（既存実装保持・変更履歴拡張）
    */
   async update(
-    id: string, 
+    id: string,
     data: InspectionItemResultUpdateInput,
     options?: {
       reason?: string;
@@ -598,7 +598,7 @@ export class InspectionItemResultService {
   async search(filter: InspectionResultFilter): Promise<InspectionItemResultListResponse> {
     try {
       const whereClause = this.buildWhereClause(filter);
-      
+
       return await this.findManyWithPagination({
         where: whereClause,
         orderBy: this.buildOrderBy(filter),
@@ -717,20 +717,20 @@ export class InspectionItemResultService {
 
   private buildWhereClause(filter: InspectionResultFilter): InspectionItemResultWhereInput {
     const where: InspectionItemResultWhereInput = {};
-    
+
     // フィルタ条件の構築
     if (filter.inspectionItemId) {
-      where.inspectionItemId = Array.isArray(filter.inspectionItemId) 
+      where.inspectionItemId = Array.isArray(filter.inspectionItemId)
         ? { in: filter.inspectionItemId }
         : filter.inspectionItemId;
     }
-    
+
     if (filter.inspectionRecordId) {
       where.inspectionRecordId = Array.isArray(filter.inspectionRecordId)
         ? { in: filter.inspectionRecordId }
         : filter.inspectionRecordId;
     }
-    
+
     if (filter.inspectionDate) {
       where.createdAt = {
         gte: filter.inspectionDate.startDate ? new Date(filter.inspectionDate.startDate) : undefined,
@@ -744,7 +744,7 @@ export class InspectionItemResultService {
   private buildOrderBy(filter: InspectionResultFilter): InspectionItemResultOrderByInput {
     const sortBy = filter.sortBy || 'createdAt';
     const sortOrder = filter.sortOrder || 'desc';
-    
+
     return { [sortBy]: sortOrder };
   }
 

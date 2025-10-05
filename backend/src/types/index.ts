@@ -278,6 +278,83 @@ export type {
 
 export { getVehicleService } from '../models/VehicleModel';
 
+
+// Report 関連
+// ✨ 修正: VehicleResponseDTO と VehicleListResponse は vehicle.ts からエクスポートされているため、
+// models/VehicleModel からは別名でエクスポート
+export {
+  ReportType,
+  ReportFormat,
+  ReportGenerationStatus
+} from './report';
+
+// 基本型定義
+export type {
+  ReportInfo,
+  CreateReportRequest,
+  UpdateReportRequest,
+  ReportResponseDTO,
+  ReportListResponse,
+
+  // レポート生成パラメータ
+  DailyOperationReportParams,
+  MonthlyOperationReportParams,
+  VehicleUtilizationReportParams,
+  InspectionSummaryReportParams,
+  TransportationSummaryReportParams,
+  CustomReportParams,
+  CustomReportQuery,
+  ComprehensiveDashboardParams,
+  KPIAnalysisParams,
+  PredictiveAnalyticsParams,
+
+  // レポート生成結果
+  ReportGenerationResult,
+  ReportStatistics,
+
+  // レポートフィルター・検索
+  ReportFilter,
+  ReportSearchQuery,
+
+  // レポートデータ
+  DailyOperationReportData,
+  MonthlyOperationReportData,
+  VehicleUtilizationReportData,
+  InspectionSummaryReportData,
+  TransportationSummaryReportData,
+  ComprehensiveDashboardData,
+  KPIAnalysisData,
+  PredictiveAnalyticsData,
+
+  // レポートアクセス制御
+  ReportAccessControl,
+
+  // レポートエクスポート
+  ReportExportOptions,
+  ReportExportResult,
+
+  // レポートテンプレート
+  ReportTemplate,
+
+  // Prisma型エイリアス
+  ReportModel,
+  ReportCreateInput,
+  ReportUpdateInput,
+  ReportWhereInput,
+  ReportWhereUniqueInput,
+  ReportOrderByInput
+} from './report';
+
+// 型ガード関数
+export {
+  isValidReportType,
+  isValidReportFormat,
+  isValidReportStatus,
+  isReportCompleted,
+  isReportFailed,
+  isReportProcessing
+} from './report';
+
 // =====================================
 // 🔧 4. 既存のTrip関連型を完全統合
 // =====================================
@@ -641,7 +718,7 @@ export type {
   CreateInspectionRecordRequest,
   UpdateInspectionRecordRequest,
   InspectionFilter,
-  
+
   // 主要エンティティ型（既存機能保持）
   Operation,
   User,
@@ -650,7 +727,7 @@ export type {
   Item,
   MaintenanceRecord,
   Notification,
-  
+
   // その他のサービス用リクエスト型
   CreateOperationRequest,
   UpdateOperationRequest,
@@ -658,47 +735,47 @@ export type {
   UpdateUserRequest,
   CreateVehicleRequest as AliasesCreateVehicleRequest,
   UpdateVehicleRequest as AliasesUpdateVehicleRequest,
-  
+
   // フィルタリング用エイリアス
   InspectionFilterParams,
   OperationFilterParams,
   VehicleFilterParams,
   UserFilterParams,
-  
+
   // 統計・レポート用エイリアス
   InspectionStatistics,
   OperationStatistics,
   VehicleUtilization,
-  
+
   // 集計・グループ化用エイリアス
   DailyAggregation,
   MonthlyAggregation,
   UserAggregation,
   VehicleAggregation,
-  
+
   // 複合型・リレーション用エイリアス
   OperationWithDetails,
   InspectionRecordWithDetails,
   VehicleWithStats,
   UserWithStats,
-  
+
   // バリデーション・エラー関連エイリアス
   InspectionValidationError,
   OperationValidationError,
-  
+
   // 条件付き型エイリアス
   ActiveUser,
   ActiveVehicle,
   CompletedOperation,
-  
+
   // 変換・マッピング用型エイリアス
   InspectionItemEntity,
   OperationEntity,
-  
+
   // API用型エイリアス
   InspectionItemsResponse,
   OperationsResponse,
-  
+
   // 型安全性向上用エイリアス
   InspectionItemId,
   OperationId,
@@ -707,7 +784,7 @@ export type {
   InspectionItemName,
   VehiclePlateNumber,
   UserEmail,
-  
+
   // ユーティリティ型の特化版
   PartialInspectionItem,
   RequiredInspectionItem,
@@ -721,24 +798,24 @@ export type {
 
 /**
  * 【型のインポートガイドライン】
- * 
+ *
  * 1. **Enumの使用**
  *    - すべてのEnumは types/index.ts から統一的にインポート
  *    - 例: import { VehicleStatus, UserRole } from '../types';
- * 
+ *
  * 2. **共通型の使用**
  *    - ページネーション、APIレスポンスなどは common.ts から
  *    - 例: import { PaginationQuery, ApiResponse } from '../types';
- * 
+ *
  * 3. **ドメイン固有型の使用**
  *    - 車両関連は vehicle.ts、位置関連は location.ts から
  *    - 例: import { VehicleInfo, LocationInfo } from '../types';
- * 
+ *
  * 4. **モデル型の使用**
  *    - 各モデルの型は models/ から直接インポート可能だが、
  *      types/index.ts 経由を推奨
  *    - 例: import { VehicleModel } from '../types';
- * 
+ *
  * 5. **統計型の注意点**
  *    - VehicleStatistics: common.ts の基本版と vehicle.ts の詳細版が存在
  *      - 基本版: VehicleStatistics（共通統計API用）
@@ -746,18 +823,18 @@ export type {
  *    - LocationStatistics: 同様に2つのバージョンが存在
  *      - 基本版: LocationStatistics（共通統計API用）
  *      - 詳細版: LocationDetailedStatistics（位置専用詳細統計）
- * 
+ *
  * 6. **型ガード関数の使用**
  *    - 各ドメインの型ガード関数も types/ から利用可能
  *    - 例: import { isValidVehicleStatus, isVehicleOperational } from '../types';
- * 
+ *
  * 7. **Model vs Domain 型の使い分け**
  *    - Model からのエクスポートは別名で取得（Model* prefix）
  *    - Domain 型（vehicle.ts, location.ts など）を優先的に使用
  *    - 例:
  *      - VehicleResponseDTO: vehicle.ts からのドメイン型（推奨）
  *      - ModelVehicleResponseDTO: VehicleModel からの型（内部使用）
- * 
+ *
  * 8. **修正内容サマリー（2025年9月30日）**
  *    - ✅ *CreateDTO, *UpdateDTO → *CreateInput, *UpdateInput に修正
  *    - ✅ 重複エクスポートを解消（Model版を別名化）
@@ -767,29 +844,29 @@ export type {
 
 /**
  * 【コード量減少の理由】
- * 
+ *
  * 本修正では以下の理由により一部のエクスポート行が削除されていますが、
  * これは機能削除ではなく、エラー修正のための正当な変更です：
- * 
+ *
  * 1. **存在しない型の削除** (削除理由: 実装されていない型の参照削除)
  *    - VehicleYearlyStats: vehicle.ts に未実装
  *    - VehicleEvent: vehicle.ts に未実装
  *    - VehicleAlert: vehicle.ts に未実装
  *    - VehicleAutomationRule: vehicle.ts に未実装
- * 
+ *
  * 2. **存在しない関数の削除** (削除理由: 実装されていない関数の参照削除)
  *    - meetsUtilizationStandard: vehicle.ts に未実装
  *    - needsMaintenance: vehicle.ts に未実装
  *    - isCompleteVehicleInfo: vehicle.ts に未実装
- * 
+ *
  * 3. **重複エクスポートの整理** (削除理由: 重複削減、機能は維持)
  *    - LocationCreateDTO/UpdateDTO → 正しい名前 *CreateInput/*UpdateInput に修正
  *    - VehicleCreateDTO/UpdateDTO → 正しい名前 *CreateInput/*UpdateInput に修正
  *    - UserCreateDTO/UpdateDTO → 正しい名前 *CreateInput/*UpdateInput に修正
- * 
+ *
  * **重要**: 上記の変更により、存在しない型・関数への参照エラーが解消され、
  * 実際に実装されている型と関数のみがエクスポートされるようになります。
  * これにより、型の整合性が保たれ、コンパイルエラーがすべて解消されます。
- * 
+ *
  * **機能面の影響**: なし（実装されていない型・関数は使用できないため、削除しても影響なし）
  */

@@ -330,6 +330,7 @@ model User {
   createdAt                            DateTime?              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                            DateTime?              @default(now()) @map("updated_at") @db.Timestamptz(6)
   auditLogs                            AuditLog[]
+  reports                              Report[]
   inspectionItemResults                InspectionItemResult[]
   inspectionItems                      InspectionItem[]
   inspectionRecords                    InspectionRecord[]
@@ -370,6 +371,96 @@ model Vehicle {
   @@index([plateNumber], map: "idx_vehicles_plate_number")
   @@index([status], map: "idx_vehicles_status")
   @@map("vehicles")
+}
+
+/// レポート管理テーブル
+model Report {
+  id                String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reportType        ReportType              @map("report_type")
+  format            ReportFormat
+  title             String                  @db.VarChar(200)
+  description       String?                 @db.Text
+
+  // レポート生成情報
+  generatedBy       String                  @map("generated_by") @db.Uuid
+  generatedAt       DateTime?               @map("generated_at") @db.Timestamptz(6)
+  status            ReportGenerationStatus  @default(PENDING)
+
+  // レポートパラメータ（JSON形式で保存）
+  parameters        Json?                   @map("parameters")
+
+  // レポート結果データ
+  resultData        Json?                   @map("result_data")
+  filePath          String?                 @map("file_path") @db.VarChar(500)
+  fileSize          Int?                    @map("file_size")
+
+  // メタデータ
+  metadata          Json?                   @map("metadata")
+  tags              String[]                @default([])
+
+  // 期間情報
+  startDate         DateTime?               @map("start_date") @db.Timestamptz(6)
+  endDate           DateTime?               @map("end_date") @db.Timestamptz(6)
+
+  // エラー情報
+  errorMessage      String?                 @map("error_message") @db.Text
+
+  // アクセス制御
+  isPublic          Boolean                 @default(false) @map("is_public")
+  sharedWith        String[]                @default([]) @map("shared_with")
+
+  // タイムスタンプ
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt         DateTime?               @map("expires_at") @db.Timestamptz(6)
+
+  // リレーション
+  user              User                    @relation(fields: [generatedBy], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([reportType], map: "idx_reports_type")
+  @@index([generatedBy], map: "idx_reports_user")
+  @@index([status], map: "idx_reports_status")
+  @@index([createdAt], map: "idx_reports_created")
+  @@index([startDate, endDate], map: "idx_reports_period")
+  @@map("reports")
+}
+
+// =====================================
+// Enum定義（レポート関連）
+// =====================================
+
+/// レポート種別
+enum ReportType {
+  DAILY_OPERATION         // 日次運行レポート
+  MONTHLY_OPERATION       // 月次運行レポート
+  VEHICLE_UTILIZATION     // 車両稼働レポート
+  INSPECTION_SUMMARY      // 点検サマリーレポート
+  TRANSPORTATION_SUMMARY  // 輸送サマリーレポート
+  CUSTOM                  // カスタムレポート
+  COMPREHENSIVE_DASHBOARD // 総合ダッシュボード
+  KPI_ANALYSIS           // KPI分析レポート
+  PREDICTIVE_ANALYTICS   // 予測分析レポート
+  MAINTENANCE_REPORT     // メンテナンスレポート
+  COST_ANALYSIS          // コスト分析レポート
+  PERFORMANCE_REPORT     // パフォーマンスレポート
+}
+
+/// レポート出力フォーマット
+enum ReportFormat {
+  PDF       // PDFフォーマット
+  EXCEL     // Excelフォーマット
+  CSV       // CSVフォーマット
+  JSON      // JSONフォーマット
+  HTML      // HTMLフォーマット
+}
+
+/// レポート生成ステータス
+enum ReportGenerationStatus {
+  PENDING    // 生成待ち
+  PROCESSING // 生成中
+  COMPLETED  // 生成完了
+  FAILED     // 生成失敗
+  CANCELLED  // キャンセル
 }
 
 enum FuelType {

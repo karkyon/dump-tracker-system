@@ -6,7 +6,7 @@
 // アーキテクチャ指針準拠 + 既存完全実装保持
 // =====================================
 
-import type { 
+import type {
   User as PrismaUser,
   Prisma,
   UserRole,
@@ -21,21 +21,21 @@ import type {
 
 // 🎯 Phase 1-A完成基盤の活用
 import { DatabaseService } from '../utils/database';
-import { 
-  AppError, 
-  ValidationError, 
-  AuthorizationError, 
+import {
+  AppError,
+  ValidationError,
+  AuthorizationError,
   NotFoundError,
   AuthenticationError,
-  ConflictError 
+  ConflictError
 } from '../utils/errors';
 import logger from '../utils/logger';
-import { 
-  hashPassword, 
-  comparePassword, 
+import {
+  hashPassword,
+  comparePassword,
   generateTokenPair,
   verifyAccessToken,
-  verifyRefreshToken 
+  verifyRefreshToken
 } from '../utils/crypto';
 
 // 🎯 types/共通型定義の活用（Phase 1-A完成）
@@ -69,7 +69,7 @@ import type {
 
 export type UserModel = PrismaUser;
 export type UserCreateInput = Prisma.UserCreateInput;
-export type UserUpdateInput = Prisma.UserUpdateInput;  
+export type UserUpdateInput = Prisma.UserUpdateInput;
 export type UserWhereInput = Prisma.UserWhereInput;
 export type UserWhereUniqueInput = Prisma.UserWhereUniqueInput;
 export type UserOrderByInput = Prisma.UserOrderByWithRelationInput;
@@ -429,8 +429,8 @@ export class UserService {
    * パスワード変更（認証系統合）
    */
   async changePassword(
-    userId: string, 
-    currentPassword: string, 
+    userId: string,
+    currentPassword: string,
     newPassword: string
   ): Promise<void> {
     try {
@@ -574,7 +574,7 @@ export class UserService {
   }> {
     try {
       const user = await this.findByKey(userId);
-      
+
       if (!user) {
         return {
           isAvailable: false,
@@ -590,7 +590,7 @@ export class UserService {
         isAvailable: user.isActive && !isLocked,
         isActive: user.isActive,
         isLocked: !!isLocked,
-        reason: !user.isActive ? 'アカウントが無効化されています' : 
+        reason: !user.isActive ? 'アカウントが無効化されています' :
                 isLocked ? 'アカウントがロックされています' : undefined
       };
 
@@ -604,7 +604,7 @@ export class UserService {
    * 一括更新（Phase 1-A統合機能）
    */
   async bulkUpdate(
-    userIds: string[], 
+    userIds: string[],
     updateData: Partial<UserUpdateInput>
   ): Promise<BulkOperationResult> {
     try {

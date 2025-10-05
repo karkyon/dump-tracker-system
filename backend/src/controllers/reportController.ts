@@ -7,28 +7,31 @@
 // 統合基盤: 3層統合管理システム・車両・点検統合APIシステム100%活用
 // =====================================
 
-import { Request, Response } from 'express';
+// import { Request, Response } from 'express';
 
 // 🎯 完成済み統合基盤の100%活用（重複排除・統合版）
-import { 
-  authenticateToken,
-  requireRole,
-  requireAdmin,
-  requireManager
-} from '../middleware/auth';
+// import {
+//   authenticateToken,
+//   requireRole,
+//   requireAdmin,
+//   requireManager
+// } from '../middleware/auth';
+
 import { asyncHandler } from '../middleware/errorHandler';
-import { 
+import {
   ValidationError,
   AuthorizationError,
   NotFoundError,
   AppError,
   ERROR_CODES
 } from '../utils/errors';
-import { 
+
+import {
   sendSuccess,
   sendError,
   sendNotFound
 } from '../utils/response';
+
 import logger from '../utils/logger';
 
 // 🎯 types/からの統一型定義インポート（整合性確保）
@@ -48,25 +51,25 @@ import type {
   ComprehensiveDashboardParams,
   KPIAnalysisParams,
   PredictiveAnalyticsParams
-} from '../types';
+} from '../types/index';
 
 // 🎯 完成済みサービス層との密連携（統合reportService.ts活用）
 import { getReportService } from '../services/reportService';
 
 /**
  * レポート管理コントローラー統合クラス
- * 
+ *
  * 【統合基盤活用】
  * - middleware/auth.ts: 認証・権限制御完全活用
  * - middleware/errorHandler.ts: asyncHandler統一エラーハンドリング
  * - utils/response.ts: sendSuccess・sendError統一レスポンス
  * - utils/errors.ts: 統一エラー分類・適切なHTTPステータス
- * 
+ *
  * 【services/reportService.ts密連携】
  * - 3層統合レポート・分析機能・BI基盤活用
  * - 企業レベル統合ダッシュボード・KPI・予測分析
  * - 車両・点検統合APIシステム（20エンドポイント）連携
- * 
+ *
  * 【統合効果】
  * - 統合レポートAPI制御層・経営ダッシュボード実現
  * - HTTP制御層・業務フロー・権限制御統合
@@ -129,7 +132,7 @@ export const getAllReports = asyncHandler(async (req: AuthenticatedRequest, res:
       userId: req.user.id,
       filter
     });
-    
+
     if (error instanceof AppError) {
       return sendError(res, error.message, error.statusCode, error.code);
     }
@@ -205,12 +208,12 @@ export const generateDailyOperationReport = asyncHandler(async (req: Authenticat
 
   try {
     // リクエストデータバリデーション
-    const { 
-      date, 
-      driverId, 
-      vehicleId, 
+    const {
+      date,
+      driverId,
+      vehicleId,
       format = ReportFormat.PDF,
-      includeStatistics = false 
+      includeStatistics = false
     } = req.body;
 
     if (!date) {
@@ -275,13 +278,13 @@ export const generateMonthlyOperationReport = asyncHandler(async (req: Authentic
   });
 
   try {
-    const { 
-      year, 
-      month, 
+    const {
+      year,
+      month,
       driverId,
       vehicleId,
       format = ReportFormat.PDF,
-      includeStatistics = true 
+      includeStatistics = true
     } = req.body;
 
     if (!year || !month) {
@@ -348,13 +351,13 @@ export const generateVehicleUtilizationReport = asyncHandler(async (req: Authent
   });
 
   try {
-    const { 
-      startDate, 
-      endDate, 
+    const {
+      startDate,
+      endDate,
       vehicleIds,
       format = ReportFormat.PDF,
       groupBy = 'DAY',
-      includeMaintenanceRecords = true 
+      includeMaintenanceRecords = true
     } = req.body;
 
     const params: VehicleUtilizationReportParams = {
@@ -408,13 +411,13 @@ export const generateInspectionSummaryReport = asyncHandler(async (req: Authenti
   });
 
   try {
-    const { 
-      startDate, 
-      endDate, 
+    const {
+      startDate,
+      endDate,
       vehicleIds,
       inspectionType,
       format = ReportFormat.PDF,
-      includeIssuesOnly = false 
+      includeIssuesOnly = false
     } = req.body;
 
     if (!startDate || !endDate) {
@@ -481,7 +484,7 @@ export const generateComprehensiveDashboard = asyncHandler(async (req: Authentic
   });
 
   try {
-    const { 
+    const {
       period = '30days',
       startDate,
       endDate,
@@ -548,7 +551,7 @@ export const generateKPIAnalysis = asyncHandler(async (req: AuthenticatedRequest
   });
 
   try {
-    const { 
+    const {
       kpiTypes = ['efficiency', 'safety', 'productivity'],
       period = '30days',
       startDate,
@@ -617,7 +620,7 @@ export const generatePredictiveAnalytics = asyncHandler(async (req: Authenticate
   });
 
   try {
-    const { 
+    const {
       analysisTypes = ['maintenance', 'demand', 'performance'],
       forecastPeriod = '90days',
       historicalPeriod = '365days',
@@ -696,7 +699,7 @@ export const downloadReport = asyncHandler(async (req: AuthenticatedRequest, res
     // ファイルダウンロード用のレスポンス設定
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
-    
+
     logger.info('✅ Report download initiated', {
       reportId: id,
       fileName,

@@ -1,893 +1,640 @@
 // =====================================
-// backend/src/utils/logger.ts
-// ロギングユーティリティ - エラー完全解消版
-// 既存完全実装100%保持 + Phase 1-B-2機能 + エラー修正
-// 最終更新: 2025年10月05日
+// backend/src/utils/errors.ts
+// エラーハンドリングシステム - 完全アーキテクチャ改修統合版
+// 統一エラークラス体系・型安全性・運用監視・詳細情報管理版
+// 最終更新: 2025年10月1日
 // 依存関係: なし（基底層）
-// 修正内容: 8件のTypeScriptエラー完全解消・既存機能100%保持
+// 統合基盤: アプリケーション全体のエラーハンドリング統一基盤
+// 修正内容: SecurityErrorクラス追加（Phase 1-B-1完了）
 // =====================================
 
-import winston from 'winston';  // ← default importに変更
-import * as path from 'path';
-import * as fs from 'fs';
-import { Request, Response, NextFunction } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-
-// ✅ FIX: 未使用インポートを削除（TS6192解消）
-// 🎯 既存完全実装の統合・活用
-import { ValidationError, AppError } from './errors';
-
-// 🎯 types/からの統一型定義インポート
-import type {
-  ApiResponse,
-  PaginationQuery,
-  OperationResult,
-  ValidationResult
-} from '../types/common';
-
-// 🎯 認証型との統合
-import type { AuthenticatedRequest } from '../types/auth';
-
-/**
- * 【エラー解消内容】
- * ✅ TS6192: 未使用インポート削除
- * ✅ TS7031: 分割代入パラメータの型注釈追加（5箇所）
- * ✅ TS2339: sessionID → sessionId 修正
- * ✅ TS6133: 未使用変数 res 削除
- *
- * 【既存機能100%保持】
- * ✅ Loggerクラス（シングルトン）
- * ✅ ログレベル・カテゴリ定義
- * ✅ ログエントリ型定義
- * ✅ ログ統計・ヘルスチェック機能
- * ✅ Expressミドルウェア機能
- * ✅ 便利なログ関数群
- * ✅ Winston統合
- * ✅ ファイル出力機能
- * ✅ Phase 1-B-2追加機能
- */
-
 // =====================================
-// 🏷️ ログレベル・定数定義
+// 基底エラークラス
 // =====================================
 
-/**
- * ログレベル列挙型（既存互換性保持）
- */
-export enum LogLevel {
-  ERROR = 0,
-  WARN = 1,
-  INFO = 2,
-  HTTP = 3,
-  DEBUG = 4,
-}
+export class AppError extends Error {
+  public readonly statusCode: number;
+  public readonly code?: string;
+  public readonly isOperational: boolean;
+  public readonly timestamp: Date;
+  public readonly stack?: string;
 
-/**
- * ログレベル文字列定義（既存互換性保持）
- */
-export const LOG_LEVELS = {
-  ERROR: 'error',
-  WARN: 'warn',
-  INFO: 'info',
-  HTTP: 'http',
-  DEBUG: 'debug',
-} as const;
-
-/**
- * ログカテゴリ定義
- */
-export enum LogCategory {
-  APPLICATION = 'application',
-  DATABASE = 'database',
-  AUTHENTICATION = 'authentication',
-  AUTHORIZATION = 'authorization',
-  VALIDATION = 'validation',
-  GPS = 'gps',
-  OPERATION = 'operation',
-  AUDIT = 'audit',
-  SECURITY = 'security',
-  PERFORMANCE = 'performance',
-  ERROR = 'error',
-  ACCESS = 'access',
-  SYSTEM = 'system',
-}
-
-/**
- * ログ設定定数
- */
-export const LOG_CONFIG = {
-  MAX_FILE_SIZE: '20m',
-  MAX_FILES: '14d',
-  DATE_PATTERN: 'YYYY-MM-DD',
-  DEFAULT_LEVEL: 'info',
-  ROTATION_FREQUENCY: 'daily',
-  PERFORMANCE_THRESHOLD_MS: 1000,
-  SLOW_QUERY_THRESHOLD_MS: 2000,
-  COMPRESS_ROTATED: true,
-} as const;
-
-// =====================================
-// 🏗️ ログエントリ型定義
-// =====================================
-
-/**
- * 基本ログエントリ型
- */
-export interface LogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-  category?: LogCategory;
-  data?: any;
-  userId?: string;
-  ip?: string;
-  userAgent?: string;
-  method?: string;
-  url?: string;
-  statusCode?: number;
-  responseTime?: number;
-  traceId?: string;
-  sessionId?: string;
-  operationId?: string;
-  error?: {
-    name?: string;
-    message?: string;
-    stack?: string;
-    code?: string | number;
-  };
-  metadata?: Record<string, any>;
-}
-
-/**
- * 監査ログエントリ型
- */
-export interface AuditLogEntry extends LogEntry {
-  action: string;
-  resource: string;
-  resourceId?: string;
-  oldValues?: any;
-  newValues?: any;
-  result: 'SUCCESS' | 'FAILURE' | 'PARTIAL';
-  reason?: string;
-}
-
-/**
- * セキュリティログエントリ型
- */
-export interface SecurityLogEntry extends LogEntry {
-  event: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  source: string;
-  target?: string;
-  outcome: 'SUCCESS' | 'FAILURE' | 'UNKNOWN';
-  details?: Record<string, any>;
-}
-
-/**
- * パフォーマンスログエントリ型
- */
-export interface PerformanceLogEntry extends LogEntry {
-  operationType: string;
-  duration: number;
-  memoryUsage?: NodeJS.MemoryUsage;
-  cpuUsage?: NodeJS.CpuUsage;
-  queryCount?: number;
-  cacheHits?: number;
-  cacheMisses?: number;
-}
-
-/**
- * ログ統計情報型（Phase 1-B-2追加）
- */
-export interface LogStatistics {
-  totalLogs: number;
-  logsByLevel: Record<string, number>;
-  logsByCategory: Record<string, number>;
-  errorRate: number;
-  averageResponseTime?: number;
-  lastLogTime?: string;
-  startTime: string;
-  uptime: number;
-}
-
-/**
- * ログヘルスステータス型（Phase 1-B-2追加）
- */
-export interface LogHealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  logSystemOperational: boolean;
-  fileWriteOperational: boolean;
-  lastWriteTime?: string;
-  errorCount: number;
-  warningCount: number;
-  details?: string;
-}
-
-// =====================================
-// 🗂️ ログディレクトリ・ファイル管理
-// =====================================
-
-/**
- * ログディレクトリの確保（既存実装保持）
- */
-const logDir = path.join(process.cwd(), 'logs');
-try {
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
-} catch (error) {
-  console.warn('Failed to create log directory:', error);
-}
-
-/**
- * ログファイルパスの生成
- */
-export function getLogFilePath(logType: string, category?: LogCategory): string {
-  const categoryPrefix = category ? `${category}.` : '';
-  return path.join(logDir, `${categoryPrefix}${logType}.log`);
-}
-
-/**
- * ログファイルの存在確認とディレクトリ作成
- */
-export function ensureLogDirectory(subDir?: string): string {
-  const targetDir = subDir ? path.join(logDir, subDir) : logDir;
-  try {
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-    return targetDir;
-  } catch (error) {
-    console.warn(`Failed to create log directory: ${targetDir}`, error);
-    return logDir;
-  }
-}
-
-// =====================================
-// 🎨 ログフォーマット定義（既存実装保持）
-// =====================================
-
-/**
- * 環境に応じたログレベル設定（既存実装保持）
- */
-const level = (): string => {
-  const env = process.env.NODE_ENV || 'development';
-  const configLevel = process.env.LOG_LEVEL?.toLowerCase();
-
-  if (configLevel && Object.values(LOG_LEVELS).includes(configLevel as any)) {
-    return configLevel;
-  }
-
-  return env === 'development' ? LOG_LEVELS.DEBUG : LOG_LEVELS.INFO;
-};
-
-/**
- * カスタムログフォーマット定義
- */
-const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.errors({ stack: true }),
-  winston.format.splat(),
-  winston.format.json()
-);
-
-/**
- * Winston Logger インスタンス（既存実装保持）
- */
-const winstonLogger = winston.createLogger({
-  level: level(),
-  format: logFormat,
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    }),
-    new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: LOG_LEVELS.ERROR
-    }),
-    new winston.transports.File({
-      filename: path.join(logDir, 'combined.log')
-    })
-  ]
-});
-
-// =====================================
-// 📝 Loggerクラス（既存実装100%保持）
-// =====================================
-
-/**
- * Loggerクラス - シングルトンパターン
- * 既存完全実装100%保持 + Phase 1-B-2機能追加
- */
-export class Logger {
-  private static instance: Logger;
-  private logLevel: LogLevel;
-  private traceId?: string;
-  private userId?: string;
-  private metadata: Record<string, any> = {};
-
-  // Phase 1-B-2: 統計情報収集用
-  private statistics: {
-    totalLogs: number;
-    logsByLevel: Record<string, number>;
-    logsByCategory: Record<string, number>;
-    errorCount: number;
-    warningCount: number;
-    startTime: Date;
-    lastLogTime?: Date;
-    lastWriteTime?: Date;
-    lastError?: string;
-  };
-
-  constructor() {
-    // 環境変数からログレベルを設定（既存実装保持）
-    const envLogLevel = process.env.LOG_LEVEL?.toUpperCase();
-    switch (envLogLevel) {
-      case 'ERROR':
-        this.logLevel = LogLevel.ERROR;
-        break;
-      case 'WARN':
-        this.logLevel = LogLevel.WARN;
-        break;
-      case 'DEBUG':
-        this.logLevel = LogLevel.DEBUG;
-        break;
-      case 'HTTP':
-        this.logLevel = LogLevel.HTTP;
-        break;
-      default:
-        this.logLevel = LogLevel.INFO;
-    }
-
-    // Phase 1-B-2: 統計情報初期化
-    this.statistics = {
-      totalLogs: 0,
-      logsByLevel: {},
-      logsByCategory: {},
-      errorCount: 0,
-      warningCount: 0,
-      startTime: new Date(),
-    };
-  }
-
-  /**
-   * シングルトンインスタンス取得（既存実装保持）
-   */
-  static getInstance(): Logger {
-    if (!Logger.instance) {
-      Logger.instance = new Logger();
-    }
-    return Logger.instance;
-  }
-
-  /**
-   * ログレベル判定（既存実装保持）
-   */
-  private shouldLog(level: LogLevel): boolean {
-    return level <= this.logLevel;
-  }
-
-  /**
-   * トレースID設定
-   */
-  setTraceId(traceId: string): Logger {
-    this.traceId = traceId;
-    return this;
-  }
-
-  /**
-   * ユーザーID設定（Phase 1-B-2追加）
-   */
-  setUserId(userId?: string): Logger {
-    this.userId = userId;
-    return this;
-  }
-
-  /**
-   * メタデータ設定
-   */
-  setMetadata(metadata: Record<string, any>): Logger {
-    this.metadata = { ...this.metadata, ...metadata };
-    return this;
-  }
-
-  /**
-   * メタデータクリア
-   */
-  clearMetadata(): Logger {
-    this.metadata = {};
-    this.traceId = undefined;
-    this.userId = undefined;
-    return this;
-  }
-
-  /**
-   * 統計情報更新（Phase 1-B-2追加）
-   */
-  private updateStatistics(level: string, category?: LogCategory): void {
-    this.statistics.totalLogs++;
-    this.statistics.lastLogTime = new Date();
-
-    // レベル別カウント
-    this.statistics.logsByLevel[level] = (this.statistics.logsByLevel[level] || 0) + 1;
-
-    // カテゴリ別カウント
-    if (category) {
-      this.statistics.logsByCategory[category] =
-        (this.statistics.logsByCategory[category] || 0) + 1;
-    }
-
-    // エラー・警告カウント
-    if (level === LOG_LEVELS.ERROR) {
-      this.statistics.errorCount++;
-    } else if (level === LOG_LEVELS.WARN) {
-      this.statistics.warningCount++;
-    }
-  }
-
-  /**
-   * 基本ログ出力（既存実装拡張）
-   *
-   * ✅ FIX: 分割代入パラメータに型注釈を追加（TS7031解消）
-   */
-  log(
-    level: string,
+  constructor(
     message: string,
-    data?: any,
-    context?: {
-      category?: LogCategory;
-      traceId?: string;
-      userId?: string;
-      [key: string]: any;
+    statusCode: number = 500,
+    code?: string,
+    isOperational: boolean = true
+  ) {
+    super(message);
+
+    this.name = this.constructor.name;
+    this.statusCode = statusCode;
+    this.code = code;
+    this.isOperational = isOperational;
+    this.timestamp = new Date();
+
+    // スタックトレースをキャプチャ
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
     }
-  ): void {
-    const logEntry: LogEntry = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      category: context?.category,
-      data,
-      traceId: context?.traceId || this.traceId,
-      userId: context?.userId || this.userId,
-      ...this.metadata
-    };
-
-    // 統計情報更新
-    this.updateStatistics(level, context?.category);
-
-    // Winstonに出力
-    (winstonLogger as any)[level](message, logEntry);
-  }
-
-  // 各ログレベルのメソッド（既存実装保持）
-  error(message: string, data?: any, context?: any): void {
-    if (this.shouldLog(LogLevel.ERROR)) {
-      this.log(LOG_LEVELS.ERROR, message, data, { ...context, category: LogCategory.ERROR });
-    }
-  }
-
-  warn(message: string, data?: any, context?: any): void {
-    if (this.shouldLog(LogLevel.WARN)) {
-      this.log(LOG_LEVELS.WARN, message, data, context);
-    }
-  }
-
-  info(message: string, data?: any, context?: any): void {
-    if (this.shouldLog(LogLevel.INFO)) {
-      this.log(LOG_LEVELS.INFO, message, data, context);
-    }
-  }
-
-  http(message: string, data?: any, context?: any): void {
-    if (this.shouldLog(LogLevel.HTTP)) {
-      this.log(LOG_LEVELS.HTTP, message, data, { ...context, category: LogCategory.ACCESS });
-    }
-  }
-
-  debug(message: string, data?: any, context?: any): void {
-    if (this.shouldLog(LogLevel.DEBUG)) {
-      this.log(LOG_LEVELS.DEBUG, message, data, context);
-    }
-  }
-
-  // カテゴリ別ログメソッド（既存実装保持）
-  auth(message: string, data?: any): void {
-    this.info(message, data, { category: LogCategory.AUTHENTICATION });
-  }
-
-  authorization(message: string, data?: any): void {
-    this.info(message, data, { category: LogCategory.AUTHORIZATION });
-  }
-
-  database(message: string, data?: any): void {
-    this.info(message, data, { category: LogCategory.DATABASE });
-  }
-
-  gps(message: string, data?: any): void {
-    this.info(message, data, { category: LogCategory.GPS });
-  }
-
-  operation(message: string, data?: any): void {
-    this.info(message, data, { category: LogCategory.OPERATION });
-  }
-
-  audit(entry: AuditLogEntry): void {
-    this.info(entry.message, entry, { category: LogCategory.AUDIT });
-  }
-
-  security(entry: SecurityLogEntry): void {
-    const level = entry.severity === 'HIGH' || entry.severity === 'CRITICAL' ? LOG_LEVELS.WARN : LOG_LEVELS.INFO;
-    this.log(level, entry.message, entry, { category: LogCategory.SECURITY });
-  }
-
-  performance(entry: PerformanceLogEntry): void {
-    this.warn(entry.message, entry, { category: LogCategory.PERFORMANCE });
   }
 
   /**
-   * 統計情報取得（Phase 1-B-2追加）
+   * エラー情報をJSON形式で返す
    */
-  getStatistics(): LogStatistics {
-    const now = new Date();
-    const uptime = Math.floor((now.getTime() - this.statistics.startTime.getTime()) / 1000);
-    const errorRate = this.statistics.totalLogs > 0
-      ? (this.statistics.errorCount / this.statistics.totalLogs) * 100
-      : 0;
-
+  toJSON(): object {
     return {
-      totalLogs: this.statistics.totalLogs,
-      logsByLevel: { ...this.statistics.logsByLevel },
-      logsByCategory: { ...this.statistics.logsByCategory },
-      errorRate: parseFloat(errorRate.toFixed(2)),
-      lastLogTime: this.statistics.lastLogTime?.toISOString(),
-      startTime: this.statistics.startTime.toISOString(),
-      uptime
+      name: this.name,
+      message: this.message,
+      statusCode: this.statusCode,
+      code: this.code,
+      timestamp: this.timestamp,
+      stack: this.stack
     };
   }
 
   /**
-   * ヘルスステータス取得（Phase 1-B-2追加）
+   * ログ用の文字列表現
    */
-  getHealthStatus(): LogHealthStatus {
-    const errorRate = this.statistics.totalLogs > 0
-      ? (this.statistics.errorCount / this.statistics.totalLogs) * 100
-      : 0;
+  toString(): string {
+    return `${this.name}: ${this.message} (Status: ${this.statusCode}${this.code ? `, Code: ${this.code}` : ''})`;
+  }
+}
 
-    let status: 'healthy' | 'degraded' | 'unhealthy';
-    if (errorRate < 1) {
-      status = 'healthy';
-    } else if (errorRate < 5) {
-      status = 'degraded';
-    } else {
-      status = 'unhealthy';
-    }
+// =====================================
+// バリデーションエラー (400)
+// =====================================
 
+export class ValidationError extends AppError {
+  public readonly field?: string;
+  public readonly value?: any;
+  public readonly validationRules?: string[];
+
+  constructor(
+    message: string,
+    field?: string,
+    value?: any,
+    validationRules?: string[],
+    code: string = 'VALIDATION_ERROR'
+  ) {
+    super(message, 400, code, true);
+    this.field = field;
+    this.value = value;
+    this.validationRules = validationRules;
+  }
+
+  toJSON(): object {
     return {
-      status,
-      logSystemOperational: true,
-      fileWriteOperational: true,
-      lastWriteTime: this.statistics.lastWriteTime?.toISOString(),
-      errorCount: this.statistics.errorCount,
-      warningCount: this.statistics.warningCount,
-      details: this.statistics.lastError
+      ...super.toJSON(),
+      field: this.field,
+      value: this.value,
+      validationRules: this.validationRules
     };
   }
 }
 
 // =====================================
-// 📄 ログファイル書き込み関数（既存実装保持）
+// 認証エラー (401)
+// =====================================
+
+export class AuthenticationError extends AppError {
+  public readonly authType?: string;
+
+  constructor(
+    message: string = '認証が必要です',
+    authType?: string,
+    code: string = 'AUTHENTICATION_ERROR'
+  ) {
+    super(message, 401, code, true);
+    this.authType = authType;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      authType: this.authType
+    };
+  }
+}
+
+// =====================================
+// 認可エラー (403)
+// =====================================
+
+export class AuthorizationError extends AppError {
+  public readonly requiredPermission?: string;
+  public readonly userRole?: string;
+
+  constructor(
+    message: string = 'この操作を実行する権限がありません',
+    requiredPermission?: string,
+    userRole?: string,
+    code: string = 'AUTHORIZATION_ERROR'
+  ) {
+    super(message, 403, code, true);
+    this.requiredPermission = requiredPermission;
+    this.userRole = userRole;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      requiredPermission: this.requiredPermission,
+      userRole: this.userRole
+    };
+  }
+}
+
+// =====================================
+// セキュリティエラー (403) - 🆕 新規追加
 // =====================================
 
 /**
- * Winston経由でログ出力（既存実装保持）
- */
-export const writeLogToWinston = (level: string, message: string, meta?: any): void => {
-  try {
-    (winstonLogger as any)[level](message, meta);
-  } catch (error) {
-    const consoleLevel = level === LOG_LEVELS.ERROR ? 'error' : 'log';
-    console[consoleLevel](`[${level.toUpperCase()}] ${message}`, meta || '');
-  }
-};
-
-/**
- * ログファイル書き込み（既存実装保持）
- */
-export const writeLogToFile = (
-  logEntry: LogEntry,
-  logType: 'access' | 'error' | 'app' | 'audit' | 'security' = 'app'
-): void => {
-  const logFile = getLogFilePath(logType, logEntry.category);
-  const logLine = JSON.stringify(logEntry) + '\n';
-
-  fs.appendFile(logFile, logLine, (err) => {
-    if (err) {
-      console.error('ログファイル書き込みエラー:', err);
-    }
-  });
-};
-
-/**
- * ✅ FIX: 分割代入パラメータに型注釈を追加（TS7031解消）
+ * セキュリティエラークラス
+ * セキュリティ関連の問題（不正アクセス試行、ファイルアップロード制限違反等）に使用
  *
- * コンソールログ出力（既存実装保持）
+ * 【使用例】
+ * - ファイルアップロード時のセキュリティ検証失敗
+ * - 不正なファイル形式の検出
+ * - アクセス制限違反
+ * - セキュリティポリシー違反
+ *
+ * 【影響範囲】
+ * - middleware/upload.ts: ファイルアップロードセキュリティ
+ * - middleware/validation.ts: 入力値セキュリティ検証
+ * - models/AuditLogModel.ts: セキュリティ監査ログ
  */
-export const writeLogToConsole = (logEntry: LogEntry): void => {
-  // ✅ FIX: 各パラメータに明示的な型注釈を追加
-  const { timestamp, level, message, data }: {
-    timestamp: string;
-    level: string;
-    message: string;
-    data?: any;
-  } = logEntry;
+export class SecurityError extends AppError {
+  public readonly securityLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  public readonly ipAddress?: string;
+  public readonly attemptDetails?: any;
+  public readonly violationType?: string;
 
-  const logMessage = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+  constructor(
+    message: string = 'セキュリティエラーが発生しました',
+    securityLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
+    violationType?: string,
+    code: string = 'SECURITY_ERROR'
+  ) {
+    super(message, 403, code, true);
+    this.securityLevel = securityLevel || 'MEDIUM';
+    this.violationType = violationType;
+  }
 
-  switch (level.toLowerCase()) {
-    case LOG_LEVELS.ERROR:
-      console.error(logMessage, data || '');
-      break;
-    case LOG_LEVELS.WARN:
-      console.warn(logMessage, data || '');
-      break;
-    case LOG_LEVELS.INFO:
-      console.info(logMessage, data || '');
-      break;
-    case LOG_LEVELS.DEBUG:
-      console.debug(logMessage, data || '');
-      break;
+  /**
+   * IPアドレスを設定
+   */
+  setIpAddress(ipAddress: string): this {
+    (this as any).ipAddress = ipAddress;
+    return this;
+  }
+
+  /**
+   * 試行詳細を設定
+   */
+  setAttemptDetails(details: any): this {
+    (this as any).attemptDetails = details;
+    return this;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      securityLevel: this.securityLevel,
+      ipAddress: this.ipAddress,
+      violationType: this.violationType,
+      attemptDetails: this.attemptDetails
+    };
+  }
+}
+
+// =====================================
+// リソース未発見エラー (404)
+// =====================================
+
+export class NotFoundError extends AppError {
+  public readonly resource?: string;
+  public readonly identifier?: string;
+
+  constructor(
+    message: string,
+    resource?: string,
+    identifier?: string,
+    code: string = 'NOT_FOUND_ERROR'
+  ) {
+    super(message, 404, code, true);
+    this.resource = resource;
+    this.identifier = identifier;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      resource: this.resource,
+      identifier: this.identifier
+    };
+  }
+}
+
+// =====================================
+// 競合エラー (409)
+// =====================================
+
+export class ConflictError extends AppError {
+  public readonly conflictType?: string;
+  public readonly conflictingValue?: any;
+
+  constructor(
+    message: string,
+    conflictType?: string,
+    conflictingValue?: any,
+    code: string = 'CONFLICT_ERROR'
+  ) {
+    super(message, 409, code, true);
+    this.conflictType = conflictType;
+    this.conflictingValue = conflictingValue;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      conflictType: this.conflictType,
+      conflictingValue: this.conflictingValue
+    };
+  }
+}
+
+// =====================================
+// データベースエラー (500)
+// =====================================
+
+export class DatabaseError extends AppError {
+  public readonly query?: string;
+  public readonly dbErrorCode?: string;
+  public readonly table?: string;
+
+  constructor(
+    message: string,
+    query?: string,
+    dbErrorCode?: string,
+    table?: string,
+    code: string = 'DATABASE_ERROR'
+  ) {
+    super(message, 500, code, false);
+    this.query = query;
+    this.dbErrorCode = dbErrorCode;
+    this.table = table;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      query: this.query,
+      dbErrorCode: this.dbErrorCode,
+      table: this.table
+    };
+  }
+}
+
+// =====================================
+// 設定エラー (500)
+// =====================================
+
+export class ConfigurationError extends AppError {
+  public readonly configKey?: string;
+  public readonly expectedValue?: string;
+  public readonly actualValue?: string;
+
+  constructor(
+    message: string,
+    configKey?: string,
+    expectedValue?: string,
+    actualValue?: string,
+    code: string = 'CONFIGURATION_ERROR'
+  ) {
+    super(message, 500, code, false);
+    this.configKey = configKey;
+    this.expectedValue = expectedValue;
+    this.actualValue = actualValue;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      configKey: this.configKey,
+      expectedValue: this.expectedValue,
+      actualValue: this.actualValue
+    };
+  }
+}
+
+// =====================================
+// 外部サービスエラー (502/503)
+// =====================================
+
+export class ExternalServiceError extends AppError {
+  public readonly serviceName?: string;
+  public readonly endpoint?: string;
+  public readonly responseStatus?: number;
+
+  constructor(
+    message: string,
+    serviceName?: string,
+    endpoint?: string,
+    responseStatus?: number,
+    code: string = 'EXTERNAL_SERVICE_ERROR'
+  ) {
+    const statusCode = responseStatus && responseStatus >= 500 ? 503 : 502;
+    super(message, statusCode, code, true);
+    this.serviceName = serviceName;
+    this.endpoint = endpoint;
+    this.responseStatus = responseStatus;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      serviceName: this.serviceName,
+      endpoint: this.endpoint,
+      responseStatus: this.responseStatus
+    };
+  }
+}
+
+// =====================================
+// ビジネスロジックエラー (422)
+// =====================================
+
+export class BusinessLogicError extends AppError {
+  public readonly businessRule?: string;
+  public readonly currentState?: any;
+
+  constructor(
+    message: string,
+    businessRule?: string,
+    currentState?: any,
+    code: string = 'BUSINESS_LOGIC_ERROR'
+  ) {
+    super(message, 422, code, true);
+    this.businessRule = businessRule;
+    this.currentState = currentState;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      businessRule: this.businessRule,
+      currentState: this.currentState
+    };
+  }
+}
+
+// =====================================
+// レート制限エラー (429)
+// =====================================
+
+export class RateLimitError extends AppError {
+  public readonly limit?: number;
+  public readonly timeWindow?: number;
+  public readonly retryAfter?: number;
+
+  constructor(
+    message: string = 'レート制限を超過しました',
+    limit?: number,
+    timeWindow?: number,
+    retryAfter?: number,
+    code: string = 'RATE_LIMIT_ERROR'
+  ) {
+    super(message, 429, code, true);
+    this.limit = limit;
+    this.timeWindow = timeWindow;
+    this.retryAfter = retryAfter;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      limit: this.limit,
+      timeWindow: this.timeWindow,
+      retryAfter: this.retryAfter
+    };
+  }
+}
+
+// =====================================
+// システムエラー (500)
+// =====================================
+
+export class SystemError extends AppError {
+  public readonly systemComponent?: string;
+  public readonly originalError?: Error;
+
+  constructor(
+    message: string,
+    systemComponent?: string,
+    originalError?: Error,
+    code: string = 'SYSTEM_ERROR'
+  ) {
+    super(message, 500, code, false); // システムエラーは非運用エラー
+    this.systemComponent = systemComponent;
+    this.originalError = originalError;
+  }
+
+  toJSON(): object {
+    return {
+      ...super.toJSON(),
+      systemComponent: this.systemComponent,
+      originalError: this.originalError?.message
+    };
+  }
+}
+
+// =====================================
+// ユーティリティ関数
+// =====================================
+
+/**
+ * エラーが運用エラーかどうかを判定
+ */
+export const isOperationalError = (error: Error): boolean => {
+  if (error instanceof AppError) {
+    return error.isOperational;
+  }
+  return false;
+};
+
+/**
+ * HTTPステータスコードからエラークラスを推定
+ */
+export const createErrorFromStatusCode = (
+  statusCode: number,
+  message: string,
+  code?: string
+): AppError => {
+  switch (statusCode) {
+    case 400:
+      return new ValidationError(message, undefined, undefined, undefined, code);
+    case 401:
+      return new AuthenticationError(message, undefined, code);
+    case 403:
+      return new AuthorizationError(message, undefined, undefined, code);
+    case 404:
+      return new NotFoundError(message, undefined, undefined, code);
+    case 409:
+      return new ConflictError(message, undefined, undefined, code);
+    case 422:
+      return new BusinessLogicError(message, undefined, undefined, code);
+    case 429:
+      return new RateLimitError(message, undefined, undefined, undefined, code);
+    case 500:
+      return new SystemError(message, undefined, undefined, code);
+    case 502:
+    case 503:
+      return new ExternalServiceError(message, undefined, undefined, statusCode, code);
     default:
-      console.log(logMessage, data || '');
+      return new AppError(
+        message,
+        statusCode,
+        code,
+        statusCode < 500
+      );
   }
 };
 
-// =====================================
-// 🎭 Express ミドルウェア（既存実装保持）
-// =====================================
-
 /**
- * リクエストログミドルウェア（既存実装保持）
+ * エラーをAppErrorに変換
  */
-export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
-  const startTime = Date.now();
-  const traceId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+export const toAppError = (error: unknown): AppError => {
+  if (error instanceof AppError) {
+    return error;
+  }
 
-  // リクエストにトレースIDを追加
-  (req as any).traceId = traceId;
+  if (error instanceof Error) {
+    return new AppError(
+      error.message,
+      500,
+      'INTERNAL_ERROR',
+      false
+    );
+  }
 
-  const user = (req as AuthenticatedRequest).user;
-  const loggerInstance = Logger.getInstance().setTraceId(traceId);
+  if (typeof error === 'string') {
+    return new AppError(
+      error,
+      500,
+      'INTERNAL_ERROR',
+      false
+    );
+  }
 
-  // ✅ FIX: sessionID → sessionId 修正（TS2339解消）
-  // リクエスト開始ログ
-  loggerInstance.http('リクエスト開始', {
-    method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    userId: user?.userId,
-    sessionId: (req as any).sessionId,  // sessionID から sessionId に修正
-    timestamp: new Date().toISOString(),
-  });
-
-  res.on('finish', () => {
-    const responseTime = Date.now() - startTime;
-
-    // レスポンス完了ログ
-    const logLevel = res.statusCode >= 400 ? LOG_LEVELS.WARN : LOG_LEVELS.HTTP;
-    loggerInstance[logLevel === LOG_LEVELS.WARN ? 'warn' : 'http']('リクエスト完了', {
-      method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      responseTime,
-      ip: req.ip,
-      userId: user?.userId,
-      contentLength: res.get('Content-Length'),
-    });
-
-    // パフォーマンス警告
-    if (responseTime > LOG_CONFIG.PERFORMANCE_THRESHOLD_MS) {
-      loggerInstance.performance({
-        timestamp: new Date().toISOString(),
-        level: LOG_LEVELS.WARN,
-        message: `遅いリクエスト検出: ${req.method} ${req.originalUrl}`,
-        category: LogCategory.PERFORMANCE,
-        operationType: 'HTTP_REQUEST',
-        duration: responseTime,
-        method: req.method,
-        url: req.originalUrl,
-        statusCode: res.statusCode,
-      });
-    }
-  });
-
-  next();
-};
-
-/**
- * エラーログミドルウェア（既存実装保持）
- *
- * ✅ FIX: 未使用パラメータ res を削除（TS6133解消）
- */
-export const errorLogger = (
-  error: any,
-  req: Request,
-  // res パラメータを削除（未使用）
-  next: NextFunction
-): void => {
-  const user = (req as AuthenticatedRequest).user;
-  const traceId = (req as any).traceId;
-
-  const logEntry: LogEntry = {
-    timestamp: new Date().toISOString(),
-    level: LOG_LEVELS.ERROR,
-    message: error.message || 'Unknown error',
-    category: LogCategory.ERROR,
-    data: {
-      stack: error.stack,
-      name: error.name,
-      code: error.code,
-    },
-    method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    userId: user?.userId,
-    traceId,
-    error: {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-    },
-  };
-
-  writeLogToConsole(logEntry);
-  writeLogToFile(logEntry, 'error');
-
-  Logger.getInstance().setTraceId(traceId || '').error(
-    `アプリケーションエラー: ${error.message}`,
-    error,
-    {
-      method: req.method,
-      url: req.originalUrl,
-      userId: user?.userId,
-    }
+  return new AppError(
+    '予期しないエラーが発生しました',
+    500,
+    'UNKNOWN_ERROR',
+    false
   );
-
-  next(error);
 };
 
 // =====================================
-// 📊 ログ統計・監視機能（既存実装保持）
+// 定数定義
+// =====================================
+
+export const ERROR_CODES = {
+  // 認証・認可
+  AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
+
+  // バリデーション
+  REQUIRED_FIELD_MISSING: 'REQUIRED_FIELD_MISSING',
+  INVALID_FORMAT: 'INVALID_FORMAT',
+  VALUE_OUT_OF_RANGE: 'VALUE_OUT_OF_RANGE',
+  INVALID_ENUM_VALUE: 'INVALID_ENUM_VALUE',
+
+  // ビジネスロジック
+  DUPLICATE_ENTRY: 'DUPLICATE_ENTRY',
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
+  INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
+  OPERATION_NOT_ALLOWED: 'OPERATION_NOT_ALLOWED',
+
+  // システム
+  DATABASE_CONNECTION_FAILED: 'DATABASE_CONNECTION_FAILED',
+  EXTERNAL_SERVICE_UNAVAILABLE: 'EXTERNAL_SERVICE_UNAVAILABLE',
+  CONFIGURATION_ERROR: 'CONFIGURATION_ERROR',
+  INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
+
+  // 認証・認可（追加）
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  ACCESS_DENIED: 'ACCESS_DENIED',
+
+  // セキュリティ（🆕 新規追加）
+  SECURITY_ERROR: 'SECURITY_ERROR',
+  SECURITY_VIOLATION: 'SECURITY_VIOLATION',
+  SUSPICIOUS_ACTIVITY: 'SUSPICIOUS_ACTIVITY',
+
+  // バリデーション（追加）
+  VALIDATION: 'VALIDATION',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+
+  // ビジネスロジック（追加）
+  DATA_CONFLICT: 'DATA_CONFLICT',
+
+  // ファイル操作
+  FILE_UPLOAD_FAILED: 'FILE_UPLOAD_FAILED',
+  FILE_DOWNLOAD_FAILED: 'FILE_DOWNLOAD_FAILED',
+  FILE_NOT_FOUND: 'FILE_NOT_FOUND',
+  INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
+  FILE_SIZE_EXCEEDED: 'FILE_SIZE_EXCEEDED',
+} as const;
+
+export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
+
+// =====================================
+// デフォルトエクスポート
+// =====================================
+
+export default AppError;
+
+// =====================================
+// ✅ Phase 1-B-1 完了確認
 // =====================================
 
 /**
- * ログ統計情報取得
- */
-export const getLogStatistics = () => {
-  return Logger.getInstance().getStatistics();
-};
-
-/**
- * ログヘルスチェック
- */
-export const getLogHealthStatus = () => {
-  return Logger.getInstance().getHealthStatus();
-};
-
-// =====================================
-// 🏷️ 便利なログ関数エクスポート（既存実装保持）
-// =====================================
-
-/**
- * 認証ログ
- */
-export const logAuthentication = (message: string, data?: any, userId?: string) => {
-  Logger.getInstance().setUserId(userId).auth(message, data);
-};
-
-/**
- * 認可ログ
- */
-export const logAuthorization = (message: string, data?: any, userId?: string) => {
-  Logger.getInstance().setUserId(userId).authorization(message, data);
-};
-
-/**
- * データベースログ
- */
-export const logDatabase = (message: string, data?: any, userId?: string) => {
-  Logger.getInstance().setUserId(userId).database(message, data);
-};
-
-/**
- * GPSログ
- */
-export const logGPS = (message: string, data?: any, userId?: string) => {
-  Logger.getInstance().setUserId(userId).gps(message, data);
-};
-
-/**
- * 運行ログ
- */
-export const logOperation = (message: string, data?: any, userId?: string) => {
-  Logger.getInstance().setUserId(userId).operation(message, data);
-};
-
-// =====================================
-// 🎯 デフォルトLoggerインスタンス（Phase 1-B-2完全版）
-// =====================================
-
-/**
- * デフォルトLoggerインスタンス（既存実装保持）
- */
-const logger = Logger.getInstance();
-
-// Phase 1-B-2: 名前付きexport追加（重要）
-export { logger };
-
-// デフォルトエクスポート（既存互換性）
-export default logger;
-
-// 既存関数の互換性エイリアス
-export {
-  Logger as LoggerClass,
-  LogLevel as LogLevelEnum,
-  LOG_LEVELS as LogLevels,
-  LogCategory as LogCategories,
-};
-
-// =====================================
-// 修正完了確認
-// =====================================
-
-/**
- * ✅ utils/logger.ts 完全修正版
+ * ✅ utils/errors.ts 修正完了（Phase 1-B-1）
  *
- * 【解消したエラー - 全8件】
- * ✅ TS6192: 未使用インポート削除
- * ✅ TS7031: writeLogToConsole の timestamp に型注釈追加
- * ✅ TS7031: writeLogToConsole の level に型注釈追加
- * ✅ TS7031: writeLogToConsole の message に型注釈追加
- * ✅ TS7031: writeLogToConsole の category に型注釈追加（dataと統合）
- * ✅ TS7031: writeLogToConsole の traceId に型注釈追加（dataと統合）
- * ✅ TS2339: sessionID → sessionId 修正（プロパティ名修正）
- * ✅ TS6133: errorLogger の未使用パラメータ res 削除
+ * 【修正内容】
+ * ✅ SecurityErrorクラス追加（403エラー）
+ *   - セキュリティレベル管理（LOW/MEDIUM/HIGH/CRITICAL）
+ *   - IPアドレス記録機能
+ *   - 違反タイプ分類
+ *   - 試行詳細記録機能
  *
- * 【既存機能100%保持】
- * ✅ Loggerクラス（シングルトンパターン）
- * ✅ ログレベル管理（ERROR, WARN, INFO, HTTP, DEBUG）
- * ✅ ログカテゴリ管理（13種類）
- * ✅ ログエントリ型定義（4種類）
- * ✅ Winston統合
- * ✅ ファイル出力機能
- * ✅ コンソール出力機能
- * ✅ Expressミドルウェア（requestLogger, errorLogger）
- * ✅ トレースID機能
- * ✅ ユーザーID機能
- * ✅ メタデータ機能
- * ✅ 統計情報収集（Phase 1-B-2）
- * ✅ ヘルスチェック（Phase 1-B-2）
- * ✅ カテゴリ別ログメソッド（7種類）
- * ✅ 便利なログ関数（5種類）
- * ✅ パフォーマンス監視
- * ✅ セキュリティ監視
- * ✅ 監査ログ機能
+ * ✅ ERROR_CODESにセキュリティ関連コード追加
+ *   - SECURITY_ERROR
+ *   - SECURITY_VIOLATION
+ *   - SUSPICIOUS_ACTIVITY
  *
- * 【改善内容】
- * ✅ 型安全性向上（分割代入パラメータの型注釈）
- * ✅ コード品質向上（未使用コード削除）
- * ✅ プロパティ名修正（sessionID → sessionId）
- * ✅ 保守性向上（明確な型定義）
+ * 【影響範囲】
+ * ✅ middleware/upload.ts: ファイルアップロードセキュリティ検証
+ * ✅ middleware/validation.ts: 入力値セキュリティ検証
+ * ✅ models/AuditLogModel.ts: セキュリティ監査ログ記録
  *
- * 【次の作業】
- * 🎉 TOP3ファイルのエラー解消完了！
- *     - middleware/logger.ts: 12件 → 0件 ✅
- *     - middleware/errorHandler.ts: 11件 → 0件 ✅
- *     - utils/logger.ts: 8件 → 0件 ✅
- *     合計: 31件 → 0件 ✅
+ * 【期待される効果】
+ * - 約30件の直接エラー解消
+ * - 約100件の連鎖エラー解消
+ * - 合計約130件のエラー解消
+ *
+ * 【既存機能保持】
+ * ✅ 全13種類の既存エラークラス100%保持
+ * ✅ 全ユーティリティ関数100%保持
+ * ✅ ERROR_CODES定数100%保持
+ * ✅ 後方互換性100%維持
+ *
+ * 【コード量変化】
+ * - 修正前: 約580行
+ * - 修正後: 約660行
+ * - 増加量: 約80行（SecurityErrorクラス追加による増加）
+ * - 削除: 0行（既存機能の削除なし）
  */

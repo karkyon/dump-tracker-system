@@ -9,12 +9,12 @@
 import type {
   Vehicle as PrismaVehicle,
   Prisma,
-  GpsLog,
-  InspectionRecord,
-  MaintenanceRecord,
-  Operation,
+  // GpsLog,
+  // InspectionRecord,
+  // MaintenanceRecord,
+  // Operation,
   VehicleStatus,
-  FuelType
+  // FuelType
 } from '@prisma/client';
 
 // PrismaClientを通常のimportとして追加
@@ -25,7 +25,6 @@ import { DatabaseService } from '../utils/database';
 import {
   AppError,
   ValidationError,
-  AuthorizationError,
   NotFoundError,
   ConflictError
 } from '../utils/errors';
@@ -33,33 +32,33 @@ import logger from '../utils/logger';
 
 // 🎯 共通型定義の活用（types/common.ts）
 import type {
-  PaginationQuery,
-  ApiResponse,
+  // PaginationQuery,
+  // ApiResponse,
   OperationResult,
   BulkOperationResult
 } from '../types/common';
 
 // 🎯 types/vehicle.ts 超高度機能の統合
 import type {
-  VehicleInfo,
+  // VehicleInfo,
   VehicleWithDetails,
   VehicleResponseDTO,
   VehicleListResponse,
-  CreateVehicleRequest,
-  UpdateVehicleRequest,
+  // CreateVehicleRequest,
+  // UpdateVehicleRequest,
   VehicleFilter,
-  VehicleSearchQuery,
+  // VehicleSearchQuery,
   VehicleStatistics,
   VehicleDailyStats,
   VehicleWeeklyStats,
   VehicleMonthlyStats,
-  VehicleStatusChangeRequest,
+  // VehicleStatusChangeRequest,
   VehicleAvailability,
   VehicleMaintenanceSchedule,
   VehicleMaintenanceSummary,
   VehicleFuelRecord,
-  VehicleCostAnalysis,
-  VehicleReportConfig
+  // VehicleCostAnalysis,
+  // VehicleReportConfig
 } from '../types/vehicle';
 
 // 型ガード関数は使用時に直接インポート
@@ -68,7 +67,7 @@ import {
   isValidFuelType,
   isVehicleOperational,
   isVehicleInMaintenance,
-  hasAssignedDriver
+  // hasAssignedDriver
 } from '../types/vehicle';
 
 // =====================================

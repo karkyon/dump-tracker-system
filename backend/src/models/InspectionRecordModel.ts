@@ -7,31 +7,31 @@
 // 更新日時: 2025年9月27日 16:00
 // =====================================
 
-import type { 
+import type {
   InspectionRecord as PrismaInspectionRecord,
   Prisma,
-  InspectionItemResult,
-  Operation,
-  User,
-  Vehicle,
+  // InspectionItemResult,
+  // // Operation,
+  // User,
+  // Vehicle,
   InspectionType,
-  InspectionStatus
+  // InspectionStatus
 } from '@prisma/client';
 
 import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完了基盤の活用
 import logger from '../utils/logger';
-import { 
-  AppError, 
-  ValidationError, 
+import {
+  AppError,
+  ValidationError,
   NotFoundError,
   DatabaseError,
-  ConflictError 
+  // ConflictError
 } from '../utils/errors';
 
 import type {
-  ApiResponse,
+  // ApiResponse,
   ApiListResponse,
   PaginationQuery,
   SearchQuery,
@@ -46,7 +46,7 @@ import type {
 import type {
   InspectionCategory,
   InspectionPriority,
-  InspectionItemStatus
+  // InspectionItemStatus
 } from './InspectionItemModel';
 
 import type {
@@ -60,7 +60,7 @@ import type {
 
 export type InspectionRecordModel = PrismaInspectionRecord;
 export type InspectionRecordCreateInput = Prisma.InspectionRecordCreateInput;
-export type InspectionRecordUpdateInput = Prisma.InspectionRecordUpdateInput;  
+export type InspectionRecordUpdateInput = Prisma.InspectionRecordUpdateInput;
 export type InspectionRecordWhereInput = Prisma.InspectionRecordWhereInput;
 export type InspectionRecordWhereUniqueInput = Prisma.InspectionRecordWhereUniqueInput;
 export type InspectionRecordOrderByInput = Prisma.InspectionRecordOrderByWithRelationInput;
@@ -105,7 +105,7 @@ export interface InspectionRecordDetails {
     weather?: string;
     visibility?: string;
   };
-  
+
   // 位置情報
   location?: {
     latitude: number;
@@ -113,14 +113,14 @@ export interface InspectionRecordDetails {
     address?: string;
     facility?: string;
   };
-  
+
   // 使用機器情報
   equipment?: {
     tools: string[];
     calibrationDates: Record<string, Date>;
     serialNumbers: Record<string, string>;
   };
-  
+
   // チェックリスト進捗
   checklist?: {
     totalItems: number;
@@ -130,7 +130,7 @@ export interface InspectionRecordDetails {
     skippedItems: number;
     completionPercentage: number;
   };
-  
+
   // 時間追跡
   timeTracking?: {
     plannedDuration: number; // 分
@@ -139,7 +139,7 @@ export interface InspectionRecordDetails {
     endTime?: Date;
     pausedDuration?: number; // 分
   };
-  
+
   // 品質指標
   qualityMetrics?: {
     thoroughnessScore: number; // 0-100
@@ -147,7 +147,7 @@ export interface InspectionRecordDetails {
     timelinessScore: number;   // 0-100
     overallScore: number;      // 0-100
   };
-  
+
   // 特記事項
   notes?: {
     preInspectionNotes?: string;
@@ -167,12 +167,12 @@ export interface InspectionRecordStatistics extends StatisticsBase {
   inProgressRecords: number;
   pendingRecords: number;
   completionRate: number;
-  
+
   // 品質統計
   averageQualityScore: number;
   averageCompletionTime: number; // 分
   onTimeCompletionRate: number;
-  
+
   // カテゴリ別統計
   byCategory: Record<InspectionCategory, {
     total: number;
@@ -180,17 +180,17 @@ export interface InspectionRecordStatistics extends StatisticsBase {
     averageScore: number;
     averageTime: number;
   }>;
-  
+
   // 重要度別統計
   byPriority: Record<InspectionPriority, {
     total: number;
     completed: number;
     urgentCount: number;
   }>;
-  
+
   // ステータス別統計
   byStatus: Record<InspectionWorkflowStatus, number>;
-  
+
   // 点検員別統計
   byInspector: Record<string, {
     name: string;
@@ -200,7 +200,7 @@ export interface InspectionRecordStatistics extends StatisticsBase {
     averageTime: number;
     onTimeRate: number;
   }>;
-  
+
   // 車両別統計
   byVehicle: Record<string, {
     plateNumber: string;
@@ -209,7 +209,7 @@ export interface InspectionRecordStatistics extends StatisticsBase {
     averageScore: number;
     issueCount: number;
   }>;
-  
+
   // 傾向データ
   trendData: {
     date: string;
@@ -218,7 +218,7 @@ export interface InspectionRecordStatistics extends StatisticsBase {
     averageTime: number;
     issueCount: number;
   }[];
-  
+
   // パフォーマンス指標
   performanceIndicators: {
     efficiency: number;        // 効率性指標
@@ -236,37 +236,37 @@ export interface InspectionRecordFilter extends PaginationQuery, SearchQuery {
   inspectorId?: string | string[];
   vehicleId?: string | string[];
   facilityId?: string | string[];
-  
+
   // ステータス・優先度フィルタ
   status?: InspectionWorkflowStatus | InspectionWorkflowStatus[];
   priority?: InspectionRecordPriority | InspectionRecordPriority[];
   inspectionType?: InspectionType | InspectionType[];
-  
+
   // 時間範囲フィルタ
   scheduledDate?: DateRange;
   completedDate?: DateRange;
-  
+
   // 品質フィルタ
   qualityScoreRange?: {
     min?: number;
     max?: number;
   };
-  
+
   // 完了状況フィルタ
   completionStatus?: 'ALL' | 'COMPLETED' | 'INCOMPLETE' | 'OVERDUE';
-  
+
   // 問題・警告フィルタ
   hasIssues?: boolean;
   hasWarnings?: boolean;
   issuesSeverity?: ResultSeverity | ResultSeverity[];
-  
+
   // 位置情報フィルタ
   location?: {
     latitude: number;
     longitude: number;
     radius: number; // km
   };
-  
+
   // 統計・分析オプション
   includeStatistics?: boolean;
   includeTrends?: boolean;
@@ -284,7 +284,7 @@ export interface InspectionRecordValidationResult extends ValidationResult {
     message: string;
     details?: any;
   }[];
-  
+
   qualityChecks?: {
     type: 'COMPLETENESS' | 'ACCURACY' | 'TIMELINESS' | 'CONSISTENCY';
     score: number;
@@ -292,7 +292,7 @@ export interface InspectionRecordValidationResult extends ValidationResult {
     passed: boolean;
     recommendations?: string[];
   }[];
-  
+
   businessRules?: {
     rule: string;
     passed: boolean;
@@ -324,7 +324,7 @@ export interface InspectionRecordResponseDTO extends InspectionRecordModel {
   workflowStatus?: InspectionWorkflowStatus;
   priority?: InspectionRecordPriority;
   details?: InspectionRecordDetails;
-  
+
   // 関連情報
   operation?: {
     id: string;
@@ -334,21 +334,21 @@ export interface InspectionRecordResponseDTO extends InspectionRecordModel {
     driverId: string;
     vehicleId: string;
   };
-  
+
   inspector?: {
     id: string;
     name: string;
     email: string;
     certifications: string[];
   };
-  
+
   vehicle?: {
     id: string;
     plateNumber: string;
     model: string;
     type: string;
   };
-  
+
   inspectionItems?: {
     total: number;
     completed: number;
@@ -363,7 +363,7 @@ export interface InspectionRecordResponseDTO extends InspectionRecordModel {
       result?: any;
     }>;
   };
-  
+
   // ワークフロー情報
   workflow?: {
     currentStatus: InspectionWorkflowStatus;
@@ -373,7 +373,7 @@ export interface InspectionRecordResponseDTO extends InspectionRecordModel {
     canApprove: boolean;
     canReject: boolean;
   };
-  
+
   // 品質・パフォーマンス情報
   qualityMetrics?: {
     overallScore: number;
@@ -381,7 +381,7 @@ export interface InspectionRecordResponseDTO extends InspectionRecordModel {
     efficiency: number;
     issuesCount: number;
   };
-  
+
   // 統計情報
   _count?: {
     inspectionItemResults: number;
@@ -389,7 +389,7 @@ export interface InspectionRecordResponseDTO extends InspectionRecordModel {
     warnings: number;
     approvals: number;
   };
-  
+
   // 計算フィールド
   completionPercentage?: number;
   isOverdue?: boolean;
@@ -406,9 +406,9 @@ export interface InspectionRecordListResponse extends ApiListResponse<Inspection
     completionRate: number;
     averageQualityScore: number;
   };
-  
+
   statistics?: InspectionRecordStatistics;
-  
+
   // フィルタ集計
   filterSummary?: {
     byStatus: Record<InspectionWorkflowStatus, number>;
@@ -422,13 +422,13 @@ export interface InspectionRecordCreateDTO extends Omit<InspectionRecordCreateIn
   workflowStatus?: InspectionWorkflowStatus;
   priority?: InspectionRecordPriority;
   details?: InspectionRecordDetails;
-  
+
   // 自動生成・計算オプション
   autoSchedule?: boolean;
   autoAssignInspector?: boolean;
   useTemplate?: string;
   copyFromRecord?: string;
-  
+
   // バリデーションオプション
   validateReadiness?: boolean;
   checkConflicts?: boolean;
@@ -441,14 +441,14 @@ export interface InspectionRecordUpdateDTO extends Partial<InspectionRecordCreat
     reason?: string;
     comments?: string;
   };
-  
+
   qualityReview?: {
     score: number;
     feedback: string;
     recommendations: string[];
     reviewedBy: string;
   };
-  
+
   // 更新メタデータ
   reason?: string;
   updatedBy?: string;
@@ -481,7 +481,7 @@ export class InspectionRecordService {
    * 🔧 新規作成（ワークフロー・バリデーション統合）
    */
   async create(
-    data: InspectionRecordCreateInput, 
+    data: InspectionRecordCreateInput,
     options?: {
       autoSchedule?: boolean;
       autoAssignInspector?: boolean;
@@ -490,7 +490,7 @@ export class InspectionRecordService {
     }
   ): Promise<InspectionRecordResponseDTO> {
     try {
-      logger.info('点検記録作成開始', { 
+      logger.info('点検記録作成開始', {
         operationId: data.operationId,
         inspectorId: data.inspectorId,
         options
@@ -688,7 +688,7 @@ export class InspectionRecordService {
    * ✏️ 更新（ワークフロー・履歴管理）
    */
   async update(
-    id: string, 
+    id: string,
     data: InspectionRecordUpdateInput,
     options?: {
       workflowTransition?: {
@@ -785,7 +785,7 @@ export class InspectionRecordService {
   async search(filter: InspectionRecordFilter): Promise<InspectionRecordListResponse> {
     try {
       const whereClause = this.buildWhereClause(filter);
-      
+
       return await this.findManyWithPagination({
         where: whereClause,
         orderBy: this.buildOrderBy(filter),
@@ -942,20 +942,20 @@ export class InspectionRecordService {
 
   private buildWhereClause(filter: InspectionRecordFilter): InspectionRecordWhereInput {
     const where: InspectionRecordWhereInput = {};
-    
+
     // フィルタ条件の構築
     if (filter.operationId) {
-      where.operationId = Array.isArray(filter.operationId) 
+      where.operationId = Array.isArray(filter.operationId)
         ? { in: filter.operationId }
         : filter.operationId;
     }
-    
+
     if (filter.inspectorId) {
       where.inspectorId = Array.isArray(filter.inspectorId)
         ? { in: filter.inspectorId }
         : filter.inspectorId;
     }
-    
+
     if (filter.scheduledDate) {
       where.scheduledAt = {
         gte: filter.scheduledDate.startDate ? new Date(filter.scheduledDate.startDate) : undefined,
@@ -969,7 +969,7 @@ export class InspectionRecordService {
   private buildOrderBy(filter: InspectionRecordFilter): InspectionRecordOrderByInput {
     const sortBy = filter.sortBy || 'createdAt';
     const sortOrder = filter.sortOrder || 'desc';
-    
+
     return { [sortBy]: sortOrder };
   }
 

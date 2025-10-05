@@ -90,7 +90,7 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 const getEnvNumber = (key: string, defaultValue: number): number => {
   const value = process.env[key];
   if (!value) return defaultValue;
-  
+
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 };
@@ -101,12 +101,12 @@ const getEnvNumber = (key: string, defaultValue: number): number => {
  */
 const resolvePath = (pathStr: string): string => {
   if (!pathStr) return './data';
-  
+
   // 絶対パスの場合はそのまま返す
   if (pathStr.startsWith('/') || /^[A-Za-z]:/.test(pathStr)) {
     return pathStr;
   }
-  
+
   // 相対パスの場合はプロジェクトルートからの相対パスとして解釈
   return pathStr.startsWith('./') ? pathStr : `./${pathStr}`;
 };
@@ -125,10 +125,10 @@ export const HTTP_STATUS = {
   CREATED: 201,
   ACCEPTED: 202,
   NO_CONTENT: 204,
-  
+
   // リダイレクト (3xx)
   NOT_MODIFIED: 304,
-  
+
   // クライアントエラー (4xx)
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
@@ -139,7 +139,7 @@ export const HTTP_STATUS = {
   GONE: 410,
   UNPROCESSABLE_ENTITY: 422,
   TOO_MANY_REQUESTS: 429,
-  
+
   // サーバーエラー (5xx)
   INTERNAL_SERVER_ERROR: 500,
   BAD_GATEWAY: 502,
@@ -160,7 +160,7 @@ export const ERROR_MESSAGES = {
   NETWORK_ERROR: 'ネットワークエラーが発生しました',
   CONNECTION_FAILED: '接続に失敗しました',
   TIMEOUT_ERROR: 'タイムアウトが発生しました',
-  
+
   // 認証・認可関連（統合版）
   AUTH_FAILED: '認証に失敗しました',
   UNAUTHORIZED: '認証が必要です',
@@ -171,38 +171,38 @@ export const ERROR_MESSAGES = {
   TOKEN_INVALID: 'トークンが無効です',
   ACCOUNT_INACTIVE: 'アカウントが無効です',
   INSUFFICIENT_PERMISSIONS: '権限が不足しています',
-  
+
   // データ・リソース関連（統合版）
   NOT_FOUND: 'データが見つかりません',
   RESOURCE_NOT_FOUND: 'リソースが見つかりません',
   DUPLICATE_ENTRY: '重複するデータが存在します',
   DATA_CONFLICT: 'データの競合が発生しました',
-  
+
   // バリデーション関連（統合版）
   VALIDATION_ERROR: '入力内容に誤りがあります',
   REQUIRED_FIELD_MISSING: '必須項目が入力されていません',
   INVALID_FORMAT: '入力形式が正しくありません',
   VALUE_OUT_OF_RANGE: '入力値が範囲外です',
   INVALID_ENUM_VALUE: '無効な選択値です',
-  
+
   // ファイル関連（統合版）
   INVALID_FILE_TYPE: 'サポートされていないファイル形式です',
   FILE_TOO_LARGE: 'ファイルサイズが制限を超えています',
   FILE_UPLOAD_FAILED: 'ファイルのアップロードに失敗しました',
   FILE_NOT_FOUND: 'ファイルが見つかりません',
   FILE_PROCESSING_ERROR: 'ファイルの処理中にエラーが発生しました',
-  
+
   // サーバー・システム関連（統合版）
   SERVER_ERROR: 'サーバーエラーが発生しました',
   INTERNAL_ERROR: 'サーバー内部エラーが発生しました',
   DATABASE_ERROR: 'データベースエラーが発生しました',
   EXTERNAL_SERVICE_ERROR: '外部サービスとの通信でエラーが発生しました',
   CONFIGURATION_ERROR: '設定エラーが発生しました',
-  
+
   // レート制限関連
   RATE_LIMIT_EXCEEDED: 'リクエスト制限を超えました',
   TOO_MANY_REQUESTS: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください',
-  
+
   // 業務固有エラー
   OPERATION_NOT_ALLOWED: 'この操作は許可されていません',
   INVALID_STATE_TRANSITION: '無効な状態遷移です',
@@ -223,23 +223,23 @@ export const SUCCESS_MESSAGES = {
   LOGOUT_SUCCESS: 'ログアウトしました',
   PASSWORD_CHANGED: 'パスワードが変更されました',
   ACCOUNT_ACTIVATED: 'アカウントが有効化されました',
-  
+
   // CRUD操作
   CREATED: '正常に作成されました',
   UPDATED: '正常に更新されました',
   DELETED: '正常に削除されました',
   SAVED: '正常に保存されました',
-  
+
   // ファイル操作
   FILE_UPLOADED: 'ファイルがアップロードされました',
   FILE_DOWNLOADED: 'ファイルがダウンロードされました',
   FILE_DELETED: 'ファイルが削除されました',
-  
+
   // データ処理
   DATA_IMPORTED: 'データがインポートされました',
   DATA_EXPORTED: 'データがエクスポートされました',
   REPORT_GENERATED: 'レポートが生成されました',
-  
+
   // システム操作
   SETTINGS_UPDATED: '設定が更新されました',
   BACKUP_COMPLETED: 'バックアップが完了しました',
@@ -261,11 +261,11 @@ export const APP_CONSTANTS: AppConfig = {
   SESSION_TIMEOUT: getEnvNumber('SESSION_TIMEOUT', 24 * 60 * 60 * 1000), // 24時間（デフォルト）
   PASSWORD_MIN_LENGTH: 8,
   USERNAME_MIN_LENGTH: 3,
-  
+
   // ページネーション設定
   DEFAULT_PAGE_SIZE: 20,
   MAX_PAGE_SIZE: 100,
-  
+
   // ファイル・アップロード設定（config統合）
   MAX_FILE_SIZE: getEnvNumber('MAX_FILE_SIZE', 10 * 1024 * 1024), // 10MB（デフォルト）
   UPLOAD_PATH: resolvePath(getEnvVar('UPLOAD_DIR', './uploads')),
@@ -273,20 +273,20 @@ export const APP_CONSTANTS: AppConfig = {
   REPORT_PATH: resolvePath(getEnvVar('REPORT_PATH', './reports')),
   BACKUP_PATH: resolvePath(getEnvVar('BACKUP_PATH', './backups')),
   REPORT_RETENTION_DAYS: getEnvNumber('REPORT_RETENTION_DAYS', 90),
-  
+
   // API制限設定
   API_RATE_LIMIT: getEnvNumber('API_RATE_LIMIT', 100),
-  
+
   // 許可ファイル形式（config統合）
   ALLOWED_IMAGE_TYPES: [
     'image/jpeg',
-    'image/png', 
+    'image/png',
     'image/gif',
     'image/webp',
     'image/bmp',
     'image/svg+xml'
   ] as const,
-  
+
   ALLOWED_DOCUMENT_TYPES: [
     'application/pdf',
     'application/msword',
@@ -296,7 +296,7 @@ export const APP_CONSTANTS: AppConfig = {
     'text/plain',
     'text/csv'
   ] as const,
-  
+
   // データベース設定（config統合）
   DB_CONNECTION_TIMEOUT: getEnvNumber('DB_CONNECTION_TIMEOUT', 10000),
   DB_QUERY_TIMEOUT: getEnvNumber('DB_QUERY_TIMEOUT', 30000)
@@ -334,7 +334,7 @@ export const VEHICLE_CONSTANTS = {
     TRAILER: 'trailer',
     OTHER: 'other'
   },
-  
+
   // 車両ステータス
   VEHICLE_STATUS: {
     ACTIVE: 'active',
@@ -342,7 +342,7 @@ export const VEHICLE_CONSTANTS = {
     MAINTENANCE: 'maintenance',
     RETIRED: 'retired'
   },
-  
+
   // 点検タイプ
   INSPECTION_TYPES: {
     DAILY: 'daily',
@@ -350,7 +350,7 @@ export const VEHICLE_CONSTANTS = {
     MONTHLY: 'monthly',
     ANNUAL: 'annual'
   },
-  
+
   // 点検ステータス
   INSPECTION_STATUS: {
     PENDING: 'pending',
@@ -358,7 +358,7 @@ export const VEHICLE_CONSTANTS = {
     COMPLETED: 'completed',
     FAILED: 'failed'
   },
-  
+
   // 運行ステータス
   OPERATION_STATUS: {
     SCHEDULED: 'scheduled',
@@ -375,16 +375,16 @@ export const GPS_CONSTANTS = {
   // GPS精度設定
   DEFAULT_ACCURACY_THRESHOLD: 10, // メートル
   HIGH_ACCURACY_THRESHOLD: 5,     // メートル
-  
+
   // 位置更新間隔
   POSITION_UPDATE_INTERVAL: 30000, // 30秒
   HIGH_FREQUENCY_INTERVAL: 10000,  // 10秒
-  
+
   // 地図関連
   DEFAULT_ZOOM_LEVEL: 13,
   MIN_ZOOM_LEVEL: 8,
   MAX_ZOOM_LEVEL: 18,
-  
+
   // 距離計算設定
   EARTH_RADIUS_KM: 6371,
   NEARBY_THRESHOLD_KM: 1,     // 1km以内を近隣とみなす
@@ -402,7 +402,7 @@ export const NOTIFICATION_CONSTANTS = {
     ERROR: 'error',
     SUCCESS: 'success'
   },
-  
+
   // 通知優先度
   PRIORITY: {
     LOW: 'low',
@@ -410,7 +410,7 @@ export const NOTIFICATION_CONSTANTS = {
     HIGH: 'high',
     URGENT: 'urgent'
   },
-  
+
   // 通知期限設定
   DEFAULT_RETENTION_DAYS: 30,
   URGENT_RETENTION_DAYS: 90
@@ -453,7 +453,7 @@ export const isValidFileSize = (size: number): boolean => {
  * ページネーションパラメータの正規化
  */
 export const normalizePaginationParams = (
-  page?: number | string, 
+  page?: number | string,
   limit?: number | string
 ): { page: number; limit: number } => {
   const normalizedPage = Math.max(1, parseInt(String(page)) || 1);
@@ -461,59 +461,43 @@ export const normalizePaginationParams = (
     APP_CONSTANTS.MAX_PAGE_SIZE,
     Math.max(1, parseInt(String(limit)) || APP_CONSTANTS.DEFAULT_PAGE_SIZE)
   );
-  
+
   return { page: normalizedPage, limit: normalizedLimit };
 };
 
 /**
  * 環境設定の健全性チェック
  */
-export const validateConfiguration = (): { 
-  isValid: boolean; 
-  errors: string[] 
+export const validateConfiguration = (): {
+  isValid: boolean;
+  errors: string[]
 } => {
   const errors: string[] = [];
-  
+
   // ファイルサイズ制限チェック
   if (APP_CONSTANTS.MAX_FILE_SIZE <= 0) {
     errors.push('MAX_FILE_SIZE must be greater than 0');
   }
-  
+
   // パスの存在チェック（相対パスの場合はスキップ）
   if (!APP_CONSTANTS.UPLOAD_PATH) {
     errors.push('UPLOAD_PATH is required');
   }
-  
+
   // API制限値チェック
   if (APP_CONSTANTS.API_RATE_LIMIT <= 0) {
     errors.push('API_RATE_LIMIT must be greater than 0');
   }
-  
+
   // セッションタイムアウトチェック
   if (APP_CONSTANTS.SESSION_TIMEOUT <= 0) {
     errors.push('SESSION_TIMEOUT must be greater than 0');
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors
   };
-};
-
-// =====================================
-// 型エクスポート（再エクスポート）
-// =====================================
-
-// 他のファイルでの型安全な使用のための型エクスポート
-export type {
-  AppConfig,
-  HttpStatusCode,
-  ErrorMessageKey,
-  SuccessMessageKey,
-  LogLevelKey,
-  AllowedImageType,
-  AllowedDocumentType,
-  AllowedFileType
 };
 
 // =====================================
@@ -533,7 +517,7 @@ const constants = {
   VEHICLE_CONSTANTS,
   GPS_CONSTANTS,
   NOTIFICATION_CONSTANTS,
-  
+
   // ユーティリティ関数
   isValidHttpStatus,
   isAllowedImageType,
@@ -546,21 +530,21 @@ const constants = {
 
 /**
  * 使用例コメント:
- * 
+ *
  * // HTTPステータスコード
  * res.status(HTTP_STATUS.OK).json(data);
- * 
+ *
  * // エラーメッセージ
  * throw new AppError(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND);
- * 
+ *
  * // ファイル検証
  * if (!isAllowedImageType(file.mimetype)) {
  *   throw new ValidationError(ERROR_MESSAGES.INVALID_FILE_TYPE);
  * }
- * 
+ *
  * // ページネーション
  * const { page, limit } = normalizePaginationParams(req.query.page, req.query.limit);
- * 
+ *
  * // 設定検証
  * const validation = validateConfiguration();
  * if (!validation.isValid) {

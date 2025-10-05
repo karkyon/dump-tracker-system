@@ -13,13 +13,13 @@
  * ✅ comparePasswordエイリアス追加（新規：後方互換性確保）
  * ✅ 既存機能100%保持
  * ✅ TypeScript型安全性完全対応
- * 
+ *
  * 【修正箇所】
  * 1. import文: bcryptjs → bcrypt
  * 2. generateAccessToken: expiresIn型アサーション追加
  * 3. generateRefreshToken: expiresIn型アサーション追加
  * 4. comparePasswordエイリアス: verifyPasswordへのエイリアス追加（新規）
- * 
+ *
  * 【影響範囲】
  * - JWT生成処理の型安全性向上
  * - パスワードハッシュ化機能の安定化
@@ -27,7 +27,7 @@
  */
 
 // ✅ Phase 1-B-3 修正: bcryptjs → bcrypt
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt, { SignOptions, VerifyOptions, JwtPayload } from 'jsonwebtoken';
 
@@ -163,7 +163,7 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 const getEnvNumber = (key: string, defaultValue: number): number => {
   const value = process.env[key];
   if (!value) return defaultValue;
-  
+
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 };
@@ -208,42 +208,42 @@ export const JWT_CONFIG: JWTConfig = {
 /**
  * パスワードハッシュ化（bcrypt統合版）
  * Phase 1-B-3修正: bcryptjsからbcryptに変更
- * 
+ *
  * @param password - ハッシュ化するパスワード
  * @param saltRounds - ソルトラウンド数（デフォルト: 10）
  * @returns ハッシュ化されたパスワード
  */
 export const hashPassword = async (
-  password: string, 
+  password: string,
   saltRounds: number = PASSWORD_CONFIG.saltRounds
 ): Promise<string> => {
   if (!password || password.length === 0) {
     throw new Error('パスワードは必須です');
   }
-  
+
   if (password.length > PASSWORD_CONFIG.maxLength) {
     throw new Error(`パスワードは${PASSWORD_CONFIG.maxLength}文字以内である必要があります`);
   }
-  
+
   return await bcrypt.hash(password, saltRounds);
 };
 
 /**
  * パスワード検証（bcrypt統合版）
  * Phase 1-B-3修正: bcryptjsからbcryptに変更
- * 
+ *
  * @param password - 検証するパスワード
  * @param hashedPassword - ハッシュ化されたパスワード
  * @returns パスワードが一致すればtrue
  */
 export const verifyPassword = async (
-  password: string, 
+  password: string,
   hashedPassword: string
 ): Promise<boolean> => {
   if (!password || !hashedPassword) {
     return false;
   }
-  
+
   try {
     return await bcrypt.compare(password, hashedPassword);
   } catch (error) {
@@ -255,16 +255,16 @@ export const verifyPassword = async (
 /**
  * ✅ comparePasswordエイリアス（新規追加 - Phase 1-B-3）
  * 既存コードとの後方互換性のため、verifyPasswordへのエイリアスを提供
- * 
+ *
  * 【追加理由】
  * - models/AuthModel.ts (line 25) でimportされている
  * - models/UserModel.ts (line 35) でimportされている
  * - エラー: Module '"../utils/crypto"' has no exported member 'comparePassword'
- * 
+ *
  * 【使用箇所】
  * - AuthModel.ts: ユーザー認証時のパスワード比較
  * - UserModel.ts: パスワード変更時の既存パスワード確認
- * 
+ *
  * @param password - 検証するパスワード
  * @param hashedPassword - ハッシュ化されたパスワード
  * @returns パスワードが一致すればtrue
@@ -297,7 +297,7 @@ export const verifyPasswordSafe = async (
 
 /**
  * パスワード強度検証（統合版）
- * 
+ *
  * @param password - 検証するパスワード
  * @returns パスワード検証結果（エラー・スコア含む）
  */
@@ -366,7 +366,7 @@ export const secureCompare = (a: string, b: string): boolean => {
   if (a.length !== b.length) {
     return false;
   }
-  
+
   try {
     return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
   } catch {
@@ -378,12 +378,12 @@ export const secureCompare = (a: string, b: string): boolean => {
  * パスワードエントロピー計算
  */
 export const calculateEntropy = (password: string): number => {
-  const charsetSize = 
+  const charsetSize =
     (/[a-z]/.test(password) ? 26 : 0) +
     (/[A-Z]/.test(password) ? 26 : 0) +
     (/[0-9]/.test(password) ? 10 : 0) +
     (/[^a-zA-Z0-9]/.test(password) ? 32 : 0);
-  
+
   return Math.log2(Math.pow(charsetSize, password.length));
 };
 
@@ -402,7 +402,7 @@ export const getCryptoConfig = () => ({
 /**
  * アクセストークン生成（統合版）
  * Phase 1-B-3修正: expiresIn型アサーション追加（line 317）
- * 
+ *
  * config/jwt.tsの機能を統合し、既存インターフェース保持
  */
 export const generateAccessToken = (payload: JWTPayload): string => {
@@ -428,7 +428,7 @@ export const generateAccessToken = (payload: JWTPayload): string => {
 /**
  * リフレッシュトークン生成（統合版）
  * Phase 1-B-3修正: expiresIn型アサーション追加（line 339）
- * 
+ *
  * config/jwt.tsの機能を統合し、既存インターフェース保持
  */
 export const generateRefreshToken = (payload: RefreshTokenPayload): string => {
@@ -555,14 +555,14 @@ export const generateRefreshTokenCrypto = (payload: RefreshTokenPayload): string
  * ランダムトークン生成（既存実装保持＋オプション追加）
  */
 export const generateRandomToken = (
-  length: number = 32, 
+  length: number = 32,
   options?: RandomTokenOptions
 ): string => {
   const actualLength = options?.length || length;
   const encoding = options?.encoding || 'hex';
-  
+
   const randomBytes = crypto.randomBytes(Math.ceil(actualLength / 2));
-  
+
   switch (encoding) {
     case 'hex':
       return randomBytes.toString('hex').substring(0, actualLength);
@@ -579,11 +579,11 @@ export const generateRandomToken = (
  * カスタム文字セットランダム文字列生成（新機能）
  */
 export const generateRandomString = (
-  length: number = 32, 
+  length: number = 32,
   options?: RandomTokenOptions
 ): string => {
   const charset = options?.charset || 'alphanumeric';
-  
+
   let chars: string;
   switch (charset) {
     case 'alphabetic':
@@ -600,13 +600,13 @@ export const generateRandomString = (
       chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       break;
   }
-  
+
   let result = '';
   for (let i = 0; i < length; i++) {
     const randomIndex = crypto.randomInt(0, chars.length);
     result += chars[randomIndex];
   }
-  
+
   return result;
 };
 
@@ -625,7 +625,7 @@ export const generateSecureId = (): string => {
   const randomBytes = crypto.randomBytes(16);
   randomBytes[6] = (randomBytes[6] & 0x0f) | 0x40; // version 4
   randomBytes[8] = (randomBytes[8] & 0x3f) | 0x80; // variant bits
-  
+
   const hex = randomBytes.toString('hex');
   return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
 };
@@ -657,14 +657,14 @@ export const encryptData = (data: string, secretKey?: string): CryptoResult<{
     const key = secretKey || getEnvVar('ENCRYPTION_KEY', JWT_CONFIG.accessToken.secret);
     const keyBuffer = crypto.scryptSync(key, 'salt', 32);
     const iv = crypto.randomBytes(16);
-    
+
     const cipher = crypto.createCipheriv('aes-256-gcm', keyBuffer, iv);
-    
+
     let encrypted = cipher.update(data, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     const tag = cipher.getAuthTag();
-    
+
     return {
       success: true,
       data: {
@@ -692,18 +692,18 @@ export const decryptData = (
   try {
     const key = secretKey || getEnvVar('ENCRYPTION_KEY', JWT_CONFIG.accessToken.secret);
     const keyBuffer = crypto.scryptSync(key, 'salt', 32);
-    
+
     const decipher = crypto.createDecipheriv(
       'aes-256-gcm',
       keyBuffer,
       Buffer.from(encryptedData.iv, 'hex')
     );
-    
+
     decipher.setAuthTag(Buffer.from(encryptedData.tag, 'hex'));
-    
+
     let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return {
       success: true,
       data: decrypted
@@ -845,7 +845,7 @@ const crypto_utils = {
   comparePassword,  // ✅ Phase 1-B-3 追加: 後方互換性確保
   verifyPasswordSafe,
   validatePasswordStrength,
-  
+
   // JWT関連（既存互換 + config統合）
   generateToken,
   generateRefreshTokenCrypto,
@@ -854,30 +854,30 @@ const crypto_utils = {
   verifyAccessToken,
   verifyRefreshToken,
   generateTokenPair,
-  
+
   // ランダムトークン関連（既存互換 + 強化）
   generateRandomToken,
   generateRandomString,
   generateSessionId,
   generateSecureId,
   generateApiKey,
-  
+
   // 暗号化関連（新機能）
   encryptData,
   decryptData,
   hashData,
   generateSignature,
   verifySignature,
-  
+
   // ユーティリティ関数
   secureCompare,
   calculateEntropy,
-  
+
   // 設定関連
   validateJWTConfig,
   validateCryptoConfig,
   getCryptoConfig,
-  
+
   // 設定オブジェクト
   PASSWORD_CONFIG,
   JWT_CONFIG
@@ -885,14 +885,14 @@ const crypto_utils = {
 
 /**
  * 使用例コメント:
- * 
+ *
  * // パスワード処理（既存互換）
  * const hashedPassword = await hashPassword('userPassword123');
  * const isValid = await verifyPassword('userPassword123', hashedPassword);
- * 
+ *
  * // comparePassword使用（後方互換）
  * const isMatch = await comparePassword('userPassword123', hashedPassword);
- * 
+ *
  * // JWT処理（統合版）
  * const tokenPair = generateTokenPair({
  *   id: 'user123',
@@ -900,17 +900,17 @@ const crypto_utils = {
  *   email: 'test@example.com',
  *   role: 'user'
  * });
- * 
+ *
  * // ランダムトークン生成
  * const sessionId = generateSessionId();
  * const apiKey = generateApiKey('dtk');
- * 
+ *
  * // データ暗号化
  * const encrypted = encryptData('sensitive data');
  * if (encrypted.success) {
  *   const decrypted = decryptData(encrypted.data);
  * }
- * 
+ *
  * // パスワード強度チェック
  * const validation = validatePasswordStrength('userPassword123');
  * console.log(`Password score: ${validation.score}/100`);
@@ -924,7 +924,7 @@ export default crypto_utils;
 
 /**
  * ✅ Phase 1-B-3: utils/crypto.ts改修完了
- * 
+ *
  * 【完了項目】
  * ✅ bcryptjs → bcrypt変更（line 9）
  * ✅ expiresIn型不一致修正（line 317, 339）
@@ -933,25 +933,25 @@ export default crypto_utils;
  * ✅ 既存機能100%保持
  * ✅ TypeScript型安全性完全対応
  * ✅ コード量: 約810行（+10行: comparePassword関連のみ追加）
- * 
+ *
  * 【コード量詳細】
  * - 修正前: 約800行
  * - 修正後: 約810行
  * - 増加理由: comparePasswordエイリアス追加（約10行のコメント含む）
  * - 削除・省略: なし（既存機能100%保持）
- * 
+ *
  * 【影響範囲】
  * ✅ JWT生成処理: 型安全性向上
  * ✅ パスワードハッシュ化: bcrypt統合完了
  * ✅ AuthModel.ts: comparePasswordインポートエラー解消
  * ✅ UserModel.ts: comparePasswordインポートエラー解消
  * ✅ 全既存機能: 100%動作保証
- * 
+ *
  * 【エラー解消】
  * ✅ AuthModel.ts (line 25): comparePassword import error → 解消
  * ✅ UserModel.ts (line 35): comparePassword import error → 解消
  * ✅ 連鎖エラー解消見込み: 約10件
- * 
+ *
  * 【次のPhase】
  * 🎯 Phase 2-A-1: config/app.ts修正
  * 🎯 Phase 2-A-2: config/upload.ts修正

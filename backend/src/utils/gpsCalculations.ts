@@ -9,7 +9,7 @@
 
 /**
  * 🎯 GPS計算ユーティリティ
- * 
+ *
  * 【主要機能】
  * ✅ GPS座標バリデーション（緯度・経度・精度チェック）
  * ✅ 距離計算（Haversine公式による高精度計算）
@@ -19,7 +19,7 @@
  * ✅ 地点検索・フィルタリング（半径内検索・最寄り検索）
  * ✅ 精度を考慮した距離計算
  * ✅ ルート分析・最適化機能
- * 
+ *
  * 【企業価値】
  * 💼 高精度GPS計算: Haversine公式による正確な距離・方位計算
  * 🗺️ 地点検索機能: 半径内検索・最寄り検索による効率的な地点管理
@@ -34,9 +34,7 @@ import { ValidationError, AppError } from './errors';
 import type {
   Coordinates,
   BoundingBox,
-  GeographicBounds,
-  RouteInfo,
-  NearbyLocation
+  RouteInfo
 } from '../types/location';
 
 // =====================================
@@ -94,9 +92,9 @@ export const GPS_CALCULATION_LIMITS = {
  * @returns 有効かどうか
  */
 export function isValidLatitude(latitude: number): boolean {
-  return !isNaN(latitude) && 
-         isFinite(latitude) && 
-         latitude >= GPS_CALCULATION_LIMITS.MIN_LATITUDE && 
+  return !isNaN(latitude) &&
+         isFinite(latitude) &&
+         latitude >= GPS_CALCULATION_LIMITS.MIN_LATITUDE &&
          latitude <= GPS_CALCULATION_LIMITS.MAX_LATITUDE;
 }
 
@@ -106,9 +104,9 @@ export function isValidLatitude(latitude: number): boolean {
  * @returns 有効かどうか
  */
 export function isValidLongitude(longitude: number): boolean {
-  return !isNaN(longitude) && 
-         isFinite(longitude) && 
-         longitude >= GPS_CALCULATION_LIMITS.MIN_LONGITUDE && 
+  return !isNaN(longitude) &&
+         isFinite(longitude) &&
+         longitude >= GPS_CALCULATION_LIMITS.MIN_LONGITUDE &&
          longitude <= GPS_CALCULATION_LIMITS.MAX_LONGITUDE;
 }
 
@@ -136,7 +134,7 @@ export const isValidCoordinate = isValidCoordinates;
  * @returns 有効かどうか
  */
 export function hasValidCoordinates(coordinates: Partial<Coordinates>): boolean {
-  return !!coordinates && 
+  return !!coordinates &&
          typeof coordinates.latitude === 'number' &&
          typeof coordinates.longitude === 'number' &&
          isValidCoordinates(coordinates.latitude, coordinates.longitude);
@@ -148,9 +146,9 @@ export function hasValidCoordinates(coordinates: Partial<Coordinates>): boolean 
  * @returns 有効かどうか
  */
 export function isValidAccuracy(accuracy: number): boolean {
-  return !isNaN(accuracy) && 
-         isFinite(accuracy) && 
-         accuracy >= GPS_CALCULATION_LIMITS.MIN_ACCURACY_METERS && 
+  return !isNaN(accuracy) &&
+         isFinite(accuracy) &&
+         accuracy >= GPS_CALCULATION_LIMITS.MIN_ACCURACY_METERS &&
          accuracy <= GPS_CALCULATION_LIMITS.MAX_ACCURACY_METERS;
 }
 
@@ -160,9 +158,9 @@ export function isValidAccuracy(accuracy: number): boolean {
  * @returns 有効かどうか
  */
 export function isValidAltitude(altitude: number): boolean {
-  return !isNaN(altitude) && 
-         isFinite(altitude) && 
-         altitude >= GPS_CALCULATION_LIMITS.MIN_ALTITUDE_METERS && 
+  return !isNaN(altitude) &&
+         isFinite(altitude) &&
+         altitude >= GPS_CALCULATION_LIMITS.MIN_ALTITUDE_METERS &&
          altitude <= GPS_CALCULATION_LIMITS.MAX_ALTITUDE_METERS;
 }
 
@@ -177,7 +175,7 @@ export function validateCoordinates(latitude: number, longitude: number, context
   if (!isValidLatitude(latitude)) {
     throw new ValidationError(`${context}の緯度が無効です: ${latitude} (有効範囲: ${GPS_CALCULATION_LIMITS.MIN_LATITUDE}〜${GPS_CALCULATION_LIMITS.MAX_LATITUDE})`);
   }
-  
+
   if (!isValidLongitude(longitude)) {
     throw new ValidationError(`${context}の経度が無効です: ${longitude} (有効範囲: ${GPS_CALCULATION_LIMITS.MIN_LONGITUDE}〜${GPS_CALCULATION_LIMITS.MAX_LONGITUDE})`);
   }
@@ -223,7 +221,7 @@ export function calculateDistance(
   const a = Math.sin(deltaLatRad / 2) * Math.sin(deltaLatRad / 2) +
             Math.cos(lat1Rad) * Math.cos(lat2Rad) *
             Math.sin(deltaLonRad / 2) * Math.sin(deltaLonRad / 2);
-  
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = EARTH_RADIUS_KM * c;
 
@@ -308,7 +306,7 @@ export function calculateBearing(
  * @returns 方位文字列（例：N, NE, E, SE, S, SW, W, NW）
  */
 export function bearingToCompass(bearing: number): string {
-  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 
+  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                      'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   const index = Math.round(bearing / 22.5) % 16;
   return directions[index];
@@ -355,7 +353,7 @@ export function findCoordinatesWithinRadius(
   coordinates: Coordinates[]
 ): Array<Coordinates & { distance: number; bearing: number }> {
   validateCoordinates(centerLat, centerLon, '中心点座標');
-  
+
   if (radiusKm <= 0 || radiusKm > GPS_CALCULATION_LIMITS.MAX_DISTANCE_KM) {
     throw new ValidationError(`無効な半径: ${radiusKm}km (有効範囲: 0km超〜${GPS_CALCULATION_LIMITS.MAX_DISTANCE_KM}km以下)`);
   }
@@ -365,7 +363,7 @@ export function findCoordinatesWithinRadius(
     .map(coord => {
       const distance = calculateDistance(centerLat, centerLon, coord.latitude, coord.longitude);
       const bearing = calculateBearing(centerLat, centerLon, coord.latitude, coord.longitude);
-      
+
       return {
         ...coord,
         distance,
@@ -391,7 +389,7 @@ export function findNearestCoordinates(
   limit = 10
 ): Array<Coordinates & { distance: number; bearing: number }> {
   validateCoordinates(targetLat, targetLon, '基準点座標');
-  
+
   if (limit <= 0 || limit > 1000) {
     throw new ValidationError(`無効な制限数: ${limit} (有効範囲: 1〜1000)`);
   }
@@ -401,7 +399,7 @@ export function findNearestCoordinates(
     .map(coord => {
       const distance = calculateDistance(targetLat, targetLon, coord.latitude, coord.longitude);
       const bearing = calculateBearing(targetLat, targetLon, coord.latitude, coord.longitude);
-      
+
       return {
         ...coord,
         distance,
@@ -415,12 +413,12 @@ export function findNearestCoordinates(
 /**
  * ✅ findNearbyLocations関数（新規追加）
  * 既存のfindCoordinatesWithinRadius関数へのエイリアス
- * 
+ *
  * 【追加理由】
  * - models/GpsLogModel.tsで参照されている
  * - エラーメッセージ: Module '"../utils/gpsCalculations"' has no exported member 'findNearbyLocations'
  * - 既存の動作を変更せず、名前の互換性を提供
- * 
+ *
  * @param centerLat 中心点緯度
  * @param centerLon 中心点経度
  * @param radiusKm 半径（キロメートル）
@@ -446,7 +444,7 @@ export function calculateBoundingBox(
   radiusKm: number
 ): BoundingBox {
   validateCoordinates(centerLat, centerLon, '中心点座標');
-  
+
   if (radiusKm <= 0) {
     throw new ValidationError(`無効な半径: ${radiusKm}km (正の値である必要があります)`);
   }
@@ -478,7 +476,7 @@ export function calculateBoundingBoxFromCoordinates(coordinates: Coordinates[]):
   }
 
   const validCoordinates = coordinates.filter(coord => hasValidCoordinates(coord));
-  
+
   if (validCoordinates.length === 0) {
     throw new ValidationError('有効な座標が見つかりません');
   }
@@ -512,7 +510,7 @@ export function calculateBoundingBoxFromCoordinates(coordinates: Coordinates[]):
  */
 export function calculateCenterPoint(coordinates: Coordinates[]): Coordinates {
   const validCoordinates = coordinates.filter(coord => hasValidCoordinates(coord));
-  
+
   if (validCoordinates.length === 0) {
     throw new ValidationError('有効な座標が見つかりません');
   }
@@ -533,13 +531,13 @@ export function calculateCenterPoint(coordinates: Coordinates[]): Coordinates {
  */
 export function calculateCoordinatesSpread(coordinates: Coordinates[]) {
   const validCoordinates = coordinates.filter(coord => hasValidCoordinates(coord));
-  
+
   if (validCoordinates.length === 0) {
     throw new ValidationError('有効な座標が見つかりません');
   }
 
   const center = calculateCenterPoint(validCoordinates);
-  const distances = validCoordinates.map(coord => 
+  const distances = validCoordinates.map(coord =>
     calculateDistanceBetweenCoordinates(center, coord)
   );
 
@@ -576,7 +574,7 @@ export function calculateDistanceWithAccuracy(
   }
 
   const distance = calculateDistanceBetweenCoordinates(coord1, coord2);
-  
+
   // 精度情報がある場合は誤差範囲を計算
   const accuracy1 = coord1.accuracy || 0;
   const accuracy2 = coord2.accuracy || 0;
@@ -623,7 +621,7 @@ export function findClosestCoordinate(
   }
 
   const validCandidates = candidates.filter(coord => hasValidCoordinates(coord));
-  
+
   if (validCandidates.length === 0) {
     return null;
   }
@@ -660,7 +658,7 @@ export function findFarthestCoordinate(
   }
 
   const validCandidates = candidates.filter(coord => hasValidCoordinates(coord));
-  
+
   if (validCandidates.length === 0) {
     return null;
   }
@@ -697,16 +695,16 @@ export function calculateRouteInfo(coordinates: Coordinates[]): RouteInfo {
   }
 
   const validCoordinates = coordinates.filter(coord => hasValidCoordinates(coord));
-  
+
   if (validCoordinates.length < 2) {
     throw new ValidationError('有効な座標が不足しています');
   }
 
   const totalDistance = calculateTotalDistance(validCoordinates);
   const boundingBox = calculateBoundingBoxFromCoordinates(validCoordinates);
-  
+
   // 開始点と終了点の方位角を計算
-  const startBearing = validCoordinates.length > 1 
+  const startBearing = validCoordinates.length > 1
     ? calculateBearing(
         validCoordinates[0].latitude,
         validCoordinates[0].longitude,
@@ -747,7 +745,7 @@ export function optimizeRouteOrder(startCoord: Coordinates, coordinates: Coordin
   }
 
   const validCoordinates = coordinates.filter(coord => hasValidCoordinates(coord));
-  
+
   if (validCoordinates.length === 0) {
     return [];
   }
@@ -762,14 +760,14 @@ export function optimizeRouteOrder(startCoord: Coordinates, coordinates: Coordin
 
     result.push(closest.coordinate);
     const index = remaining.findIndex(
-      coord => coord.latitude === closest.coordinate.latitude && 
+      coord => coord.latitude === closest.coordinate.latitude &&
                coord.longitude === closest.coordinate.longitude
     );
-    
+
     if (index !== -1) {
       remaining.splice(index, 1);
     }
-    
+
     currentCoord = closest.coordinate;
   }
 
@@ -784,7 +782,7 @@ export function optimizeRouteOrder(startCoord: Coordinates, coordinates: Coordin
  */
 export function calculateOptimizedRouteDistance(startCoord: Coordinates, coordinates: Coordinates[]): number {
   const optimizedRoute = optimizeRouteOrder(startCoord, coordinates);
-  
+
   if (optimizedRoute.length === 0) {
     return 0;
   }
@@ -799,7 +797,7 @@ export function calculateOptimizedRouteDistance(startCoord: Coordinates, coordin
 
 /**
  * ✅ utils/gpsCalculations.ts統合完了
- * 
+ *
  * 【完了項目】
  * ✅ GPS座標バリデーション（緯度・経度・精度チェック）
  * ✅ 距離計算（Haversine公式による高精度計算）
@@ -810,7 +808,7 @@ export function calculateOptimizedRouteDistance(startCoord: Coordinates, coordin
  * ✅ 精度を考慮した距離計算
  * ✅ ルート分析・最適化機能
  * ✅ findNearbyLocations関数追加（models/GpsLogModel.ts等との互換性確保）
- * 
+ *
  * 【企業価値】
  * 💼 高精度GPS計算: Haversine公式による正確な距離・方位計算
  * 🗺️ 地点検索機能: 半径内検索・最寄り検索による効率的な地点管理
@@ -832,40 +830,40 @@ const gpsCalculations = {
   isValidAltitude,
   validateCoordinates,
   validateGPSCoordinates,
-  
+
   // 距離計算
   calculateDistance,
   calculateDistanceBetweenCoordinates,
   calculateTotalDistance,
   calculateDistanceWithAccuracy,
-  
+
   // 方位計算
   calculateBearing,
   bearingToCompass,
   bearingToCompass8,
   bearingToJapaneseCompass,
-  
+
   // 地点検索
   findCoordinatesWithinRadius,
   findNearestCoordinates,
   findNearbyLocations, // ✅ 新規追加エイリアス
   findClosestCoordinate,
   findFarthestCoordinate,
-  
+
   // バウンディングボックス
   calculateBoundingBox,
   calculateBoundingBoxFromCoordinates,
   isCoordinateInBoundingBox,
-  
+
   // 座標統計
   calculateCenterPoint,
   calculateCoordinatesSpread,
-  
+
   // ルート分析
   calculateRouteInfo,
   optimizeRouteOrder,
   calculateOptimizedRouteDistance,
-  
+
   // 定数
   EARTH_RADIUS_KM,
   EARTH_RADIUS_M,

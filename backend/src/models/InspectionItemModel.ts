@@ -7,29 +7,29 @@
 // 更新日時: 2025年9月27日 15:00
 // =====================================
 
-import type { 
+import type {
   InspectionItem as PrismaInspectionItem,
   Prisma,
   InspectionType,
   InputType,
   InspectionItemResult,
-  User,
+  // User,
 } from '@prisma/client';
 
 import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完了基盤の活用
 import logger from '../utils/logger';
-import { 
-  AppError, 
-  ValidationError, 
+import {
+  // AppError,
+  ValidationError,
   NotFoundError,
   DatabaseError,
-  ConflictError 
+  ConflictError
 } from '../utils/errors';
 
 import type {
-  ApiResponse,
+  // ApiResponse,
   ApiListResponse,
   PaginationQuery,
   SearchQuery,
@@ -46,7 +46,7 @@ import type {
 
 export type InspectionItemModel = PrismaInspectionItem;
 export type InspectionItemCreateInput = Prisma.InspectionItemCreateInput;
-export type InspectionItemUpdateInput = Prisma.InspectionItemUpdateInput;  
+export type InspectionItemUpdateInput = Prisma.InspectionItemUpdateInput;
 export type InspectionItemWhereInput = Prisma.InspectionItemWhereInput;
 export type InspectionItemWhereUniqueInput = Prisma.InspectionItemWhereUniqueInput;
 export type InspectionItemOrderByInput = Prisma.InspectionItemOrderByWithRelationInput;
@@ -99,7 +99,7 @@ export interface InspectionItemOptions {
     isDefault?: boolean;
     score?: number; // 点数評価
   }[];
-  
+
   // 数値型の場合の範囲設定
   numericRange?: {
     min?: number;
@@ -107,7 +107,7 @@ export interface InspectionItemOptions {
     unit?: string; // 単位
     precision?: number; // 小数点以下桁数
   };
-  
+
   // テキスト型の場合の制約
   textConstraints?: {
     minLength?: number;
@@ -115,7 +115,7 @@ export interface InspectionItemOptions {
     pattern?: string; // 正規表現
     placeholder?: string;
   };
-  
+
   // 条件分岐設定
   conditions?: {
     dependsOn?: string; // 依存する項目ID
@@ -326,10 +326,10 @@ export class InspectionItemService {
       // 統計情報の付加
       const enhanced = await this.enhanceWithStatistics(item);
 
-      logger.info('点検項目作成完了', { 
-        id: item.id, 
+      logger.info('点検項目作成完了', {
+        id: item.id,
         name: item.name,
-        displayOrder: item.displayOrder 
+        displayOrder: item.displayOrder
       });
 
       return enhanced;
@@ -504,7 +504,7 @@ export class InspectionItemService {
   async findByFilter(filter: InspectionItemFilter): Promise<InspectionItemListResponse> {
     try {
       const where = this.buildWhereFromFilter(filter);
-      
+
       return await this.findManyWithPagination({
         where,
         orderBy: this.buildOrderByFromFilter(filter),
@@ -591,7 +591,7 @@ export class InspectionItemService {
 
       if (softDelete) {
         // 論理削除
-        await this.update(id, { 
+        await this.update(id, {
           isActive: false,
           status: InspectionItemStatus.ARCHIVED,
           archiveReason: '削除処理による無効化'
@@ -629,9 +629,9 @@ export class InspectionItemService {
       let failureCount = 0;
       const errors: Array<{ index: number; error: string }> = [];
 
-      logger.info('点検項目一括作成開始', { 
+      logger.info('点検項目一括作成開始', {
         itemCount: data.items.length,
-        templateId: data.templateId 
+        templateId: data.templateId
       });
 
       for (let i = 0; i < data.items.length; i++) {
@@ -676,7 +676,7 @@ export class InspectionItemService {
         for (const update of updates) {
           await tx.inspectionItem.update({
             where: { id: update.id },
-            data: { 
+            data: {
               displayOrder: update.displayOrder,
               updatedAt: new Date()
             }
@@ -706,7 +706,7 @@ export class InspectionItemService {
    * 点検項目バリデーション
    */
   private async validateItem(
-    data: Partial<InspectionItemCreateInput>, 
+    data: Partial<InspectionItemCreateInput>,
     excludeId?: string
   ): Promise<InspectionItemValidationResult> {
     const errors: ValidationResult['errors'] = [];
@@ -825,11 +825,11 @@ export class InspectionItemService {
       })
     ]);
 
-    const passCount = results.filter(r => 
+    const passCount = results.filter(r =>
       r.inspectionItemResults.some(result => result.status === 'OK')
     ).length;
-    
-    const failCount = results.filter(r => 
+
+    const failCount = results.filter(r =>
       r.inspectionItemResults.some(result => result.status === 'NG')
     ).length;
 
@@ -887,7 +887,7 @@ export class InspectionItemService {
     }
 
     if (filter.inspectionType) {
-      where.inspectionType = Array.isArray(filter.inspectionType) 
+      where.inspectionType = Array.isArray(filter.inspectionType)
         ? { in: filter.inspectionType }
         : filter.inspectionType;
     }
@@ -939,8 +939,8 @@ export class InspectionItemService {
       byType
     ] = await Promise.all([
       this.prisma.inspectionItem.count({ where }),
-      this.prisma.inspectionItem.count({ 
-        where: { ...where, isActive: true } 
+      this.prisma.inspectionItem.count({
+        where: { ...where, isActive: true }
       }),
       this.getCountsByField('inspectionType', where),
       this.getCountsByField('inputType', where)
@@ -962,7 +962,7 @@ export class InspectionItemService {
     const usage = items.map(item => item._count?.inspectionRecords || 0);
     const averageUsage = usage.reduce((sum, count) => sum + count, 0) / items.length;
 
-    const sorted = [...items].sort((a, b) => 
+    const sorted = [...items].sort((a, b) =>
       (b._count?.inspectionRecords || 0) - (a._count?.inspectionRecords || 0)
     );
 

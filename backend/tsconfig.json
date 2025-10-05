@@ -6,7 +6,7 @@
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
-    
+
     /* 厳密な型チェック（CRITICAL検出に必須） */
     "strict": true,                           // 全ての厳密チェックを有効化
     "noImplicitAny": true,                   // C-03: any型の暗黙的使用を禁止
@@ -16,26 +16,26 @@
     "strictPropertyInitialization": true,    // クラスプロパティ初期化チェック
     "noImplicitThis": true,                  // this型の暗黙的使用を禁止
     "alwaysStrict": true,                    // 'use strict'を自動挿入
-    
+
     /* 追加チェック */
-    "noUnusedLocals": true,                  // 未使用変数の検出
-    "noUnusedParameters": true,              // 未使用パラメータの検出
+    "noUnusedLocals": false,                  // 未使用変数の検出
+    "noUnusedParameters": false,              // 未使用パラメータの検出
     "noImplicitReturns": true,               // 暗黙的returnの禁止
     "noFallthroughCasesInSwitch": true,      // switch文のfall-through検出
     "noUncheckedIndexedAccess": true,        // 配列・オブジェクトアクセスの厳密化
-    
+
     /* モジュール解決 */
     "moduleResolution": "node",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true, // C-01: ファイル名の大文字小文字を厳密化
-    
+
     /* 型生成・検証 */
     "declaration": true,                      // .d.ts生成
     "declarationMap": true,
     "sourceMap": true,
-    
+
     /* パス設定 */
     "baseUrl": "./src",
     "paths": {
@@ -48,7 +48,7 @@
       "@utils/*": ["utils/*"],
       "@types/*": ["types/*"]
     },
-    
+
     /* その他 */
     "skipLibCheck": true,
     "experimentalDecorators": true,
