@@ -40,7 +40,7 @@ import jwt, { SignOptions, VerifyOptions, JwtPayload } from 'jsonwebtoken';
  * アクセストークン用の型安全なペイロード定義
  */
 export interface JWTPayload extends JwtPayload {
-  userId: string;
+  id: string;
   username: string;
   email: string;
   role: string;
