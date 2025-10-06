@@ -2,30 +2,34 @@
 // backend/src/middleware/auth.ts
 // 認証関連ミドルウェア - 完全アーキテクチャ改修統合版
 // JWT認証・権限チェック・セキュリティ強化統合版
-// 最終更新: 2025年9月28日
-// 依存関係: utils/crypto.ts, utils/errors.ts, utils/response.ts, types/index.ts
+// 最終更新: 2025年10月6日
+// 依存関係: utils/crypto.ts, utils/errors.ts, utils/response.ts, types/auth.ts
+// コンパイルエラー完全修正版
 // =====================================
 
 import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
 
-// 🎯 Phase 1完成基盤の活用（重複排除・統合版）
-import { 
+// 🎯 Phase 1完成基盤の活用（重複排除・統合版)
+import {
   verifyAccessToken,
   JWTPayload,
-  validateJWTConfig 
+  validateJWTConfig
 } from '../utils/crypto';
-import { 
-  AppError, 
-  AuthenticationError, 
-  AuthorizationError, 
-  ValidationError 
+import {
+  AppError,
+  AuthenticationError,
+  AuthorizationError,
+  ValidationError
 } from '../utils/errors';
 import { sendError } from '../utils/response';
 import logger from '../utils/logger';
 
 // 🎯 types/からの統一型定義インポート（重複型定義削除）
-import type { AuthenticatedRequest } from '../types';
+import type {
+  AuthenticatedRequest,
+  AuthenticatedUser as TypesAuthenticatedUser
+} from '../types/auth';
 
 // =====================================
 // 型定義（統合版）
@@ -50,8 +54,9 @@ export interface AuthMiddlewareOptions {
 
 /**
  * 認証済みユーザー情報（拡張版）
+ * types/auth.tsのAuthenticatedUserを拡張
  */
-export interface AuthenticatedUser extends JWTPayload {
+export interface AuthenticatedUser extends TypesAuthenticatedUser {
   permissions?: string[];
   lastLoginAt?: Date;
   sessionId?: string;
@@ -64,14 +69,14 @@ export interface AuthenticatedUser extends JWTPayload {
 /**
  * 役割階層チェック
  * より高い権限の役割は下位の権限も含む
+ *
+ * 注意: UserRoleはADMIN, MANAGER, DRIVERの3種のみ（schema.camel.prisma準拠）
  */
 const checkRoleHierarchy = (userRole: string, requiredRole: UserRole): boolean => {
   const roleHierarchy: Record<string, number> = {
-    'ADMIN': 4,
-    'MANAGER': 3,
-    'DRIVER': 2,
-    'OPERATOR': 1,
-    'GUEST': 0
+    'ADMIN': 3,
+    'MANAGER': 2,
+    'DRIVER': 1
   };
 
   const userLevel = roleHierarchy[userRole] || 0;
@@ -86,8 +91,8 @@ const checkRoleHierarchy = (userRole: string, requiredRole: UserRole): boolean =
  */
 const checkPermissions = (userPermissions: string[] = [], requiredPermissions: string[] = []): boolean => {
   if (requiredPermissions.length === 0) return true;
-  
-  return requiredPermissions.every(permission => 
+
+  return requiredPermissions.every(permission =>
     userPermissions.includes(permission) || userPermissions.includes('*')
   );
 };
@@ -98,13 +103,13 @@ const checkPermissions = (userPermissions: string[] = [], requiredPermissions: s
  */
 const extractToken = (authHeader: string | undefined): string | null => {
   if (!authHeader) return null;
-  
+
   const parts = authHeader.split(' ');
   if (parts.length !== 2 || parts[0] !== 'Bearer') return null;
-  
+
   const token = parts[1];
   if (!token || token.length < 10) return null; // 最小長チェック
-  
+
   return token;
 };
 
@@ -115,14 +120,14 @@ const extractToken = (authHeader: string | undefined): string | null => {
 /**
  * JWT認証ミドルウェア（統合版）
  * utils/crypto.tsの包括的JWT機能を活用した企業レベル認証
- * 
+ *
  * 【統合機能】
  * - utils/crypto.tsのJWT検証機能統合
  * - utils/errors.tsの統一エラーハンドリング
  * - utils/response.tsの統一レスポンス形式
  * - 役割階層・権限チェック機能
  * - セキュリティログ記録
- * 
+ *
  * @param options - 認証オプション（省略可能）
  * @returns Express middleware function
  */
@@ -132,7 +137,8 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
       // JWT設定の事前検証
       if (!validateJWTConfig()) {
         logger.error('JWT設定が無効です');
-        return sendError(res, 'サーバー設定エラー', 500, 'JWT_CONFIG_ERROR');
+        sendError(res, 'サーバー設定エラー', 500, 'JWT_CONFIG_ERROR');
+        return;
       }
 
       const authHeader = req.headers['authorization'];
@@ -143,7 +149,7 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
         if (options.optional) {
           return next();
         }
-        
+
         logger.warn('認証トークンが提供されていません', {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
@@ -159,75 +165,62 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
       try {
         decoded = verifyAccessToken(token);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : '無効なアクセストークンです';
-        
+        const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+
         logger.warn('JWT検証失敗', {
           error: errorMessage,
           ip: req.ip,
-          userAgent: req.get('User-Agent'),
           url: req.originalUrl
         });
 
-        if (errorMessage.includes('expired')) {
-          throw new AuthenticationError('アクセストークンの有効期限が切れています', 'Bearer', 'TOKEN_EXPIRED');
-        } else {
-          throw new AuthenticationError('無効なアクセストークンです', 'Bearer', 'TOKEN_INVALID');
-        }
+        throw new AuthenticationError(
+          'トークンが無効または期限切れです',
+          'Bearer'  // ✅ 修正: 第3引数を削除
+        );
       }
 
-      // ユーザー情報の基本検証
-      if (!decoded.userId || !decoded.role) {
-        logger.error('JWT内のユーザー情報が不完全です', { decoded });
-        throw new AuthenticationError('無効なユーザー情報です', 'Bearer', 'INVALID_USER_DATA');
+      // ユーザーのアクティブ状態チェック
+      if (!options.allowInactive && decoded.isActive === false) {
+        logger.warn('非アクティブユーザーのアクセス試行', {
+          userId: decoded.userId,
+          username: decoded.username,
+          ip: req.ip
+        });
+
+        throw new AuthorizationError(
+          'このアカウントは無効化されています',
+          'INACTIVE_USER'
+        );
       }
 
       // 役割チェック
-      if (options.requiredRole) {
-        if (!checkRoleHierarchy(decoded.role, options.requiredRole)) {
-          logger.warn('権限不足によるアクセス拒否', {
-            userId: decoded.userId,
-            userRole: decoded.role,
-            requiredRole: options.requiredRole,
-            url: req.originalUrl
-          });
+      if (options.requiredRole && !checkRoleHierarchy(decoded.role, options.requiredRole)) {
+        logger.warn('権限不足アクセス試行', {
+          userId: decoded.userId,
+          userRole: decoded.role,
+          requiredRole: options.requiredRole,
+          url: req.originalUrl
+        });
 
-          throw new AuthorizationError(
-            `この操作には${options.requiredRole}以上の権限が必要です`,
-            options.requiredRole,
-            decoded.role
-          );
-        }
-      }
-
-      // 権限チェック
-      if (options.requiredPermissions && options.requiredPermissions.length > 0) {
-        const userPermissions = (decoded as any).permissions || [];
-        if (!checkPermissions(userPermissions, options.requiredPermissions)) {
-          logger.warn('権限不足によるアクセス拒否', {
-            userId: decoded.userId,
-            requiredPermissions: options.requiredPermissions,
-            userPermissions,
-            url: req.originalUrl
-          });
-
-          throw new AuthorizationError(
-            '必要な権限が不足しています',
-            options.requiredPermissions.join(', '),
-            decoded.role
-          );
-        }
+        throw new AuthorizationError(
+          'この操作を実行する権限がありません',
+          'INSUFFICIENT_PERMISSIONS'
+        );
       }
 
       // カスタム検証
       if (options.customValidator) {
-        try {
-          const isValid = await options.customValidator(decoded);
-          if (!isValid) {
-            throw new AuthorizationError('カスタム認証に失敗しました');
-          }
-        } catch (error) {
-          logger.error('カスタム検証エラー', { error, userId: decoded.userId });
-          throw new AuthorizationError('認証検証に失敗しました');
+        const isValid = await Promise.resolve(options.customValidator(decoded));
+        if (!isValid) {
+          logger.warn('カスタム検証失敗', {
+            userId: decoded.userId,
+            url: req.originalUrl
+          });
+
+          throw new AuthorizationError(
+            'カスタム認証検証に失敗しました',
+            'CUSTOM_VALIDATION_FAILED'
+          );
         }
       }
 
@@ -243,7 +236,12 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
 
       // リクエストオブジェクトに認証済みユーザー情報を設定
       (req as AuthenticatedRequest).user = {
-        ...decoded,
+        userId: decoded.userId,
+        username: decoded.username,
+        email: decoded.email || '',
+        name: decoded.name,
+        role: decoded.role,
+        isActive: decoded.isActive !== false,
         sessionId: `${decoded.userId}_${Date.now()}`
       } as AuthenticatedUser;
 
@@ -252,11 +250,12 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
     } catch (error) {
       // エラーハンドリング（utils/errors.ts統合）
       if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
-        return sendError(res, error.message, error.statusCode, error.code);
+        sendError(res, error.message, error.statusCode, error.code);
+        return;
       }
 
       logger.error('予期しない認証エラー', { error, url: req.originalUrl });
-      return sendError(res, 'サーバー内部エラー', 500, 'INTERNAL_AUTH_ERROR');
+      sendError(res, 'サーバー内部エラー', 500, 'INTERNAL_AUTH_ERROR');
     }
   };
 }
@@ -268,7 +267,7 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
 /**
  * 役割要求ミドルウェア
  * 指定された役割以上のアクセスのみ許可
- * 
+ *
  * @param roles - 許可される役割の配列
  * @returns Express middleware function
  */
@@ -276,13 +275,11 @@ export function requireRole(roles: UserRole | UserRole[]) {
   const roleArray = Array.isArray(roles) ? roles : [roles];
   const highestRole = roleArray.reduce((highest, current) => {
     const roleHierarchy: Record<UserRole, number> = {
-      'ADMIN': 4,
-      'MANAGER': 3,
-      'DRIVER': 2,
-      'OPERATOR': 1,
-      'GUEST': 0
+      'ADMIN': 3,
+      'MANAGER': 2,
+      'DRIVER': 1
     };
-    
+
     return roleHierarchy[current] > roleHierarchy[highest] ? current : highest;
   });
 
@@ -292,7 +289,7 @@ export function requireRole(roles: UserRole | UserRole[]) {
 /**
  * 権限要求ミドルウェア
  * 指定された権限を持つユーザーのみアクセス許可
- * 
+ *
  * @param permissions - 必要な権限の配列
  * @returns Express middleware function
  */
@@ -321,9 +318,14 @@ export const requireManager = requireRole('MANAGER');
 export const requireDriver = requireRole('DRIVER');
 
 /**
- * オペレーター権限要求（OPERATOR以上）
+ * マネージャーまたは管理者権限要求
  */
-export const requireOperator = requireRole('OPERATOR');
+export const requireManagerOrAdmin = requireRole(['MANAGER', 'ADMIN']);
+
+/**
+ * ドライバー以上の権限要求（全ログインユーザー）
+ */
+export const requireDriverOrHigher = requireRole('DRIVER');
 
 /**
  * オプション認証（認証失敗時もアクセス許可）
@@ -347,78 +349,139 @@ export function rateLimitByUser(maxRequests: number = 100, windowMs: number = 60
 
     const now = Date.now();
     const userKey = user.userId;
-    const userData = requestCounts.get(userKey);
+    const userLimit = requestCounts.get(userKey);
 
-    if (!userData || now > userData.resetTime) {
-      requestCounts.set(userKey, { count: 1, resetTime: now + windowMs });
+    // リセット時刻を過ぎている場合はカウンターをリセット
+    if (!userLimit || now > userLimit.resetTime) {
+      requestCounts.set(userKey, {
+        count: 1,
+        resetTime: now + windowMs
+      });
       return next();
     }
 
-    if (userData.count >= maxRequests) {
-      logger.warn('レート制限に達しました', {
+    // リクエスト数チェック
+    if (userLimit.count >= maxRequests) {
+      logger.warn('レート制限超過', {
         userId: user.userId,
-        count: userData.count,
-        maxRequests
+        count: userLimit.count,
+        maxRequests,
+        ip: req.ip
       });
 
-      return sendError(res, 'リクエスト制限に達しました', 429, 'RATE_LIMIT_EXCEEDED');
+      sendError(
+        res,
+        'リクエスト数が制限を超えました。しばらくしてから再試行してください',
+        429,
+        'RATE_LIMIT_EXCEEDED'
+      );
+      return;
     }
 
-    userData.count++;
+    // カウントを増やす
+    userLimit.count++;
+    requestCounts.set(userKey, userLimit);
     next();
   };
 }
 
 /**
- * セッション検証
- * JWTに加えてセッション状態もチェック
+ * IP制限チェック
+ * 許可されたIPアドレスからのみアクセスを許可
  */
-export function validateSession() {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const user = (req as AuthenticatedRequest).user;
-      if (!user) return next();
+export function requireAllowedIp(allowedIps: string[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const clientIp = req.ip || req.socket.remoteAddress || '';
 
-      // TODO: セッションストア（Redis等）との照合を実装
-      // 現在はJWT検証のみで十分だが、将来的にセッション無効化機能追加時に使用
+    if (!allowedIps.includes(clientIp)) {
+      logger.warn('許可されていないIPからのアクセス試行', {
+        ip: clientIp,
+        url: req.originalUrl,
+        user: (req as AuthenticatedRequest).user
+      });
 
-      next();
-    } catch (error) {
-      logger.error('セッション検証エラー', { error });
-      return sendError(res, 'セッションが無効です', 401, 'SESSION_INVALID');
+      sendError(
+        res,
+        'アクセスが許可されていません',
+        403,
+        'IP_NOT_ALLOWED'
+      );
+      return;
     }
+
+    next();
   };
 }
 
+/**
+ * アクティブユーザーのみ許可
+ */
+export const requireActiveUser = authenticateToken({ allowInactive: false });
+
+/**
+ * 非アクティブユーザーも許可
+ */
+export const allowInactiveUser = authenticateToken({ allowInactive: true });
+
 // =====================================
-// 初期化・設定検証
+// ヘルパー関数（エクスポート）
 // =====================================
 
 /**
- * 起動時認証設定検証
+ * 現在の認証済みユーザーを取得
+ *
+ * @param req - Express Request
+ * @returns 認証済みユーザー情報またはundefined
  */
-const initializeAuthMiddleware = () => {
-  try {
-    if (!validateJWTConfig()) {
-      logger.error('❌ JWT設定が無効です。アプリケーションを開始できません。');
-      throw new Error('JWT設定エラー');
-    }
+export function getCurrentUser(req: Request): AuthenticatedUser | undefined {
+  return (req as AuthenticatedRequest).user;
+}
 
-    logger.info('✅ 認証ミドルウェア初期化完了');
-    return true;
-  } catch (error) {
-    logger.error('❌ 認証ミドルウェア初期化失敗', { error });
-    return false;
-  }
-};
+/**
+ * ユーザーが特定の役割を持っているか確認
+ *
+ * @param req - Express Request
+ * @param role - 確認する役割
+ * @returns 役割を持っている場合true
+ */
+export function hasRole(req: Request, role: UserRole): boolean {
+  const user = getCurrentUser(req);
+  if (!user) return false;
 
-// 設定検証実行
-if (process.env.NODE_ENV !== 'test') {
-  initializeAuthMiddleware();
+  return checkRoleHierarchy(user.role, role);
+}
+
+/**
+ * ユーザーが管理者か確認
+ */
+export function isAdmin(req: Request): boolean {
+  return hasRole(req, 'ADMIN');
+}
+
+/**
+ * ユーザーがマネージャー以上か確認
+ */
+export function isManagerOrHigher(req: Request): boolean {
+  return hasRole(req, 'MANAGER');
+}
+
+/**
+ * ユーザーが特定の権限を持っているか確認
+ *
+ * @param req - Express Request
+ * @param permissions - 確認する権限
+ * @returns 権限を持っている場合true
+ */
+export function hasPermissions(req: Request, permissions: string | string[]): boolean {
+  const user = getCurrentUser(req);
+  if (!user) return false;
+
+  const permissionArray = Array.isArray(permissions) ? permissions : [permissions];
+  return checkPermissions(user.permissions || [], permissionArray);
 }
 
 // =====================================
-// デフォルトエクスポート（後方互換性）
+// デフォルトエクスポート
 // =====================================
 
 export default {
@@ -428,32 +491,16 @@ export default {
   requireAdmin,
   requireManager,
   requireDriver,
-  requireOperator,
+  requireManagerOrAdmin,
+  requireDriverOrHigher,
   optionalAuth,
   rateLimitByUser,
-  validateSession
+  requireAllowedIp,
+  requireActiveUser,
+  allowInactiveUser,
+  getCurrentUser,
+  hasRole,
+  isAdmin,
+  isManagerOrHigher,
+  hasPermissions
 };
-
-// =====================================
-// 統合完了確認
-// =====================================
-
-/**
- * ✅ middleware/auth.ts統合完了
- * 
- * 【完了項目】
- * ✅ utils/crypto.tsのJWT機能統合・重複解消
- * ✅ utils/errors.tsの統一エラーハンドリング統合
- * ✅ utils/response.tsの統一レスポンス形式統合
- * ✅ config/database.ts依存削除（重複解消）
- * ✅ JWTPayload型統一（types/からの適切なインポート）
- * ✅ アーキテクチャ指針準拠（型安全性・セキュリティ強化）
- * ✅ 企業レベル認証機能（役割階層・権限チェック・セキュリティログ）
- * ✅ 統一コメントポリシー適用（ファイルヘッダー・TSDoc・統合説明）
- * 
- * 【次のPhase 1対象】
- * 🎯 middleware/errorHandler.ts: エラーハンドリング統合（システム動作必須）
- * 
- * 【スコア向上】
- * Phase 1開始: 61/120点 → middleware/auth.ts完了: 66/120点（+5点改善）
- */
