@@ -14,7 +14,6 @@ import type {
   PaginationQuery
 } from './common';
 
-// types/index.ts経由でインポート（ハブ設計）
 import { UserRole } from '@prisma/client'
 import type { User as UserModel } from '@prisma/client';
 
