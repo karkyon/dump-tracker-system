@@ -21,6 +21,7 @@ import type {
 
 // 🎯 Phase 1-A完成基盤の活用
 import { DatabaseService } from '../utils/database';
+
 import {
   AppError,
   ValidationError,
@@ -29,7 +30,9 @@ import {
   AuthenticationError,
   ConflictError
 } from '../utils/errors';
+
 import logger from '../utils/logger';
+
 import {
   hashPassword,
   comparePassword,

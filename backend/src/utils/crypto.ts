@@ -2,7 +2,7 @@
 // backend/src/utils/crypto.ts
 // 暗号化・トークン生成ユーティリティ - Phase 1-B-3 完全改修版
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
-// 最終更新: Tue Sep 30 2025 - Phase 1-B-3 参照整合性改修完了
+// 最終更新: 2025年10月6日 - TypeScriptエラー完全修正
 // config/jwt.ts統合・重複解消・セキュリティ強化・型安全性完全対応
 // =====================================
 
@@ -14,11 +14,18 @@
  * ✅ 既存機能100%保持
  * ✅ TypeScript型安全性完全対応
  *
+ * 【最終修正 2025年10月6日】
+ * ✅ line 418, 443: expiresIn型アサーション修正
+ * ✅ line 512: JWTPayload型不一致修正
+ * ✅ line 626, 627: undefined可能性修正
+ *
  * 【修正箇所】
  * 1. import文: bcryptjs → bcrypt
- * 2. generateAccessToken: expiresIn型アサーション追加
- * 3. generateRefreshToken: expiresIn型アサーション追加
+ * 2. generateAccessToken: expiresIn型アサーション修正 + payload型修正
+ * 3. generateRefreshToken: expiresIn型アサーション修正
  * 4. comparePasswordエイリアス: verifyPasswordへのエイリアス追加（新規）
+ * 5. generateTokenPair: JWTPayload型修正
+ * 6. 使用例: undefined安全性修正
  *
  * 【影響範囲】
  * - JWT生成処理の型安全性向上
@@ -40,7 +47,7 @@ import jwt, { SignOptions, VerifyOptions, JwtPayload } from 'jsonwebtoken';
  * アクセストークン用の型安全なペイロード定義
  */
 export interface JWTPayload extends JwtPayload {
-  id: string;
+  userId: string;
   username: string;
   email: string;
   role: string;
@@ -401,7 +408,7 @@ export const getCryptoConfig = () => ({
 
 /**
  * アクセストークン生成（統合版）
- * Phase 1-B-3修正: expiresIn型アサーション追加（line 317）
+ * ✅ 最終修正 2025年10月6日: expiresIn型修正 + payload型修正
  *
  * config/jwt.tsの機能を統合し、既存インターフェース保持
  */
@@ -414,8 +421,8 @@ export const generateAccessToken = (payload: JWTPayload): string => {
   };
 
   const options: SignOptions = {
-    // ✅ Phase 1-B-3 修正: 型アサーションを追加して型不一致を解消
-    expiresIn: JWT_CONFIG.accessToken.expiresIn as string | number,
+    // ✅ 修正: expiresIn を jsonwebtoken の SignOptions 型に合わせてキャスト
+    expiresIn: JWT_CONFIG.accessToken.expiresIn as SignOptions['expiresIn'],
     algorithm: JWT_CONFIG.accessToken.algorithm,
     issuer: JWT_CONFIG.accessToken.issuer,
     audience: JWT_CONFIG.accessToken.audience,
@@ -427,7 +434,7 @@ export const generateAccessToken = (payload: JWTPayload): string => {
 
 /**
  * リフレッシュトークン生成（統合版）
- * Phase 1-B-3修正: expiresIn型アサーション追加（line 339）
+ * ✅ 最終修正 2025年10月6日: expiresIn型修正
  *
  * config/jwt.tsの機能を統合し、既存インターフェース保持
  */
@@ -439,8 +446,8 @@ export const generateRefreshToken = (payload: RefreshTokenPayload): string => {
   };
 
   const options: SignOptions = {
-    // ✅ Phase 1-B-3 修正: 型アサーションを追加して型不一致を解消
-    expiresIn: JWT_CONFIG.refreshToken.expiresIn as string | number,
+    // ✅ 修正: expiresIn を jsonwebtoken の SignOptions 型に合わせてキャスト
+    expiresIn: JWT_CONFIG.refreshToken.expiresIn as SignOptions['expiresIn'],
     algorithm: JWT_CONFIG.refreshToken.algorithm,
     issuer: JWT_CONFIG.refreshToken.issuer,
     audience: JWT_CONFIG.refreshToken.audience,
@@ -500,6 +507,8 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
 
 /**
  * トークンペア生成（統合版）
+ * ✅ 最終修正 2025年10月6日: JWTPayload型修正
+ *
  * config/jwt.tsの機能を統合
  */
 export const generateTokenPair = (user: {
@@ -509,6 +518,7 @@ export const generateTokenPair = (user: {
   role: string;
   tokenVersion?: number;
 }): TokenPair => {
+  // ✅ 修正: JWTPayloadに適合する形式に変更（id → userId）
   const accessToken = generateAccessToken({
     userId: user.id,
     username: user.username,
@@ -623,8 +633,11 @@ export const generateSessionId = (): string => {
  */
 export const generateSecureId = (): string => {
   const randomBytes = crypto.randomBytes(16);
-  randomBytes[6] = (randomBytes[6] & 0x0f) | 0x40; // version 4
-  randomBytes[8] = (randomBytes[8] & 0x3f) | 0x80; // variant bits
+  const b6 = randomBytes.readUInt8(6);
+  const b8 = randomBytes.readUInt8(8);
+
+  randomBytes.writeUInt8((b6 & 0x0f) | 0x40, 6); // version 4
+  randomBytes.writeUInt8((b8 & 0x3f) | 0x80, 8); // variant bits
 
   const hex = randomBytes.toString('hex');
   return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
@@ -952,7 +965,4 @@ export default crypto_utils;
  * ✅ UserModel.ts (line 35): comparePassword import error → 解消
  * ✅ 連鎖エラー解消見込み: 約10件
  *
- * 【次のPhase】
- * 🎯 Phase 2-A-1: config/app.ts修正
- * 🎯 Phase 2-A-2: config/upload.ts修正
  */

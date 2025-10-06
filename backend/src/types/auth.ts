@@ -16,7 +16,7 @@ import type {
 
 // types/index.ts経由でインポート（ハブ設計）
 import { UserRole } from '@prisma/client'
-import type { UserModel } from '../models/UserModel';
+import type { User as UserModel } from '@prisma/client';
 
 // =====================================
 // 認証済みリクエスト型（統一版）

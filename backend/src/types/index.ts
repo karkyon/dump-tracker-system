@@ -373,7 +373,6 @@ export type {
   TripDetail,
   PrismaVehicleStatus,
   BusinessVehicleStatus,
-  // ✨ 追加: trip.ts の拡張型もエクスポート
   CreateTripRequestExtended,
   UpdateTripRequestExtended,
   EndTripRequest,

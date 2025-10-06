@@ -29,6 +29,7 @@ import type {
   DateRange,
   StatisticsBase
 } from './common';
+import { OperationDetailCreateDTO } from '@/models/OperationDetailModel';
 
 // =====================================
 // 基本Trip型定義（既存完全実装保持）
@@ -175,6 +176,21 @@ export interface EndTripRequest {
 }
 
 export interface AddActnDetailivityRequest extends Prisma.OperationDetailCreateInput {
+  locationId: string;
+  itemId?: string;
+  quantity?: number;
+  activityType: ActivityType;
+  startTime: Date;
+  endTime?: Date;
+  notes?: string;
+  gpsLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+}
+
+export interface AddActivityRequest extends OperationDetailCreateDTO {
   locationId: string;
   itemId?: string;
   quantity?: number;

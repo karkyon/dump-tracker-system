@@ -33,13 +33,11 @@ import type {
   TimeRange
 } from './common';
 
-// 他のエンティティ型のインポート
-import type {
-  OperationResponseDTO,
-  VehicleResponseDTO,
-  InspectionRecordResponseDTO,
-  UserResponseDTO
-} from './index';
+// 他のエンティティ型を各モデルからインポート
+import type { OperationResponseDTO } from '../models/OperationModel';
+import type { VehicleResponseDTO } from '../models/VehicleModel';
+import type { InspectionRecordResponseDTO } from '../models/InspectionRecordModel';
+import type { UserResponseDTO } from '../models/UserModel';
 
 // =====================================
 // 1. 基本レポート型定義
