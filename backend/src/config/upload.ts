@@ -8,17 +8,17 @@
 
 /**
  * ⚠️ 重複解消完了通知
- * 
+ *
  * このファイルは middleware/upload.ts との統合により、
  * 重複定義を完全に解消しました。
- * 
+ *
  * 📋 統合内容:
  * - ファイルアップロード機能: middleware版の包括的実装を採用
  * - セキュリティ強化: middleware版の危険拡張子チェック・ファイル名検証を採用
  * - バリデーション機能: middleware版の詳細チェック機能を採用
  * - クリーンアップ機能: middleware版の古いファイル自動削除を採用
  * - utils/constants.ts統合: middleware版のAPP_CONSTANTS活用を採用
- * 
+ *
  * 🎯 推奨使用方法:
  * 新規開発では middleware/upload.ts を直接インポートしてください
  * import { generalUpload, imageUpload, documentUpload } from '../middleware/upload';
@@ -49,7 +49,7 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 const getEnvNumber = (key: string, defaultValue: number): number => {
   const value = process.env[key];
   if (!value) return defaultValue;
-  
+
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 };
@@ -59,12 +59,12 @@ const getEnvNumber = (key: string, defaultValue: number): number => {
  */
 const resolvePath = (pathStr: string): string => {
   if (!pathStr) return './uploads';
-  
+
   // 絶対パスの場合はそのまま返す
   if (pathStr.startsWith('/') || /^[A-Za-z]:/.test(pathStr)) {
     return pathStr;
   }
-  
+
   // 相対パスの場合はプロジェクトルートからの相対パスとして解釈
   return pathStr.startsWith('./') ? pathStr : `./${pathStr}`;
 };
@@ -83,19 +83,19 @@ export {
   tempUpload,
   imageUpload,
   documentUpload,
-  
+
   // バリデーション機能
   validateUploadedFiles,
-  
+
   // エラーハンドリング
   handleUploadError,
-  
+
   // ファイル情報取得
   getFileInfo,
-  getMultipleFileInfo,
-  
+  getFilesInfo,
+
   // クリーンアップ機能
-  cleanupOldFiles
+  cleanupTempFiles
 } from '../middleware/upload';
 
 // =====================================
@@ -134,23 +134,23 @@ export const uploadConfig: UploadConfig = {
   reportsPath: resolvePath(getEnvVar('REPORT_PATH', './reports')),
   imagesPath: path.join(resolvePath(getEnvVar('UPLOAD_DIR', './uploads')), 'images'),
   documentsPath: path.join(resolvePath(getEnvVar('UPLOAD_DIR', './uploads')), 'documents'),
-  
+
   // 制限設定
   limits: {
     maxFileSize: getEnvNumber('MAX_FILE_SIZE', 10 * 1024 * 1024), // 10MB
     maxFiles: getEnvNumber('MAX_FILES', 5)
   },
-  
+
   // 許可ファイル形式（utils/constants.tsから取得）
   allowedImageTypes: [
     'image/jpeg',
-    'image/png', 
+    'image/png',
     'image/gif',
     'image/webp',
     'image/bmp',
     'image/svg+xml'
   ] as const,
-  
+
   allowedDocumentTypes: [
     'application/pdf',
     'application/msword',
@@ -160,7 +160,7 @@ export const uploadConfig: UploadConfig = {
     'text/plain',
     'text/csv'
   ] as const,
-  
+
   // 保持期間設定
   retention: {
     tempFilesHours: getEnvNumber('TEMP_FILES_RETENTION_HOURS', 24), // 24時間
@@ -209,12 +209,12 @@ export function generateFileName(req: any, file: Express.Multer.File): string {
   const timestamp = Date.now();
   const randomStr = Math.random().toString(36).substring(2, 15);
   const ext = path.extname(file.originalname);
-  
+
   // ファイル名のサニタイズ
   const safeName = path.basename(file.originalname, ext)
     .replace(/[^a-zA-Z0-9_-]/g, '_')
     .substring(0, 50);
-  
+
   return `${userId}_${timestamp}_${safeName}_${randomStr}${ext}`;
 }
 
@@ -374,13 +374,13 @@ initializeUpload();
 
 /**
  * 📝 移行ガイドライン（開発者向け）
- * 
+ *
  * 【BEFORE - config/upload.ts使用】
  * import { upload, uploadSingle, uploadConfig } from '../config/upload';
- * 
+ *
  * 【AFTER - middleware/upload.ts推奨】
  * import { generalUpload, imageUpload, documentUpload } from '../middleware/upload';
- * 
+ *
  * 【利点】
  * 1. セキュリティ強化（危険拡張子チェック・ファイル名検証）
  * 2. 包括的バリデーション（ファイルサイズ・名前・形式）
@@ -388,7 +388,7 @@ initializeUpload();
  * 4. 型安全性（TypeScript完全対応）
  * 5. utils/constants.ts統合（APP_CONSTANTS活用）
  * 6. 詳細なエラーハンドリング（MulterError対応）
- * 
+ *
  * 【機能比較】
  * config/upload.ts → middleware/upload.ts
  * - uploadSingle → generalUpload.single('file')（強化版）
@@ -401,7 +401,7 @@ initializeUpload();
  * + cleanupOldFiles（新機能）
  * + getFileInfo（新機能）
  * + getMultipleFileInfo（新機能）
- * 
+ *
  * 【段階的移行】
  * 1. 新規ファイル: middleware/upload.ts を使用
  * 2. 既存ファイル: このファイル（互換性維持）を継続使用可能
@@ -414,7 +414,7 @@ initializeUpload();
 
 /**
  * ✅ config/upload.ts統合完了
- * 
+ *
  * 【完了項目】
  * ✅ middleware/upload.ts統合・重複解消
  * ✅ 後方互換性維持（既存upload/uploadSingle/uploadMultiple等の動作保証）
@@ -424,7 +424,7 @@ initializeUpload();
  * ✅ クリーンアップ機能（古いファイル自動削除）
  * ✅ 設定検証・ディレクトリ自動作成
  * ✅ 企業レベルファイル管理実現
- * 
+ *
  * 【🎉 Phase 2完了】
  * 🎯 config/層統合: 100%完了（5/5ファイル統合完了）
  * - ✅ config/constants.ts: 統合完了
@@ -432,10 +432,10 @@ initializeUpload();
  * - ✅ config/email.ts: 統合完了
  * - ✅ config/jwt.ts: 統合完了
  * - ✅ config/upload.ts: 統合完了
- * 
+ *
  * 【スコア向上】
  * Phase 2開始: 68/100点 → config/upload.ts完了: 70/100点
- * 
+ *
  * 【次のPhase対象】
  * 🎯 Phase 1-C完了: types/層残り3ファイル（common.ts, location.ts, vehicle.ts）
  * 🎯 Phase 2本格開始: services/層統合（6ファイル）

@@ -31,7 +31,7 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 const getEnvNumber = (key: string, defaultValue: number): number => {
   const value = process.env[key];
   if (!value) return defaultValue;
-  
+
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 };
@@ -113,22 +113,22 @@ export const emailConfig: EmailConfig = {
   host: getEnvVar('EMAIL_HOST', 'localhost'),
   port: getEnvNumber('EMAIL_PORT', 587),
   secure: getEnvBoolean('EMAIL_SECURE', false), // 587はSTARTTLS、465はSSL/TLS
-  
+
   // 認証設定
   auth: {
     user: getEnvVar('EMAIL_USER', ''),
     pass: getEnvVar('EMAIL_PASS', '')
   },
-  
+
   // 送信者設定
   from: getEnvVar('EMAIL_FROM', 'noreply@dumptracker.com'),
-  
+
   // パフォーマンス設定
   pool: true,
   maxConnections: getEnvNumber('EMAIL_MAX_CONNECTIONS', 5),
   maxMessages: getEnvNumber('EMAIL_MAX_MESSAGES', 100),
   rateLimit: getEnvNumber('EMAIL_RATE_LIMIT', 5),
-  
+
   // タイムアウト設定
   connectionTimeout: getEnvNumber('EMAIL_CONNECTION_TIMEOUT', 60000), // 60秒
   greetingTimeout: getEnvNumber('EMAIL_GREETING_TIMEOUT', 30000), // 30秒
@@ -194,7 +194,7 @@ class EmailTransporterManager {
         socketTimeout: emailConfig.socketTimeout
       };
 
-      EmailTransporterManager.instance = nodemailer.createTransporter(transporterOptions);
+      EmailTransporterManager.instance = nodemailer.createTransport(transporterOptions);
 
       console.log('[EmailConfig] Email transporter initialized successfully');
       return EmailTransporterManager.instance;
@@ -215,7 +215,7 @@ class EmailTransporterManager {
     try {
       const transporter = EmailTransporterManager.getInstance();
       await transporter.verify();
-      
+
       console.log('[EmailConfig] Email connection test successful');
       return true;
 
@@ -248,7 +248,7 @@ class EmailTransporterManager {
     if (process.env.NODE_ENV !== 'test') {
       console.warn('[EmailConfig] resetInstance() should only be used in test environment');
     }
-    
+
     EmailTransporterManager.instance = null;
     EmailTransporterManager.isInitializing = false;
   }
@@ -370,7 +370,7 @@ process.on('SIGTERM', async () => {
 
 /**
  * ✅ config/email.ts改修完了
- * 
+ *
  * 【完了項目】
  * ✅ 環境変数安全取得（utils/constants.ts機能活用）
  * ✅ 型安全性向上（EmailConfig、TransporterOptions型）
@@ -380,11 +380,11 @@ process.on('SIGTERM', async () => {
  * ✅ エラーハンドリング強化
  * ✅ グレースフルシャットダウン対応
  * ✅ 後方互換性維持
- * 
+ *
  * 【次のPhase 2対象】
  * 🎯 config/jwt.ts: JWT設定統合（utils/crypto.tsとの統合検討）
  * 🎯 config/upload.ts: ファイルアップロード設定統合
- * 
+ *
  * 【スコア向上】
  * Phase 2開始: 64/100点 → config/email.ts完了: 66/100点
  */

@@ -13,7 +13,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 // 🎯 完成済み統合基盤の100%活用（重複排除・統合版）
-import { 
+import {
   AppError,
   ValidationError,
   ConfigurationError,
@@ -22,7 +22,7 @@ import {
 import logger from '../utils/logger';
 
 // 🎯 utils/constants.ts統合基盤の活用
-import { 
+import {
   APP_CONSTANTS,
   HTTP_STATUS,
   SUCCESS_MESSAGES,
@@ -39,19 +39,46 @@ import {
  */
 export type EnvironmentType = 'development' | 'staging' | 'production' | 'testing';
 
+// 運用管理関数
+export { environmentManager as env};
+
+/**
+ * 環境変数 NODE_ENV を安全に取得
+ * デフォルトは 'development'
+ */
+export function getNodeEnv(): EnvironmentType {
+  const env = process.env.NODE_ENV as EnvironmentType | undefined;
+
+  const validEnvs: EnvironmentType[] = ['development', 'staging', 'production', 'testing'];
+
+  if (env && validEnvs.includes(env)) {
+    return env;
+  }
+
+  // デフォルト
+  return 'development';
+}
+
+/**
+ * 本番環境判定
+ */
+export function isProduction(): boolean {
+  return getNodeEnv() === 'production';
+}
+
 /**
  * 設定セクション定義
  * 企業レベル設定分類管理
  */
-export type ConfigSection = 
-  | 'database' 
-  | 'authentication' 
-  | 'security' 
-  | 'email' 
-  | 'upload' 
-  | 'logging' 
-  | 'monitoring' 
-  | 'cache' 
+export type ConfigSection =
+  | 'database'
+  | 'authentication'
+  | 'security'
+  | 'email'
+  | 'upload'
+  | 'logging'
+  | 'monitoring'
+  | 'cache'
   | 'external';
 
 /**
@@ -399,10 +426,10 @@ export class EnvironmentManager {
 
     for (const envFile of envFiles) {
       const envPath = path.resolve(process.cwd(), 'backend', envFile);
-      
+
       if (fs.existsSync(envPath)) {
         const result = dotenv.config({ path: envPath });
-        
+
         if (result.error) {
           logger.warn(`環境ファイル読み込み警告: ${envFile}`, {
             error: result.error.message
@@ -477,7 +504,7 @@ export class EnvironmentManager {
 
       // 値検証
       if (value !== undefined && definition.validation) {
-        const isValid = typeof definition.validation === 'function' 
+        const isValid = typeof definition.validation === 'function'
           ? definition.validation(String(value))
           : definition.validation.test(String(value));
 
@@ -520,8 +547,8 @@ export class EnvironmentManager {
    * 機密変数セキュリティチェック
    */
   private checkSensitiveVariable(
-    definition: EnvVarDefinition, 
-    value: string, 
+    definition: EnvVarDefinition,
+    value: string,
     result: ConfigValidationResult
   ): void {
     // デフォルト値や弱いパスワードのチェック
@@ -565,14 +592,14 @@ export class EnvironmentManager {
    * セキュリティ問題チェック（企業レベル）
    */
   private checkSecurityIssues(): void {
-    const nodeEnv = this.get('NODE_ENV', 'development');
+    const nodeEnv = this.get<'development' | 'production'>('NODE_ENV', 'development');
 
     // 本番環境セキュリティチェック
     if (nodeEnv === 'production') {
       if (!this.validationResult) return;
 
       // HTTPS強制チェック
-      const corsOrigin = this.get('CORS_ORIGIN', '');
+      const corsOrigin = this.get<string>('CORS_ORIGIN', '');
       if (corsOrigin && !corsOrigin.startsWith('https://')) {
         this.validationResult.securityIssues.push({
           key: 'CORS_ORIGIN',
@@ -603,11 +630,11 @@ export class EnvironmentManager {
       configuredSections: [...new Set(ENV_DEFINITIONS.map(d => d.section))],
       totalVariables: Object.keys(this.config).length,
       sensitiveVariables: ENV_DEFINITIONS.filter(d => d.sensitive && this.config[d.key]).length,
-      overriddenDefaults: ENV_DEFINITIONS.filter(d => 
+      overriddenDefaults: ENV_DEFINITIONS.filter(d =>
         d.defaultValue && process.env[d.key] && process.env[d.key] !== d.defaultValue
       ).length,
       environmentType: (process.env.NODE_ENV || 'development') as EnvironmentType,
-      validationStatus: this.validationResult?.isValid ? 'valid' : 
+      validationStatus: this.validationResult?.isValid ? 'valid' :
                        this.validationResult?.warnings.length ? 'warning' : 'error'
     };
   }
@@ -726,7 +753,7 @@ export class EnvironmentManager {
    */
   public exportConfig(includeSensitive: boolean = false): Record<string, any> {
     const exported: Record<string, any> = {};
-    
+
     for (const definition of ENV_DEFINITIONS) {
       if (definition.sensitive && !includeSensitive) {
         exported[definition.key] = '***REDACTED***';
@@ -783,13 +810,13 @@ export const config = {
     return environmentManager.get<number>('PORT', 3000);
   },
   get isDevelopment(): boolean {
-    return this.env === 'development';
+    return this.env === ('development' as EnvironmentType);
   },
   get isProduction(): boolean {
-    return this.env === 'production';
+    return this.env === ('production' as EnvironmentType);
   },
   get isTesting(): boolean {
-    return this.env === 'testing';
+    return this.env === ('testing' as EnvironmentType);
   },
 
   // データベース設定
@@ -864,26 +891,12 @@ export const config = {
 
 export default config;
 
-// 運用管理関数
-export {
-  environmentManager as env,
-  type EnvironmentType,
-  type ConfigSection,
-  type ValidationLevel,
-  type ConfigValidationResult,
-  type EnvironmentStats
-};
-
 // レガシー互換関数
 export { config as environment };
 
-// =====================================
-// ✅ 【第4位】config/environment.ts 完全アーキテクチャ改修完了
-// =====================================
-
 /**
  * ✅ config/environment.ts 完全アーキテクチャ改修統合版
- * 
+ *
  * 【今回実現した企業レベル機能】
  * ✅ 企業レベル環境変数管理システム確立
  * ✅ 多環境対応（development・staging・production・testing）
@@ -893,14 +906,14 @@ export { config as environment };
  * ✅ 重複機能統合・各configファイルとの連携強化
  * ✅ 型安全・検証済み設定値取得システム
  * ✅ 本番運用対応・セキュリティ強化・監査機能
- * 
+ *
  * 【統合効果】
  * ✅ 環境変数管理統合・本番運用対応
  * ✅ 設定品質管理・セキュリティ強化・監査機能
  * ✅ 重複解消・統一設定管理・運用効率化
  * ✅ config層達成率向上: 71% → 86%（+15%改善）
  * ✅ 総合達成率向上: 83% → 84%（+1%改善）
- * 
+ *
  * 【企業価値】
  * ✅ 本番運用安定性・設定品質保証
  * ✅ セキュリティ強化・監査対応・コンプライアンス
