@@ -134,7 +134,7 @@ export function isInArray(value: any, allowedValues: any[]): boolean {
  */
 export function validateUsername(username: string): FieldValidation[] {
   const errors: FieldValidation[] = [];
-  
+
   if (!isRequired(username)) {
     errors.push({
       field: 'username',
@@ -150,7 +150,7 @@ export function validateUsername(username: string): FieldValidation[] {
         constraint: 'length'
       });
     }
-    
+
     // 英数字とアンダースコアのみ許可
     const usernameRegex = /^[a-zA-Z0-9_]+$/;
     if (!usernameRegex.test(username)) {
@@ -162,7 +162,7 @@ export function validateUsername(username: string): FieldValidation[] {
       });
     }
   }
-  
+
   return errors;
 }
 
@@ -171,7 +171,7 @@ export function validateUsername(username: string): FieldValidation[] {
  */
 export function validatePassword(password: string): FieldValidation[] {
   const errors: FieldValidation[] = [];
-  
+
   if (!isRequired(password)) {
     errors.push({
       field: 'password',
@@ -187,13 +187,13 @@ export function validatePassword(password: string): FieldValidation[] {
         constraint: 'length'
       });
     }
-    
+
     // 強いパスワード要件
     const hasUppercase = /[A-Z]/.test(password);
     const hasLowercase = /[a-z]/.test(password);
     const hasNumber = /[0-9]/.test(password);
     const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-    
+
     if (!hasUppercase) {
       errors.push({
         field: 'password',
@@ -201,7 +201,7 @@ export function validatePassword(password: string): FieldValidation[] {
         constraint: 'uppercase_required'
       });
     }
-    
+
     if (!hasLowercase) {
       errors.push({
         field: 'password',
@@ -209,7 +209,7 @@ export function validatePassword(password: string): FieldValidation[] {
         constraint: 'lowercase_required'
       });
     }
-    
+
     if (!hasNumber) {
       errors.push({
         field: 'password',
@@ -217,7 +217,7 @@ export function validatePassword(password: string): FieldValidation[] {
         constraint: 'number_required'
       });
     }
-    
+
     if (!hasSpecialChar) {
       errors.push({
         field: 'password',
@@ -226,7 +226,7 @@ export function validatePassword(password: string): FieldValidation[] {
       });
     }
   }
-  
+
   return errors;
 }
 
@@ -235,7 +235,7 @@ export function validatePassword(password: string): FieldValidation[] {
  */
 export function validateEmail(email: string): FieldValidation[] {
   const errors: FieldValidation[] = [];
-  
+
   if (!isRequired(email)) {
     errors.push({
       field: 'email',
@@ -252,7 +252,7 @@ export function validateEmail(email: string): FieldValidation[] {
       });
     }
   }
-  
+
   return errors;
 }
 
@@ -265,7 +265,7 @@ export function validateEmail(email: string): FieldValidation[] {
  */
 export function validatePlateNumber(plateNumber: string): FieldValidation[] {
   const errors: FieldValidation[] = [];
-  
+
   if (!isRequired(plateNumber)) {
     errors.push({
       field: 'plateNumber',
@@ -284,7 +284,7 @@ export function validatePlateNumber(plateNumber: string): FieldValidation[] {
       });
     }
   }
-  
+
   return errors;
 }
 
@@ -293,7 +293,7 @@ export function validatePlateNumber(plateNumber: string): FieldValidation[] {
  */
 export function validateCoordinates(latitude: number, longitude: number): FieldValidation[] {
   const errors: FieldValidation[] = [];
-  
+
   if (!isNumber(latitude) || !isInRange(latitude, -90, 90)) {
     errors.push({
       field: 'latitude',
@@ -302,7 +302,7 @@ export function validateCoordinates(latitude: number, longitude: number): FieldV
       constraint: 'coordinate_range'
     });
   }
-  
+
   if (!isNumber(longitude) || !isInRange(longitude, -180, 180)) {
     errors.push({
       field: 'longitude',
@@ -311,7 +311,7 @@ export function validateCoordinates(latitude: number, longitude: number): FieldV
       constraint: 'coordinate_range'
     });
   }
-  
+
   return errors;
 }
 
@@ -325,7 +325,7 @@ export function validateCoordinates(latitude: number, longitude: number): FieldV
 export const reportValidation = {
   createReport: (data: any): FieldValidation[] => {
     const errors: FieldValidation[] = [];
-    
+
     if (!isRequired(data.reportType)) {
       errors.push({
         field: 'reportType',
@@ -351,7 +351,7 @@ export const reportValidation = {
         });
       }
     }
-    
+
     if (data.startDate && !isDate(data.startDate)) {
       errors.push({
         field: 'startDate',
@@ -360,7 +360,7 @@ export const reportValidation = {
         constraint: 'invalid_date'
       });
     }
-    
+
     if (data.endDate && !isDate(data.endDate)) {
       errors.push({
         field: 'endDate',
@@ -369,7 +369,7 @@ export const reportValidation = {
         constraint: 'invalid_date'
       });
     }
-    
+
     if (data.startDate && data.endDate) {
       const start = new Date(data.startDate);
       const end = new Date(data.endDate);
@@ -381,7 +381,7 @@ export const reportValidation = {
         });
       }
     }
-    
+
     return errors;
   }
 };
@@ -392,11 +392,11 @@ export const reportValidation = {
 export const userValidation = {
   createUser: (data: any): FieldValidation[] => {
     const errors: FieldValidation[] = [];
-    
+
     errors.push(...validateUsername(data.username || ''));
     errors.push(...validateEmail(data.email || ''));
     errors.push(...validatePassword(data.password || ''));
-    
+
     if (data.role && !isInArray(data.role, ['ADMIN', 'MANAGER', 'DRIVER'])) {
       errors.push({
         field: 'role',
@@ -405,25 +405,25 @@ export const userValidation = {
         constraint: 'invalid_enum'
       });
     }
-    
+
     return errors;
   },
-  
+
   updateUser: (data: any): FieldValidation[] => {
     const errors: FieldValidation[] = [];
-    
+
     if (data.username !== undefined) {
       errors.push(...validateUsername(data.username));
     }
-    
+
     if (data.email !== undefined) {
       errors.push(...validateEmail(data.email));
     }
-    
+
     if (data.password !== undefined) {
       errors.push(...validatePassword(data.password));
     }
-    
+
     if (data.role !== undefined && !isInArray(data.role, ['ADMIN', 'MANAGER', 'DRIVER'])) {
       errors.push({
         field: 'role',
@@ -432,7 +432,7 @@ export const userValidation = {
         constraint: 'invalid_enum'
       });
     }
-    
+
     return errors;
   }
 };
@@ -443,9 +443,9 @@ export const userValidation = {
 export const vehicleValidation = {
   createVehicle: (data: any): FieldValidation[] => {
     const errors: FieldValidation[] = [];
-    
+
     errors.push(...validatePlateNumber(data.plateNumber || ''));
-    
+
     if (!isRequired(data.model)) {
       errors.push({
         field: 'model',
@@ -453,7 +453,7 @@ export const vehicleValidation = {
         constraint: 'required'
       });
     }
-    
+
     if (!isRequired(data.manufacturer)) {
       errors.push({
         field: 'manufacturer',
@@ -461,7 +461,7 @@ export const vehicleValidation = {
         constraint: 'required'
       });
     }
-    
+
     if (data.year !== undefined) {
       const currentYear = new Date().getFullYear();
       if (!isInteger(data.year) || !isInRange(data.year, 1900, currentYear + 1)) {
@@ -473,7 +473,7 @@ export const vehicleValidation = {
         });
       }
     }
-    
+
     if (data.capacity !== undefined && (!isNumber(data.capacity) || !isPositive(data.capacity))) {
       errors.push({
         field: 'capacity',
@@ -482,7 +482,7 @@ export const vehicleValidation = {
         constraint: 'positive_number'
       });
     }
-    
+
     if (data.fuelType && !isInArray(data.fuelType, ['GASOLINE', 'DIESEL', 'HYBRID', 'ELECTRIC'])) {
       errors.push({
         field: 'fuelType',
@@ -491,7 +491,7 @@ export const vehicleValidation = {
         constraint: 'invalid_enum'
       });
     }
-    
+
     return errors;
   }
 };
@@ -502,7 +502,7 @@ export const vehicleValidation = {
 export const tripValidation = {
   createTrip: (data: any): FieldValidation[] => {
     const errors: FieldValidation[] = [];
-    
+
     if (!isRequired(data.vehicleId)) {
       errors.push({
         field: 'vehicleId',
@@ -510,7 +510,7 @@ export const tripValidation = {
         constraint: 'required'
       });
     }
-    
+
     if (!isRequired(data.driverId)) {
       errors.push({
         field: 'driverId',
@@ -518,7 +518,7 @@ export const tripValidation = {
         constraint: 'required'
       });
     }
-    
+
     if (!isRequired(data.startTime)) {
       errors.push({
         field: 'startTime',
@@ -533,7 +533,7 @@ export const tripValidation = {
         constraint: 'invalid_date'
       });
     }
-    
+
     if (data.plannedEndTime && !isDate(data.plannedEndTime)) {
       errors.push({
         field: 'plannedEndTime',
@@ -542,7 +542,7 @@ export const tripValidation = {
         constraint: 'invalid_date'
       });
     }
-    
+
     if (data.startTime && data.plannedEndTime) {
       const start = new Date(data.startTime);
       const plannedEnd = new Date(data.plannedEndTime);
@@ -554,13 +554,13 @@ export const tripValidation = {
         });
       }
     }
-    
+
     return errors;
   },
-  
+
   addActivity: (data: any): FieldValidation[] => {
     const errors: FieldValidation[] = [];
-    
+
     if (!isRequired(data.locationId)) {
       errors.push({
         field: 'locationId',
@@ -568,7 +568,7 @@ export const tripValidation = {
         constraint: 'required'
       });
     }
-    
+
     if (!isRequired(data.activityType)) {
       errors.push({
         field: 'activityType',
@@ -586,7 +586,7 @@ export const tripValidation = {
         });
       }
     }
-    
+
     if (!isRequired(data.startTime)) {
       errors.push({
         field: 'startTime',
@@ -601,7 +601,7 @@ export const tripValidation = {
         constraint: 'invalid_date'
       });
     }
-    
+
     if (data.endTime && !isDate(data.endTime)) {
       errors.push({
         field: 'endTime',
@@ -610,7 +610,7 @@ export const tripValidation = {
         constraint: 'invalid_date'
       });
     }
-    
+
     if (data.quantity !== undefined && (!isNumber(data.quantity) || data.quantity < 0)) {
       errors.push({
         field: 'quantity',
@@ -619,14 +619,14 @@ export const tripValidation = {
         constraint: 'non_negative_number'
       });
     }
-    
+
     if (data.gpsLocation) {
       errors.push(...validateCoordinates(
         data.gpsLocation.latitude,
         data.gpsLocation.longitude
       ));
     }
-    
+
     return errors;
   }
 };
@@ -648,18 +648,20 @@ export function validate(
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       const errors = validationSchema(req.body);
-      
+
       if (errors.length > 0) {
-        return sendValidationError(
+        sendValidationError(
           res,
           errors,
           options.customErrorMessage || 'バリデーションエラーが発生しました'
         );
+        return;
       }
-      
+
       next();
+      return;
     } catch (error) {
-      return sendValidationError(
+      sendValidationError(
         res,
         [{
           field: 'validation',
@@ -667,31 +669,31 @@ export function validate(
         }],
         'バリデーション処理エラー'
       );
+      return;
     }
   };
 }
 
-/**
- * クエリパラメータのバリデーション
- */
 export function validateQuery(
   validationSchema: (data: any) => FieldValidation[]
 ) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       const errors = validationSchema(req.query);
-      
+
       if (errors.length > 0) {
-        return sendValidationError(
+        sendValidationError(
           res,
           errors,
           'クエリパラメータのバリデーションエラーが発生しました'
         );
+        return;
       }
-      
+
       next();
+      return;
     } catch (error) {
-      return sendValidationError(
+      sendValidationError(
         res,
         [{
           field: 'query',
@@ -699,6 +701,7 @@ export function validateQuery(
         }],
         'クエリバリデーション処理エラー'
       );
+      return;
     }
   };
 }
@@ -714,11 +717,11 @@ export function sanitizeData(data: any): any {
       .replace(/<[^>]*>/g, '')
       .trim();
   }
-  
+
   if (Array.isArray(data)) {
     return data.map(item => sanitizeData(item));
   }
-  
+
   if (typeof data === 'object' && data !== null) {
     const sanitized: any = {};
     for (const key in data) {
@@ -728,7 +731,7 @@ export function sanitizeData(data: any): any {
     }
     return sanitized;
   }
-  
+
   return data;
 }
 
@@ -741,7 +744,7 @@ export function sanitizeData(data: any): any {
  */
 export function validatePagination(query: any): FieldValidation[] {
   const errors: FieldValidation[] = [];
-  
+
   if (query.page !== undefined) {
     const page = parseInt(query.page);
     if (!isInteger(page) || !isPositive(page)) {
@@ -753,7 +756,7 @@ export function validatePagination(query: any): FieldValidation[] {
       });
     }
   }
-  
+
   if (query.limit !== undefined) {
     const limit = parseInt(query.limit);
     if (!isInteger(limit) || !isInRange(limit, 1, 100)) {
@@ -765,7 +768,7 @@ export function validatePagination(query: any): FieldValidation[] {
       });
     }
   }
-  
+
   if (query.sortOrder !== undefined && !isInArray(query.sortOrder, ['asc', 'desc'])) {
     errors.push({
       field: 'sortOrder',
@@ -774,6 +777,6 @@ export function validatePagination(query: any): FieldValidation[] {
       constraint: 'invalid_sort_order'
     });
   }
-  
+
   return errors;
 }
