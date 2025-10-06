@@ -194,9 +194,10 @@ const handlePrismaError = (error: any): AppError => {
       default:
         return new DatabaseError(
           `データベースエラー: ${error.message}`,
-          'prisma',
-          error,
-          error.code
+          'prisma',           // 第2引数: query（クエリタイプ）
+          error.code,         // 第3引数にはPrismaエラーコード文字列を渡す
+          undefined,          // 第4引数: table（不明な場合はundefined）
+          'DATABASE_ERROR'    // 第5引数: エラーコード
         );
     }
   }
@@ -212,13 +213,14 @@ const handlePrismaError = (error: any): AppError => {
     );
   }
 
-  // Prisma Initialization Error
+  // Prisma Client Initialization Error
   if (error instanceof Prisma.PrismaClientInitializationError) {
     return new DatabaseError(
       'データベース接続エラー',
-      'connection',
-      error,
-      ERROR_CODES.DATABASE_CONNECTION_FAILED
+      'connection',                              // 第2引数: query（接続タイプ）
+      error.errorCode || 'INIT_ERROR',           // 第3引数にはエラーコード文字列を渡す
+      undefined,                                 // 第4引数: table（接続エラーなので不明）
+      ERROR_CODES.DATABASE_CONNECTION_FAILED     // 第5引数: エラーコード
     );
   }
 
