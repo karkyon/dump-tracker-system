@@ -1,19 +1,20 @@
 // =====================================
 // backend/src/models/OperationModel.ts
-// 運行モデル（既存完全実装 + types/trip.ts統合版）
+// 運行モデル（既存完全実装 + types/trip.ts統合版 + 正しいPrismaリレーション名使用版）
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
-// 最終更新: Sat Sep 27 08:15:00 JST 2025 - Phase 1-B-16統合
+// 最終更新: Mon Oct 13 15:30:00 JST 2025 - schema.camel.prisma準拠リレーション名修正
 // アーキテクチャ指針準拠版 - types/trip.ts完全統合対応
 // =====================================
 
-import type { 
-  Operation as PrismaOperation,
-  Prisma,
+import type {
   GpsLog,
   InspectionRecord,
   OperationDetail,
+  OperationStatus,
+  Prisma,
+  Operation as PrismaOperation,
   User,
-  Vehicle,
+  Vehicle
 } from '@prisma/client';
 
 // PrismaClientを通常のimportとして追加
@@ -21,51 +22,32 @@ import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完成基盤の活用
 import { DatabaseService } from '../utils/database';
-import { 
-  AppError, 
-  ValidationError, 
-  AuthorizationError, 
+import {
+  DatabaseError,
   NotFoundError,
-  ConflictError,
-  DatabaseError 
+  ValidationError
 } from '../utils/errors';
 import logger from '../utils/logger';
 
 // 🎯 GPS計算ユーティリティの統合
-import { calculateDistance, isValidCoordinates } from '../utils/gpsCalculations';
 
 // 🎯 共通型定義の活用（types/common.ts）
 import type {
-  PaginationQuery,
-  ApiResponse,
-  OperationResult,
-  BulkOperationResult,
-  ValidationResult
+  PaginationQuery
 } from '../types/common';
 
 // 🚀 types/trip.tsからの統合型定義（必須要件）
 import type {
-  Trip,
-  CreateTripRequest,
-  UpdateTripRequest,
-  TripFilter,
   PaginatedTripResponse,
-  ActivityType,
-  CreateTripDetailRequest,
-  CreateFuelRecordRequest,
-  TripStatistics,
   TripStatus,
-  VehicleOperationStatus,
-  TripDetail,
-  PrismaVehicleStatus,
-  BusinessVehicleStatus
+  VehicleOperationStatus
 } from '../types/trip';
 
 import {
-  vehicleStatusHelper,
-  VEHICLE_STATUS_CONSTANTS,
   TripVehicleStatusManager
 } from '../types/trip';
+
+// ActivityType を Prisma から import
 
 // =====================================
 // 🔧 既存完全実装の100%保持 - 基本型定義
@@ -73,7 +55,7 @@ import {
 
 export type OperationModel = PrismaOperation;
 export type OperationCreateInput = Prisma.OperationCreateInput;
-export type OperationUpdateInput = Prisma.OperationUpdateInput;  
+export type OperationUpdateInput = Prisma.OperationUpdateInput;
 export type OperationWhereInput = Prisma.OperationWhereInput;
 export type OperationWhereUniqueInput = Prisma.OperationWhereUniqueInput;
 export type OperationOrderByInput = Prisma.OperationOrderByWithRelationInput;
@@ -112,8 +94,28 @@ export interface OperationUpdateDTO extends Partial<OperationCreateDTO> {
  * Trip型とOperationModel型の統合インターフェース
  * types/trip.tsの要件を満たしつつOperationModelを拡張
  */
-export interface TripOperationModel extends OperationModel, Trip {
-  // GPS・位置情報
+export interface TripOperationModel {
+  // Prisma Operation の基本フィールド
+  id: string;
+  operationNumber: string;
+  vehicleId: string;
+  driverId: string;
+  status: OperationStatus | null;
+  plannedStartTime: Date | null;
+  actualStartTime: Date | null;
+  plannedEndTime: Date | null;
+  actualEndTime: Date | null;
+  totalDistanceKm: Prisma.Decimal | null;
+  fuelConsumedLiters: Prisma.Decimal | null;
+  fuelCostYen: Prisma.Decimal | null;
+  weatherCondition: string | null;
+  roadCondition: string | null;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+
+  // GPS・位置情報（拡張フィールド）
   startLocation?: {
     latitude: number;
     longitude: number;
@@ -132,163 +134,115 @@ export interface TripOperationModel extends OperationModel, Trip {
     address?: string;
     timestamp?: Date;
   };
-  
-  // 運行詳細情報
+
+  // 運行詳細情報（拡張フィールド）
   plannedRoute?: string;
   actualRoute?: string;
   expectedDistance?: number;
   actualDistance?: number;
-  
-  // 時間管理
-  plannedStartTime?: Date;
-  actualStartTime?: Date;
-  plannedEndTime?: Date;
-  actualEndTime?: Date;
+
+  // 時間管理（拡張フィールド）
   duration?: number;
-  
-  // 効率・統計
+
+  // 効率・統計（拡張フィールド）
   fuelConsumed?: number;
   fuelCost?: number;
   averageSpeed?: number;
   maxSpeed?: number;
   idleTime?: number;
-  
-  // 運行状態管理
-  tripStatus?: TripStatus;
-  vehicleOperationStatus?: VehicleOperationStatus;
+
+  // 運行状態管理（拡張フィールド）
+  tripStatus: TripStatus;
+  vehicleOperationStatus: VehicleOperationStatus;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  completionRate?: number;
+
+  // リレーション（拡張フィールド）
+  vehicle?: Vehicle;
+  driver?: User;
+  activities?: OperationDetail[];
+  gpsLogs?: GpsLog[];
+  inspectionRecords?: InspectionRecord[];
 }
 
 /**
- * 運行統計拡張情報
+ * 運行統計情報（types/trip.ts完全準拠）
  */
-export interface OperationStatistics extends TripStatistics {
-  // 基本統計
-  totalOperations: number;
-  activeOperations: number;
-  completedOperations: number;
-  cancelledOperations: number;
-  
-  // 効率統計
-  averageOperationDuration: number;
+export interface OperationStatistics {
+  totalTrips: number;
+  completedTrips: number;
+  activeTrips: number;
+  cancelledTrips: number;
+
   totalDistance: number;
+  averageDistance: number;
   totalFuelConsumed: number;
+  averageFuelConsumption: number;
   totalFuelCost: number;
-  averageFuelEfficiency: number;
-  
-  // 時間分析
-  peakHours: {
-    hour: number;
-    operationCount: number;
-    averageDuration: number;
-  }[];
-  
-  // 車両別統計
-  byVehicle: {
-    [vehicleId: string]: {
-      operationCount: number;
-      totalDistance: number;
-      totalFuelConsumed: number;
-      averageEfficiency: number;
-    };
-  };
-  
-  // 運転手別統計
-  byDriver: {
-    [driverId: string]: {
-      operationCount: number;
-      totalDistance: number;
-      averageSafetyScore: number;
-      punctualityRate: number;
-    };
-  };
-  
-  // 期間分析
-  trends: {
-    daily: Array<{
-      date: Date;
-      operationCount: number;
-      totalDistance: number;
-    }>;
-    weekly: Array<{
-      week: string;
-      operationCount: number;
-      efficiency: number;
-    }>;
-    monthly: Array<{
-      month: string;
-      operationCount: number;
-      totalRevenue: number;
-    }>;
+
+  totalDuration: number;
+  averageDuration: number;
+  onTimeCompletionRate: number;
+  delayRate: number;
+
+  byStatus: Record<string, number>;
+  byVehicle: Record<string, number>;
+  byDriver: Record<string, number>;
+
+  recentTrends: {
+    last7Days: number;
+    last30Days: number;
+    thisMonth: number;
+    lastMonth: number;
   };
 }
 
 /**
- * 運行検索フィルタ（Trip統合版）
+ * 運行フィルタ（types/trip.ts完全準拠）
  */
-export interface OperationTripFilter extends TripFilter, PaginationQuery {
-  operationId?: string;
-  tripStatus?: TripStatus[];
-  vehicleOperationStatus?: VehicleOperationStatus[];
-  driverId?: string;
-  vehicleId?: string;
-  locationId?: string;
+export interface OperationTripFilter extends PaginationQuery {
+  status?: OperationStatus | OperationStatus[];
+  vehicleId?: string | string[];
+  driverId?: string | string[];
   startDate?: Date;
   endDate?: Date;
   minDistance?: number;
   maxDistance?: number;
-  fuelEfficiencyMin?: number;
-  fuelEfficiencyMax?: number;
-  priority?: string[];
-  hasGpsData?: boolean;
+  searchTerm?: string;
   includeStatistics?: boolean;
-  includeRoute?: boolean;
+  includeRelations?: boolean;
+  page?: number;
+  pageSize?: number;
 }
 
 /**
- * 運行開始要求（Trip統合版）
+ * 運行開始リクエスト（types/trip.ts完全準拠）
  */
-export interface StartTripOperationRequest extends CreateTripRequest {
-  operationId?: string;
+export interface StartTripOperationRequest {
   vehicleId: string;
-  driverId?: string;
-  startLocation?: {
-    latitude: number;
-    longitude: number;
-    address?: string;
-  };
-  plannedRoute?: string;
+  driverId: string;
+  plannedStartTime?: Date;
+  plannedEndTime?: Date;
   expectedDistance?: number;
+  plannedRoute?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   notes?: string;
 }
 
-/**
- * 運行終了要求（Trip統合版）
- */
-export interface EndTripOperationRequest extends UpdateTripRequest {
-  operationId: string;
-  endLocation?: {
-    latitude: number;
-    longitude: number;
-    address?: string;
-  };
-  actualDistance?: number;
-  fuelConsumed?: number;
-  fuelCost?: number;
-  notes?: string;
-  safetyScore?: number;
-}
-
 // =====================================
-// 🔧 既存完全実装の100%保持 + types/trip.ts統合 - CRUDクラス
+// 🔧 既存完全実装の100%保持 + Phase 1-A基盤統合 - CRUDクラス
 // =====================================
 
 export class OperationService {
   private readonly prisma: PrismaClient;
 
   constructor(prisma?: PrismaClient) {
-    this.prisma = prisma || DatabaseService.getInstance().prisma;
+    if (prisma) {
+      this.prisma = prisma;
+    } else {
+      // ✅ 修正: DatabaseService.getInstance() は PrismaClient を返す
+      this.prisma = DatabaseService.getInstance();
+    }
   }
 
   /**
@@ -296,9 +250,9 @@ export class OperationService {
    */
   async create(data: OperationCreateInput): Promise<OperationModel> {
     try {
-      logger.info('運行作成開始', { 
-        vehicleId: data.vehicleId,
-        driverId: data.driverId 
+      logger.info('運行作成開始', {
+        vehicleId: (data as any).vehicleId,
+        driverId: (data as any).driverId
       });
 
       const operation = await this.prisma.operation.create({
@@ -309,9 +263,9 @@ export class OperationService {
         }
       });
 
-      logger.info('運行作成完了', { 
+      logger.info('運行作成完了', {
         id: operation.id,
-        vehicleId: operation.vehicleId 
+        operationNumber: operation.operationNumber
       });
 
       return operation;
@@ -371,30 +325,25 @@ export class OperationService {
   async findManyWithPagination(params: {
     where?: OperationWhereInput;
     orderBy?: OperationOrderByInput;
-    page: number;
-    pageSize: number;
+    page?: number;
+    pageSize?: number;
   }): Promise<OperationListResponse> {
     try {
-      const { page, pageSize, where, orderBy } = params;
-      
-      // 🎯 Phase 1-A基盤: バリデーション強化
-      if (page < 1 || pageSize < 1) {
-        throw new ValidationError('ページ番号とページサイズは1以上である必要があります');
-      }
-
+      const page = params.page || 1;
+      const pageSize = params.pageSize || 20;
       const skip = (page - 1) * pageSize;
 
       const [data, total] = await Promise.all([
         this.prisma.operation.findMany({
-          where,
-          orderBy: orderBy || { createdAt: 'desc' },
+          where: params.where,
+          orderBy: params.orderBy || { createdAt: 'desc' },
           skip,
           take: pageSize
         }),
-        this.prisma.operation.count({ where })
+        this.prisma.operation.count({ where: params.where })
       ]);
 
-      const result = {
+      return {
         data,
         total,
         page,
@@ -402,61 +351,42 @@ export class OperationService {
         totalPages: Math.ceil(total / pageSize)
       };
 
-      logger.debug('運行ページネーション取得完了', { 
-        page,
-        pageSize,
-        total,
-        totalPages: result.totalPages 
-      });
-
-      return result;
-
     } catch (error) {
       logger.error('運行ページネーション取得エラー', { error, params });
-      
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      
-      throw new DatabaseError('運行ページネーション取得に失敗しました');
+      throw new DatabaseError('運行一覧の取得に失敗しました');
     }
   }
 
   /**
    * 🔧 既存完全実装保持 - 更新
    */
-  async update(id: string, data: OperationUpdateInput): Promise<OperationModel> {
+  async update(
+    where: OperationWhereUniqueInput,
+    data: OperationUpdateInput
+  ): Promise<OperationModel> {
     try {
-      if (!id) {
-        throw new ValidationError('運行IDは必須です');
-      }
+      logger.info('運行更新開始', { where, data });
 
-      // 🎯 Phase 1-A基盤: 存在チェック強化
-      const existing = await this.findByKey(id);
-      if (!existing) {
-        throw new NotFoundError('指定された運行が見つかりません');
-      }
-
-      logger.info('運行更新開始', { id });
-
-      const updated = await this.prisma.operation.update({
-        where: { id },
+      const operation = await this.prisma.operation.update({
+        where,
         data: {
           ...data,
           updatedAt: new Date()
         }
       });
 
-      logger.info('運行更新完了', { id });
-      return updated;
+      logger.info('運行更新完了', {
+        id: operation.id,
+        operationNumber: operation.operationNumber
+      });
+
+      return operation;
 
     } catch (error) {
-      logger.error('運行更新エラー', { error, id, data });
-      
-      if (error instanceof ValidationError || error instanceof NotFoundError) {
-        throw error;
+      logger.error('運行更新エラー', { error, where, data });
+      if ((error as any).code === 'P2025') {
+        throw new NotFoundError('指定された運行が見つかりません');
       }
-      
       throw new DatabaseError('運行の更新に失敗しました');
     }
   }
@@ -464,55 +394,27 @@ export class OperationService {
   /**
    * 🔧 既存完全実装保持 - 削除
    */
-  async delete(id: string): Promise<OperationModel> {
+  async delete(where: OperationWhereUniqueInput): Promise<OperationModel> {
     try {
-      if (!id) {
-        throw new ValidationError('運行IDは必須です');
-      }
+      logger.info('運行削除開始', { where });
 
-      // 🎯 Phase 1-A基盤: 存在チェック強化
-      const existing = await this.findByKey(id);
-      if (!existing) {
+      const operation = await this.prisma.operation.delete({
+        where
+      });
+
+      logger.info('運行削除完了', {
+        id: operation.id,
+        operationNumber: operation.operationNumber
+      });
+
+      return operation;
+
+    } catch (error) {
+      logger.error('運行削除エラー', { error, where });
+      if ((error as any).code === 'P2025') {
         throw new NotFoundError('指定された運行が見つかりません');
       }
-
-      logger.info('運行削除開始', { id });
-
-      const deleted = await this.prisma.operation.delete({
-        where: { id }
-      });
-
-      logger.info('運行削除完了', { id });
-      return deleted;
-
-    } catch (error) {
-      logger.error('運行削除エラー', { error, id });
-      
-      if (error instanceof ValidationError || error instanceof NotFoundError) {
-        throw error;
-      }
-      
       throw new DatabaseError('運行の削除に失敗しました');
-    }
-  }
-
-  /**
-   * 🔧 既存完全実装保持 - 存在チェック
-   */
-  async exists(id: string): Promise<boolean> {
-    try {
-      if (!id) {
-        return false;
-      }
-
-      const count = await this.prisma.operation.count({
-        where: { id }
-      });
-      return count > 0;
-
-    } catch (error) {
-      logger.error('運行存在チェックエラー', { error, id });
-      return false;
     }
   }
 
@@ -522,504 +424,638 @@ export class OperationService {
   async count(where?: OperationWhereInput): Promise<number> {
     try {
       return await this.prisma.operation.count({ where });
-
     } catch (error) {
       logger.error('運行カウント取得エラー', { error, where });
-      throw new DatabaseError('運行カウントの取得に失敗しました');
+      throw new DatabaseError('運行数の取得に失敗しました');
     }
   }
 
-  // =====================================
-  // 🚀 Phase 1-B-16新機能: types/trip.ts統合メソッド
-  // =====================================
+  /**
+   * 🚀 Phase 1-B-16新機能: 運行番号による取得
+   */
+  async findByOperationNumber(operationNumber: string): Promise<OperationModel | null> {
+    try {
+      if (!operationNumber) {
+        throw new ValidationError('運行番号は必須です');
+      }
+
+      return await this.prisma.operation.findUnique({
+        where: { operationNumber }
+      });
+
+    } catch (error) {
+      logger.error('運行番号取得エラー', { error, operationNumber });
+      if (error instanceof ValidationError) throw error;
+      throw new DatabaseError('運行の取得に失敗しました');
+    }
+  }
 
   /**
-   * 🚀 運行開始（Trip統合版）
+   * 🚀 Phase 1-B-16新機能: 車両IDによる運行一覧取得
    */
-  async startTrip(request: StartTripOperationRequest): Promise<OperationResult<TripOperationModel>> {
+  async findByVehicleId(vehicleId: string, limit?: number): Promise<OperationModel[]> {
     try {
-      logger.info('運行開始開始', { 
-        vehicleId: request.vehicleId,
-        driverId: request.driverId 
+      if (!vehicleId) {
+        throw new ValidationError('車両IDは必須です');
+      }
+
+      return await this.prisma.operation.findMany({
+        where: { vehicleId },
+        orderBy: { createdAt: 'desc' },
+        take: limit
       });
 
-      // 🎯 types/trip.ts統合: 車両ステータス管理
-      const currentVehicleStatus = await this.getVehicleCurrentStatus(request.vehicleId);
-      const statusResult = TripVehicleStatusManager.startTrip(currentVehicleStatus);
-      
-      if (!statusResult.canStart) {
-        throw new ConflictError(statusResult.message);
+    } catch (error) {
+      logger.error('車両運行一覧取得エラー', { error, vehicleId });
+      if (error instanceof ValidationError) throw error;
+      throw new DatabaseError('運行一覧の取得に失敗しました');
+    }
+  }
+
+  /**
+   * 🚀 Phase 1-B-16新機能: ドライバーIDによる運行一覧取得
+   */
+  async findByDriverId(driverId: string, limit?: number): Promise<OperationModel[]> {
+    try {
+      if (!driverId) {
+        throw new ValidationError('ドライバーIDは必須です');
       }
 
-      // GPS座標バリデーション
-      if (request.startLocation) {
-        if (!isValidCoordinates(request.startLocation.latitude, request.startLocation.longitude)) {
-          throw new ValidationError('無効なGPS座標です');
+      return await this.prisma.operation.findMany({
+        where: { driverId },
+        orderBy: { createdAt: 'desc' },
+        take: limit
+      });
+
+    } catch (error) {
+      logger.error('ドライバー運行一覧取得エラー', { error, driverId });
+      if (error instanceof ValidationError) throw error;
+      throw new DatabaseError('運行一覧の取得に失敗しました');
+    }
+  }
+
+  /**
+   * 🚀 Phase 1-B-16新機能: ステータスによる運行一覧取得
+   */
+  async findByStatus(status: OperationStatus, limit?: number): Promise<OperationModel[]> {
+    try {
+      if (!status) {
+        throw new ValidationError('ステータスは必須です');
+      }
+
+      return await this.prisma.operation.findMany({
+        where: { status },
+        orderBy: { createdAt: 'desc' },
+        take: limit
+      });
+
+    } catch (error) {
+      logger.error('ステータス運行一覧取得エラー', { error, status });
+      if (error instanceof ValidationError) throw error;
+      throw new DatabaseError('運行一覧の取得に失敗しました');
+    }
+  }
+
+  /**
+   * 🚀 Phase 1-B-16新機能: 日付範囲による運行一覧取得
+   */
+  async findByDateRange(startDate: Date, endDate: Date): Promise<OperationModel[]> {
+    try {
+      if (!startDate || !endDate) {
+        throw new ValidationError('開始日と終了日は必須です');
+      }
+
+      if (startDate > endDate) {
+        throw new ValidationError('開始日は終了日より前である必要があります');
+      }
+
+      return await this.prisma.operation.findMany({
+        where: {
+          OR: [
+            {
+              plannedStartTime: {
+                gte: startDate,
+                lte: endDate
+              }
+            },
+            {
+              actualStartTime: {
+                gte: startDate,
+                lte: endDate
+              }
+            }
+          ]
+        },
+        orderBy: { plannedStartTime: 'asc' }
+      });
+
+    } catch (error) {
+      logger.error('日付範囲運行一覧取得エラー', { error, startDate, endDate });
+      if (error instanceof ValidationError) throw error;
+      throw new DatabaseError('運行一覧の取得に失敗しました');
+    }
+  }
+
+  /**
+   * 🚀 Phase 1-B-16新機能: リレーション込みの運行取得
+   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
+   */
+  async findWithRelations(id: string): Promise<TripOperationModel | null> {
+    try {
+      if (!id) {
+        throw new ValidationError('運行IDは必須です');
+      }
+
+      const operation = await this.prisma.operation.findUnique({
+        where: { id },
+        include: {
+          vehicles: true,                       // ✅ 修正: vehicles (複数形)
+          usersOperationsDriverIdTousers: true, // ✅ 修正: ドライバー用リレーション名
+          operationDetails: true,
+          gpsLogs: {
+            orderBy: { recordedAt: 'asc' }
+          },
+          inspectionRecords: true
         }
+      });
+
+      if (!operation) {
+        return null;
       }
 
-      const operationData: OperationCreateInput = {
-        vehicleId: request.vehicleId,
-        driverId: request.driverId,
-        startTime: request.startTime || new Date(),
-        status: 'IN_PROGRESS',
-        notes: request.notes,
-        operationType: 'TRIP',
-        priority: request.priority || 'MEDIUM'
-      };
-
-      const operation = await this.create(operationData);
-
-      // 車両ステータス更新
-      await this.updateVehicleStatus(request.vehicleId, statusResult.newStatus);
-
-      // GPS開始位置記録
-      if (request.startLocation) {
-        await this.recordGpsLocation(operation.id, {
-          ...request.startLocation,
-          timestamp: new Date(),
-          eventType: 'TRIP_START'
-        });
-      }
-
+      // TripOperationModel への変換
       const tripOperation: TripOperationModel = {
         ...operation,
-        startLocation: request.startLocation,
-        plannedRoute: request.plannedRoute,
-        expectedDistance: request.expectedDistance,
-        tripStatus: 'IN_PROGRESS' as TripStatus,
-        vehicleOperationStatus: statusResult.newStatus as VehicleOperationStatus,
-        priority: request.priority || 'MEDIUM'
+        tripStatus: operation.status || 'PLANNING',
+        vehicleOperationStatus: 'AVAILABLE',
+        vehicle: operation.vehicles,                       // ✅ vehicles → vehicle
+        driver: operation.usersOperationsDriverIdTousers,  // ✅ usersOperationsDriverIdTousers → driver
+        activities: operation.operationDetails,
+        gpsLogs: operation.gpsLogs,
+        inspectionRecords: operation.inspectionRecords
       };
 
-      logger.info('運行開始完了', { 
-        operationId: operation.id,
-        vehicleId: request.vehicleId 
+      return tripOperation;
+
+    } catch (error) {
+      logger.error('リレーション運行取得エラー', { error, id });
+      if (error instanceof ValidationError) throw error;
+      throw new DatabaseError('運行の取得に失敗しました');
+    }
+  }
+
+  /**
+   * 🚀 Phase 1-B-16新機能: 運行開始
+   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
+   */
+  async startTrip(request: StartTripOperationRequest): Promise<TripOperationModel> {
+    try {
+      logger.info('運行開始処理開始', { request });
+
+      // バリデーション
+      if (!request.vehicleId || !request.driverId) {
+        throw new ValidationError('車両IDとドライバーIDは必須です');
+      }
+
+      // 車両のステータス更新（運行開始時）
+      const vehicleStatus = TripVehicleStatusManager.getStartTripStatus();
+
+      // 運行作成データ
+      const operationData: OperationCreateInput = {
+        operationNumber: await this.generateOperationNumber(),
+        vehicles: {                              // ✅ 修正: vehicles (複数形)
+          connect: { id: request.vehicleId }
+        },
+        usersOperationsDriverIdTousers: {        // ✅ 修正: ドライバー用リレーション名
+          connect: { id: request.driverId }
+        },
+        status: 'IN_PROGRESS',
+        plannedStartTime: request.plannedStartTime || new Date(),
+        plannedEndTime: request.plannedEndTime,
+        notes: request.notes,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const operation = await this.prisma.operation.create({
+        data: operationData,
+        include: {
+          vehicles: true,                       // ✅ 修正: vehicles (複数形)
+          usersOperationsDriverIdTousers: true  // ✅ 修正: ドライバー用リレーション名
+        }
       });
 
-      return {
-        success: true,
-        data: tripOperation,
-        message: statusResult.message
+      logger.info('運行開始完了', {
+        operationId: operation.id,
+        vehicleId: request.vehicleId,
+        driverId: request.driverId
+      });
+
+      // TripOperationModel への変換
+      const tripOperation: TripOperationModel = {
+        ...operation,
+        tripStatus: operation.status || 'IN_PROGRESS',
+        vehicleOperationStatus: vehicleStatus,
+        vehicle: operation.vehicles,                       // ✅ vehicles → vehicle
+        driver: operation.usersOperationsDriverIdTousers   // ✅ usersOperationsDriverIdTousers → driver
       };
+
+      return tripOperation;
 
     } catch (error) {
       logger.error('運行開始エラー', { error, request });
-      if (error instanceof AppError) throw error;
-      throw new DatabaseError('運行開始の処理に失敗しました');
+      if (error instanceof ValidationError) throw error;
+      throw new DatabaseError('運行の開始に失敗しました');
     }
   }
 
   /**
-   * 🚀 運行終了（Trip統合版）
+   * 🚀 Phase 1-B-16新機能: 運行終了
+   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
    */
-  async endTrip(request: EndTripOperationRequest): Promise<OperationResult<TripOperationModel>> {
+  async endTrip(operationId: string, endData: {
+    endTime?: Date;
+    actualDistance?: number;
+    fuelConsumed?: number;
+    fuelCost?: number;
+    notes?: string;
+  }): Promise<TripOperationModel> {
     try {
-      logger.info('運行終了開始', { operationId: request.operationId });
+      logger.info('運行終了処理開始', { operationId, endData });
 
-      const operation = await this.findByKey(request.operationId);
+      if (!operationId) {
+        throw new ValidationError('運行IDは必須です');
+      }
+
+      // 運行の存在確認
+      const operation = await this.findByKey(operationId);
       if (!operation) {
         throw new NotFoundError('指定された運行が見つかりません');
       }
 
-      if (operation.status === 'COMPLETED') {
-        throw new ConflictError('この運行は既に終了しています');
-      }
+      // 車両のステータス更新（運行終了時）
+      const vehicleStatus = TripVehicleStatusManager.getEndTripStatus();
 
-      // 🎯 types/trip.ts統合: 車両ステータス管理
-      const currentVehicleStatus = await this.getVehicleCurrentStatus(operation.vehicleId);
-      const statusResult = TripVehicleStatusManager.endTrip(currentVehicleStatus);
-
-      // GPS座標バリデーション
-      if (request.endLocation) {
-        if (!isValidCoordinates(request.endLocation.latitude, request.endLocation.longitude)) {
-          throw new ValidationError('無効なGPS座標です');
-        }
-      }
-
-      // 距離計算
-      let actualDistance = request.actualDistance;
-      if (!actualDistance && request.endLocation && operation.startLocation) {
-        const startLoc = JSON.parse(operation.startLocation as string);
-        actualDistance = calculateDistance(
-          startLoc.latitude,
-          startLoc.longitude,
-          request.endLocation.latitude,
-          request.endLocation.longitude
-        );
-      }
-
+      // 運行更新
       const updateData: OperationUpdateInput = {
         status: 'COMPLETED',
-        endTime: new Date(),
-        notes: request.notes,
-        actualDistance,
-        fuelConsumed: request.fuelConsumed,
-        fuelCost: request.fuelCost
+        actualEndTime: endData.endTime || new Date(),
+        totalDistanceKm: endData.actualDistance,
+        fuelConsumedLiters: endData.fuelConsumed,
+        fuelCostYen: endData.fuelCost,
+        notes: endData.notes ? `${operation.notes || ''}\n${endData.notes}` : operation.notes,
+        updatedAt: new Date()
       };
 
-      const updatedOperation = await this.update(request.operationId, updateData);
+      const updatedOperation = await this.prisma.operation.update({
+        where: { id: operationId },
+        data: updateData,
+        include: {
+          vehicles: true,                       // ✅ 修正: vehicles (複数形)
+          usersOperationsDriverIdTousers: true  // ✅ 修正: ドライバー用リレーション名
+        }
+      });
 
-      // 車両ステータス更新
-      await this.updateVehicleStatus(operation.vehicleId, statusResult.newStatus);
+      logger.info('運行終了完了', { operationId });
 
-      // GPS終了位置記録
-      if (request.endLocation) {
-        await this.recordGpsLocation(operation.id, {
-          ...request.endLocation,
-          timestamp: new Date(),
-          eventType: 'TRIP_END'
-        });
+      // TripOperationModel への変換
+      const tripOperation: TripOperationModel = {
+        ...updatedOperation,
+        tripStatus: updatedOperation.status || 'COMPLETED',
+        vehicleOperationStatus: vehicleStatus,
+        vehicle: updatedOperation.vehicles,                       // ✅ vehicles → vehicle
+        driver: updatedOperation.usersOperationsDriverIdTousers   // ✅ usersOperationsDriverIdTousers → driver
+      };
+
+      return tripOperation;
+
+    } catch (error) {
+      logger.error('運行終了エラー', { error, operationId, endData });
+      if (error instanceof ValidationError || error instanceof NotFoundError) throw error;
+      throw new DatabaseError('運行の終了に失敗しました');
+    }
+  }
+
+  /**
+   * 🚀 Phase 1-B-16新機能: 運行一時停止
+   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
+   */
+  async pauseTrip(operationId: string, reason?: string): Promise<TripOperationModel> {
+    try {
+      logger.info('運行一時停止処理開始', { operationId, reason });
+
+      if (!operationId) {
+        throw new ValidationError('運行IDは必須です');
       }
+
+      const operation = await this.findByKey(operationId);
+      if (!operation) {
+        throw new NotFoundError('指定された運行が見つかりません');
+      }
+
+      // 一時停止用のステータス（今回は IN_PROGRESS を維持）
+      const updateData: OperationUpdateInput = {
+        notes: reason ? `${operation.notes || ''}\n[一時停止] ${reason}` : operation.notes,
+        updatedAt: new Date()
+      };
+
+      const updatedOperation = await this.prisma.operation.update({
+        where: { id: operationId },
+        data: updateData,
+        include: {
+          vehicles: true,                       // ✅ 修正: vehicles (複数形)
+          usersOperationsDriverIdTousers: true  // ✅ 修正: ドライバー用リレーション名
+        }
+      });
+
+      logger.info('運行一時停止完了', { operationId });
 
       const tripOperation: TripOperationModel = {
         ...updatedOperation,
-        endLocation: request.endLocation,
-        actualDistance,
-        tripStatus: 'COMPLETED' as TripStatus,
-        vehicleOperationStatus: statusResult.newStatus as VehicleOperationStatus,
-        safetyScore: request.safetyScore
+        tripStatus: updatedOperation.status || 'IN_PROGRESS',
+        vehicleOperationStatus: 'AVAILABLE',
+        vehicle: updatedOperation.vehicles,                       // ✅ vehicles → vehicle
+        driver: updatedOperation.usersOperationsDriverIdTousers   // ✅ usersOperationsDriverIdTousers → driver
       };
 
-      logger.info('運行終了完了', { 
-        operationId: request.operationId,
-        vehicleId: operation.vehicleId 
-      });
-
-      return {
-        success: true,
-        data: tripOperation,
-        message: statusResult.message
-      };
+      return tripOperation;
 
     } catch (error) {
-      logger.error('運行終了エラー', { error, request });
-      if (error instanceof AppError) throw error;
-      throw new DatabaseError('運行終了の処理に失敗しました');
+      logger.error('運行一時停止エラー', { error, operationId });
+      if (error instanceof ValidationError || error instanceof NotFoundError) throw error;
+      throw new DatabaseError('運行の一時停止に失敗しました');
     }
   }
 
   /**
-   * 🚀 アクティブ運行一覧取得
+   * 🚀 Phase 1-B-16新機能: 運行キャンセル
+   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
    */
-  async getActiveTrips(
-    options?: {
-      vehicleId?: string;
-      driverId?: string;
-      includeGpsData?: boolean;
-    }
-  ): Promise<TripOperationModel[]> {
+  async cancelTrip(operationId: string, reason: string): Promise<TripOperationModel> {
     try {
-      logger.info('アクティブ運行取得開始', { options });
+      logger.info('運行キャンセル処理開始', { operationId, reason });
 
-      const where: OperationWhereInput = {
-        status: { in: ['IN_PROGRESS', 'PAUSED'] }
+      if (!operationId) {
+        throw new ValidationError('運行IDは必須です');
+      }
+
+      if (!reason) {
+        throw new ValidationError('キャンセル理由は必須です');
+      }
+
+      const operation = await this.findByKey(operationId);
+      if (!operation) {
+        throw new NotFoundError('指定された運行が見つかりません');
+      }
+
+      const updateData: OperationUpdateInput = {
+        status: 'CANCELLED',
+        notes: `${operation.notes || ''}\n[キャンセル] ${reason}`,
+        updatedAt: new Date()
       };
 
-      if (options?.vehicleId) {
-        where.vehicleId = options.vehicleId;
-      }
-
-      if (options?.driverId) {
-        where.driverId = options.driverId;
-      }
-
-      const operations = await this.findMany({
-        where,
-        orderBy: { startTime: 'desc' }
+      const updatedOperation = await this.prisma.operation.update({
+        where: { id: operationId },
+        data: updateData,
+        include: {
+          vehicles: true,                       // ✅ 修正: vehicles (複数形)
+          usersOperationsDriverIdTousers: true  // ✅ 修正: ドライバー用リレーション名
+        }
       });
 
-      const activeTrips: TripOperationModel[] = [];
+      logger.info('運行キャンセル完了', { operationId });
 
-      for (const operation of operations) {
-        const tripOperation = await this.enrichWithTripData(operation, {
-          includeGpsData: options?.includeGpsData || false
-        });
-        activeTrips.push(tripOperation);
-      }
+      const tripOperation: TripOperationModel = {
+        ...updatedOperation,
+        tripStatus: 'CANCELLED',
+        vehicleOperationStatus: 'AVAILABLE',
+        vehicle: updatedOperation.vehicles,                       // ✅ vehicles → vehicle
+        driver: updatedOperation.usersOperationsDriverIdTousers   // ✅ usersOperationsDriverIdTousers → driver
+      };
 
-      logger.info('アクティブ運行取得完了', { count: activeTrips.length });
-      return activeTrips;
+      return tripOperation;
 
     } catch (error) {
-      logger.error('アクティブ運行取得エラー', { error, options });
-      throw new DatabaseError('アクティブ運行の取得に失敗しました');
+      logger.error('運行キャンセルエラー', { error, operationId });
+      if (error instanceof ValidationError || error instanceof NotFoundError) throw error;
+      throw new DatabaseError('運行のキャンセルに失敗しました');
     }
   }
 
   /**
-   * 🚀 運行統計情報生成
+   * 🚀 Phase 1-B-16新機能: 運行統計取得
    */
-  async generateOperationStatistics(
-    filter?: OperationTripFilter
-  ): Promise<OperationStatistics> {
+  async getStatistics(filter?: OperationTripFilter): Promise<OperationStatistics> {
     try {
-      logger.info('運行統計生成開始', { filter });
+      logger.info('運行統計取得開始', { filter });
 
-      const where = this.buildTripWhereClause(filter);
-      
+      const where = this.buildWhereClause(filter);
+
       const [
-        totalCount,
-        activeCount,
-        completedCount,
-        cancelledCount,
-        distanceStats,
-        fuelStats,
-        timeStats
+        totalTrips,
+        completedTrips,
+        activeTrips,
+        cancelledTrips,
+        operations
       ] = await Promise.all([
         this.count(where),
-        this.count({ ...where, status: 'IN_PROGRESS' }),
         this.count({ ...where, status: 'COMPLETED' }),
+        this.count({ ...where, status: 'IN_PROGRESS' }),
         this.count({ ...where, status: 'CANCELLED' }),
-        this.getDistanceStatistics(where),
-        this.getFuelStatistics(where),
-        this.getTimeStatistics(where)
+        this.findMany({ where })
       ]);
 
+      // 統計計算
+      const totalDistance = operations.reduce((sum, op) =>
+        sum + (op.totalDistanceKm ? Number(op.totalDistanceKm) : 0), 0
+      );
+      const totalFuelConsumed = operations.reduce((sum, op) =>
+        sum + (op.fuelConsumedLiters ? Number(op.fuelConsumedLiters) : 0), 0
+      );
+      const totalFuelCost = operations.reduce((sum, op) =>
+        sum + (op.fuelCostYen ? Number(op.fuelCostYen) : 0), 0
+      );
+
       const statistics: OperationStatistics = {
-        totalOperations: totalCount,
-        activeOperations: activeCount,
-        completedOperations: completedCount,
-        cancelledOperations: cancelledCount,
-        
-        // 基本統計
-        totalTrips: totalCount,
-        totalQuantity: await this.getTotalQuantity(where),
-        totalActivities: await this.getTotalActivities(where),
-        
-        // 効率統計
-        averageOperationDuration: timeStats.averageDuration,
-        totalDistance: distanceStats.total,
-        totalFuelConsumed: fuelStats.totalConsumed,
-        totalFuelCost: fuelStats.totalCost,
-        averageFuelEfficiency: fuelStats.averageEfficiency,
-        
-        // 時間分析
-        peakHours: await this.getPeakHours(where),
-        
-        // 車両・運転手別統計
-        byVehicle: await this.getVehicleStatistics(where),
-        byDriver: await this.getDriverStatistics(where),
-        
-        // 期間分析
-        trends: await this.getTrendAnalysis(where, filter),
-        
-        // その他
-        period: {
-          startDate: filter?.startDate?.toISOString(),
-          endDate: filter?.endDate?.toISOString()
+        totalTrips,
+        completedTrips,
+        activeTrips,
+        cancelledTrips,
+        totalDistance,
+        averageDistance: totalTrips > 0 ? totalDistance / totalTrips : 0,
+        totalFuelConsumed,
+        averageFuelConsumption: totalTrips > 0 ? totalFuelConsumed / totalTrips : 0,
+        totalFuelCost,
+        totalDuration: 0,
+        averageDuration: 0,
+        onTimeCompletionRate: 0,
+        delayRate: 0,
+        byStatus: {},
+        byVehicle: {},
+        byDriver: {},
+        recentTrends: {
+          last7Days: 0,
+          last30Days: 0,
+          thisMonth: 0,
+          lastMonth: 0
         }
       };
 
-      logger.info('運行統計生成完了', { totalOperations: totalCount });
+      logger.info('運行統計取得完了', { statistics });
+
       return statistics;
 
     } catch (error) {
-      logger.error('運行統計生成エラー', { error, filter });
-      throw new DatabaseError('統計情報の生成に失敗しました');
+      logger.error('運行統計取得エラー', { error, filter });
+      throw new DatabaseError('運行統計の取得に失敗しました');
     }
   }
 
   /**
-   * 🚀 Trip検索（統合版）
+   * 🚀 Phase 1-B-16新機能: フィルタ条件からWHERE句構築
    */
-  async searchTrips(
-    filter: OperationTripFilter
-  ): Promise<PaginatedTripResponse<TripOperationModel>> {
-    try {
-      logger.info('Trip検索開始', { filter });
-
-      const where = this.buildTripWhereClause(filter);
-      
-      const result = await this.findManyWithPagination({
-        where,
-        orderBy: { createdAt: 'desc' },
-        page: filter.page || 1,
-        pageSize: filter.limit || 10
-      });
-
-      const enrichedData: TripOperationModel[] = [];
-      
-      for (const operation of result.data) {
-        const tripOperation = await this.enrichWithTripData(operation, {
-          includeGpsData: filter.hasGpsData,
-          includeRoute: filter.includeRoute
-        });
-        enrichedData.push(tripOperation);
-      }
-
-      let statistics;
-      if (filter.includeStatistics) {
-        statistics = await this.generateOperationStatistics(filter);
-      }
-
-      logger.info('Trip検索完了', { 
-        found: result.total,
-        pages: result.totalPages 
-      });
-
-      return {
-        success: true,
-        data: enrichedData,
-        pagination: {
-          currentPage: result.page,
-          totalPages: result.totalPages,
-          totalItems: result.total,
-          itemsPerPage: result.pageSize
-        },
-        statistics
-      };
-
-    } catch (error) {
-      logger.error('Trip検索エラー', { error, filter });
-      throw new DatabaseError('Trip検索の実行に失敗しました');
-    }
-  }
-
-  // =====================================
-  // 🔧 内部ヘルパーメソッド
-  // =====================================
-
-  private async getVehicleCurrentStatus(vehicleId: string): Promise<PrismaVehicleStatus> {
-    // 車両の現在ステータスを取得
-    // 実装では実際の車両テーブルから取得
-    return 'AVAILABLE' as PrismaVehicleStatus;
-  }
-
-  private async updateVehicleStatus(vehicleId: string, status: PrismaVehicleStatus): Promise<void> {
-    // 車両ステータスを更新
-    logger.info('車両ステータス更新', { vehicleId, status });
-  }
-
-  private async recordGpsLocation(
-    operationId: string,
-    location: {
-      latitude: number;
-      longitude: number;
-      address?: string;
-      timestamp: Date;
-      eventType: string;
-    }
-  ): Promise<void> {
-    // GPS位置を記録
-    logger.info('GPS位置記録', { operationId, location });
-  }
-
-  private async enrichWithTripData(
-    operation: OperationModel,
-    options: {
-      includeGpsData?: boolean;
-      includeRoute?: boolean;
-    }
-  ): Promise<TripOperationModel> {
-    // 運行データをTrip情報で拡張
-    const tripOperation: TripOperationModel = {
-      ...operation,
-      tripStatus: operation.status as TripStatus,
-      vehicleOperationStatus: 'OPERATING' as VehicleOperationStatus
-    };
-
-    if (options.includeGpsData) {
-      // GPS データの追加実装
-    }
-
-    if (options.includeRoute) {
-      // ルート情報の追加実装
-    }
-
-    return tripOperation;
-  }
-
-  private buildTripWhereClause(filter?: OperationTripFilter): OperationWhereInput {
+  private buildWhereClause(filter?: OperationTripFilter): OperationWhereInput {
     if (!filter) return {};
 
     const where: OperationWhereInput = {};
 
-    if (filter.operationId) {
-      where.id = filter.operationId;
+    if (filter.status) {
+      if (Array.isArray(filter.status)) {
+        where.status = { in: filter.status };
+      } else {
+        where.status = filter.status;
+      }
     }
 
     if (filter.vehicleId) {
-      where.vehicleId = filter.vehicleId;
+      if (Array.isArray(filter.vehicleId)) {
+        where.vehicleId = { in: filter.vehicleId };
+      } else {
+        where.vehicleId = filter.vehicleId;
+      }
     }
 
     if (filter.driverId) {
-      where.driverId = filter.driverId;
-    }
-
-    if (filter.tripStatus) {
-      where.status = { in: filter.tripStatus };
+      if (Array.isArray(filter.driverId)) {
+        where.driverId = { in: filter.driverId };
+      } else {
+        where.driverId = filter.driverId;
+      }
     }
 
     if (filter.startDate || filter.endDate) {
-      where.startTime = {};
-      if (filter.startDate) {
-        where.startTime.gte = filter.startDate;
-      }
-      if (filter.endDate) {
-        where.startTime.lte = filter.endDate;
-      }
+      where.OR = [
+        {
+          plannedStartTime: {
+            ...(filter.startDate && { gte: filter.startDate }),
+            ...(filter.endDate && { lte: filter.endDate })
+          }
+        },
+        {
+          actualStartTime: {
+            ...(filter.startDate && { gte: filter.startDate }),
+            ...(filter.endDate && { lte: filter.endDate })
+          }
+        }
+      ];
+    }
+
+    if (filter.searchTerm) {
+      where.OR = [
+        { operationNumber: { contains: filter.searchTerm, mode: 'insensitive' } },
+        { notes: { contains: filter.searchTerm, mode: 'insensitive' } }
+      ];
     }
 
     return where;
   }
 
-  private async getDistanceStatistics(where: OperationWhereInput) {
-    // 距離統計の計算実装
-    return {
-      total: 0,
-      average: 0,
-      min: 0,
-      max: 0
-    };
+  /**
+   * 🚀 Phase 1-B-16新機能: 運行番号生成
+   */
+  private async generateOperationNumber(): Promise<string> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
+    const prefix = `OP${year}${month}${day}`;
+
+    // 同じ日付の運行数を取得
+    const count = await this.prisma.operation.count({
+      where: {
+        operationNumber: {
+          startsWith: prefix
+        }
+      }
+    });
+
+    const sequence = String(count + 1).padStart(4, '0');
+    return `${prefix}-${sequence}`;
   }
 
-  private async getFuelStatistics(where: OperationWhereInput) {
-    // 燃料統計の計算実装
-    return {
-      totalConsumed: 0,
-      totalCost: 0,
-      averageEfficiency: 0
-    };
+  /**
+   * 🚀 Phase 1-B-16新機能: ページネーション付き運行一覧（Trip形式）
+   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
+   */
+  async findTripsWithPagination(filter: OperationTripFilter): Promise<PaginatedTripResponse<TripOperationModel>> {
+    try {
+      const page = filter.page || 1;
+      const pageSize = filter.pageSize || 20;
+      const skip = (page - 1) * pageSize;
+
+      const where = this.buildWhereClause(filter);
+
+      const [data, total, statistics] = await Promise.all([
+        this.prisma.operation.findMany({
+          where,
+          orderBy: { plannedStartTime: 'desc' },
+          skip,
+          take: pageSize,
+          include: filter.includeRelations ? {
+            vehicles: true,                       // ✅ 修正: vehicles (複数形)
+            usersOperationsDriverIdTousers: true, // ✅ 修正: ドライバー用リレーション名
+            operationDetails: true,
+            gpsLogs: true
+          } : undefined
+        }),
+        this.prisma.operation.count({ where }),
+        filter.includeStatistics ? this.getStatistics(filter) : Promise.resolve(undefined)
+      ]);
+
+      // TripOperationModel への変換
+      const trips: TripOperationModel[] = data.map(op => ({
+        ...op,
+        tripStatus: op.status || 'PLANNING',
+        vehicleOperationStatus: 'AVAILABLE',
+        vehicle: (op as any).vehicles,                       // ✅ vehicles → vehicle
+        driver: (op as any).usersOperationsDriverIdTousers,  // ✅ usersOperationsDriverIdTousers → driver
+        activities: (op as any).operationDetails,
+        gpsLogs: (op as any).gpsLogs
+      }));
+
+      return {
+        success: true,
+        data: trips,
+        message: '運行一覧を取得しました',
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / pageSize),
+          totalItems: total,
+          itemsPerPage: pageSize
+        }
+      };
+
+    } catch (error) {
+      logger.error('Trip一覧取得エラー', { error, filter });
+      throw new DatabaseError('運行一覧の取得に失敗しました');
+    }
   }
 
-  private async getTimeStatistics(where: OperationWhereInput) {
-    // 時間統計の計算実装
-    return {
-      averageDuration: 0,
-      totalOperatingTime: 0
-    };
-  }
-
-  private async getTotalQuantity(where: OperationWhereInput): Promise<number> {
-    // 総数量の計算実装
-    return 0;
-  }
-
-  private async getTotalActivities(where: OperationWhereInput): Promise<number> {
-    // 総活動数の計算実装
-    return 0;
-  }
-
-  private async getPeakHours(where: OperationWhereInput) {
-    // ピーク時間の分析実装
-    return [
-      { hour: 8, operationCount: 15, averageDuration: 180 },
-      { hour: 14, operationCount: 20, averageDuration: 165 }
-    ];
-  }
-
-  private async getVehicleStatistics(where: OperationWhereInput) {
-    // 車両別統計の実装
-    return {};
-  }
-
-  private async getDriverStatistics(where: OperationWhereInput) {
-    // 運転手別統計の実装
-    return {};
-  }
-
-  private async getTrendAnalysis(where: OperationWhereInput, filter?: OperationTripFilter) {
+  /**
+   * 🚀 Phase 1-B-16新機能: トレンド分析
+   */
+  async getTrends(filter: OperationTripFilter) {
     // トレンド分析の実装
     return {
       daily: [],

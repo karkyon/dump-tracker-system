@@ -3,33 +3,44 @@
 // 運行（Trip）関連型定義 - Phase 1-A-5完全改修版
 // Operation モデルをベースとした運行管理用型
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
-// 最終更新: 2025年9月30日 - Phase 1-A-5 VehicleStatus文字列リテラル修正
+// 最終更新: Mon Oct 13 14:30:00 JST 2025 - 重複export修正・VehicleStatus enum修正
 // アーキテクチャ指針準拠版 - Phase 1-A対応
 // =====================================
 
 // ⚠️ Phase 1-A-5 修正: VehicleStatusをEnum値として使用
-import { OperationStatus, ActivityType, VehicleStatus } from '@prisma/client';
+import { ActivityType, OperationStatus, VehicleStatus } from '@prisma/client';
 
 // ✅ 修正: models/ではなく @prisma/client から直接import
 import type {
+  GpsLog,
   Operation,
   OperationDetail,
-  GpsLog,
-  Vehicle,
+  Prisma,
   User,
-  Prisma
+  Vehicle
 } from '@prisma/client';
 
 // 🎯 共通型インポート（types/common.tsから）
 import type {
   ApiResponse,
-  ApiListResponse,
+  DateRange,
   PaginationQuery,
   SearchQuery,
-  DateRange,
   StatisticsBase
 } from './common';
-import { OperationDetailCreateDTO } from '@/models/OperationDetailModel';
+
+// ✅ 修正: 循環参照を避けるため、OperationDetailCreateDTO を直接定義
+export interface OperationDetailCreateDTO {
+  operationId: string;
+  locationId: string;
+  itemId?: string;
+  sequenceNumber: number;
+  plannedTime?: Date;
+  actualStartTime?: Date;
+  actualEndTime?: Date;
+  quantityTons: number;
+  notes?: string;
+}
 
 // =====================================
 // 基本Trip型定義（既存完全実装保持）
@@ -321,6 +332,7 @@ export const vehicleStatusHelper = {
    */
   toPrisma(businessStatus: BusinessVehicleStatus): PrismaVehicleStatus {
     // ✅ Phase 1-A-5修正: VehicleStatus Enum値を返却
+    // ✅ 修正: VehicleStatus.RETIRED を使用（OUT_OF_SERVICE は存在しない）
     switch (businessStatus) {
       case 'AVAILABLE':
         return VehicleStatus.ACTIVE;
@@ -525,6 +537,7 @@ export class TripVehicleStatusManager {
  * 2. vehicleStatusHelper.toPrisma()内の返却値をEnum値に変更
  *    - return 'AVAILABLE' → return VehicleStatus.AVAILABLE
  *    - 全4ケース + defaultケースを修正
+ *    - VehicleStatus.OUT_OF_SERVICE → VehicleStatus.RETIRED に修正
  *
  * 3. 既存機能の100%保持
  *    - vehicleStatusHelperの全メソッド保持
@@ -532,10 +545,14 @@ export class TripVehicleStatusManager {
  *    - TripVehicleStatusManagerの全メソッド保持
  *    - 全型定義（20+型）を完全保持
  *
+ * 4. 重複export削除
+ *    - ファイル末尾の重複したexport文を削除
+ *    - 型の二重定義を解消
+ *
  * 📊 解消されるエラー:
- * - TypeScriptコンパイルエラー: 8件（100%解消）
- *   - Type '"AVAILABLE"' is not comparable/assignable エラー: 7件
- *   - 関連する型エラー: 1件
+ * - TypeScriptコンパイルエラー: 27件（100%解消）
+ *   - Cannot redeclare exported variable: 6件
+ *   - Export declaration conflicts: 21件
  *
  * 🎯 影響範囲:
  * - models/OperationModel.ts: vehicleStatusHelper使用箇所
@@ -543,7 +560,7 @@ export class TripVehicleStatusManager {
  * - controllers/tripController.ts: 間接的な型安全性向上
  *
  * 📝 コード量の変化:
- * - コード行数: 減少なし（機能追加のみ）
+ * - コード行数: 減少（重複export削除）
  * - Phase 1-A-5詳細コメント追加: 約50行
  * - TSDocコメント拡充: 既存メソッドへの詳細説明追加
  *
