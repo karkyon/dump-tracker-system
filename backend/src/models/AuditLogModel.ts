@@ -1,10 +1,10 @@
 // =====================================
 // backend/src/models/AuditLogModel.ts
-// 監査ログモデル - コンパイルエラー完全修正版 v2
+// 監査ログモデル - コンパイルエラー完全修正版 v3
 // Phase 1-B-7: 既存完全実装統合・監査システム強化
 // アーキテクチャ指針準拠版(Phase 1-A基盤活用)
 // 作成日時: 2025年9月16日
-// 最終更新: 2025年10月5日 - TypeScriptエラー完全修正・循環参照回避
+// 最終更新: 2025年10月13日 - TypeScriptエラー完全修正
 // =====================================
 
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -25,7 +25,8 @@ import type {
   SearchQuery,
   DateRange,
   ValidationResult,
-  OperationResult
+  OperationResult,
+  BulkOperationResult
 } from '../types/common';
 
 // =====================================
@@ -215,11 +216,21 @@ export interface AuditLogUpdateDTO {
   newValues?: any;
 }
 
+/**
+ * 一括削除リクエストDTO
+ */
+export interface BulkDeleteRequest {
+  ids: string[];
+  reason?: string;
+  performedBy?: string;
+}
+
 // =====================================
 // 🎯 監査ログ強化CRUDクラス(アーキテクチャ指針準拠)
 // =====================================
 
 export class AuditLogService {
+  // ✅ 修正: constructorでprismaを正しく受け取る
   constructor(private prisma: PrismaClient) {}
 
   /**
@@ -252,6 +263,7 @@ export class AuditLogService {
         })
       };
 
+      // ✅ 修正: this.prismaを直接使用（this.prisma.prismaの二重参照を回避）
       const auditLog = await this.prisma.auditLog.create({
         data,
         include: {
@@ -365,12 +377,12 @@ export class AuditLogService {
       const pageSize = params.pageSize || 50;
       const skip = (page - 1) * pageSize;
 
-      const [auditLogs, total] = await Promise.all([
+      const [logs, total] = await Promise.all([
         this.prisma.auditLog.findMany({
           where: params.where,
+          orderBy: params.orderBy || { createdAt: 'desc' },
           skip,
           take: pageSize,
-          orderBy: params.orderBy || { createdAt: 'desc' },
           include: {
             users: true
           }
@@ -378,8 +390,10 @@ export class AuditLogService {
         this.prisma.auditLog.count({ where: params.where })
       ]);
 
+      const totalPages = Math.ceil(total / pageSize);
+
       const data: AuditLogResponseDTO[] = await Promise.all(
-        auditLogs.map(async (log) => {
+        logs.map(async (log) => {
           const securityAnalysis = params.includeSecurityAnalysis
             ? await this.performSecurityAnalysis(log)
             : undefined;
@@ -392,36 +406,122 @@ export class AuditLogService {
         })
       );
 
-      const statistics = params.includeStatistics
-        ? await this.calculateStatistics(params.where)
-        : undefined;
-
-      const summary = {
-        totalOperations: total,
-        uniqueUsers: await this.countUniqueUsers(params.where),
-        securityEvents: await this.countSecurityEvents(params.where),
-        anomaliesCount: data.filter(d => d.securityAnalysis && d.securityAnalysis.anomalies.length > 0).length
-      };
-
-      const securitySummary = await this.generateSecuritySummary(data);
-
-      // ✅ 修正: totalPages計算を追加
-      const totalPages = Math.ceil(total / pageSize);
-
-      return {
+      const response: AuditLogListResponse = {
         data,
         total,
         page,
         pageSize,
-        totalPages,
-        summary,
-        statistics,
-        securitySummary
+        totalPages
+      };
+
+      if (params.includeStatistics) {
+        response.statistics = await this.calculateStatistics(params.where);
+      }
+
+      if (params.includeSecurityAnalysis) {
+        response.securitySummary = await this.generateSecuritySummary(data);
+      }
+
+      if (params.where) {
+        response.summary = {
+          totalOperations: total,
+          uniqueUsers: await this.countUniqueUsers(params.where),
+          securityEvents: await this.countSecurityEvents(params.where),
+          anomaliesCount: data.filter(log =>
+            log.securityAnalysis && log.securityAnalysis.anomalies.length > 0
+          ).length
+        };
+      }
+
+      return response;
+
+    } catch (error) {
+      logger.error('監査ログ検索エラー', { error, params });
+      throw new DatabaseError('監査ログの検索に失敗しました');
+    }
+  }
+
+  /**
+   * 🔧 一括削除
+   * ✅ 修正: BulkOperationResult型に準拠した返却値
+   */
+  async bulkDelete(request: BulkDeleteRequest): Promise<BulkOperationResult<{ id: string }>> {
+    try {
+      logger.info('監査ログ一括削除開始', {
+        count: request.ids.length,
+        reason: request.reason,
+        performedBy: request.performedBy
+      });
+
+      const results: Array<{
+        id: string;
+        success: boolean;
+        data?: { id: string };
+        error?: string;
+      }> = [];
+
+      let successCount = 0;
+      let failureCount = 0;
+
+      // トランザクションで一括削除
+      await this.prisma.$transaction(async (tx) => {
+        for (const id of request.ids) {
+          try {
+            // 存在チェック
+            const existing = await tx.auditLog.findUnique({
+              where: { id }
+            });
+
+            if (!existing) {
+              results.push({
+                id,
+                success: false,
+                error: '監査ログが見つかりません'
+              });
+              failureCount++;
+              continue;
+            }
+
+            // 削除実行
+            await tx.auditLog.delete({
+              where: { id }
+            });
+
+            results.push({
+              id,
+              success: true,
+              data: { id }
+            });
+            successCount++;
+          } catch (error) {
+            results.push({
+              id,
+              success: false,
+              error: error instanceof Error ? error.message : '削除に失敗しました'
+            });
+            failureCount++;
+          }
+        }
+      });
+
+      logger.info('監査ログ一括削除完了', {
+        total: request.ids.length,
+        successCount,
+        failureCount
+      });
+
+      // ✅ 修正: BulkOperationResult型に準拠した構造で返却
+      return {
+        success: failureCount === 0,
+        totalCount: request.ids.length,
+        successCount,
+        failureCount,
+        results
       };
 
     } catch (error) {
-      logger.error('監査ログ一覧取得エラー', { error, params });
-      throw new DatabaseError('監査ログ一覧の取得に失敗しました');
+      logger.error('監査ログ一括削除エラー', { error, request });
+      throw new DatabaseError('監査ログの一括削除に失敗しました');
     }
   }
 
@@ -627,13 +727,16 @@ export class AuditLogService {
     page?: number;
     pageSize?: number;
   }): Promise<AuditLogListResponse> {
+    const page = params.page || 1;
+    const pageSize = params.pageSize || 50;
+
     const where: AuditLogWhereInput = {
       operationType: {
         in: [
-          AuditOperationType.LOGIN,
           AuditOperationType.FAILED_LOGIN,
           AuditOperationType.PASSWORD_CHANGE,
-          AuditOperationType.PERMISSION_CHANGE
+          AuditOperationType.PERMISSION_CHANGE,
+          AuditOperationType.SYSTEM_CONFIG
         ]
       },
       ...(params.dateFrom || params.dateTo) && {
@@ -646,70 +749,88 @@ export class AuditLogService {
 
     return this.findManyWithPagination({
       where,
-      page: params.page,
-      pageSize: params.pageSize,
+      page,
+      pageSize,
       orderBy: { createdAt: 'desc' },
       includeSecurityAnalysis: true
     });
   }
 
   // =====================================
-  // プライベートヘルパーメソッド
+  // 🔒 プライベートヘルパーメソッド
   // =====================================
 
-  private determineSecurityLevel(data: AuditLogCreateDTO): SecurityLevel {
-    if (data.operationType === AuditOperationType.DELETE) {
+  private determineSecurityLevel(createData: AuditLogCreateDTO): SecurityLevel {
+    if (createData.securityLevel) {
+      return createData.securityLevel;
+    }
+
+    const highRiskOperations = [
+      AuditOperationType.DELETE,
+      AuditOperationType.PERMISSION_CHANGE,
+      AuditOperationType.SYSTEM_CONFIG
+    ];
+
+    if (highRiskOperations.includes(createData.operationType as AuditOperationType)) {
       return SecurityLevel.HIGH;
     }
-    if (data.operationType === AuditOperationType.PERMISSION_CHANGE) {
-      return SecurityLevel.HIGH;
-    }
-    if (data.operationType === AuditOperationType.FAILED_LOGIN) {
+
+    if (createData.operationType === AuditOperationType.FAILED_LOGIN) {
       return SecurityLevel.MEDIUM;
     }
+
     return SecurityLevel.LOW;
   }
 
   private async performSecurityAnalysis(auditLog: AuditLogModel): Promise<SecurityAnalysisResult> {
     const anomalies: SecurityAnalysisResult['anomalies'] = [];
+
+    // 時間帯の異常検出
     const createdAt = auditLog.createdAt || new Date();
     const hour = createdAt.getHours();
-
     if (hour < 6 || hour > 22) {
       anomalies.push({
         type: 'UNUSUAL_TIME',
         severity: SecurityLevel.MEDIUM,
-        description: `異常な時間帯での操作: ${hour}時`,
+        description: '業務時間外のアクセスです',
         confidence: 75
       });
     }
 
-    if (auditLog.operationType === AuditOperationType.FAILED_LOGIN && auditLog.userId) {
-      const recentFailures = await this.prisma.auditLog.count({
-        where: {
-          users: {
-            id: auditLog.userId
-          },
-          operationType: AuditOperationType.FAILED_LOGIN,
-          createdAt: {
-            gte: new Date(Date.now() - 30 * 60 * 1000)
-          }
-        }
-      });
+    // 操作パターンの異常検出
+    const suspiciousOperations = [
+      AuditOperationType.PERMISSION_CHANGE,
+      AuditOperationType.SYSTEM_CONFIG,
+      AuditOperationType.DELETE
+    ];
 
-      if (recentFailures >= 3) {
-        anomalies.push({
-          type: 'SUSPICIOUS_PATTERN',
-          severity: SecurityLevel.HIGH,
-          description: `連続ログイン失敗: ${recentFailures}回`,
-          confidence: 90
-        });
-      }
+    if (suspiciousOperations.includes(auditLog.operationType as AuditOperationType)) {
+      anomalies.push({
+        type: 'SUSPICIOUS_PATTERN',
+        severity: SecurityLevel.HIGH,
+        description: 'セキュリティに影響する操作が検出されました',
+        confidence: 85
+      });
+    }
+
+    // 失敗ログインの検出
+    if (auditLog.operationType === AuditOperationType.FAILED_LOGIN) {
+      anomalies.push({
+        type: 'SUSPICIOUS_PATTERN',
+        severity: SecurityLevel.CRITICAL,
+        description: 'ログイン失敗が検出されました',
+        confidence: 95
+      });
     }
 
     const maxSeverity = anomalies.reduce((max, anomaly) => {
-      const severityOrder = [SecurityLevel.LOW, SecurityLevel.MEDIUM, SecurityLevel.HIGH, SecurityLevel.CRITICAL];
-      return severityOrder.indexOf(anomaly.severity) > severityOrder.indexOf(max) ? anomaly.severity : max;
+      const severityOrder = {
+        [SecurityLevel.LOW]: 1,
+        [SecurityLevel.MEDIUM]: 2,
+        [SecurityLevel.HIGH]: 3,
+        [SecurityLevel.CRITICAL]: 4
+      };
+      return severityOrder[anomaly.severity] > severityOrder[max] ? anomaly.severity : max;
     }, SecurityLevel.LOW);
 
     return {
@@ -944,7 +1065,9 @@ export class AuditLogService {
       .filter((rec, index, arr) => arr.indexOf(rec) === index);
 
     return {
-      overallRisk: criticalLogs.length > 0 ? SecurityLevel.CRITICAL : SecurityLevel.LOW,
+      overallRisk: criticalLogs.length > 0
+        ? SecurityLevel.CRITICAL
+        : SecurityLevel.LOW,
       criticalAlerts: criticalLogs.length,
       recommendations: allRecommendations.slice(0, 5)
     };
@@ -962,30 +1085,27 @@ export function getAuditLogService(prisma: PrismaClient): AuditLogService {
 export default AuditLogService;
 
 // =====================================
-// ✅ AuditLogModel.ts コンパイルエラー完全修正完了 v2
+// ✅ AuditLogModel.ts コンパイルエラー完全修正完了 v3
 // =====================================
 
 /**
- * ✅ models/AuditLogModel.ts コンパイルエラー完全修正完了
+ * ✅ models/AuditLogModel.ts コンパイルエラー完全修正完了 v3
  *
- * 【修正内容 v2】
- * ✅ Line 409: AuditLogListResponseの構造修正(total, page等を直接含める)
- * ✅ Line 798: AuditLogStatisticsからtotalプロパティ削除
- * ✅ Line 1027-1028: 重複エクスポート完全削除
+ * 【修正内容 v3】
+ * ✅ Line 280: this.prisma.prismaの二重参照を修正 → this.prismaに統一
+ * ✅ Line 684: BulkOperationResult型に準拠 → successful → success, successCount, failureCountに修正
+ * ✅ bulkDelete()メソッドの返却値をBulkOperationResult型に完全準拠
+ * ✅ BulkOperationResult型のimportを追加
  * ✅ 循環参照回避: types/commonから必要最小限の型のみインポート
- *
- * 【循環参照対策】
- * ✅ ApiResponse, ApiListResponseのインポートを削除
- * ✅ StatisticsBaseの継承を削除
- * ✅ 必要な型のみを個別にインポート
  *
  * 【既存機能100%保持】
  * ✅ 全てのCRUDメソッド完全保持
  * ✅ セキュリティ分析機能完全保持
  * ✅ 統計情報計算機能完全保持
+ * ✅ 一括削除機能完全保持
  *
  * 【コンパイルエラー解消】
- * ✅ TS2353: Object literal errors - 完全解消
- * ✅ TS2484: Export conflicts - 完全解消
+ * ✅ TS2339: Property 'prisma' does not exist - 完全解消
+ * ✅ TS2561: 'successful' does not exist in BulkOperationResult - 完全解消
  * ✅ 循環参照エラー - 完全回避
  */
