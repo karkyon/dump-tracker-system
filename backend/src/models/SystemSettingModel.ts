@@ -2,11 +2,11 @@
 // backend/src/models/SystemSettingModel.ts
 // システム設定モデル（既存完全実装 + Phase 1-A基盤統合版）
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
-// 最終更新: Sat Sep 27 08:00:00 JST 2025 - Phase 1-B-15統合
+// 最終更新: 2025/10/09 - コンパイルエラー完全修正版
 // アーキテクチャ指針準拠版 - 企業レベルシステム設定管理システム
 // =====================================
 
-import type { 
+import type {
   SystemSetting as PrismaSystemSetting,
   Prisma,
 } from '@prisma/client';
@@ -16,13 +16,13 @@ import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完成基盤の活用
 import { DatabaseService } from '../utils/database';
-import { 
-  AppError, 
-  ValidationError, 
-  AuthorizationError, 
+import {
+  AppError,
+  ValidationError,
+  AuthorizationError,
   NotFoundError,
   ConflictError,
-  DatabaseError 
+  DatabaseError
 } from '../utils/errors';
 import logger from '../utils/logger';
 
@@ -41,7 +41,7 @@ import type {
 
 export type SystemSettingModel = PrismaSystemSetting;
 export type SystemSettingCreateInput = Prisma.SystemSettingCreateInput;
-export type SystemSettingUpdateInput = Prisma.SystemSettingUpdateInput;  
+export type SystemSettingUpdateInput = Prisma.SystemSettingUpdateInput;
 export type SystemSettingWhereInput = Prisma.SystemSettingWhereInput;
 export type SystemSettingWhereUniqueInput = Prisma.SystemSettingWhereUniqueInput;
 export type SystemSettingOrderByInput = Prisma.SystemSettingOrderByWithRelationInput;
@@ -69,7 +69,7 @@ export interface SystemSettingCreateDTO extends Omit<SystemSettingCreateInput, '
 }
 
 export interface SystemSettingUpdateDTO extends Partial<SystemSettingCreateDTO> {
-  // 更新用（部分更新対応）
+  // 更新用（部分更新対応)
 }
 
 // =====================================
@@ -130,12 +130,12 @@ export interface SystemSettingInfo {
   category: SystemSettingCategory;
   dataType: SystemSettingDataType;
   visibility: SystemSettingVisibility;
-  
+
   // 設定値管理
   defaultValue?: any;
   currentValue?: any;
   previousValue?: any;
-  
+
   // バリデーション
   validation?: {
     required: boolean;
@@ -146,7 +146,7 @@ export interface SystemSettingInfo {
     min?: number;
     max?: number;
   };
-  
+
   // 表示制御
   display?: {
     label: string;
@@ -156,7 +156,7 @@ export interface SystemSettingInfo {
     order?: number;
     icon?: string;
   };
-  
+
   // 変更管理
   changeHistory?: {
     changedAt: Date;
@@ -165,7 +165,7 @@ export interface SystemSettingInfo {
     newValue: any;
     reason?: string;
   }[];
-  
+
   // 特殊設定
   readonly?: boolean;
   encrypted?: boolean;
@@ -183,7 +183,7 @@ export interface SystemSettingGroup {
   icon?: string;
   order: number;
   settings: SystemSettingModel[];
-  
+
   // グループ統計
   statistics?: {
     totalSettings: number;
@@ -205,15 +205,15 @@ export interface SystemSettingStatistics {
   settingsByDataType: {
     [key in SystemSettingDataType]: number;
   };
-  
+
   // 変更統計
-  recentChanges: {
+  recentChanges: Array<{
     settingKey: string;
     category: SystemSettingCategory;
     changedAt: Date;
     changedBy: string;
-  }[];
-  
+  }>;
+
   // システム状態
   systemHealth: {
     configurationComplete: boolean;
@@ -221,7 +221,7 @@ export interface SystemSettingStatistics {
     deprecatedSettings: string[];
     conflictingSettings: string[];
   };
-  
+
   // 使用状況
   usageMetrics: {
     mostAccessedSettings: string[];
@@ -277,7 +277,7 @@ export class SystemSettingService {
   private readonly prisma: PrismaClient;
 
   constructor(prisma?: PrismaClient) {
-    this.prisma = prisma || DatabaseService.getInstance().prisma;
+    this.prisma = prisma || DatabaseService.getInstance();
   }
 
   /**
@@ -285,9 +285,8 @@ export class SystemSettingService {
    */
   async create(data: SystemSettingCreateInput): Promise<SystemSettingModel> {
     try {
-      logger.info('システム設定作成開始', { 
-        key: data.key,
-        category: (data as any).category 
+      logger.info('システム設定作成開始', {
+        key: data.key
       });
 
       // 🎯 Phase 1-A基盤: バリデーション強化
@@ -305,9 +304,9 @@ export class SystemSettingService {
         data
       });
 
-      logger.info('システム設定作成完了', { 
+      logger.info('システム設定作成完了', {
         key: systemSetting.key,
-        value: systemSetting.value 
+        value: systemSetting.value
       });
 
       return systemSetting;
@@ -373,7 +372,7 @@ export class SystemSettingService {
   }): Promise<SystemSettingListResponse> {
     try {
       const { page, pageSize, where, orderBy } = params;
-      
+
       // 🎯 Phase 1-A基盤: バリデーション強化
       if (page < 1 || pageSize < 1) {
         throw new ValidationError('ページ番号とページサイズは1以上である必要があります');
@@ -399,22 +398,22 @@ export class SystemSettingService {
         totalPages: Math.ceil(total / pageSize)
       };
 
-      logger.debug('システム設定ページネーション取得完了', { 
+      logger.debug('システム設定ページネーション取得完了', {
         page,
         pageSize,
         total,
-        totalPages: result.totalPages 
+        totalPages: result.totalPages
       });
 
       return result;
 
     } catch (error) {
       logger.error('システム設定ページネーション取得エラー', { error, params });
-      
+
       if (error instanceof ValidationError) {
         throw error;
       }
-      
+
       throw new DatabaseError('システム設定ページネーション取得に失敗しました');
     }
   }
@@ -434,10 +433,10 @@ export class SystemSettingService {
         throw new NotFoundError('指定されたシステム設定が見つかりません');
       }
 
-      logger.info('システム設定更新開始', { 
+      logger.info('システム設定更新開始', {
         key,
         oldValue: existing.value,
-        newValue: data.value 
+        newValue: data.value
       });
 
       const updated = await this.prisma.systemSetting.update({
@@ -450,11 +449,11 @@ export class SystemSettingService {
 
     } catch (error) {
       logger.error('システム設定更新エラー', { error, key, data });
-      
+
       if (error instanceof ValidationError || error instanceof NotFoundError) {
         throw error;
       }
-      
+
       throw new DatabaseError('システム設定の更新に失敗しました');
     }
   }
@@ -485,11 +484,11 @@ export class SystemSettingService {
 
     } catch (error) {
       logger.error('システム設定削除エラー', { error, key });
-      
+
       if (error instanceof ValidationError || error instanceof NotFoundError) {
         throw error;
       }
-      
+
       throw new DatabaseError('システム設定の削除に失敗しました');
     }
   }
@@ -534,7 +533,7 @@ export class SystemSettingService {
   /**
    * 🚀 設定値取得（型安全）
    */
-  async getSettingValue<T = any>(
+  async getSettingValue<T = string>(
     key: string,
     defaultValue?: T,
     dataType?: SystemSettingDataType
@@ -543,7 +542,7 @@ export class SystemSettingService {
       logger.debug('設定値取得開始', { key, dataType });
 
       const setting = await this.findByKey(key);
-      if (!setting) {
+      if (!setting || setting.value === null) {
         if (defaultValue !== undefined) {
           logger.info('設定値未設定、デフォルト値を使用', { key, defaultValue });
           return defaultValue;
@@ -551,7 +550,7 @@ export class SystemSettingService {
         throw new NotFoundError(`設定 '${key}' が見つかりません`);
       }
 
-      let value: T = setting.value;
+      let value: any = setting.value;
 
       // データ型に応じた変換
       if (dataType) {
@@ -559,7 +558,7 @@ export class SystemSettingService {
       }
 
       logger.debug('設定値取得完了', { key, value });
-      return value;
+      return value as T;
 
     } catch (error) {
       logger.error('設定値取得エラー', { error, key });
@@ -602,7 +601,7 @@ export class SystemSettingService {
         });
       }
 
-      const updated = await this.update(key, { value });
+      const updated = await this.update(key, { value: String(value) });
 
       logger.info('設定値更新完了', { key });
 
@@ -620,7 +619,80 @@ export class SystemSettingService {
   }
 
   /**
+   * 🚀 一括設定更新
+   */
+  async bulkUpdate(
+    request: BulkSystemSettingRequest
+  ): Promise<BulkOperationResult<SystemSettingModel>> {
+    try {
+      logger.info('一括設定更新開始', {
+        count: request.changes.length,
+        category: request.category,
+        changedBy: request.changedBy
+      });
+
+      const results: Array<{
+        id: string;
+        success: boolean;
+        data?: SystemSettingModel;
+        error?: string;
+      }> = [];
+
+      for (const change of request.changes) {
+        try {
+          const result = await this.updateSettingValue(
+            change.settingKey,
+            change.newValue,
+            {
+              changedBy: request.changedBy,
+              reason: change.reason || request.reason,
+              trackHistory: true
+            }
+          );
+
+          results.push({
+            id: change.settingKey,
+            success: result.success,
+            data: result.data
+          });
+
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+          logger.warn('設定更新失敗', { key: change.settingKey, error: errorMessage });
+          results.push({
+            id: change.settingKey,
+            success: false,
+            error: errorMessage
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const failureCount = results.filter(r => !r.success).length;
+
+      logger.info('一括設定更新完了', {
+        total: request.changes.length,
+        successCount,
+        failureCount
+      });
+
+      return {
+        success: failureCount === 0,
+        totalCount: request.changes.length,
+        successCount,
+        failureCount,
+        results
+      };
+
+    } catch (error) {
+      logger.error('一括設定更新エラー', { error, request });
+      throw new DatabaseError('一括設定更新の実行に失敗しました');
+    }
+  }
+
+  /**
    * 🚀 カテゴリ別設定グループ取得
+   * Note: categoryはDBフィールドではなく、keyのプレフィックスで判定
    */
   async getSettingsByCategory(
     category: SystemSettingCategory,
@@ -632,14 +704,18 @@ export class SystemSettingService {
     try {
       logger.info('カテゴリ別設定取得開始', { category });
 
-      const where = { category };
-      const orderBy = options?.sortByOrder 
-        ? { displayOrder: 'asc' }
-        : { key: 'asc' };
+      // カテゴリに該当するキーのプレフィックスで検索
+      const categoryPrefix = category.toLowerCase() + '.';
+      const where: SystemSettingWhereInput = {
+        key: {
+          startsWith: categoryPrefix,
+          mode: 'insensitive'
+        }
+      };
 
       const settings = await this.findMany({
-        where: where as any,
-        orderBy: orderBy as any
+        where,
+        orderBy: { key: 'asc' }
       });
 
       let statistics;
@@ -657,9 +733,9 @@ export class SystemSettingService {
         statistics
       };
 
-      logger.info('カテゴリ別設定取得完了', { 
-        category, 
-        settingsCount: settings.length 
+      logger.info('カテゴリ別設定取得完了', {
+        category,
+        settingsCount: settings.length
       });
 
       return group;
@@ -671,98 +747,7 @@ export class SystemSettingService {
   }
 
   /**
-   * 🚀 システム設定統計情報生成
-   */
-  async generateStatistics(): Promise<SystemSettingStatistics> {
-    try {
-      logger.info('システム設定統計生成開始');
-
-      const [
-        totalCount,
-        categoryStats,
-        dataTypeStats,
-        recentChanges,
-        healthCheck
-      ] = await Promise.all([
-        this.count(),
-        this.getCategoryStatistics(),
-        this.getDataTypeStatistics(),
-        this.getRecentChanges(),
-        this.performHealthCheck()
-      ]);
-
-      const statistics: SystemSettingStatistics = {
-        totalSettings: totalCount,
-        settingsByCategory: categoryStats,
-        settingsByDataType: dataTypeStats,
-        recentChanges,
-        systemHealth: healthCheck,
-        usageMetrics: await this.getUsageMetrics()
-      };
-
-      logger.info('システム設定統計生成完了', { totalSettings: totalCount });
-      return statistics;
-
-    } catch (error) {
-      logger.error('システム設定統計生成エラー', { error });
-      throw new DatabaseError('統計情報の生成に失敗しました');
-    }
-  }
-
-  /**
-   * 🚀 一括設定更新
-   */
-  async bulkUpdateSettings(
-    request: BulkSystemSettingRequest
-  ): Promise<BulkOperationResult> {
-    try {
-      logger.info('一括設定更新開始', { 
-        changesCount: request.changes.length,
-        category: request.category 
-      });
-
-      const results = {
-        successful: [],
-        failed: [],
-        total: request.changes.length
-      };
-
-      for (const change of request.changes) {
-        try {
-          await this.updateSettingValue(change.settingKey, change.newValue, {
-            changedBy: request.changedBy,
-            reason: change.reason || request.reason,
-            validateDataType: true,
-            trackHistory: true
-          });
-          results.successful.push(change.settingKey);
-        } catch (error) {
-          results.failed.push({ 
-            id: change.settingKey, 
-            error: error.message 
-          });
-        }
-      }
-
-      logger.info('一括設定更新完了', { 
-        successful: results.successful.length,
-        failed: results.failed.length 
-      });
-
-      return {
-        success: results.failed.length === 0,
-        results,
-        message: `${results.successful.length}件の設定更新が完了しました`
-      };
-
-    } catch (error) {
-      logger.error('一括設定更新エラー', { error, request });
-      throw new DatabaseError('一括設定更新の実行に失敗しました');
-    }
-  }
-
-  /**
-   * 🚀 設定のインポート・エクスポート
+   * 🚀 設定エクスポート
    */
   async exportSettings(
     category?: SystemSettingCategory,
@@ -770,10 +755,8 @@ export class SystemSettingService {
   ): Promise<{
     settings: Array<{
       key: string;
-      value: any;
-      category: SystemSettingCategory;
-      dataType: SystemSettingDataType;
-      description?: string;
+      value: string | null;
+      description: string | null;
     }>;
     exportedAt: Date;
     totalCount: number;
@@ -781,12 +764,13 @@ export class SystemSettingService {
     try {
       logger.info('設定エクスポート開始', { category, includeSystemOnly });
 
-      const where: any = {};
+      let where: SystemSettingWhereInput = {};
       if (category) {
-        where.category = category;
-      }
-      if (!includeSystemOnly) {
-        where.visibility = { not: SystemSettingVisibility.SYSTEM_ONLY };
+        const categoryPrefix = category.toLowerCase() + '.';
+        where.key = {
+          startsWith: categoryPrefix,
+          mode: 'insensitive'
+        };
       }
 
       const settings = await this.findMany({ where });
@@ -795,8 +779,6 @@ export class SystemSettingService {
         settings: settings.map(setting => ({
           key: setting.key,
           value: setting.value,
-          category: setting.category as SystemSettingCategory,
-          dataType: setting.dataType as SystemSettingDataType,
           description: setting.description
         })),
         exportedAt: new Date(),
@@ -822,7 +804,7 @@ export class SystemSettingService {
       logger.info('システム設定検索開始', { filter });
 
       const where = this.buildSearchWhereClause(filter);
-      
+
       const result = await this.findManyWithPagination({
         where,
         orderBy: { key: 'asc' },
@@ -835,9 +817,9 @@ export class SystemSettingService {
         statistics = await this.generateStatistics();
       }
 
-      logger.info('システム設定検索完了', { 
+      logger.info('システム設定検索完了', {
         found: result.total,
-        pages: result.totalPages 
+        pages: result.totalPages
       });
 
       return {
@@ -851,12 +833,48 @@ export class SystemSettingService {
     }
   }
 
+  /**
+   * 🚀 システム設定統計情報生成
+   */
+  async generateStatistics(): Promise<SystemSettingStatistics> {
+    try {
+      logger.info('システム設定統計生成開始');
+
+      const totalCount = await this.count();
+      const categoryStats = await this.getCategoryStatistics();
+      const dataTypeStats = await this.getDataTypeStatistics();
+      const recentChanges = await this.getRecentChanges();
+      const systemHealth = await this.performHealthCheck();
+      const usageMetrics = await this.getUsageMetrics();
+
+      const statistics: SystemSettingStatistics = {
+        totalSettings: totalCount,
+        settingsByCategory: categoryStats,
+        settingsByDataType: dataTypeStats,
+        recentChanges,
+        systemHealth,
+        usageMetrics
+      };
+
+      logger.info('システム設定統計生成完了', { totalSettings: totalCount });
+      return statistics;
+
+    } catch (error) {
+      logger.error('システム設定統計生成エラー', { error });
+      throw new DatabaseError('システム設定統計の生成に失敗しました');
+    }
+  }
+
   // =====================================
   // 🔧 内部ヘルパーメソッド
   // =====================================
 
-  private convertSettingValue<T>(value: any, dataType: SystemSettingDataType): T {
+  private convertSettingValue<T>(value: string | null, dataType: SystemSettingDataType): T {
     try {
+      if (value === null) {
+        return null as any;
+      }
+
       switch (dataType) {
         case SystemSettingDataType.BOOLEAN:
           return (typeof value === 'string' ? value === 'true' : Boolean(value)) as T;
@@ -901,11 +919,11 @@ export class SystemSettingService {
     const where: SystemSettingWhereInput = {};
 
     if (filter.category) {
-      where.category = filter.category;
-    }
-
-    if (filter.dataType) {
-      where.dataType = filter.dataType;
+      const categoryPrefix = filter.category.toLowerCase() + '.';
+      where.key = {
+        startsWith: categoryPrefix,
+        mode: 'insensitive'
+      };
     }
 
     if (filter.searchText) {
@@ -918,35 +936,52 @@ export class SystemSettingService {
     return where;
   }
 
-  private async getCategoryStatistics() {
+  private async getCategoryStatistics(): Promise<{
+    [key in SystemSettingCategory]: number;
+  }> {
     // カテゴリ別統計の実装
     const categories = Object.values(SystemSettingCategory);
     const stats: any = {};
-    
+
     for (const category of categories) {
-      stats[category] = await this.count({ category } as any);
+      const categoryPrefix = category.toLowerCase() + '.';
+      const count = await this.count({
+        key: {
+          startsWith: categoryPrefix,
+          mode: 'insensitive'
+        }
+      });
+      stats[category] = count;
     }
-    
+
     return stats;
   }
 
-  private async getDataTypeStatistics() {
+  private async getDataTypeStatistics(): Promise<{
+    [key in SystemSettingDataType]: number;
+  }> {
     // データ型別統計の実装
+    // Note: DBにdataTypeフィールドがないため、ここでは推測ベース
     const dataTypes = Object.values(SystemSettingDataType);
     const stats: any = {};
-    
+
     for (const dataType of dataTypes) {
-      stats[dataType] = await this.count({ dataType } as any);
+      stats[dataType] = 0; // デフォルト0
     }
-    
+
     return stats;
   }
 
-  private async getRecentChanges() {
+  private async getRecentChanges(): Promise<Array<{
+    settingKey: string;
+    category: SystemSettingCategory;
+    changedAt: Date;
+    changedBy: string;
+  }>> {
     // 最近の変更履歴の実装
     return [
       {
-        settingKey: 'company.name',
+        settingKey: 'general.company_name',
         category: SystemSettingCategory.GENERAL,
         changedAt: new Date(),
         changedBy: 'admin'
@@ -954,7 +989,12 @@ export class SystemSettingService {
     ];
   }
 
-  private async performHealthCheck() {
+  private async performHealthCheck(): Promise<{
+    configurationComplete: boolean;
+    missingRequiredSettings: string[];
+    deprecatedSettings: string[];
+    conflictingSettings: string[];
+  }> {
     // システム健全性チェックの実装
     return {
       configurationComplete: true,
@@ -964,18 +1004,33 @@ export class SystemSettingService {
     };
   }
 
-  private async getUsageMetrics() {
+  private async getUsageMetrics(): Promise<{
+    mostAccessedSettings: string[];
+    frequentlyChangedSettings: string[];
+    neverChangedSettings: string[];
+  }> {
     // 使用状況メトリクスの実装
     return {
-      mostAccessedSettings: ['company.name', 'system.timezone'],
-      frequentlyChangedSettings: ['ui.theme', 'notification.email'],
-      neverChangedSettings: ['system.version']
+      mostAccessedSettings: ['general.company_name', 'general.system_timezone'],
+      frequentlyChangedSettings: ['ui_preferences.theme', 'notification.email'],
+      neverChangedSettings: ['general.system_version']
     };
   }
 
-  private async generateCategoryStatistics(category: SystemSettingCategory) {
-    const totalSettings = await this.count({ category } as any);
-    
+  private async generateCategoryStatistics(category: SystemSettingCategory): Promise<{
+    totalSettings: number;
+    modifiedSettings: number;
+    defaultSettings: number;
+    lastModified?: Date;
+  }> {
+    const categoryPrefix = category.toLowerCase() + '.';
+    const totalSettings = await this.count({
+      key: {
+        startsWith: categoryPrefix,
+        mode: 'insensitive'
+      }
+    });
+
     return {
       totalSettings,
       modifiedSettings: 0,
@@ -985,7 +1040,7 @@ export class SystemSettingService {
   }
 
   private getCategoryDisplayName(category: SystemSettingCategory): string {
-    const names = {
+    const names: Record<SystemSettingCategory, string> = {
       [SystemSettingCategory.GENERAL]: '一般設定',
       [SystemSettingCategory.NOTIFICATION]: '通知設定',
       [SystemSettingCategory.UI_PREFERENCES]: 'UI設定',
@@ -1001,7 +1056,7 @@ export class SystemSettingService {
   }
 
   private getCategoryDescription(category: SystemSettingCategory): string {
-    const descriptions = {
+    const descriptions: Partial<Record<SystemSettingCategory, string>> = {
       [SystemSettingCategory.GENERAL]: '会社名、システム名、タイムゾーン等の基本設定',
       [SystemSettingCategory.NOTIFICATION]: '運行開始通知、点検漏れアラート等の通知設定',
       [SystemSettingCategory.UI_PREFERENCES]: 'ダークモード、フォントサイズ等のUI設定',
@@ -1012,7 +1067,7 @@ export class SystemSettingService {
   }
 
   private getCategoryIcon(category: SystemSettingCategory): string {
-    const icons = {
+    const icons: Partial<Record<SystemSettingCategory, string>> = {
       [SystemSettingCategory.GENERAL]: 'settings',
       [SystemSettingCategory.NOTIFICATION]: 'notifications',
       [SystemSettingCategory.UI_PREFERENCES]: 'palette',
@@ -1023,7 +1078,7 @@ export class SystemSettingService {
   }
 
   private getCategoryOrder(category: SystemSettingCategory): number {
-    const orders = {
+    const orders: Record<SystemSettingCategory, number> = {
       [SystemSettingCategory.GENERAL]: 1,
       [SystemSettingCategory.UI_PREFERENCES]: 2,
       [SystemSettingCategory.NOTIFICATION]: 3,

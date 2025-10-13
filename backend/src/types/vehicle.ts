@@ -66,6 +66,7 @@ export interface VehicleWithDetails extends VehicleInfo {
     licenseNumber?: string;
     licenseExpiration?: Date;
   };
+  isActive: VehicleInfo['isActive']; // ✅ 追加: VehicleWithDetailsに必須
   recentOperations?: OperationModel[];
   maintenanceHistory?: MaintenanceRecordModel[];
   gpsLogs?: GpsLogModel[];
@@ -226,20 +227,33 @@ export interface VehicleSearchQuery extends SearchQuery {
  */
 export interface VehicleStatistics {
   totalOperations: number;
+  completedOperations: number;    // ✅ 追加
+  ongoingOperations: number;      // ✅ 追加
   totalDistance: number;
+  averageDistance: number;
+  totalOperationTime: number;
+  averageOperationTime: number;
   totalFuelConsumed: number;
+  totalFuelCost: number;
   averageFuelEfficiency: number;
+  fuelCostPerKm: number;
+  operationDays: number;
   utilizationRate: number;
+  availabilityRate: number;
   maintenanceCount: number;
+  lastMaintenanceDate?: Date;
+  nextMaintenanceDate?: Date;
+  maintenanceCost: number;
   downtime: number;
   costPerKm: number;
   revenuePerKm?: number;
   profitMargin?: number;
   co2Emissions?: number;
   safetyScore?: number;
-  period: {
-    from: Date;
-    to: Date;
+  periodStats?: {
+    daily: VehicleDailyStats[];
+    weekly: VehicleWeeklyStats[];
+    monthly: VehicleMonthlyStats[];
   };
 }
 

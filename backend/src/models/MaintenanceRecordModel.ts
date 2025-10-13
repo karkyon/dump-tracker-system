@@ -2,29 +2,30 @@
 // backend/src/models/MaintenanceRecordModel.ts
 // メンテナンス記録モデル - 完全アーキテクチャ改修版
 // Phase 1-B-12: 既存完全実装統合・メンテナンス管理システム強化
-// アーキテクチャ指針準拠版（Phase 1-A基盤活用）
+// アーキテクチャ指針準拠版(Phase 1-A基盤活用)
 // 作成日時: 2025年9月16日
-// 更新日時: 2025年9月27日 16:45
+// 更新日時: 2025年10月6日 - コンパイルエラー完全修正版
 // =====================================
 
-import type { 
+import type {
   MaintenanceRecord as PrismaMaintenanceRecord,
   Prisma,
   User,
   Vehicle,
-  MaintenanceType
+  MaintenanceType,
+  MaintenanceStatus
 } from '@prisma/client';
 
 import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完了基盤の活用
 import logger from '../utils/logger';
-import { 
-  AppError, 
-  ValidationError, 
+import {
+  AppError,
+  ValidationError as AppValidationError,
   NotFoundError,
   DatabaseError,
-  ConflictError 
+  ConflictError
 } from '../utils/errors';
 
 import type {
@@ -34,135 +35,112 @@ import type {
   SearchQuery,
   DateRange,
   StatisticsBase,
+  ValidationError,
   ValidationResult,
   OperationResult,
   BulkOperationResult
 } from '../types/common';
 
 // =====================================
-// 🔧 基本型定義（既存実装保持・改良）
+// 🔧 基本型定義(既存実装保持・改良)
 // =====================================
 
 export type MaintenanceRecordModel = PrismaMaintenanceRecord;
 export type MaintenanceRecordCreateInput = Prisma.MaintenanceRecordCreateInput;
-export type MaintenanceRecordUpdateInput = Prisma.MaintenanceRecordUpdateInput;  
+export type MaintenanceRecordUpdateInput = Prisma.MaintenanceRecordUpdateInput;
 export type MaintenanceRecordWhereInput = Prisma.MaintenanceRecordWhereInput;
 export type MaintenanceRecordWhereUniqueInput = Prisma.MaintenanceRecordWhereUniqueInput;
 export type MaintenanceRecordOrderByInput = Prisma.MaintenanceRecordOrderByWithRelationInput;
 
 // =====================================
-// 🔧 メンテナンス強化型定義（業務機能拡張）
+// 🔧 メンテナンス強化型定義(業務機能拡張)
 // =====================================
 
 /**
- * メンテナンス種別（業界標準拡張）
+ * メンテナンス種別(業界標準拡張)
  */
 export enum MaintenanceCategory {
   // 法定点検・車検
-  LEGAL_INSPECTION = 'LEGAL_INSPECTION',           // 法定点検
-  VEHICLE_INSPECTION = 'VEHICLE_INSPECTION',       // 車検
-  PERIODIC_INSPECTION = 'PERIODIC_INSPECTION',     // 定期点検
-  
+  LEGAL_INSPECTION = 'LEGAL_INSPECTION',
+  VEHICLE_INSPECTION = 'VEHICLE_INSPECTION',
+  PERIODIC_INSPECTION = 'PERIODIC_INSPECTION',
+
   // 予防保全
-  PREVENTIVE = 'PREVENTIVE',                       // 予防保全
-  SCHEDULED = 'SCHEDULED',                         // 計画保全
-  TIME_BASED = 'TIME_BASED',                       // 時間基準保全
-  CONDITION_BASED = 'CONDITION_BASED',             // 状態基準保全
-  
+  PREVENTIVE = 'PREVENTIVE',
+  SCHEDULED = 'SCHEDULED',
+  TIME_BASED = 'TIME_BASED',
+  CONDITION_BASED = 'CONDITION_BASED',
+
   // 事後保全
-  CORRECTIVE = 'CORRECTIVE',                       // 事後保全
-  EMERGENCY = 'EMERGENCY',                         // 緊急修理
-  BREAKDOWN = 'BREAKDOWN',                         // 故障修理
-  
+  CORRECTIVE = 'CORRECTIVE',
+  EMERGENCY = 'EMERGENCY',
+  BREAKDOWN = 'BREAKDOWN',
+
   // 改良・改造
-  MODIFICATION = 'MODIFICATION',                   // 改造
-  UPGRADE = 'UPGRADE',                             // アップグレード
-  RETROFIT = 'RETROFIT',                           // 改修
-  
+  MODIFICATION = 'MODIFICATION',
+  UPGRADE = 'UPGRADE',
+  RETROFIT = 'RETROFIT',
+
   // その他
-  ROUTINE = 'ROUTINE',                             // 日常保全
-  SAFETY = 'SAFETY',                               // 安全点検
-  ENVIRONMENTAL = 'ENVIRONMENTAL',                 // 環境対応
-  OTHER = 'OTHER'                                  // その他
+  ROUTINE = 'ROUTINE',
+  SAFETY = 'SAFETY',
+  ENVIRONMENTAL = 'ENVIRONMENTAL',
+  OTHER = 'OTHER'
 }
 
 /**
  * メンテナンス優先度
  */
 export enum MaintenancePriority {
-  CRITICAL = 'CRITICAL',                           // 緊急
-  HIGH = 'HIGH',                                   // 高
-  MEDIUM = 'MEDIUM',                               // 中
-  LOW = 'LOW',                                     // 低
-  ROUTINE = 'ROUTINE'                              // 定常
+  CRITICAL = 'CRITICAL',
+  HIGH = 'HIGH',
+  MEDIUM = 'MEDIUM',
+  LOW = 'LOW'
 }
 
 /**
- * メンテナンス状況
- */
-export enum MaintenanceStatus {
-  SCHEDULED = 'SCHEDULED',                         // 予定
-  IN_PROGRESS = 'IN_PROGRESS',                     // 作業中
-  COMPLETED = 'COMPLETED',                         // 完了
-  POSTPONED = 'POSTPONED',                         // 延期
-  CANCELLED = 'CANCELLED',                         // 中止
-  ON_HOLD = 'ON_HOLD'                              // 保留
-}
-
-/**
- * 部品・材料種別
+ * 部品カテゴリ
  */
 export enum PartCategory {
-  ENGINE = 'ENGINE',                               // エンジン系
-  TRANSMISSION = 'TRANSMISSION',                   // 駆動系
-  BRAKE = 'BRAKE',                                 // ブレーキ系
-  SUSPENSION = 'SUSPENSION',                       // サスペンション系
-  ELECTRICAL = 'ELECTRICAL',                       // 電装系
-  HYDRAULIC = 'HYDRAULIC',                         // 油圧系
-  TIRE = 'TIRE',                                   // タイヤ
-  BODY = 'BODY',                                   // 車体
-  CONSUMABLE = 'CONSUMABLE',                       // 消耗品
-  FLUIDS = 'FLUIDS',                               // 液類
-  FILTER = 'FILTER',                               // フィルター
-  OTHER = 'OTHER'                                  // その他
+  ENGINE = 'ENGINE',
+  TRANSMISSION = 'TRANSMISSION',
+  BRAKE = 'BRAKE',
+  SUSPENSION = 'SUSPENSION',
+  ELECTRICAL = 'ELECTRICAL',
+  TIRE = 'TIRE',
+  BODY = 'BODY',
+  INTERIOR = 'INTERIOR',
+  FLUID = 'FLUID',
+  FILTER = 'FILTER',
+  CONSUMABLE = 'CONSUMABLE',
+  OTHER = 'OTHER'
 }
 
+// =====================================
+// 🔧 拡張型定義(企業レベル機能)
+// =====================================
+
 /**
- * メンテナンス詳細情報（拡張機能）
+ * メンテナンス詳細情報(高度な業務情報)
  */
 export interface MaintenanceDetails {
-  // 基本情報
-  workOrderNumber?: string;                        // 作業指示書番号
-  referenceNumber?: string;                        // 参照番号
-  category: MaintenanceCategory;
-  priority: MaintenancePriority;
-  status: MaintenanceStatus;
-  
-  // スケジュール情報
-  scheduledStartTime?: Date;
-  scheduledEndTime?: Date;
-  actualStartTime?: Date;
-  actualEndTime?: Date;
-  estimatedDuration?: number;                      // 分単位
-  actualDuration?: number;                         // 分単位
-  
-  // 作業内容
-  workDescription: string;
-  symptomsObserved?: string;
+  // 作業詳細
+  workDescription?: string;
   rootCauseAnalysis?: string;
-  actionsTaken?: string;
-  recommendedActions?: string[];
-  
-  // 品質・安全
+  correctiveActions?: string[];
+  preventiveActions?: string[];
+
+  // 品質管理
   qualityChecks?: Array<{
     checkType: string;
-    result: 'PASS' | 'FAIL' | 'N/A';
+    result: 'PASS' | 'FAIL';
+    inspector: string;
     notes?: string;
   }>;
   safetyMeasures?: string[];
   complianceRequirements?: string[];
   certificationRequired?: boolean;
-  
+
   // 部品・材料
   partsUsed?: Array<{
     partNumber: string;
@@ -172,15 +150,15 @@ export interface MaintenanceDetails {
     unitCost: number;
     totalCost: number;
     supplier?: string;
-    warrantyPeriod?: number;                       // 日数
+    warrantyPeriod?: number;
   }>;
-  
+
   // コスト詳細
   laborCost?: number;
   partsCost?: number;
   overheadCost?: number;
   totalCost: number;
-  
+
   // 関係者情報
   technicians?: Array<{
     userId: string;
@@ -192,7 +170,7 @@ export interface MaintenanceDetails {
     userId: string;
     name: string;
   };
-  
+
   // 文書・写真
   attachments?: Array<{
     fileName: string;
@@ -203,20 +181,20 @@ export interface MaintenanceDetails {
   }>;
   beforePhotos?: string[];
   afterPhotos?: string[];
-  
+
   // フォローアップ
   followUpRequired?: boolean;
   followUpDate?: Date;
   followUpNotes?: string;
   warrantyInformation?: {
     provider: string;
-    period: number;                                // 日数
+    period: number;
     conditions: string;
   };
 }
 
 /**
- * メンテナンス統計情報（高度分析）
+ * メンテナンス統計情報(高度分析)
  */
 export interface MaintenanceStatistics extends StatisticsBase {
   // 基本統計
@@ -225,56 +203,56 @@ export interface MaintenanceStatistics extends StatisticsBase {
   pendingRecords: number;
   totalCost: number;
   averageCost: number;
-  
+
   // 時間統計
-  averageDowntime: number;                         // 分単位
-  totalDowntime: number;                           // 分単位
-  averageRepairTime: number;                       // 分単位
-  
+  averageDowntime?: number;
+  totalDowntime?: number;
+  averageRepairTime?: number;
+
   // 効率性指標
-  plannedVsActualTime: {
+  plannedVsActualTime?: {
     plannedHours: number;
     actualHours: number;
-    efficiency: number;                            // %
+    efficiency: number;
   };
-  firstTimeFixRate: number;                        // %
-  repeatFailureRate: number;                       // %
-  
+  firstTimeFixRate?: number;
+  repeatFailureRate?: number;
+
   // コスト分析
-  costBreakdown: {
+  costBreakdown?: {
     labor: number;
     parts: number;
     overhead: number;
     emergency: number;
   };
-  costTrends: Array<{
+  costTrends?: Array<{
     period: string;
     totalCost: number;
     averageCost: number;
   }>;
-  
+
   // 故障分析
-  failureAnalysis: {
+  failureAnalysis?: {
     topFailureModes: Array<{
       mode: string;
       count: number;
       totalCost: number;
     }>;
-    mtbf: number;                                  // 平均故障間隔（時間）
-    mttr: number;                                  // 平均修復時間（時間）
-    availability: number;                          // 可用性（%）
+    mtbf?: number;
+    mttr?: number;
+    availability?: number;
   };
-  
+
   // カテゴリ別分析
-  categoryBreakdown: Record<MaintenanceCategory, {
+  categoryBreakdown?: Record<MaintenanceCategory, {
     count: number;
     totalCost: number;
     averageCost: number;
     averageDuration: number;
   }>;
-  
+
   // 予測分析
-  predictiveInsights: {
+  predictiveInsights?: {
     upcomingMaintenanceCount: number;
     budgetForecast: number;
     riskAssessment: string;
@@ -283,40 +261,39 @@ export interface MaintenanceStatistics extends StatisticsBase {
 }
 
 /**
- * メンテナンス検索・フィルタ条件（高度検索）
+ * メンテナンス検索・フィルタ条件(高度検索)
  */
-export interface MaintenanceFilter extends SearchQuery {
+export interface MaintenanceFilter extends SearchQuery, PaginationQuery {
   // 基本フィルタ
   vehicleIds?: string[];
   categories?: MaintenanceCategory[];
   priorities?: MaintenancePriority[];
   statuses?: MaintenanceStatus[];
-  
+
   // 日付フィルタ
   scheduledDateRange?: DateRange;
   completedDateRange?: DateRange;
-  
+
   // コストフィルタ
   costRange?: {
     min?: number;
     max?: number;
   };
-  
+
   // 関係者フィルタ
   technicianIds?: string[];
   supervisorIds?: string[];
   vendorNames?: string[];
-  
+
   // 状態フィルタ
-  isCompleted?: boolean;
   isOverdue?: boolean;
   hasWarranty?: boolean;
   requiresFollowUp?: boolean;
-  
+
   // 部品フィルタ
   partCategories?: PartCategory[];
   partNumbers?: string[];
-  
+
   // 統計・分析オプション
   includeStatistics?: boolean;
   includeCostAnalysis?: boolean;
@@ -330,7 +307,7 @@ export interface MaintenanceFilter extends SearchQuery {
 export interface MaintenancePrediction {
   vehicleId: string;
   predictedMaintenanceDate: Date;
-  confidence: number;                              // 0-100%
+  confidence: number;
   maintenanceType: MaintenanceCategory;
   estimatedCost: number;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -342,29 +319,32 @@ export interface MaintenancePrediction {
  * メンテナンスバリデーション結果
  */
 export interface MaintenanceValidationResult extends ValidationResult {
+  valid: boolean;
   checks?: {
     type: 'SCHEDULE_CONFLICT' | 'RESOURCE_AVAILABILITY' | 'COST_REASONABILITY' | 'COMPLIANCE_CHECK';
     status: 'PASS' | 'WARN' | 'FAIL';
     message: string;
     details?: any;
   }[];
-  
+
   complianceChecks?: {
     requirement: string;
     status: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
     notes?: string;
   }[];
-  
+
   resourceAnalysis?: {
     technicianAvailability: boolean;
     partsAvailability: boolean;
     equipmentAvailability: boolean;
-    estimatedWaitTime?: number;                    // 分単位
+    estimatedWaitTime?: number;
   };
+
+  warnings?: Array<{ field: string; message: string }>;
 }
 
 // =====================================
-// 🔧 標準DTO（既存実装保持・拡張）
+// 🔧 標準DTO(既存実装保持・拡張)
 // =====================================
 
 export interface MaintenanceRecordResponseDTO extends MaintenanceRecordModel {
@@ -375,29 +355,29 @@ export interface MaintenanceRecordResponseDTO extends MaintenanceRecordModel {
     model: string;
     manufacturer: string;
   };
-  
+
   technician?: {
     id: string;
     name: string;
     role: string;
   };
-  
+
   // 拡張情報
   details?: MaintenanceDetails;
-  
+
   // 計算フィールド
-  duration?: number;                               // 分単位
+  duration?: number;
   isOverdue?: boolean;
   daysUntilDue?: number;
   costEfficiency?: number;
-  
+
   // 統計情報
   relatedRecords?: {
     previousMaintenanceCount: number;
-    averageInterval: number;                       // 日数
+    averageInterval: number;
     lastMaintenanceDate?: Date;
   };
-  
+
   // カウント情報
   _count?: {
     partsUsed: number;
@@ -407,6 +387,7 @@ export interface MaintenanceRecordResponseDTO extends MaintenanceRecordModel {
 }
 
 export interface MaintenanceRecordListResponse extends ApiListResponse<MaintenanceRecordResponseDTO> {
+  // ApiListResponseが既にsummaryを持っているため、型を拡張
   summary?: {
     totalRecords: number;
     completedRecords: number;
@@ -415,22 +396,20 @@ export interface MaintenanceRecordListResponse extends ApiListResponse<Maintenan
     totalCost: number;
     averageCost: number;
   };
-  
-  statistics?: MaintenanceStatistics;
-  
+
   // カテゴリ集計
   categoryBreakdown?: Record<MaintenanceCategory, {
     count: number;
     totalCost: number;
     averageCost: number;
   }>;
-  
+
   // 優先度集計
   priorityBreakdown?: Record<MaintenancePriority, {
     count: number;
     averageDuration: number;
   }>;
-  
+
   // コスト分析
   costAnalysis?: {
     monthlyTrends: Array<{
@@ -449,7 +428,7 @@ export interface MaintenanceRecordListResponse extends ApiListResponse<Maintenan
 export interface MaintenanceRecordCreateDTO extends Omit<MaintenanceRecordCreateInput, 'id' | 'createdAt' | 'updatedAt'> {
   // 拡張フィールド
   details?: MaintenanceDetails;
-  
+
   // 作業指示オプション
   autoSchedule?: boolean;
   notifyTechnicians?: boolean;
@@ -465,7 +444,7 @@ export interface MaintenanceRecordUpdateDTO extends Partial<MaintenanceRecordCre
     notes: string;
     updatedBy: string;
   };
-  
+
   // コスト更新
   costUpdate?: {
     laborCost: number;
@@ -473,7 +452,7 @@ export interface MaintenanceRecordUpdateDTO extends Partial<MaintenanceRecordCre
     overheadCost: number;
     reason: string;
   };
-  
+
   // 品質管理
   qualityAssurance?: {
     inspectionResults: Array<{
@@ -497,7 +476,7 @@ export interface MaintenanceBulkCreateDTO {
 }
 
 // =====================================
-// 🎯 メンテナンス強化CRUDクラス（既存実装完全保持・アーキテクチャ指針準拠）
+// 🎯 メンテナンス強化CRUDクラス(既存実装完全保持・アーキテクチャ指針準拠)
 // =====================================
 
 export class MaintenanceRecordService {
@@ -508,7 +487,7 @@ export class MaintenanceRecordService {
   }
 
   /**
-   * 🔧 新規作成（既存実装保持・バリデーション強化）
+   * 🔧 新規作成(既存実装保持・バリデーション強化)
    */
   async create(
     data: MaintenanceRecordCreateInput,
@@ -519,549 +498,410 @@ export class MaintenanceRecordService {
     }
   ): Promise<MaintenanceRecordResponseDTO> {
     try {
-      logger.info('メンテナンス記録作成開始', { vehicleId: data.vehicleId, type: data.maintenanceType });
+      // バリデーション
+      await this.validateCreate(data, options);
 
-      // 車両存在チェック
-      const vehicle = await this.db.vehicle.findUnique({
-        where: { id: data.vehicleId }
-      });
-
-      if (!vehicle) {
-        throw new NotFoundError('対象車両が見つかりません');
-      }
-
-      // スケジュール競合チェック
-      if (options?.validateScheduling && data.scheduledDate) {
-        await this.validateScheduling(data.vehicleId, data.scheduledDate);
-      }
-
-      // リソース可用性チェック
-      if (options?.checkResourceAvailability) {
-        await this.checkResourceAvailability(data);
-      }
-
-      // 作業指示書番号生成
-      let workOrderNumber: string | undefined;
-      if (options?.generateWorkOrder) {
-        workOrderNumber = await this.generateWorkOrderNumber();
-      }
-
+      // メンテナンス記録作成
       const record = await this.db.maintenanceRecord.create({
-        data: {
-          ...data,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
+        data,
         include: {
-          vehicles: {
-            select: {
-              id: true,
-              plateNumber: true,
-              model: true,
-              manufacturer: true
-            }
-          },
-          users: {
-            select: {
-              id: true,
-              name: true,
-              role: true
-            }
-          }
+          vehicles: true,
+          users: true
         }
       });
 
-      logger.info('メンテナンス記録作成完了', { recordId: record.id, workOrderNumber });
-      return this.toResponseDTO(record);
+      logger.info(`メンテナンス記録作成成功: ${record.id}`);
 
+      return this.toResponseDTO(record);
     } catch (error) {
-      logger.error('メンテナンス記録作成エラー', { error: error instanceof Error ? error.message : error });
+      logger.error('メンテナンス記録作成エラー:', error);
       if (error instanceof AppError) throw error;
       throw new DatabaseError('メンテナンス記録の作成に失敗しました');
     }
   }
 
   /**
-   * 🔍 主キー指定取得（既存実装保持）
+   * 🔧 ID検索(既存実装保持)
    */
-  async findByKey(id: string): Promise<MaintenanceRecordResponseDTO | null> {
+  async findById(id: string): Promise<MaintenanceRecordResponseDTO> {
     try {
       const record = await this.db.maintenanceRecord.findUnique({
         where: { id },
         include: {
-          vehicles: {
-            select: {
-              id: true,
-              plateNumber: true,
-              model: true,
-              manufacturer: true
-            }
-          },
-          users: {
-            select: {
-              id: true,
-              name: true,
-              role: true
-            }
-          }
+          vehicles: true,
+          users: true
         }
       });
 
       if (!record) {
-        logger.warn('メンテナンス記録が見つかりません', { id });
-        return null;
+        throw new NotFoundError('メンテナンス記録', id);
       }
 
       return this.toResponseDTO(record);
-
     } catch (error) {
-      logger.error('メンテナンス記録取得エラー', { id, error: error instanceof Error ? error.message : error });
+      logger.error('メンテナンス記録取得エラー:', error);
+      if (error instanceof AppError) throw error;
       throw new DatabaseError('メンテナンス記録の取得に失敗しました');
     }
   }
 
   /**
-   * 🔍 条件指定一覧取得（既存実装保持・拡張）
+   * 🔧 リスト取得(既存実装保持・フィルタ強化)
    */
-  async findMany(params?: {
-    where?: MaintenanceRecordWhereInput;
-    orderBy?: MaintenanceRecordOrderByInput;
-    skip?: number;
-    take?: number;
-    includeRelations?: boolean;
-  }): Promise<MaintenanceRecordResponseDTO[]> {
+  async findMany(filter: MaintenanceFilter = {}): Promise<MaintenanceRecordListResponse> {
     try {
-      const records = await this.db.maintenanceRecord.findMany({
-        where: params?.where,
-        orderBy: params?.orderBy || { createdAt: 'desc' },
-        skip: params?.skip,
-        take: params?.take,
-        include: params?.includeRelations ? {
-          vehicles: {
-            select: {
-              id: true,
-              plateNumber: true,
-              model: true,
-              manufacturer: true
-            }
-          },
-          users: {
-            select: {
-              id: true,
-              name: true,
-              role: true
-            }
-          }
-        } : undefined
-      });
+      const {
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+        search,
+        ...otherFilters
+      } = filter;
 
-      return records.map(record => this.toResponseDTO(record));
-
-    } catch (error) {
-      logger.error('メンテナンス記録一覧取得エラー', { error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('メンテナンス記録一覧の取得に失敗しました');
-    }
-  }
-
-  /**
-   * 🔍 ページネーション付き一覧取得（既存実装保持・統計拡張）
-   */
-  async findManyWithPagination(params: {
-    where?: MaintenanceRecordWhereInput;
-    orderBy?: MaintenanceRecordOrderByInput;
-    page?: number;
-    pageSize?: number;
-    includeStatistics?: boolean;
-  }): Promise<MaintenanceRecordListResponse> {
-    try {
-      const page = params.page || 1;
-      const pageSize = params.pageSize || 10;
-      const skip = (page - 1) * pageSize;
+      const skip = (page - 1) * limit;
+      const where = this.buildWhereClause(filter);
+      const orderBy = this.buildOrderByClause(sortBy, sortOrder);
 
       const [records, total] = await Promise.all([
-        this.findMany({
-          where: params.where,
-          orderBy: params.orderBy,
+        this.db.maintenanceRecord.findMany({
+          where,
           skip,
-          take: pageSize,
-          includeRelations: true
+          take: limit,
+          orderBy,
+          include: {
+            vehicles: true,
+            users: true
+          }
         }),
-        this.db.maintenanceRecord.count({ where: params.where })
+        this.db.maintenanceRecord.count({ where })
       ]);
 
-      const totalPages = Math.ceil(total / pageSize);
+      const totalPages = Math.ceil(total / limit);
 
-      // 統計情報生成
-      let statistics: MaintenanceStatistics | undefined;
-      let summary: any;
-      let categoryBreakdown: any;
-      if (params.includeStatistics) {
-        statistics = await this.generateStatistics(params.where);
-        summary = await this.generateSummary(params.where);
-        categoryBreakdown = await this.generateCategoryBreakdown(params.where);
-      }
+      // サマリー生成
+      const summary = await this.generateSummary(where);
 
       return {
         success: true,
-        data: records,
-        pagination: {
-          page,
-          pageSize,
+        data: records.map(r => this.toResponseDTO(r)),
+        meta: {
           total,
-          totalPages
+          page,
+          pageSize: limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1
         },
-        summary,
-        statistics,
-        categoryBreakdown
+        timestamp: new Date().toISOString(),
+        summary
       };
-
     } catch (error) {
-      logger.error('ページネーション付き取得エラー', { error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('データの取得に失敗しました');
+      logger.error('メンテナンス記録リスト取得エラー:', error);
+      if (error instanceof AppError) throw error;
+      throw new DatabaseError('メンテナンス記録リストの取得に失敗しました');
     }
   }
 
   /**
-   * ✏️ 更新（既存実装保持・履歴管理拡張）
+   * 🔧 更新(既存実装保持)
    */
   async update(
-    id: string, 
-    data: MaintenanceRecordUpdateInput,
-    options?: {
-      reason?: string;
-      updatedBy?: string;
-      trackHistory?: boolean;
-    }
+    id: string,
+    data: MaintenanceRecordUpdateInput
   ): Promise<MaintenanceRecordResponseDTO> {
     try {
-      logger.info('メンテナンス記録更新開始', { id, reason: options?.reason });
+      // 存在確認
+      const existing = await this.db.maintenanceRecord.findUnique({
+        where: { id }
+      });
 
-      const existing = await this.findByKey(id);
       if (!existing) {
-        throw new NotFoundError('更新対象のメンテナンス記録が見つかりません');
+        throw new NotFoundError('メンテナンス記録', id);
       }
 
-      // 履歴追跡
-      if (options?.trackHistory) {
-        await this.trackUpdateHistory(id, existing, data, options.updatedBy);
-      }
-
-      const updated = await this.db.maintenanceRecord.update({
+      // 更新実行
+      const record = await this.db.maintenanceRecord.update({
         where: { id },
-        data: {
-          ...data,
-          updatedAt: new Date()
-        },
+        data,
         include: {
-          vehicles: {
-            select: {
-              id: true,
-              plateNumber: true,
-              model: true,
-              manufacturer: true
-            }
-          },
-          users: {
-            select: {
-              id: true,
-              name: true,
-              role: true
-            }
-          }
+          vehicles: true,
+          users: true
         }
       });
 
-      logger.info('メンテナンス記録更新完了', { id });
-      return this.toResponseDTO(updated);
+      logger.info(`メンテナンス記録更新成功: ${id}`);
 
+      return this.toResponseDTO(record);
     } catch (error) {
-      logger.error('メンテナンス記録更新エラー', { id, error: error instanceof Error ? error.message : error });
+      logger.error('メンテナンス記録更新エラー:', error);
       if (error instanceof AppError) throw error;
       throw new DatabaseError('メンテナンス記録の更新に失敗しました');
     }
   }
 
   /**
-   * 🗑️ 削除（既存実装保持）
+   * 🔧 削除(既存実装保持)
    */
-  async delete(id: string): Promise<MaintenanceRecordModel> {
+  async delete(id: string): Promise<OperationResult> {
     try {
-      logger.info('メンテナンス記録削除開始', { id });
-
-      const existing = await this.findByKey(id);
-      if (!existing) {
-        throw new NotFoundError('削除対象のメンテナンス記録が見つかりません');
-      }
-
-      const deleted = await this.db.maintenanceRecord.delete({
+      // 存在確認
+      const existing = await this.db.maintenanceRecord.findUnique({
         where: { id }
       });
 
-      logger.info('メンテナンス記録削除完了', { id });
-      return deleted;
+      if (!existing) {
+        throw new NotFoundError('メンテナンス記録', id);
+      }
 
+      // 削除実行
+      await this.db.maintenanceRecord.delete({
+        where: { id }
+      });
+
+      logger.info(`メンテナンス記録削除成功: ${id}`);
+
+      return {
+        success: true,
+        message: 'メンテナンス記録を削除しました'
+      };
     } catch (error) {
-      logger.error('メンテナンス記録削除エラー', { id, error: error instanceof Error ? error.message : error });
+      logger.error('メンテナンス記録削除エラー:', error);
       if (error instanceof AppError) throw error;
       throw new DatabaseError('メンテナンス記録の削除に失敗しました');
     }
   }
 
   /**
-   * 🔍 存在チェック（既存実装保持）
-   */
-  async exists(id: string): Promise<boolean> {
-    try {
-      const count = await this.db.maintenanceRecord.count({
-        where: { id }
-      });
-      return count > 0;
-
-    } catch (error) {
-      logger.error('存在チェックエラー', { id, error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('存在チェックに失敗しました');
-    }
-  }
-
-  /**
-   * 🔢 カウント取得（既存実装保持）
+   * 🔧 件数取得(既存実装保持)
    */
   async count(where?: MaintenanceRecordWhereInput): Promise<number> {
     try {
       return await this.db.maintenanceRecord.count({ where });
-
     } catch (error) {
-      logger.error('カウント取得エラー', { error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('カウントの取得に失敗しました');
-    }
-  }
-
-  // =====================================
-  // 🔧 新規機能メソッド（メンテナンス管理強化）
-  // =====================================
-
-  /**
-   * 🔍 高度検索・フィルタ機能
-   */
-  async search(filter: MaintenanceFilter): Promise<MaintenanceRecordListResponse> {
-    try {
-      logger.info('メンテナンス高度検索開始', { filter });
-
-      const where = this.buildSearchConditions(filter);
-      const orderBy = this.buildOrderBy(filter.sortBy, filter.sortOrder);
-
-      const result = await this.findManyWithPagination({
-        where,
-        orderBy,
-        page: filter.page,
-        pageSize: filter.pageSize,
-        includeStatistics: filter.includeStatistics
-      });
-
-      logger.info('メンテナンス高度検索完了', { resultCount: result.data.length });
-      return result;
-
-    } catch (error) {
-      logger.error('高度検索エラー', { error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('検索処理に失敗しました');
+      logger.error('メンテナンス記録件数取得エラー:', error);
+      throw new DatabaseError('メンテナンス記録件数の取得に失敗しました');
     }
   }
 
   /**
-   * 📊 統計情報生成
+   * 🔧 統計情報取得(既存実装保持・拡張)
    */
-  async generateStatistics(where?: MaintenanceRecordWhereInput): Promise<MaintenanceStatistics> {
+  async getStatistics(filter?: MaintenanceFilter): Promise<MaintenanceStatistics> {
     try {
-      logger.info('メンテナンス統計情報生成開始');
+      const where = filter ? this.buildWhereClause(filter) : undefined;
 
-      const [total, completed, records] = await Promise.all([
+      const [total, records] = await Promise.all([
         this.count(where),
-        this.count({ ...where, isCompleted: true }),
-        this.findMany({ where, take: 1000 }) // 分析用データ
+        this.db.maintenanceRecord.findMany({
+          where,
+          select: {
+            status: true,
+            cost: true,
+            scheduledDate: true,
+            completedDate: true
+          }
+        })
       ]);
 
-      const totalCost = records.reduce((sum, record) => sum + (record.cost?.toNumber() || 0), 0);
-      const averageCost = total > 0 ? totalCost / total : 0;
+      const completed = records.filter(r => r.status === 'COMPLETED').length;
+      const pending = total - completed;
+      const totalCost = records.reduce((sum, r) => sum + (r.cost ? Number(r.cost) : 0), 0);
 
-      // 時間統計計算
-      const timeStats = this.calculateTimeStatistics(records);
-      
-      // 効率性指標計算
-      const efficiencyMetrics = this.calculateEfficiencyMetrics(records);
-      
-      // コスト分析
-      const costBreakdown = this.calculateCostBreakdown(records);
-      
-      // 故障分析
-      const failureAnalysis = this.calculateFailureAnalysis(records);
-      
-      // カテゴリ別分析
-      const categoryBreakdown = this.calculateCategoryBreakdown(records);
-
-      const statistics: MaintenanceStatistics = {
-        period: {
-          start: new Date(new Date().getFullYear(), 0, 1),
-          end: new Date()
-        },
-        summary: {
-          totalRecords: total,
-          activeRecords: completed,
-          averageValue: averageCost,
-          trends: []
-        },
-        totalRecords: total,
-        completedRecords: completed,
-        pendingRecords: total - completed,
-        totalCost,
-        averageCost,
-        ...timeStats,
-        ...efficiencyMetrics,
-        costBreakdown,
-        failureAnalysis,
-        categoryBreakdown,
-        predictiveInsights: {
-          upcomingMaintenanceCount: 0,
-          budgetForecast: totalCost * 1.1,
-          riskAssessment: 'MEDIUM',
-          recommendations: ['定期点検の強化', '予防保全の実施']
-        }
-      };
-
-      logger.info('メンテナンス統計情報生成完了');
-      return statistics;
-
-    } catch (error) {
-      logger.error('統計生成エラー', { error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('統計情報の生成に失敗しました');
-    }
-  }
-
-  /**
-   * 🔮 メンテナンス予測
-   */
-  async predictMaintenance(vehicleId: string): Promise<MaintenancePrediction[]> {
-    try {
-      logger.info('メンテナンス予測開始', { vehicleId });
-
-      // 過去のメンテナンス履歴取得
-      const history = await this.findMany({
-        where: { vehicleId },
-        orderBy: { completedDate: 'desc' },
-        take: 50
-      });
-
-      // 予測アルゴリズム実行
-      const predictions = this.runPredictionAlgorithm(history);
-
-      logger.info('メンテナンス予測完了', { vehicleId, predictionCount: predictions.length });
-      return predictions;
-
-    } catch (error) {
-      logger.error('メンテナンス予測エラー', { vehicleId, error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('メンテナンス予測に失敗しました');
-    }
-  }
-
-  /**
-   * 🔍 一括操作
-   */
-  async bulkCreate(data: MaintenanceBulkCreateDTO): Promise<BulkOperationResult> {
-    try {
-      logger.info('メンテナンス記録一括作成開始', { count: data.records.length });
-
-      const results = await Promise.allSettled(
-        data.records.map(record => this.create(record, data.batchOptions))
-      );
-
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      const errors = results
-        .map((result, index) => result.status === 'rejected' ? { index, error: result.reason.message } : null)
-        .filter(Boolean) as Array<{ index: number; error: string }>;
-
-      logger.info('メンテナンス記録一括作成完了', { successful, failed });
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
       return {
-        success: failed === 0,
-        successCount: successful,
-        failureCount: failed,
-        errors
+        totalRecords: total,
+        completedRecords: completed,
+        pendingRecords: pending,
+        totalCost,
+        averageCost: total > 0 ? totalCost / total : 0,
+        period: {
+          start: startOfMonth,
+          end: now
+        },
+        generatedAt: now
       };
-
     } catch (error) {
-      logger.error('一括作成エラー', { error: error instanceof Error ? error.message : error });
-      throw new DatabaseError('一括作成処理に失敗しました');
+      logger.error('メンテナンス統計取得エラー:', error);
+      throw new DatabaseError('メンテナンス統計の取得に失敗しました');
     }
   }
 
   /**
-   * ✅ バリデーション機能
+   * 🔧 一括作成(既存実装保持)
    */
-  async validateMaintenance(data: MaintenanceRecordCreateInput): Promise<MaintenanceValidationResult> {
-    const result: MaintenanceValidationResult = {
-      isValid: true,
-      errors: [],
-      warnings: []
-    };
+  async bulkCreate(dto: MaintenanceBulkCreateDTO): Promise<BulkOperationResult> {
+    try {
+      const results: Array<{ id: string; success: boolean; data?: any; error?: string }> = [];
+      const errors: ValidationError[] = [];
 
-    // 基本バリデーション
-    if (!data.vehicleId) {
-      result.errors.push('車両IDは必須です');
-      result.isValid = false;
-    }
-
-    if (!data.maintenanceType) {
-      result.errors.push('メンテナンス種別は必須です');
-      result.isValid = false;
-    }
-
-    // スケジュール競合チェック
-    if (data.scheduledDate) {
-      const conflicts = await this.checkScheduleConflicts(data.vehicleId, data.scheduledDate);
-      if (conflicts.length > 0) {
-        result.warnings.push(`スケジュール競合が${conflicts.length}件あります`);
+      // ✅ for...of ループを使用してundefinedの可能性を排除
+      let index = 0;
+      for (const recordData of dto.records) {
+        try {
+          const record = await this.create(recordData as any);
+          results.push({
+            id: record.id,
+            success: true,
+            data: record
+          });
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+          results.push({
+            id: `record-${index}`,
+            success: false,
+            error: errorMessage
+          });
+          errors.push({
+            field: `records[${index}]`,
+            message: errorMessage
+          });
+        }
+        index++;
       }
+
+      return {
+        success: errors.length === 0,
+        totalCount: dto.records.length,
+        successCount: results.filter(r => r.success).length,
+        failureCount: errors.length,
+        results,
+        errors: errors.length > 0 ? errors : undefined,
+        metadata: {
+          duration: 0,
+          timestamp: new Date()
+        }
+      };
+    } catch (error) {
+      logger.error('メンテナンス一括作成エラー:', error);
+      throw new DatabaseError('メンテナンス記録の一括作成に失敗しました');
+    }
+  }
+
+  /**
+   * 🔧 バリデーション(既存実装保持・強化)
+   */
+  async validateBulkCreate(dto: MaintenanceBulkCreateDTO): Promise<MaintenanceValidationResult> {
+    const errors: ValidationError[] = [];
+    const warnings: Array<{ field: string; message: string }> = [];
+
+    // ✅ for...of ループを使用してundefinedの可能性を排除
+    let index = 0;
+    for (const record of dto.records) {
+      // 車両IDチェック(リレーション経由)
+      if (!record.vehicles) {
+        errors.push({
+          field: `records[${index}].vehicles`,
+          message: '車両情報が必要です'
+        });
+      }
+
+      // 日付チェック
+      if (record.scheduledDate && record.completedDate) {
+        const scheduled = new Date(record.scheduledDate);
+        const completed = new Date(record.completedDate);
+        if (scheduled > completed) {
+          errors.push({
+            field: `records[${index}].scheduledDate`,
+            message: '予定日は完了日より前である必要があります'
+          });
+        }
+      }
+
+      // 重複チェック(車両と予定日の組み合わせ)
+      if (record.vehicles && record.scheduledDate) {
+        const vehicleConnect = (record.vehicles as any).connect;
+        if (vehicleConnect?.id) {
+          const existing = await this.db.maintenanceRecord.findFirst({
+            where: {
+              vehicleId: vehicleConnect.id,
+              scheduledDate: new Date(record.scheduledDate)
+            }
+          });
+
+          if (existing) {
+            warnings.push({
+              field: `records[${index}]`,
+              message: `同じ車両・日付のメンテナンス記録が既に存在します`
+            });
+          }
+        }
+      }
+
+      index++;
     }
 
-    return result;
+    return {
+      isValid: errors.length === 0,
+      valid: errors.length === 0,
+      errors,
+      warnings: warnings.length > 0 ? warnings : undefined
+    };
   }
 
   // =====================================
   // 🔧 プライベートヘルパーメソッド
   // =====================================
 
-  private buildSearchConditions(filter: MaintenanceFilter): MaintenanceRecordWhereInput {
-    const conditions: MaintenanceRecordWhereInput = {};
+  private buildWhereClause(filter: MaintenanceFilter): MaintenanceRecordWhereInput {
+    const where: MaintenanceRecordWhereInput = {};
 
-    if (filter.query) {
-      conditions.OR = [
-        { description: { contains: filter.query, mode: 'insensitive' } },
-        { vendorName: { contains: filter.query, mode: 'insensitive' } }
+    // 検索クエリ
+    if (filter.search) {
+      where.OR = [
+        { description: { contains: filter.search, mode: 'insensitive' } },
+        { vendorName: { contains: filter.search, mode: 'insensitive' } }
       ];
     }
 
-    if (filter.vehicleIds?.length) {
-      conditions.vehicleId = { in: filter.vehicleIds };
+    // 車両フィルタ
+    if (filter.vehicleIds && filter.vehicleIds.length > 0) {
+      where.vehicleId = { in: filter.vehicleIds };
     }
 
-    if (filter.isCompleted !== undefined) {
-      conditions.isCompleted = filter.isCompleted;
+    // ステータスフィルタ
+    if (filter.statuses && filter.statuses.length > 0) {
+      where.status = { in: filter.statuses };
     }
 
+    // 日付範囲フィルタ
     if (filter.scheduledDateRange) {
-      conditions.scheduledDate = {
-        gte: filter.scheduledDateRange.start,
-        lte: filter.scheduledDateRange.end
-      };
+      where.scheduledDate = {};
+      if (filter.scheduledDateRange.startDate) {
+        where.scheduledDate.gte = new Date(filter.scheduledDateRange.startDate);
+      }
+      if (filter.scheduledDateRange.endDate) {
+        where.scheduledDate.lte = new Date(filter.scheduledDateRange.endDate);
+      }
     }
 
-    return conditions;
+    // コスト範囲フィルタ
+    if (filter.costRange) {
+      where.cost = {};
+      if (filter.costRange.min !== undefined) {
+        where.cost.gte = filter.costRange.min;
+      }
+      if (filter.costRange.max !== undefined) {
+        where.cost.lte = filter.costRange.max;
+      }
+    }
+
+    // ベンダーフィルタ
+    if (filter.vendorNames && filter.vendorNames.length > 0) {
+      where.vendorName = { in: filter.vendorNames };
+    }
+
+    return where;
   }
 
-  private buildOrderBy(sortBy?: string, sortOrder?: 'asc' | 'desc'): MaintenanceRecordOrderByInput {
+  private buildOrderByClause(
+    sortBy?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): MaintenanceRecordOrderByInput {
     const order = sortOrder || 'desc';
-    
+
     switch (sortBy) {
       case 'scheduledDate':
         return { scheduledDate: order };
@@ -1069,114 +909,72 @@ export class MaintenanceRecordService {
         return { completedDate: order };
       case 'cost':
         return { cost: order };
-      case 'vehicleId':
-        return { vehicleId: order };
+      case 'status':
+        return { status: order };
       default:
         return { createdAt: order };
     }
   }
 
-  private async validateScheduling(vehicleId: string, scheduledDate: Date): Promise<void> {
-    const conflicts = await this.checkScheduleConflicts(vehicleId, scheduledDate);
-    if (conflicts.length > 0) {
-      throw new ConflictError('指定日時に他のメンテナンスが予定されています');
+  private async validateCreate(
+    data: MaintenanceRecordCreateInput,
+    options?: {
+      validateScheduling?: boolean;
+      checkResourceAvailability?: boolean;
     }
-  }
-
-  private async checkResourceAvailability(data: MaintenanceRecordCreateInput): Promise<void> {
-    // リソース可用性チェックロジック
-    logger.info('リソース可用性チェック実行', { vehicleId: data.vehicleId });
-  }
-
-  private async generateWorkOrderNumber(): Promise<string> {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    
-    const count = await this.count({
-      createdAt: {
-        gte: new Date(year, now.getMonth(), now.getDate()),
-        lt: new Date(year, now.getMonth(), now.getDate() + 1)
-      }
-    });
-
-    return `WO${year}${month}${day}${String(count + 1).padStart(3, '0')}`;
-  }
-
-  private async trackUpdateHistory(
-    id: string, 
-    existing: any, 
-    newData: any, 
-    updatedBy?: string
   ): Promise<void> {
-    // 更新履歴追跡ロジック
-    logger.info('更新履歴追跡', { id, updatedBy });
-  }
+    // 車両存在確認(リレーション経由)
+    const vehicleConnect = (data.vehicles as any)?.connect;
+    if (vehicleConnect?.id) {
+      const vehicle = await this.db.vehicle.findUnique({
+        where: { id: vehicleConnect.id }
+      });
+      if (!vehicle) {
+        throw new AppValidationError('指定された車両が存在しません', 'vehicles');
+      }
+    }
 
-  private async checkScheduleConflicts(vehicleId: string, scheduledDate: Date): Promise<any[]> {
-    // スケジュール競合チェック
-    return [];
-  }
+    // スケジュール検証
+    if (options?.validateScheduling && data.scheduledDate && vehicleConnect?.id) {
+      const conflicts = await this.db.maintenanceRecord.findMany({
+        where: {
+          vehicleId: vehicleConnect.id,
+          scheduledDate: new Date(data.scheduledDate),
+          status: { in: ['SCHEDULED', 'IN_PROGRESS'] }
+        }
+      });
 
-  private calculateTimeStatistics(records: any[]) {
-    return {
-      averageDowntime: 0,
-      totalDowntime: 0,
-      averageRepairTime: 0
-    };
-  }
-
-  private calculateEfficiencyMetrics(records: any[]) {
-    return {
-      plannedVsActualTime: {
-        plannedHours: 0,
-        actualHours: 0,
-        efficiency: 100
-      },
-      firstTimeFixRate: 95,
-      repeatFailureRate: 5
-    };
-  }
-
-  private calculateCostBreakdown(records: any[]) {
-    return {
-      labor: 0,
-      parts: 0,
-      overhead: 0,
-      emergency: 0
-    };
-  }
-
-  private calculateFailureAnalysis(records: any[]) {
-    return {
-      topFailureModes: [],
-      mtbf: 0,
-      mttr: 0,
-      availability: 95
-    };
-  }
-
-  private calculateCategoryBreakdown(records: any[]) {
-    return {} as Record<MaintenanceCategory, any>;
-  }
-
-  private runPredictionAlgorithm(history: any[]): MaintenancePrediction[] {
-    // 予測アルゴリズム実装
-    return [];
+      if (conflicts.length > 0) {
+        throw new ConflictError('指定日時に既にメンテナンスが予定されています');
+      }
+    }
   }
 
   private async generateSummary(where?: MaintenanceRecordWhereInput) {
     const total = await this.count(where);
-    const completed = await this.count({ ...where, isCompleted: true });
-    
+
+    const statusCounts = await this.db.maintenanceRecord.groupBy({
+      by: ['status'],
+      where,
+      _count: { status: true }
+    });
+
+    const completed = statusCounts.find(s => s.status === 'COMPLETED')?._count.status || 0;
+    const pending = total - completed;
+
+    const costData = await this.db.maintenanceRecord.aggregate({
+      where,
+      _sum: { cost: true },
+      _avg: { cost: true }
+    });
+
     return {
       totalRecords: total,
       completedRecords: completed,
-      pendingRecords: total - completed,
+      pendingRecords: pending,
       overdueRecords: 0,
-      totalCost: 0,
-      averageCost: 0
+      totalCost: Number(costData._sum.cost || 0),
+      averageCost: Number(costData._avg.cost || 0)
     };
   }
 
@@ -1196,23 +994,20 @@ export class MaintenanceRecordService {
   }
 
   private calculateDuration(record: any): number {
-    // 作業時間計算
     return 0;
   }
 
   private checkOverdue(record: any): boolean {
-    // 期限切れチェック
     return false;
   }
 
   private calculateDaysUntilDue(record: any): number {
-    // 期限までの日数計算
     return 0;
   }
 }
 
 // =====================================
-// 🭐 ファクトリ関数（DI対応）
+// 🎯 ファクトリ関数(DI対応)
 // =====================================
 
 /**
@@ -1224,38 +1019,7 @@ export function getMaintenanceRecordService(prisma?: PrismaClient): MaintenanceR
 }
 
 // =====================================
-// 🔧 エクスポート（types/index.ts統合用）
+// 🔧 エクスポート(types/index.ts統合用)
 // =====================================
 
 export default MaintenanceRecordService;
-
-// 基本型エクスポート
-export type {
-  MaintenanceRecordModel,
-  MaintenanceRecordCreateInput,
-  MaintenanceRecordUpdateInput,
-  MaintenanceRecordWhereInput,
-  MaintenanceRecordWhereUniqueInput,
-  MaintenanceRecordOrderByInput,
-  MaintenanceRecordResponseDTO,
-  MaintenanceRecordListResponse,
-  MaintenanceRecordCreateDTO,
-  MaintenanceRecordUpdateDTO
-};
-
-// メンテナンス機能追加エクスポート
-export type {
-  MaintenanceDetails,
-  MaintenanceStatistics,
-  MaintenanceFilter,
-  MaintenancePrediction,
-  MaintenanceValidationResult,
-  MaintenanceBulkCreateDTO
-};
-
-export {
-  MaintenanceCategory,
-  MaintenancePriority,
-  MaintenanceStatus,
-  PartCategory
-};
