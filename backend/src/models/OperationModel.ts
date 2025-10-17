@@ -182,6 +182,7 @@ export interface OperationStatistics {
 
   totalDuration: number;
   averageDuration: number;
+  completionRate: number;
   onTimeCompletionRate: number;
   delayRate: number;
 
@@ -875,6 +876,9 @@ export class OperationService {
       const totalFuelCost = operations.reduce((sum, op) =>
         sum + (op.fuelCostYen ? Number(op.fuelCostYen) : 0), 0
       );
+      const onTimeTrips = operations.filter(op =>
+        op.actualEndTime && op.plannedEndTime && op.actualEndTime <= op.plannedEndTime
+      ).length;
 
       const statistics: OperationStatistics = {
         totalTrips,
@@ -887,8 +891,9 @@ export class OperationService {
         averageFuelConsumption: totalTrips > 0 ? totalFuelConsumed / totalTrips : 0,
         totalFuelCost,
         totalDuration: 0,
+        completionRate: totalTrips ? (completedTrips / totalTrips) * 100 : 0,
         averageDuration: 0,
-        onTimeCompletionRate: 0,
+        onTimeCompletionRate: totalTrips ? (onTimeTrips / totalTrips) * 100 : 0,
         delayRate: 0,
         byStatus: {},
         byVehicle: {},
