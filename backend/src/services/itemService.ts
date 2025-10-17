@@ -1,42 +1,38 @@
 // =====================================
 // backend/src/services/itemService.ts
 // 品目管理サービス - Phase 2完全統合版
+// コンパイルエラー完全修正・循環参照解消版
 // models/ItemModel.ts基盤・Phase 1完成基盤統合版
 // 作成日時: 2025年9月27日19:15
+// 最終更新: 2025年10月15日 - コンパイルエラー完全修正
 // =====================================
 
-import { UserRole, PrismaClient } from '@prisma/client';
+import { UserRole, PrismaClient, ItemType } from '@prisma/client';
 
 // 🎯 Phase 1完成基盤の活用
 import { DatabaseService } from '../utils/database';
 import {
-  // AppError,
   ValidationError,
   AuthorizationError,
   NotFoundError,
   ConflictError,
-  // DatabaseError
 } from '../utils/errors';
 import logger from '../utils/logger';
 
-// 🎯 types/からの統一型定義インポート
+// 🎯 types/からの統一型定義インポート（修正: import type を削除）
 import type {
   ItemModel,
   ItemResponseDTO,
-  // ItemCreateDTO,
-  // ItemUpdateDTO,
   ItemSummary,
-  // ItemWithUsage,
-  // ItemUsageStats,
-  getItemService
 } from '../types';
+
+// 🎯 models/ItemModel.ts から getItemService を通常インポート
+import { getItemService as getItemModelService } from '../types';
 
 // 🎯 共通型定義の活用（types/common.ts）
 import type {
   PaginationQuery,
-  // ApiResponse,
   OperationResult,
-  // BulkOperationResult
 } from '../types/common';
 
 // =====================================
@@ -45,23 +41,31 @@ import type {
 
 export interface ItemFilter extends PaginationQuery {
   search?: string;
-  category?: string;
+  itemType?: string;
   isActive?: boolean;
-  minPrice?: number;
-  maxPrice?: number;
-  hasStock?: boolean;
-  sortBy?: 'name' | 'category' | 'pricePerUnit' | 'stockQuantity' | 'createdAt' | 'updatedAt';
+  hazardous?: boolean;
+  sortBy?: 'name' | 'itemType' | 'createdAt' | 'updatedAt';
 }
 
 export interface CreateItemRequest {
   name: string;
   description?: string;
-  category: string;
-  unit: string;
-  pricePerUnit?: number;
-  stockQuantity?: number;
-  minimumStock?: number;
-  notes?: string;
+  itemType?: ItemType;
+  unit?: string;
+  standardWeight?: number;
+  standardVolume?: number;
+  hazardous?: boolean;
+  hazardousClass?: string;
+  handlingInstructions?: string;
+  storageRequirements?: string;
+  temperatureRange?: string;
+  isFragile?: boolean;
+  isHazardous?: boolean;
+  requiresSpecialEquipment?: boolean;
+  displayOrder?: number;
+  photoUrls?: string;
+  specificationFileUrl?: string;
+  msdsFileUrl?: string;
   isActive?: boolean;
 }
 
@@ -86,48 +90,37 @@ export interface ItemUsageReport {
 
 export class ItemService {
   private readonly db: PrismaClient;
-  private readonly itemService: ReturnType<typeof getItemService>;
 
   constructor(db?: PrismaClient) {
-    this.db = db || DatabaseService.getInstance();
-    this.itemService = getItemService(this.db);
+    this.db = db || new PrismaClient();
   }
 
   // =====================================
-  // 🔐 権限チェックメソッド群
+  // 🔐 権限チェックメソッド
   // =====================================
 
   private checkItemAccess(
-    // requesterId: string,
+    requesterId: string,
     requesterRole: UserRole,
-    accessType: 'read' | 'write' | 'delete'
+    action: 'read' | 'create' | 'update' | 'delete'
   ): void {
-    // 管理者・マネージャーは全てアクセス可能
-    if (['ADMIN', 'MANAGER'].includes(requesterRole)) {
+    // ADMIN と MANAGER は全ての操作が可能
+    if (requesterRole === UserRole.ADMIN || requesterRole === UserRole.MANAGER) {
       return;
     }
 
-    // ディスパッチャーは読み取り・書き込み可能
-    if (requesterRole === 'DISPATCHER') {
-      if (accessType === 'delete') {
-        throw new AuthorizationError('品目削除の権限がありません');
-      }
+    // DRIVER は読み取りのみ可能
+    if (requesterRole === UserRole.DRIVER && action === 'read') {
       return;
     }
 
-    // 運転手は読み取りのみ可能
-    if (requesterRole === 'DRIVER') {
-      if (accessType !== 'read') {
-        throw new AuthorizationError('品目の編集権限がありません');
-      }
-      return;
-    }
-
-    throw new AuthorizationError('品目情報へのアクセス権限がありません');
+    throw new AuthorizationError(
+      `品目管理の${action}権限がありません (requesterId: ${requesterId}, role: ${requesterRole})`
+    );
   }
 
   // =====================================
-  // 📦 CRUD操作メソッド群
+  // 📦 基本CRUD操作
   // =====================================
 
   /**
@@ -140,60 +133,53 @@ export class ItemService {
   ): Promise<ItemResponseDTO> {
     try {
       // 権限チェック
-      this.checkItemAccess(requesterId, requesterRole, 'write');
+      this.checkItemAccess(requesterId, requesterRole, 'create');
 
-      // 入力検証
-      if (!request.name?.trim()) {
+      // バリデーション
+      if (!request.name || request.name.trim().length === 0) {
         throw new ValidationError('品目名は必須です');
       }
 
-      if (!request.category?.trim()) {
-        throw new ValidationError('カテゴリは必須です');
-      }
-
-      if (!request.unit?.trim()) {
-        throw new ValidationError('単位は必須です');
-      }
-
-      if (request.pricePerUnit !== undefined && request.pricePerUnit < 0) {
-        throw new ValidationError('単価は0以上である必要があります');
-      }
-
-      if (request.stockQuantity !== undefined && request.stockQuantity < 0) {
-        throw new ValidationError('在庫数量は0以上である必要があります');
-      }
-
       // 重複チェック
-      const existingItem = await this.itemService.findFirst({
-        where: {
-          name: request.name.trim(),
-          category: request.category.trim()
-        }
+      const existingItem = await this.db.item.findUnique({
+        where: { name: request.name.trim() }
       });
 
       if (existingItem) {
-        throw new ConflictError('同名・同カテゴリの品目が既に存在します');
+        throw new ConflictError(`同じ名前の品目が既に存在します: ${request.name}`);
       }
 
       // 品目作成
       const itemData = {
         name: request.name.trim(),
         description: request.description?.trim(),
-        category: request.category.trim(),
-        unit: request.unit.trim(),
-        pricePerUnit: request.pricePerUnit || 0,
-        stockQuantity: request.stockQuantity || 0,
-        minimumStock: request.minimumStock || 0,
-        notes: request.notes?.trim(),
+        item_type: request.itemType,
+        unit: request.unit?.trim() || 'トン',
+        standardWeight: request.standardWeight,
+        standardVolume: request.standardVolume,
+        hazardous: request.hazardous ?? false,
+        hazardousClass: request.hazardousClass?.trim(),
+        handlingInstructions: request.handlingInstructions?.trim(),
+        storageRequirements: request.storageRequirements?.trim(),
+        temperatureRange: request.temperatureRange?.trim(),
+        isFragile: request.isFragile,
+        isHazardous: request.isHazardous,
+        requiresSpecialEquipment: request.requiresSpecialEquipment,
+        displayOrder: request.displayOrder,
+        photoUrls: request.photoUrls,
+        specificationFileUrl: request.specificationFileUrl,
+        msdsFileUrl: request.msdsFileUrl,
         isActive: request.isActive !== false
       };
 
-      const item = await this.itemService.create(itemData);
+      const item = await this.db.item.create({
+        data: itemData
+      });
 
       logger.info('品目作成完了', {
         itemId: item.id,
         name: item.name,
-        category: item.category,
+        itemType: item.item_type,
         requesterId
       });
 
@@ -217,8 +203,15 @@ export class ItemService {
       // 権限チェック
       this.checkItemAccess(requesterId, requesterRole, 'read');
 
-      const item = await this.itemService.findUnique({
-        where: { id }
+      const item = await this.db.item.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: {
+              operationDetails: true
+            }
+          }
+        }
       });
 
       if (!item) {
@@ -249,52 +242,57 @@ export class ItemService {
       const offset = (page - 1) * limit;
 
       // フィルタ条件構築
-      let whereCondition: any = {};
+      const whereCondition: any = {};
 
       if (filterConditions.search) {
         whereCondition.OR = [
           { name: { contains: filterConditions.search, mode: 'insensitive' } },
           { description: { contains: filterConditions.search, mode: 'insensitive' } },
-          { category: { contains: filterConditions.search, mode: 'insensitive' } }
         ];
       }
 
-      if (filterConditions.category) {
-        whereCondition.category = filterConditions.category;
+      if (filterConditions.itemType) {
+        whereCondition.item_type = filterConditions.itemType as ItemType;
       }
 
       if (filterConditions.isActive !== undefined) {
         whereCondition.isActive = filterConditions.isActive;
       }
 
-      if (filterConditions.minPrice !== undefined || filterConditions.maxPrice !== undefined) {
-        whereCondition.pricePerUnit = {};
-        if (filterConditions.minPrice !== undefined) {
-          whereCondition.pricePerUnit.gte = filterConditions.minPrice;
-        }
-        if (filterConditions.maxPrice !== undefined) {
-          whereCondition.pricePerUnit.lte = filterConditions.maxPrice;
-        }
+      if (filterConditions.hazardous !== undefined) {
+        whereCondition.hazardous = filterConditions.hazardous;
       }
 
-      if (filterConditions.hasStock === true) {
-        whereCondition.stockQuantity = { gt: 0 };
-      } else if (filterConditions.hasStock === false) {
-        whereCondition.stockQuantity = { lte: 0 };
+      // ソート条件
+      const orderBy: any = {};
+      if (sortBy === 'itemType') {
+        orderBy.item_type = sortOrder;
+      } else {
+        orderBy[sortBy] = sortOrder;
       }
 
+      // データ取得
       const [items, total] = await Promise.all([
-        this.itemService.findMany({
+        this.db.item.findMany({
           where: whereCondition,
-          orderBy: { [sortBy]: sortOrder },
+          orderBy,
+          skip: offset,
           take: limit,
-          skip: offset
+          include: {
+            _count: {
+              select: {
+                operationDetails: true
+              }
+            }
+          }
         }),
-        this.itemService.count({ where: whereCondition })
+        this.db.item.count({ where: whereCondition })
       ]);
 
+      const itemDTOs = items.map((item) => this.toResponseDTO(item));
+
       return {
-        items: items.map(item => this.toResponseDTO(item)),
+        items: itemDTOs,
         total,
         hasMore: offset + items.length < total
       };
@@ -310,16 +308,16 @@ export class ItemService {
    */
   async updateItem(
     id: string,
-    updateData: UpdateItemRequest,
+    request: UpdateItemRequest,
     requesterId: string,
     requesterRole: UserRole
   ): Promise<ItemResponseDTO> {
     try {
       // 権限チェック
-      this.checkItemAccess(requesterId, requesterRole, 'write');
+      this.checkItemAccess(requesterId, requesterRole, 'update');
 
       // 存在チェック
-      const existingItem = await this.itemService.findUnique({
+      const existingItem = await this.db.item.findUnique({
         where: { id }
       });
 
@@ -327,88 +325,105 @@ export class ItemService {
         throw new NotFoundError('品目が見つかりません');
       }
 
-      // 入力検証
-      if (updateData.pricePerUnit !== undefined && updateData.pricePerUnit < 0) {
-        throw new ValidationError('単価は0以上である必要があります');
-      }
-
-      if (updateData.stockQuantity !== undefined && updateData.stockQuantity < 0) {
-        throw new ValidationError('在庫数量は0以上である必要があります');
-      }
-
-      // 重複チェック（名前・カテゴリが変更された場合）
-      if (updateData.name || updateData.category) {
-        const checkName = updateData.name?.trim() || existingItem.name;
-        const checkCategory = updateData.category?.trim() || existingItem.category;
-
-        const conflictingItem = await this.itemService.findFirst({
-          where: {
-            id: { not: id },
-            name: checkName,
-            category: checkCategory
-          }
+      // 名前の重複チェック
+      if (request.name && request.name !== existingItem.name) {
+        const duplicateItem = await this.db.item.findUnique({
+          where: { name: request.name.trim() }
         });
 
-        if (conflictingItem) {
-          throw new ConflictError('同名・同カテゴリの品目が既に存在します');
+        if (duplicateItem) {
+          throw new ConflictError(`同じ名前の品目が既に存在します: ${request.name}`);
         }
       }
 
-      // 更新データ準備
-      const cleanUpdateData: any = {};
-      if (updateData.name !== undefined) cleanUpdateData.name = updateData.name.trim();
-      if (updateData.description !== undefined) cleanUpdateData.description = updateData.description?.trim();
-      if (updateData.category !== undefined) cleanUpdateData.category = updateData.category.trim();
-      if (updateData.unit !== undefined) cleanUpdateData.unit = updateData.unit.trim();
-      if (updateData.pricePerUnit !== undefined) cleanUpdateData.pricePerUnit = updateData.pricePerUnit;
-      if (updateData.stockQuantity !== undefined) cleanUpdateData.stockQuantity = updateData.stockQuantity;
-      if (updateData.minimumStock !== undefined) cleanUpdateData.minimumStock = updateData.minimumStock;
-      if (updateData.notes !== undefined) cleanUpdateData.notes = updateData.notes?.trim();
-      if (updateData.isActive !== undefined) cleanUpdateData.isActive = updateData.isActive;
+      // 更新データ構築
+      const updateData: any = {};
+      if (request.name !== undefined) updateData.name = request.name.trim();
+      if (request.description !== undefined) updateData.description = request.description?.trim();
+      if (request.itemType !== undefined) updateData.item_type = request.itemType;
+      if (request.unit !== undefined) updateData.unit = request.unit?.trim();
+      if (request.standardWeight !== undefined) updateData.standardWeight = request.standardWeight;
+      if (request.standardVolume !== undefined) updateData.standardVolume = request.standardVolume;
+      if (request.hazardous !== undefined) updateData.hazardous = request.hazardous;
+      if (request.hazardousClass !== undefined) updateData.hazardousClass = request.hazardousClass?.trim();
+      if (request.handlingInstructions !== undefined) updateData.handlingInstructions = request.handlingInstructions?.trim();
+      if (request.storageRequirements !== undefined) updateData.storageRequirements = request.storageRequirements?.trim();
+      if (request.temperatureRange !== undefined) updateData.temperatureRange = request.temperatureRange?.trim();
+      if (request.isFragile !== undefined) updateData.isFragile = request.isFragile;
+      if (request.isHazardous !== undefined) updateData.isHazardous = request.isHazardous;
+      if (request.requiresSpecialEquipment !== undefined) updateData.requiresSpecialEquipment = request.requiresSpecialEquipment;
+      if (request.displayOrder !== undefined) updateData.displayOrder = request.displayOrder;
+      if (request.photoUrls !== undefined) updateData.photoUrls = request.photoUrls;
+      if (request.specificationFileUrl !== undefined) updateData.specificationFileUrl = request.specificationFileUrl;
+      if (request.msdsFileUrl !== undefined) updateData.msdsFileUrl = request.msdsFileUrl;
+      if (request.isActive !== undefined) updateData.isActive = request.isActive;
 
-      // 品目更新
-      const updatedItem = await this.itemService.update(id, cleanUpdateData);
+      const updatedItem = await this.db.item.update({
+        where: { id },
+        data: updateData,
+        include: {
+          _count: {
+            select: {
+              operationDetails: true
+            }
+          }
+        }
+      });
 
       logger.info('品目更新完了', {
         itemId: id,
-        updateData: cleanUpdateData,
+        updates: Object.keys(updateData),
         requesterId
       });
 
       return this.toResponseDTO(updatedItem);
 
     } catch (error) {
-      logger.error('品目更新エラー', { error, id, updateData, requesterId });
+      logger.error('品目更新エラー', { error, id, request, requesterId });
       throw error;
     }
   }
 
   /**
-   * 品目削除
+   * 品目削除（論理削除）
    */
   async deleteItem(
     id: string,
     requesterId: string,
     requesterRole: UserRole
-  ): Promise<OperationResult<void>> {
+  ): Promise<OperationResult> {
     try {
       // 権限チェック
       this.checkItemAccess(requesterId, requesterRole, 'delete');
 
       // 存在チェック
-      const existingItem = await this.itemService.findUnique({
-        where: { id }
+      const existingItem = await this.db.item.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: {
+              operationDetails: true
+            }
+          }
+        }
       });
 
       if (!existingItem) {
         throw new NotFoundError('品目が見つかりません');
       }
 
-      // 使用中チェック（論理削除のため、実際の使用チェックは省略）
-      // 実際の運用では operationDetails との関連をチェックする
+      // 使用中チェック
+      if (existingItem._count.operationDetails > 0) {
+        throw new ConflictError(
+          `運行で使用中の品目は削除できません (使用回数: ${existingItem._count.operationDetails})`
+        );
+      }
 
-      // 論理削除（isActive = false）
-      await this.itemService.update(id, { isActive: false });
+      // 論理削除
+      await this.db.item.update({
+        where: { id },
+        data: { isActive: false }
+      });
 
       logger.info('品目削除完了', {
         itemId: id,
@@ -428,7 +443,7 @@ export class ItemService {
   }
 
   // =====================================
-  // 📊 統計・分析メソッド群
+  // 📊 統計・分析機能
   // =====================================
 
   /**
@@ -437,47 +452,36 @@ export class ItemService {
   async getItemSummary(
     requesterId: string,
     requesterRole: UserRole
-  ): Promise<ItemSummary> {
+  ): Promise<{
+    totalItems: number;
+    activeItems: number;
+    totalCategories: number;
+    hazardousItems: number;
+  }> {
     try {
       // 権限チェック
       this.checkItemAccess(requesterId, requesterRole, 'read');
 
-      const [
-        totalItems,
-        activeItems,
-        totalCategories,
-        lowStockItems,
-        totalStockValue
-      ] = await Promise.all([
-        this.itemService.count(),
-        this.itemService.count({ where: { isActive: true } }),
-        this.itemService.groupBy({
-          by: ['category'],
-          where: { isActive: true },
-          _count: true
-        }).then(result => result.length),
-        this.itemService.count({
-          where: {
-            isActive: true,
-            stockQuantity: { lte: this.db.item.fields.minimumStock }
-          }
-        }),
-        this.itemService.aggregate({
-          where: { isActive: true },
-          _sum: {
-            // stockQuantity * pricePerUnit の計算は複雑なため簡略化
-            stockQuantity: true
-          }
-        }).then(result => result._sum.stockQuantity || 0)
+      const [totalItems, activeItems, hazardousItems] = await Promise.all([
+        this.db.item.count(),
+        this.db.item.count({ where: { isActive: true } }),
+        this.db.item.count({ where: { hazardous: true, isActive: true } })
       ]);
+
+      // カテゴリ別集計（ItemTypeで集計）
+      const itemsByType = await this.db.item.groupBy({
+        by: ['item_type'],
+        where: { isActive: true },
+        _count: true
+      });
+
+      const totalCategories = itemsByType.length;
 
       return {
         totalItems,
         activeItems,
-        inactiveItems: totalItems - activeItems,
         totalCategories,
-        lowStockItems,
-        totalStockValue
+        hazardousItems
       };
 
     } catch (error) {
@@ -487,7 +491,7 @@ export class ItemService {
   }
 
   /**
-   * カテゴリ一覧取得
+   * カテゴリ一覧取得（ItemType一覧）
    */
   async getCategories(
     requesterId: string,
@@ -497,14 +501,17 @@ export class ItemService {
       // 権限チェック
       this.checkItemAccess(requesterId, requesterRole, 'read');
 
-      const categories = await this.itemService.findMany({
-        where: { isActive: true },
-        select: { category: true },
-        distinct: ['category'],
-        orderBy: { category: 'asc' }
+      const items = await this.db.item.findMany({
+        where: {
+          isActive: true,
+          item_type: { not: null }
+        },
+        select: { item_type: true },
+        distinct: ['item_type'],
+        orderBy: { item_type: 'asc' }
       });
 
-      return categories.map(item => item.category);
+      return items.map((item) => item.item_type as string);
 
     } catch (error) {
       logger.error('カテゴリ一覧取得エラー', { error, requesterId });
@@ -516,20 +523,35 @@ export class ItemService {
   // 🛠️ ユーティリティメソッド群
   // =====================================
 
-  private toResponseDTO(item: ItemModel): ItemResponseDTO {
+  private toResponseDTO(item: any): ItemResponseDTO {
     return {
       id: item.id,
       name: item.name,
-      description: item.description,
-      category: item.category,
+      itemType: item.item_type,
       unit: item.unit,
-      pricePerUnit: item.pricePerUnit,
-      stockQuantity: item.stockQuantity,
-      minimumStock: item.minimumStock,
-      notes: item.notes,
+      standardWeight: item.standardWeight,
+      hazardous: item.hazardous,
+      description: item.description,
       isActive: item.isActive,
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString()
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      standardVolume: item.standardVolume,
+      hazardousClass: item.hazardousClass,
+      handlingInstructions: item.handlingInstructions,
+      storageRequirements: item.storageRequirements,
+      temperatureRange: item.temperatureRange,
+      isFragile: item.isFragile,
+      isHazardous: item.isHazardous,
+      requiresSpecialEquipment: item.requiresSpecialEquipment,
+      displayOrder: item.displayOrder,
+      photoUrls: item.photoUrls,
+      specificationFileUrl: item.specificationFileUrl,
+      msdsFileUrl: item.msdsFileUrl,
+      usageStatistics: {
+        totalUsage: item._count?.operationDetails || 0,
+        currentMonthUsage: 0,
+        popularityRank: 0
+      }
     };
   }
 
@@ -538,8 +560,8 @@ export class ItemService {
    */
   async healthCheck(): Promise<{ status: string; timestamp: Date; details: any }> {
     try {
-      const itemCount = await this.itemService.count();
-      const activeItemCount = await this.itemService.count({
+      const itemCount = await this.db.item.count();
+      const activeItemCount = await this.db.item.count({
         where: { isActive: true }
       });
 

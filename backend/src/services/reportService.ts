@@ -57,7 +57,6 @@ import type { VehicleService } from './vehicleService';
 import type { InspectionService } from './inspectionService';
 import type { UserService } from './userService';
 import type { TripService } from './tripService';
-import type { LocationService } from './locationService';
 import type { ItemService } from './itemService';
 
 /**
@@ -95,7 +94,6 @@ class ReportService {
   private inspectionService?: InspectionService;
   private userService?: UserService;
   private tripService?: TripService;
-  private locationService?: LocationService;
   private itemService?: ItemService;
 
   constructor(db?: PrismaClient) {
@@ -302,14 +300,6 @@ class ReportService {
       this.tripService = getTripService();
     }
     return this.tripService;
-  }
-
-  private async getLocationService(): Promise<LocationService> {
-    if (!this.locationService) {
-      const { getLocationServiceInstance } = await import('./locationService');
-      this.locationService = getLocationServiceInstance();
-    }
-    return this.locationService;
   }
 
   private async getItemService(): Promise<ItemService> {
