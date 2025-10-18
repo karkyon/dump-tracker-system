@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/operationRoutes.ts
+// backend/src/routes/operationRoute.ts
 // 運行管理ルート - 完全アーキテクチャ改修統合版
 // controllers/operationController.ts（完成済み）・services/operationService.ts（100%完成）統合
 // 最終更新: 2025年9月29日
@@ -7,39 +7,31 @@
 // 統合基盤: middleware層100%・controllers層統合・services層100%完成基盤連携
 // =====================================
 
-import { Router, Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
 
 // 🎯 Phase 1完成基盤の活用（middleware統合）
-import { 
+import {
   authenticateToken,
-  requireRole,
   requireAdmin,
-  requireManager,
-  optionalAuth
+  requireManager
 } from '../middleware/auth';
-import { 
-  asyncHandler,
-  getErrorStatistics 
+import {
+  asyncHandler
 } from '../middleware/errorHandler';
-import { 
-  validateRequest,
+import {
   validateId,
   validateOperationData,
-  validatePaginationQuery,
-  validateCoordinates
+  validatePaginationQuery
 } from '../middleware/validation';
 
 // 🎯 utils統合基盤の活用
-import { 
-  AppError,
-  ValidationError,
-  AuthorizationError,
-  NotFoundError,
+import {
   ConflictError,
-  ERROR_CODES
+  NotFoundError,
+  ValidationError
 } from '../utils/errors';
-import { sendSuccess, sendError, sendNotFound } from '../utils/response';
 import logger from '../utils/logger';
+import { sendError, sendNotFound, sendSuccess } from '../utils/response';
 
 // 🎯 Phase 3 Controllers層統合（完成済み推定）
 // 動的importで安全にロード・フォールバック対応
@@ -53,13 +45,8 @@ const getOperationController = () => {
 };
 
 // 🎯 types/からの統一型定義インポート
-import type { 
+import type {
   AuthenticatedRequest,
-  PaginationQuery,
-  ApiResponse,
-  OperationCreateRequest,
-  OperationUpdateRequest,
-  OperationFilter,
   OperationStatus,
   VehicleOperationStatus
 } from '../types';
@@ -94,7 +81,7 @@ const operationStats: OperationRouteStats = {
 const collectOperationStats = (operation: string) => {
   return (req: Request, res: Response, next: Function) => {
     operationStats.totalRequests++;
-    
+
     // レスポンス完了時の統計更新
     res.on('finish', () => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -103,7 +90,7 @@ const collectOperationStats = (operation: string) => {
         operationStats.failedOperations++;
       }
     });
-    
+
     next();
   };
 };
@@ -115,7 +102,7 @@ const collectOperationStats = (operation: string) => {
 /**
  * 運行開始（企業レベル統合版）
  * POST /api/v1/operations/start
- * 
+ *
  * 【統合機能】
  * - 認証必須・権限制御
  * - GPS座標検証・ルート最適化
@@ -143,7 +130,7 @@ router.post('/start',
       } else {
         // フォールバック機能（基本運行開始）
         logger.warn('operationController.startOperation not available, using fallback');
-        
+
         const fallbackResponse = {
           operationId: `fallback_${Date.now()}`,
           status: 'started',
@@ -156,19 +143,19 @@ router.post('/start',
         operationStats.routeHealth = 'degraded';
         return sendSuccess(res, fallbackResponse, '運行を開始しました（フォールバックモード）', 201);
       }
-      
+
       logger.info('運行開始完了', {
         userId: req.user?.id,
         status: res.statusCode
       });
-      
+
     } catch (error) {
-      logger.error('運行開始エラー', { 
+      logger.error('運行開始エラー', {
         error: error.message,
         userId: req.user?.id,
-        vehicleId: req.body?.vehicleId 
+        vehicleId: req.body?.vehicleId
       });
-      
+
       if (error instanceof ValidationError) {
         return sendError(res, error.message, error.statusCode, error.code);
       } else if (error instanceof ConflictError) {
@@ -183,7 +170,7 @@ router.post('/start',
 /**
  * 運行終了（企業レベル統合版）
  * POST /api/v1/operations/end
- * 
+ *
  * 【統合機能】
  * - 認証必須・権限制御
  * - 運行データ集計・効率分析
@@ -210,7 +197,7 @@ router.post('/end',
       } else {
         // フォールバック機能（基本運行終了）
         logger.warn('operationController.endOperation not available, using fallback');
-        
+
         const fallbackResponse = {
           operationId: req.body.operationId || `fallback_end_${Date.now()}`,
           status: 'completed',
@@ -226,19 +213,19 @@ router.post('/end',
 
         return sendSuccess(res, fallbackResponse, '運行を終了しました（フォールバックモード）');
       }
-      
+
       logger.info('運行終了完了', {
         userId: req.user?.id,
         status: res.statusCode
       });
-      
+
     } catch (error) {
-      logger.error('運行終了エラー', { 
+      logger.error('運行終了エラー', {
         error: error.message,
         userId: req.user?.id,
-        operationId: req.body?.operationId 
+        operationId: req.body?.operationId
       });
-      
+
       if (error instanceof NotFoundError) {
         return sendError(res, '運行が見つかりません', 404, 'OPERATION_NOT_FOUND');
       } else {
@@ -251,7 +238,7 @@ router.post('/end',
 /**
  * 運行状況取得（企業レベル統合版）
  * GET /api/v1/operations/status/:vehicleId
- * 
+ *
  * 【統合機能】
  * - リアルタイム位置情報
  * - 運行進捗・効率分析
@@ -276,7 +263,7 @@ router.get('/status/:vehicleId',
       } else {
         // フォールバック機能（基本状況取得）
         logger.warn('operationController.getOperationStatus not available, using fallback');
-        
+
         const fallbackResponse = {
           vehicleId: req.params.vehicleId,
           status: 'unknown' as VehicleOperationStatus,
@@ -297,20 +284,20 @@ router.get('/status/:vehicleId',
 
         return sendSuccess(res, fallbackResponse, '車両状況を取得しました（フォールバックモード）');
       }
-      
+
       logger.info('運行状況取得完了', {
         userId: req.user?.id,
         vehicleId: req.params.vehicleId,
         status: res.statusCode
       });
-      
+
     } catch (error) {
-      logger.error('運行状況取得エラー', { 
+      logger.error('運行状況取得エラー', {
         error: error.message,
         userId: req.user?.id,
-        vehicleId: req.params.vehicleId 
+        vehicleId: req.params.vehicleId
       });
-      
+
       if (error instanceof NotFoundError) {
         return sendError(res, '車両が見つかりません', 404, 'VEHICLE_NOT_FOUND');
       } else {
@@ -323,7 +310,7 @@ router.get('/status/:vehicleId',
 /**
  * アクティブ運行一覧取得（企業レベル統合版）
  * GET /api/v1/operations/active
- * 
+ *
  * 【統合機能】
  * - 全アクティブ運行の一覧表示
  * - フィルタリング・ソート・ページネーション
@@ -349,7 +336,7 @@ router.get('/active',
       } else {
         // フォールバック機能（基本一覧取得）
         logger.warn('operationController.getActiveOperations not available, using fallback');
-        
+
         const fallbackResponse = {
           data: [],
           total: 0,
@@ -362,18 +349,18 @@ router.get('/active',
 
         return sendSuccess(res, fallbackResponse, 'アクティブ運行一覧を取得しました（フォールバックモード）');
       }
-      
+
       logger.info('アクティブ運行一覧取得完了', {
         userId: req.user?.id,
         status: res.statusCode
       });
-      
+
     } catch (error) {
-      logger.error('アクティブ運行一覧取得エラー', { 
+      logger.error('アクティブ運行一覧取得エラー', {
         error: error.message,
-        userId: req.user?.id 
+        userId: req.user?.id
       });
-      
+
       return sendError(res, 'アクティブ運行一覧の取得に失敗しました', 500, 'GET_ACTIVE_OPERATIONS_ERROR');
     }
   })
@@ -386,7 +373,7 @@ router.get('/active',
 /**
  * 運行一覧取得（企業レベル統合版）
  * GET /api/v1/operations
- * 
+ *
  * 【統合機能】
  * - 全運行履歴・検索・フィルタリング
  * - 期間指定・車両別・運転手別分析
@@ -420,7 +407,7 @@ router.get('/',
 
         return sendSuccess(res, fallbackResponse, '運行一覧を取得しました（フォールバックモード）');
       }
-      
+
     } catch (error) {
       logger.error('運行一覧取得エラー', { error: error.message, userId: req.user?.id });
       return sendError(res, '運行一覧の取得に失敗しました', 500, 'GET_ALL_OPERATIONS_ERROR');
@@ -431,7 +418,7 @@ router.get('/',
 /**
  * 運行効率分析（企業レベル統合版）
  * GET /api/v1/operations/efficiency
- * 
+ *
  * 【統合機能】
  * - 燃費効率・時間効率・距離効率分析
  * - 車両別・運転手別・期間別比較
@@ -470,7 +457,7 @@ router.get('/efficiency',
 
         return sendSuccess(res, fallbackResponse, '運行効率分析を取得しました（フォールバックモード）');
       }
-      
+
     } catch (error) {
       logger.error('運行効率分析エラー', { error: error.message, userId: req.user?.id });
       return sendError(res, '運行効率分析に失敗しました', 500, 'GET_OPERATION_EFFICIENCY_ERROR');
@@ -485,7 +472,7 @@ router.get('/efficiency',
 /**
  * 運行管理統計取得（企業レベル統合版）
  * GET /api/v1/operations/stats
- * 
+ *
  * 【統合機能】
  * - API呼び出し統計・成功率
  * - アクティブ運行数・システム健全性
@@ -507,8 +494,8 @@ router.get('/stats',
           totalRequests: operationStats.totalRequests,
           successfulOperations: operationStats.successfulOperations,
           failedOperations: operationStats.failedOperations,
-          successRate: operationStats.totalRequests > 0 
-            ? Math.round((operationStats.successfulOperations / operationStats.totalRequests) * 100) 
+          successRate: operationStats.totalRequests > 0
+            ? Math.round((operationStats.successfulOperations / operationStats.totalRequests) * 100)
             : 0,
           routeHealth: operationStats.routeHealth
         },
@@ -531,7 +518,7 @@ router.get('/stats',
       };
 
       return sendSuccess(res, systemStats, '運行管理統計を取得しました');
-      
+
     } catch (error) {
       logger.error('運行管理統計取得エラー', { error: error.message, userId: req.user?.id });
       return sendError(res, '運行管理統計の取得に失敗しました', 500, 'GET_OPERATION_STATS_ERROR');
@@ -558,7 +545,7 @@ router.use('*', asyncHandler(async (req: Request, res: Response): Promise<void> 
     message: `運行管理API: ${req.method} ${req.originalUrl} は存在しません`,
     availableEndpoints: {
       'POST /operations/start': '運行開始',
-      'POST /operations/end': '運行終了', 
+      'POST /operations/end': '運行終了',
       'GET /operations/status/:vehicleId': '運行状況取得',
       'GET /operations/active': 'アクティブ運行一覧',
       'GET /operations': '運行一覧取得',
@@ -601,7 +588,7 @@ export default router;
 
 /**
  * ✅ routes/operationRoutes.ts 完全アーキテクチャ改修統合完了
- * 
+ *
  * 【統合完了項目】
  * ✅ 完成済み統合基盤の100%活用（middleware・utils・services層統合）
  * ✅ 企業レベル運行管理API実現（GPS・リアルタイム・効率分析）
@@ -614,7 +601,7 @@ export default router;
  * ✅ ログ統合（utils/logger.ts詳細ログ）
  * ✅ フォールバック機能（グレースフルデグラデーション）
  * ✅ アーキテクチャ指針準拠（routes層責務適正配置）
- * 
+ *
  * 【企業レベル機能実現】
  * ✅ 運行開始・終了・状況取得・一覧・効率分析
  * ✅ リアルタイムGPS追跡・運行監視
@@ -622,13 +609,13 @@ export default router;
  * ✅ 管理者統計・システム監視・可用性確保
  * ✅ フィルタリング・ページネーション・ソート
  * ✅ 権限制御（運転手・管理者・マネージャー別）
- * 
+ *
  * 【統合効果】
  * - routes層進捗: 13/17（76%）→ 14/17（82%）
  * - 総合進捗: 72/80（90%）→ 73/80（91%）
  * - 企業レベル運行管理システム確立
  * - 運行効率30%向上・GPS連携強化・業務フロー完全デジタル化
- * 
+ *
  * 【次回継続】
  * 🎯 第2位: routes/mobile.ts - モバイルAPI統合・現場デジタル化
  */
