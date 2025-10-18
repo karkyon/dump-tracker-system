@@ -6,57 +6,43 @@
 // 最終更新: 2025年10月14日 - コンパイルエラー完全修正・既存機能削除なし
 // =====================================
 
-import { UserRole, User as PrismaUser } from '@prisma/client';
+import { User as PrismaUser, UserRole } from '@prisma/client';
 
 // 🎯 Phase 1完成基盤の活用（bcryptjs → utils/crypto.ts統合）
+import {
+  hashPassword,
+  validatePasswordStrength,
+  verifyPassword
+} from '../utils/crypto';
 import { DatabaseService } from '../utils/database';
 import {
   AppError,
+  ConflictError,
   ValidationError as ErrorsValidationError,
-  AuthorizationError,
-  NotFoundError,
-  ConflictError
+  NotFoundError
 } from '../utils/errors';
-import {
-  hashPassword,
-  verifyPassword,
-  validatePasswordStrength,
-  type PasswordValidationResult
-} from '../utils/crypto';
 import logger from '../utils/logger';
-import { successResponse, errorResponse } from '../utils/response';
 
 // 🎯 types/からの統一型定義インポート
 import type {
-  UserModel,
   UserResponseDTO,
   UserWhereInput
 } from '../types';
 
 // 🎯 types/aliases.tsから CreateDTO/UpdateDTO をインポート
-import type {
-  UserCreateDTO,
-  UserUpdateDTO
-} from '../types/aliases';
 
 // 🎯 types/auth.ts統合基盤の活用（既存独自型定義を統合）
 import type {
-  UpdateUserRequest,
   ChangePasswordRequest,
-  UserInfo,
-  AuthenticatedUser,
   RolePermissions,
+  UpdateUserRequest,
   UserFilter
 } from '../types/auth';
 
 // 🎯 共通型定義の活用（types/common.ts）
 import type {
-  PaginationQuery,
-  ApiResponse,
-  OperationResult,
-  BulkOperationResult,
-  ValidationResult as CommonValidationResult,
-  ValidationError as CommonValidationError
+  ValidationError as CommonValidationError,
+  ValidationResult as CommonValidationResult
 } from '../types/common';
 
 // =====================================
@@ -625,6 +611,295 @@ class UserService {
   }
 
   /**
+     * ユーザーアクティビティ取得
+     *
+     * @param userId - ユーザーID
+     * @param options - ページネーションオプション
+     * @returns アクティビティ一覧とページネーション情報
+     */
+  async getUserActivities(
+    userId: string,
+    options: { page: number; limit: number }
+  ): Promise<{
+    data: Array<{
+      id: string;
+      type: string;
+      description: string;
+      createdAt: Date;
+      metadata?: any;
+    }>;
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+  }> {
+    try {
+      logger.info('ユーザーアクティビティ取得開始', { userId, options });
+
+      // ユーザー存在確認
+      const user = await this.db.getInstance().user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!user) {
+        throw new NotFoundError('ユーザーが見つかりません');
+      }
+
+      const { page, limit } = options;
+      const skip = (page - 1) * limit;
+
+      // ✅ 修正: AuditLogの正しいフィールド名を使用
+      const [activities, total] = await Promise.all([
+        this.db.getInstance().auditLog.findMany({
+          where: {
+            userId: userId
+          },
+          skip,
+          take: limit,
+          orderBy: {
+            createdAt: 'desc'
+          },
+          select: {
+            id: true,
+            operationType: true,  // ✅ action → operationType
+            tableName: true,
+            createdAt: true,
+            oldValues: true,      // ✅ changes → oldValues/newValues
+            newValues: true
+          }
+        }),
+        this.db.getInstance().auditLog.count({
+          where: { userId: userId }
+        })
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      // ✅ 修正: アクティビティデータの整形（null対応）
+      const formattedActivities = activities.map(activity => ({
+        id: activity.id,
+        type: activity.operationType,  // ✅ action → operationType
+        description: `${activity.tableName}を${activity.operationType}しました`,
+        createdAt: activity.createdAt || new Date(),  // ✅ null対応
+        metadata: {
+          oldValues: activity.oldValues,
+          newValues: activity.newValues
+        }
+      }));
+
+      logger.info('ユーザーアクティビティ取得成功', { userId, total });
+
+      return {
+        data: formattedActivities,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages
+        }
+      };
+    } catch (error) {
+      logger.error('ユーザーアクティビティ取得エラー', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * ユーザー設定取得
+   *
+   * @param userId - ユーザーID
+   * @returns ユーザー設定情報
+   */
+  /**
+     * ユーザー設定取得
+     *
+     * @param userId - ユーザーID
+     * @returns ユーザー設定情報
+     */
+  async getUserPreferences(userId: string): Promise<{
+    theme: string;
+    language: string;
+    notifications: {
+      email: boolean;
+      push: boolean;
+      sms: boolean;
+    };
+    dashboard: {
+      layout: string;
+      widgets: string[];
+    };
+  }> {
+    try {
+      logger.info('ユーザー設定取得開始', { userId });
+
+      // ユーザー存在確認
+      const user = await this.db.getInstance().user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!user) {
+        throw new NotFoundError('ユーザーが見つかりません');
+      }
+
+      // SystemSettingからユーザー設定を取得
+      const settings = await this.db.getInstance().systemSetting.findMany({
+        where: {
+          key: {
+            startsWith: `user_preferences_${userId}_`
+          }
+        }
+      });
+
+      // デフォルト設定
+      const defaultPreferences = {
+        theme: 'light',
+        language: 'ja',
+        notifications: {
+          email: true,
+          push: true,
+          sms: false
+        },
+        dashboard: {
+          layout: 'default',
+          widgets: ['summary', 'recent_activities']
+        }
+      };
+
+      // 設定が存在する場合はマージ
+      if (settings.length > 0) {
+        const preferences = { ...defaultPreferences };
+        settings.forEach(setting => {
+          // ✅ 修正: null チェックを追加
+          if (!setting.value) {
+            return; // value が null の場合はスキップ
+          }
+
+          const key = setting.key.replace(`user_preferences_${userId}_`, '');
+          try {
+            const value = JSON.parse(setting.value);
+            if (key === 'theme') preferences.theme = value;
+            if (key === 'language') preferences.language = value;
+            if (key === 'notifications') preferences.notifications = value;
+            if (key === 'dashboard') preferences.dashboard = value;
+          } catch (e) {
+            // JSON parse失敗時はデフォルト値を使用
+            logger.warn('ユーザー設定のパースに失敗', { userId, key, error: e });
+          }
+        });
+        return preferences;
+      }
+
+      logger.info('ユーザー設定取得成功（デフォルト）', { userId });
+      return defaultPreferences;
+
+    } catch (error) {
+      logger.error('ユーザー設定取得エラー', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+     * ユーザー設定更新
+     *
+     * @param userId - ユーザーID
+     * @param preferences - 更新する設定情報
+     * @returns 更新後の設定情報
+     */
+  async updateUserPreferences(
+    userId: string,
+    preferences: {
+      theme?: string;
+      language?: string;
+      notifications?: {
+        email?: boolean;
+        push?: boolean;
+        sms?: boolean;
+      };
+      dashboard?: {
+        layout?: string;
+        widgets?: string[];
+      };
+    }
+  ): Promise<{
+    theme: string;
+    language: string;
+    notifications: {
+      email: boolean;
+      push: boolean;
+      sms: boolean;
+    };
+    dashboard: {
+      layout: string;
+      widgets: string[];
+    };
+  }> {
+    try {
+      logger.info('ユーザー設定更新開始', { userId, preferences });
+
+      // ユーザー存在確認
+      const user = await this.db.getInstance().user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!user) {
+        throw new NotFoundError('ユーザーが見つかりません');
+      }
+
+      // 現在の設定を取得
+      const currentPreferences = await this.getUserPreferences(userId);
+
+      // 設定を更新
+      const updatedPreferences = {
+        theme: preferences.theme || currentPreferences.theme,
+        language: preferences.language || currentPreferences.language,
+        notifications: {
+          ...currentPreferences.notifications,
+          ...preferences.notifications
+        },
+        dashboard: {
+          ...currentPreferences.dashboard,
+          ...preferences.dashboard
+        }
+      };
+
+      // SystemSettingに保存
+      const settingsToUpdate = [
+        { key: 'theme', value: updatedPreferences.theme },
+        { key: 'language', value: updatedPreferences.language },
+        { key: 'notifications', value: JSON.stringify(updatedPreferences.notifications) },
+        { key: 'dashboard', value: JSON.stringify(updatedPreferences.dashboard) }
+      ];
+
+      await Promise.all(
+        settingsToUpdate.map(setting =>
+          this.db.getInstance().systemSetting.upsert({
+            where: {
+              key: `user_preferences_${userId}_${setting.key}`
+            },
+            create: {
+              key: `user_preferences_${userId}_${setting.key}`,
+              value: setting.value,
+              description: `User ${userId} preferences: ${setting.key}` // ✅ null の可能性があるが create 時は必須なのでこのままでOK
+            },
+            update: {
+              value: setting.value
+            }
+          })
+        )
+      );
+
+      logger.info('ユーザー設定更新成功', { userId });
+      return updatedPreferences;
+
+    } catch (error) {
+      logger.error('ユーザー設定更新エラー', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
    * ユーザー統計取得（既存保持）
    */
   async getUserStatistics(userId?: string): Promise<UserStatistics> {
@@ -780,19 +1055,14 @@ function getUserService(): UserService {
 // 📤 エクスポート（既存完全実装保持 + Phase 2統合）
 // =====================================
 
-export type { UserService as default };
 export {
-  UserService,
-  getUserService,
-  validateUserInput,
-  validatePassword
+  getUserService, UserService, validatePassword, validateUserInput
 };
+export type { UserService as default };
 
 export type {
-  CreateUserRequest,
-  UserStatistics,
-  UserWithDetails,
-  UserAuditInfo
+  CreateUserRequest, UserAuditInfo, UserStatistics,
+  UserWithDetails
 };
 
 // =====================================

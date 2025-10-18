@@ -502,9 +502,10 @@ enum InspectionType {
 }
 
 enum LocationType {
-  LOADING
-  UNLOADING
-  BOTH
+  DEPOT
+  DESTINATION
+  REST_AREA
+  FUEL_STATION
 
   @@map("location_type")
 }

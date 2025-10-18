@@ -11,8 +11,8 @@ import { Response } from 'express';
 
 // 🎯 Phase 1完成基盤の活用
 import type {
-  ApiResponse,
   ApiListResponse,
+  ApiResponse,
   ListMeta
 } from '../types/common';
 
@@ -277,6 +277,25 @@ export function sendForbiddenError(
   message?: string
 ): Response {
   return sendError(res, message || 'Access forbidden', 403, 'ACCESS_FORBIDDEN');
+}
+
+/**
+ * 権限不足エラーレスポンス送信（403 Forbidden）
+ *
+ * @param res - Expressレスポンスオブジェクト
+ * @param message - メッセージ（オプション）
+ * @returns Response
+ *
+ * @example
+ * ```typescript
+ * return sendUnauthorizedError(res, 'この操作を実行する権限がありません');
+ * ```
+ */
+export function sendUnauthorizedError(
+  res: Response,
+  message?: string
+): Response {
+  return sendError(res, message || 'Unauthorized access', 403, 'UNAUTHORIZED_ACCESS');
 }
 
 /**
