@@ -7,23 +7,21 @@
 // コンパイルエラー完全修正版
 // =====================================
 
-import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
+import { NextFunction, Request, Response } from 'express';
 
 // 🎯 Phase 1完成基盤の活用（重複排除・統合版)
 import {
-  verifyAccessToken,
   JWTPayload,
-  validateJWTConfig
+  validateJWTConfig,
+  verifyAccessToken
 } from '../utils/crypto';
 import {
-  AppError,
   AuthenticationError,
-  AuthorizationError,
-  ValidationError
+  AuthorizationError
 } from '../utils/errors';
-import { sendError } from '../utils/response';
 import logger from '../utils/logger';
+import { sendError } from '../utils/response';
 
 // 🎯 types/からの統一型定義インポート（重複型定義削除）
 import type {
@@ -287,6 +285,18 @@ export function requireRole(roles: UserRole | UserRole[]) {
 }
 
 /**
+ * 役割要求ミドルウェア（エイリアス）
+ * requireRoleの別名 - routesファイルでの使用を想定
+ *
+ * @param roles - 許可される役割の配列
+ * @returns Express middleware function
+ *
+ * @example
+ * router.get('/', authorize(['ADMIN', 'MANAGER']), controller.method);
+ */
+export const authorize = requireRole;
+
+/**
  * 権限要求ミドルウェア
  * 指定された権限を持つユーザーのみアクセス許可
  *
@@ -486,6 +496,7 @@ export function hasPermissions(req: Request, permissions: string | string[]): bo
 
 export default {
   authenticateToken,
+  authorize,
   requireRole,
   requirePermissions,
   requireAdmin,
