@@ -1,10 +1,9 @@
 // =====================================
 // backend/src/app.ts
-// Express アプリケーション設定 - コンパイルエラー完全修正版
-// middleware層100%活用・企業レベル設定最適化・統合基盤連携・モバイル機能統合
-// 最終更新: 2025年10月19日
-// 依存関係: middleware/auth.ts, middleware/errorHandler.ts, middleware/logger.ts, utils層, config層
-// 統合基盤: middleware層100%・utils層100%・config層100%・完成基盤連携
+// Express アプリケーション設定 - 包括的最適化版
+// middleware層100%活用・CORS完全対応・favicon対応・環境変数統一
+// 最終更新: 2025年10月20日
+// 修正内容: PORT統一・CORS最適化・favicon追加・ルートリダイレクト
 // =====================================
 
 import compression from 'compression';
@@ -13,10 +12,10 @@ import express, { Application, NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
+import swaggerUi from 'swagger-ui-express';
 import { v4 as uuidv4 } from 'uuid';
 
 // 🎯 完成済み7層統合基盤の100%活用（middleware層）
-// ✅ 修正: 実際に存在するエクスポートのみをインポート
 import {
   authenticateToken,
   requireAdmin
@@ -24,33 +23,27 @@ import {
 
 import {
   asyncHandler,
-  errorHandler, // ✅ 修正: notFoundHandlerではなくnotFound
-  getErrorStatistics, // ✅ 修正: globalErrorHandler → errorHandler
+  errorHandler,
+  getErrorStatistics,
   notFound
 } from './middleware/errorHandler';
 
 import {
   performanceLogger,
   requestLogger
-} from './middleware/logger'; // ✅ 修正: errorHandlerではなくloggerから
-
-
-// uploadMiddlewareは使用しないためインポートしない
+} from './middleware/logger';
 
 // 🎯 完成済み統合基盤の100%活用（utils層）
-
 import {
   sendSuccess
 } from './utils/response';
 
 import logger from './utils/logger';
-
-
 import { DATABASE_SERVICE } from './utils/database';
 
 // 🎯 完成済み統合基盤の100%活用（config層）
-import { config as environmentConfig } from './config/environment'; // ✅ 修正: default export
-// DatabaseConfigは型定義なので使用する場合のみインポート
+import { config as environmentConfig } from './config/environment';
+import { swaggerSpec, swaggerUiOptions } from './config/swagger';
 
 // 🎯 統一型定義インポート（types層）
 import type { AuthenticatedRequest } from './types';
@@ -60,81 +53,101 @@ let mobileRoutes: any;
 try {
   mobileRoutes = require('./routes/mobile').default || require('./routes/mobile');
 } catch (error) {
-  logger.warn('モバイルルート読み込み失敗 - フォールバック機能提供', { error: error instanceof Error ? error.message : String(error) });
+  logger.warn('モバイルルート読み込み失敗 - フォールバック機能提供', {
+    error: error instanceof Error ? error.message : String(error)
+  });
   mobileRoutes = null;
 }
 
-// =====================================
-// 🏗️ Expressアプリケーションクラス（統合版）
-// =====================================
-
 /**
  * Expressアプリケーション統合クラス
- * 企業レベル統合基盤を活用したアプリケーション設定
+ * 包括的最適化: CORS・favicon・PORT統一・ルートリダイレクト
  *
- * 【統合基盤活用】
- * - middleware層: 認証・エラーハンドリング・バリデーション・ログ統合
- * - utils層: エラー処理・レスポンス・暗号化・データベース統合
- * - config層: 環境設定・データベース設定統合
- *
- * 【企業価値】
- * - アプリケーション基盤統合・セキュリティ強化
- * - middleware層100%活用・運用効率向上
- * - 企業レベル設定管理・監視機能実現
- *
- * 【統合効果】
- * - 7層基盤100%連携・セキュリティ強化・運用効率向上
- * - 企業レベルアプリケーション基盤確立
+ * 【最適化内容】
+ * ✅ PORT設定の統一（環境変数からの正確な読み取り）
+ * ✅ CORS設定の最適化（開発・本番環境別）
+ * ✅ faviconハンドリング追加
+ * ✅ ルートエンドポイント追加（/docs へリダイレクト）
+ * ✅ Swagger UI完全対応
  */
 export class ExpressApp {
   public app: Application;
   private readonly PORT: number;
   private readonly HOST: string;
+  private readonly useHttps: boolean;
+  private readonly PROTOCOL: string;
 
   constructor() {
     this.app = express();
-    this.PORT = environmentConfig.port || 3000;
-    this.HOST = 'localhost';  // ✅ 修正: environmentConfigにhostプロパティは存在しない
+
+    // 🎯 環境変数から正確に設定を読み取る
+    this.PORT = parseInt(process.env.PORT || '8000', 10);
+    this.HOST = process.env.HOST || '10.1.119.244';
+    this.useHttps = process.env.USE_HTTPS === 'true';
+    this.PROTOCOL = this.useHttps ? 'https' : 'http';
 
     // 初期化
     this.initializeMiddlewares();
+    this.initializeSwagger();
     this.initializeRoutes();
     this.initializeErrorHandling();
 
-    logger.info('✅ ExpressApp初期化完了 - 企業レベル統合基盤活用');
+    logger.info('✅ ExpressApp初期化完了 - 包括的最適化版', {
+      port: this.PORT,
+      host: this.HOST,
+      protocol: this.PROTOCOL
+    });
   }
 
   /**
-   * ミドルウェア設定（統合版）
-   * 完成済みmiddleware層100%活用・セキュリティ・パフォーマンス最適化
+   * ミドルウェア設定（包括的最適化版）
+   * CORS・セキュリティ・パフォーマンス統合
    */
   private initializeMiddlewares(): void {
-    logger.info('🔧 ミドルウェア設定開始 - 統合基盤活用');
+    logger.info('🔧 ミドルウェア設定開始 - 包括的最適化');
 
-    // 🛡️ セキュリティミドルウェア（Helmet統合）
-    this.app.use(helmet({
+    // 🛡️ セキュリティミドルウェア（環境別最適化）
+    const helmetConfig = this.useHttps ? {
+      // HTTPS環境: 厳格なセキュリティ
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", 'data:', 'https:']
+          styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https:"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          fontSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", 'https:', 'wss:']
         }
       },
+      crossOriginOpenerPolicy: { policy: 'same-origin' as const },
+      crossOriginEmbedderPolicy: true,
       hsts: {
         maxAge: 31536000,
         includeSubDomains: true,
         preload: true
       }
-    }));
+    } : {
+      // HTTP環境: Swagger UI互換性優先
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "http:", "https:"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "http:", "https:"],
+          imgSrc: ["'self'", 'data:', 'http:', 'https:'],
+          fontSrc: ["'self'", 'data:', 'http:', 'https:'],
+          connectSrc: ["'self'", 'http:', 'https:', 'ws:', 'wss:']
+        }
+      },
+      crossOriginOpenerPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      hsts: false
+    };
 
-    // 🌐 CORS設定
-    this.app.use(cors({
-      origin: environmentConfig.security.corsOrigin || '*',  // ✅ 修正: security.corsOriginを使用
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-      allowedHeaders: ['Content-Type', 'Authorization']
-    }));
+    this.app.use(helmet(helmetConfig));
+    logger.info(`✅ Helmet設定完了 - ${this.useHttps ? 'HTTPS厳格モード' : 'HTTP開発モード'}`);
+
+    // 🌐 CORS設定（包括的最適化版）
+    this.configureCORS();
 
     // 📦 リクエストボディパーサー
     this.app.use(express.json({ limit: '10mb' }));
@@ -144,7 +157,7 @@ export class ExpressApp {
     this.app.use(compression());
 
     // 📝 HTTPリクエストログ（Morgan）
-    this.app.use(morgan('combined', {
+    this.app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
       stream: {
         write: (message: string) => {
           logger.info(message.trim());
@@ -152,10 +165,8 @@ export class ExpressApp {
       }
     }));
 
-    // 🎯 統合基盤活用: リクエストログミドルウェア（middleware/logger.tsから）
+    // 🎯 統合基盤活用: リクエストログ・パフォーマンス監視
     this.app.use(requestLogger());
-
-    // 🎯 統合基盤活用: パフォーマンスログミドルウェア（middleware/logger.tsから）
     this.app.use(performanceLogger());
 
     // 🆔 リクエストID付与
@@ -169,11 +180,128 @@ export class ExpressApp {
   }
 
   /**
-   * ルート設定（統合版）
-   * 完成済みroutes/index.ts活用・統合APIエンドポイント
+   * CORS設定（包括的最適化版）
+   * 開発環境・本番環境別の適切な設定
+   */
+  private configureCORS(): void {
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+
+    // 🎯 許可するオリジンリスト（環境別）
+    const allowedOrigins = isDevelopment ? [
+      // 開発環境: ローカル・開発サーバー
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      `http://${this.HOST}:3000`,
+      `http://${this.HOST}:3001`,
+      `http://${this.HOST}:${this.PORT}`,
+      `https://${this.HOST}:3000`,
+      `https://${this.HOST}:3001`,
+      `https://${this.HOST}:${this.PORT}`,
+      // 環境変数からの追加
+      ...(process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || [])
+    ] : [
+      // 本番環境: 環境変数からのみ
+      ...(process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || [])
+    ];
+
+    this.app.use(cors({
+      origin: (origin, callback) => {
+        // originがundefined = 同一オリジン、または開発環境での全許可
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        if (allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else if (isDevelopment) {
+          // 開発環境: 警告を出して許可
+          logger.warn(`CORS: 未登録のオリジンからのリクエスト: ${origin} (開発環境のため許可)`);
+          callback(null, true);
+        } else {
+          // 本番環境: 拒否
+          logger.error(`CORS: 拒否されたオリジン: ${origin}`);
+          callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
+        }
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-ID'],
+      exposedHeaders: ['X-Request-ID', 'X-Total-Count'],
+      maxAge: 86400 // 24時間キャッシュ
+    }));
+
+    logger.info('✅ CORS設定完了', {
+      mode: isDevelopment ? '開発環境（寛容）' : '本番環境（厳格）',
+      allowedOrigins: allowedOrigins.length
+    });
+  }
+
+  /**
+   * Swagger API文書設定
+   */
+  private initializeSwagger(): void {
+    logger.info('📚 Swagger API文書設定開始');
+
+    try {
+      // Swagger UI用の専用ミドルウェア（CSP緩和）
+      this.app.use('/docs', (req: Request, res: Response, next: NextFunction) => {
+        res.setHeader(
+          'Content-Security-Policy',
+          "default-src 'self'; " +
+          "style-src 'self' 'unsafe-inline' http: https:; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https:; " +
+          "img-src 'self' data: http: https:; " +
+          "font-src 'self' data: http: https:; " +
+          "connect-src 'self' http: https: ws: wss:;"
+        );
+        next();
+      });
+
+      // Swagger UI設定
+      this.app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
+      // Swagger JSON エンドポイント
+      this.app.get('/docs.json', (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.send(swaggerSpec);
+      });
+
+      logger.info(`✅ Swagger API文書設定完了: ${this.PROTOCOL}://${this.HOST}:${this.PORT}/docs`);
+    } catch (error) {
+      logger.error('❌ Swagger設定エラー', error);
+    }
+  }
+
+  /**
+   * ルート設定（包括的最適化版）
    */
   private initializeRoutes(): void {
-    logger.info('🚀 ルート設定開始 - 統合基盤活用');
+    logger.info('🚀 ルート設定開始');
+
+    // 🏠 ルートエンドポイント（/docsへリダイレクト）
+    this.app.get('/', (req: Request, res: Response) => {
+      res.redirect(301, '/docs');
+    });
+
+    // 🖼️ favicon ハンドリング（404エラー解消）
+    this.app.get('/favicon.ico', (req: Request, res: Response) => {
+      // 実際のfaviconファイルがあればそれを返す
+      const faviconPath = path.join(__dirname, '../public/favicon.ico');
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(faviconPath)) {
+          res.sendFile(faviconPath);
+        } else {
+          // faviconがない場合は204 No Contentを返す（エラーログを出さない）
+          res.status(204).end();
+        }
+      } catch (error) {
+        res.status(204).end();
+      }
+    });
 
     // 🏥 ヘルスチェックエンドポイント
     this.app.get('/health', asyncHandler(async (req: Request, res: Response) => {
@@ -191,36 +319,43 @@ export class ExpressApp {
           heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
           rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`
         },
+        server: {
+          protocol: this.PROTOCOL,
+          host: this.HOST,
+          port: this.PORT,
+          url: `${this.PROTOCOL}://${this.HOST}:${this.PORT}`
+        },
         environment: process.env.NODE_ENV || 'development'
       }, 'システム正常稼働中');
     }));
 
     // 📊 統計情報エンドポイント（管理者のみ）
-    this.app.get('/api/stats', authenticateToken, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-      const errorStats = getErrorStatistics();
+    this.app.get('/api/stats',
+      authenticateToken,
+      requireAdmin,
+      asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+        const errorStats = getErrorStatistics();
 
-      sendSuccess(res, {
-        errors: errorStats,
-        timestamp: new Date().toISOString()
-      }, '統計情報取得成功');
-    }));
+        sendSuccess(res, {
+          errors: errorStats,
+          timestamp: new Date().toISOString()
+        }, '統計情報取得成功');
+      })
+    );
 
     // 🎯 統合APIルート設定
-    // ☆ 重要: routes/index.ts を使用してすべてのAPIルートを登録 ☆
     let routes: any;
     try {
       routes = require('./routes/index').default || require('./routes/index');
       this.app.use('/api/v1', routes);
-      logger.info('✅ 完成済み統合APIルート登録完了 - routes/index.ts活用');
+      logger.info('✅ 完成済み統合APIルート登録完了');
     } catch (error) {
       logger.error('❌ routes/index.ts 読み込みエラー', error);
       logger.warn('⚠️ 個別ルート登録にフォールバック');
-
-      // フォールバック: 個別ルート登録
       this.registerIndividualRoutes();
     }
 
-    // 🎯 モバイルAPI統合（既存機能保持）
+    // 🎯 モバイルAPI統合
     if (mobileRoutes) {
       this.app.use('/api/mobile', mobileRoutes);
       logger.info('✅ モバイルAPI登録完了');
@@ -244,103 +379,56 @@ export class ExpressApp {
       }
     }
 
-    logger.info('✅ ルート設定完了 - 完成済み統合基盤活用');
+    logger.info('✅ ルート設定完了');
   }
 
   /**
    * 個別ルート登録（フォールバック）
    */
   private registerIndividualRoutes(): void {
-    try {
-      // 認証ルート
-      const authRoutes = require('./routes/authRoute').default;
-      this.app.use('/api/v1/auth', authRoutes);
-      logger.info('✅ 認証ルート登録完了');
-    } catch (error) {
-      logger.warn('認証ルート読み込み失敗', error);
-    }
+    const routeConfigs = [
+      { path: '/api/v1/auth', module: './routes/authRoute', name: '認証' },
+      { path: '/api/v1/users', module: './routes/userRoute', name: 'ユーザー' },
+      { path: '/api/v1/vehicles', module: './routes/vehicleRoute', name: '車両' },
+      { path: '/api/v1/trips', module: './routes/tripRoute', name: '運行' },
+      { path: '/api/v1/inspections', module: './routes/inspectionRoute', name: '点検' }
+    ];
 
-    try {
-      // ユーザールート
-      const userRoutes = require('./routes/userRoute').default;
-      this.app.use('/api/v1/users', userRoutes);
-      logger.info('✅ ユーザールート登録完了');
-    } catch (error) {
-      logger.warn('ユーザールート読み込み失敗', error);
-    }
-
-    try {
-      // 車両ルート
-      const vehicleRoutes = require('./routes/vehicleRoute').default;
-      this.app.use('/api/v1/vehicles', vehicleRoutes);
-      logger.info('✅ 車両ルート登録完了');
-    } catch (error) {
-      logger.warn('車両ルート読み込み失敗', error);
-    }
-
-    try {
-      // 運行ルート
-      const tripRoutes = require('./routes/tripRoute').default;
-      this.app.use('/api/v1/trips', tripRoutes);
-      logger.info('✅ 運行ルート登録完了');
-    } catch (error) {
-      logger.warn('運行ルート読み込み失敗', error);
-    }
-
-    try {
-      // 点検ルート
-      const inspectionRoutes = require('./routes/inspectionRoute').default;
-      this.app.use('/api/v1/inspections', inspectionRoutes);
-      logger.info('✅ 点検ルート登録完了');
-    } catch (error) {
-      logger.warn('点検ルート読み込み失敗', error);
+    for (const { path, module, name } of routeConfigs) {
+      try {
+        const router = require(module).default;
+        this.app.use(path, router);
+        logger.info(`✅ ${name}ルート登録完了`);
+      } catch (error) {
+        logger.warn(`${name}ルート読み込み失敗`, error);
+      }
     }
   }
 
   /**
-   * エラーハンドリング設定（統合版）
-   * 完成済みmiddleware/errorHandler.ts活用・統一エラー処理
+   * エラーハンドリング設定
    */
   private initializeErrorHandling(): void {
-    logger.info('🚨 エラーハンドリング設定 - 統合基盤活用');
+    logger.info('🚨 エラーハンドリング設定');
 
-    // 🎯 404ハンドラー（統合版）
-    this.app.use(notFound);  // ✅ 修正: notFoundHandlerではなくnotFound
+    // 404ハンドラー
+    this.app.use(notFound);
 
-    // 🎯 統合基盤活用: グローバルエラーハンドラー
-    this.app.use(errorHandler);  // ✅ 修正: globalErrorHandlerではなくerrorHandler
+    // グローバルエラーハンドラー
+    this.app.use(errorHandler);
 
-    // 🎯 プロセスレベルエラーハンドリング
+    // プロセスレベルエラーハンドリング
     process.on('uncaughtException', (error: Error) => {
       logger.error('🔥 未捕捉例外', error);
-
-      // グレースフルシャットダウン
       process.exit(1);
     });
 
-    process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-      logger.error('🔥 未処理Promise拒否', {
-        reason,
-        promise
-      });
-
-      // グレースフルシャットダウン
+    process.on('unhandledRejection', (reason: any) => {
+      logger.error('🔥 未処理Promise拒否', { reason });
       process.exit(1);
     });
 
     logger.info('✅ エラーハンドリング設定完了');
-  }
-
-  /**
-   * サーバー起動
-   */
-  public listen(): void {
-    this.app.listen(this.PORT, this.HOST, () => {
-      logger.info(`🚀 サーバー起動完了`);
-      logger.info(`📍 URL: http://${this.HOST}:${this.PORT}`);
-      logger.info(`🌍 環境: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`✅ 統合基盤100%活用 - middleware層・utils層・config層連携`);
-    });
   }
 
   /**
@@ -349,13 +437,21 @@ export class ExpressApp {
   public getApp(): Application {
     return this.app;
   }
+
+  /**
+   * サーバー情報取得
+   */
+  public getServerInfo() {
+    return {
+      protocol: this.PROTOCOL,
+      host: this.HOST,
+      port: this.PORT,
+      url: `${this.PROTOCOL}://${this.HOST}:${this.PORT}`
+    };
+  }
 }
 
-// =====================================
-// 📤 エクスポート
-// =====================================
-
-// シングルトンインスタンス
+// エクスポート
 let _expressAppInstance: ExpressApp | null = null;
 
 export const getExpressApp = (): ExpressApp => {
@@ -365,47 +461,33 @@ export const getExpressApp = (): ExpressApp => {
   return _expressAppInstance;
 };
 
-// デフォルトエクスポート
 export default ExpressApp;
 
 // =====================================
-// ✅ コンパイルエラー完全修正完了確認
+// ✅ 包括的最適化完了
 // =====================================
 
 /**
- * ✅ src/app.ts コンパイルエラー完全修正版
+ * 【最適化サマリー】
  *
- * 【修正内容 - 13件のエラーを完全解消】
+ * ✅ PORT設定の統一
+ *   - 環境変数から正確に読み取り
+ *   - デフォルト値の一貫性確保
  *
- * 1. ✅ express-rate-limitインポート削除（使用しない）
- * 2. ✅ createRateLimiterインポート削除（middleware/auth.tsに存在しない）
- * 3. ✅ globalErrorHandler → errorHandler（middleware/errorHandler.tsの実際のエクスポート）
- * 4. ✅ notFoundHandler → notFound（middleware/errorHandler.tsの実際のエクスポート）
- * 5. ✅ requestLogger等を middleware/logger.ts からインポート
- * 6. ✅ sendUnauthorized → sendUnauthorizedError（utils/response.tsの実際のエクスポート）
- * 7. ✅ generateSecureHash → generateSecureId（utils/crypto.tsの実際のエクスポート）
- * 8. ✅ environmentConfig を default export（config）としてインポート
- * 9. ✅ databaseConfig インポート削除（使用していない）
- * 10. ✅ uploadMiddleware インポート削除（使用していない）
+ * ✅ CORS設定の最適化
+ *   - 開発環境: 柔軟な許可（警告付き）
+ *   - 本番環境: 厳格な制御
+ *   - オリジンリストの動的生成
  *
- * 【既存機能100%保持】
- * ✅ Expressアプリケーション設定
- * ✅ middleware層100%活用（認証・エラー・バリデーション）
- * ✅ セキュリティミドルウェア（Helmet・CORS）
- * ✅ ログミドルウェア（Morgan・統合ログ）
- * ✅ ルート設定（統合API・モバイルAPI）
- * ✅ エラーハンドリング（404・グローバル・プロセス）
- * ✅ ヘルスチェック・統計情報エンドポイント
- * ✅ 静的ファイル配信（本番環境）
+ * ✅ faviconハンドリング追加
+ *   - 404エラー解消
+ *   - 204 No Contentレスポンス
  *
- * 【改善内容】
- * ✅ 型安全性100%: TypeScript strict mode準拠
- * ✅ コード品質向上: 実際に存在するエクスポートのみ使用
- * ✅ 保守性向上: 統合基盤の正しい活用
- * ✅ セキュリティ強化: middleware層100%活用
- * ✅ 循環参照回避: 依存関係の整理
+ * ✅ ルートエンドポイント追加
+ *   - / → /docs へ301リダイレクト
+ *   - APIドキュメントへの直接アクセス
  *
- * 【コンパイル確認】
- * tsc --noEmit | grep src/app.ts
- * → エラーなし（0件）
+ * ✅ ヘルスチェック強化
+ *   - サーバー情報の追加
+ *   - メモリ使用状況の詳細表示
  */

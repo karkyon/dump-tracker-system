@@ -532,14 +532,13 @@ businessRoutes.forEach(route => {
 // =====================================
 // GPS・位置追跡ルート登録（統合版）
 // =====================================
-
 const locationTrackingRoutes = [
   {
     name: 'gpsRoutes',
     path: '/gps',
     priority: 'normal' as const,
     requireAuth: true,
-    description: 'GPS・位置追跡'
+    description: 'GPS横断機能・リアルタイム追跡'
   },
   {
     name: 'operationRoutes',
@@ -748,4 +747,66 @@ export const resetRouteStatistics = (): void => {
  * 【スコア向上】
  * 前回: 71/120点 → routes/index.ts完了: 76/120点（+5点改善）
  * routes/層: 0/17ファイル → 1/17ファイル（基盤確立）
+ */
+
+// =====================================
+// 登録完了後のルート一覧（参考）
+// =====================================
+
+/**
+ * 📋 全登録ルート（gpsRoutes追加後）
+ *
+ * 認証・管理系:
+ * - /auth - 認証・JWT管理
+ * - /users - ユーザー管理
+ *
+ * 業務系:
+ * - /vehicles - 車両管理
+ * - /trips - 運行記録管理
+ * - /locations - 位置・場所管理
+ * - /items - 品目管理
+ * - /inspections - 点検記録管理
+ * - /reports - レポート・分析
+ *
+ * GPS・運行系:
+ * - /gps - GPS横断機能（NEW!）
+ * - /operations - 運行管理・操作
+ * - /operationDetails - 運行詳細管理
+ *
+ * モバイル・ヘルスチェック:
+ * - /mobile - モバイル専用API
+ * - /health-detailed - 詳細ヘルスチェック
+ *
+ * 合計: 13ルート + 1新規 = 14ルート
+ */
+
+// =====================================
+// エンドポイント一覧（gpsRoutes）
+// =====================================
+
+/**
+ * 🌐 GPS横断機能エンドポイント
+ *
+ * リアルタイム追跡:
+ * - GET /api/v1/gps/realtime/vehicles - 全車両位置
+ * - GET /api/v1/gps/realtime/vehicle/:id - 特定車両位置
+ * - POST /api/v1/gps/realtime/area - エリア内検索
+ *
+ * ヒートマップ・可視化:
+ * - GET /api/v1/gps/heatmap - ヒートマップデータ
+ * - GET /api/v1/gps/tracks - 移動軌跡データ
+ *
+ * ジオフェンシング:
+ * - GET /api/v1/gps/geofences - ジオフェンス一覧
+ * - POST /api/v1/gps/geofences - ジオフェンス作成
+ * - GET /api/v1/gps/geofence/violations - 違反検出
+ *
+ * データ分析:
+ * - GET /api/v1/gps/speed-violations - 速度違反
+ * - GET /api/v1/gps/idle-analysis - アイドリング分析
+ * - GET /api/v1/gps/analytics/patterns - 移動パターン
+ * - POST /api/v1/gps/route-optimization - ルート最適化
+ * - GET /api/v1/gps/statistics - GPS統計
+ *
+ * 合計: 13エンドポイント
  */
