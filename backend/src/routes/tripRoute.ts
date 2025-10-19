@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/tripRoutes.ts
+// backend/src/routes/tripRoute.ts
 // 運行管理ルート統合 - コンパイルエラー完全解消版
 // 運行記録CRUD・GPS連携・状態管理・リアルタイム追跡・統計分析
 // 最終更新: 2025年10月18日

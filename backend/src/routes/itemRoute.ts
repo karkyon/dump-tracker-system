@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/itemRoutes.ts
+// backend/src/routes/itemRoute.ts
 // 品目管理ルート - コンパイルエラー完全解消版
 // tripRoutes.tsパターン適用・全100件エラー解消
 // 最終更新: 2025年10月18日

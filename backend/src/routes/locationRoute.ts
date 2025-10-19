@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/locationRoutes.ts
+// backend/src/routes/locationRoute.ts
 // 位置管理ルート - コンパイルエラー完全解消版
 // tripRoutes.tsパターン適用・全75件エラー解消
 // 最終更新: 2025年10月18日

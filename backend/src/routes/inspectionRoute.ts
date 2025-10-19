@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/inspectionRoutes.ts
+// backend/src/routes/inspectionRoute.ts
 // 点検管理ルート - コンパイルエラー完全解消版
 // tripRoutes.tsパターン適用・全28件エラー解消
 // 最終更新: 2025年10月18日

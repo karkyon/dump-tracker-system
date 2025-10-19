@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/vehicleRoutes.ts
+// backend/src/routes/vehicleRoute.ts
 // 車両管理ルート - コンパイルエラー完全解消版
 // tripRoutes.tsパターン適用・全37件エラー解消
 // 最終更新: 2025年10月18日

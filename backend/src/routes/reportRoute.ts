@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/reportRoutes.ts
+// backend/src/routes/reportRoute.ts
 // レポート管理ルート - コンパイルエラー完全解消版
 // tripRoutes.tsパターン完全適用・全31件エラー解消
 // 最終更新: 2025年10月18日

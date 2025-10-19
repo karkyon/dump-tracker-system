@@ -1,5 +1,5 @@
 // =====================================
-// backend/src/routes/userRoutes.ts
+// backend/src/routes/userRoute.ts
 // ユーザー管理ルート - Controller活用版
 // エンドポイント定義のみ・ビジネスロジックはController層に委譲
 // 最終更新: 2025年10月18日
