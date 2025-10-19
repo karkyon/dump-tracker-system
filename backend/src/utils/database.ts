@@ -4,10 +4,10 @@
 // 配置: utils/ - データベース接続の統一管理層
 // 全サービス層からのDB接続をこのファイル経由で統一
 // 作成日時: 2025年9月26日
-// 最終更新: 2025年9月29日 - Prisma v6型安全対応・コンパイルエラー解消
+// 最終更新: 2025年10月19日 - Prisma 5.0+ beforeExit対応
 // =====================================
 
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 // =====================================
 // 型定義（export: config/database.tsから参照）
@@ -56,7 +56,7 @@ export class DatabaseService {
   }
 
   /**
-   * 新しいPrismaClientインスタンス作成（Prisma v6型安全対応）
+   * 新しいPrismaClientインスタンス作成（Prisma 5.0+対応）
    */
   private static createInstance(config?: DatabaseConfig): PrismaClient {
     DatabaseService.isInitializing = true;
@@ -82,11 +82,9 @@ export class DatabaseService {
 
       const client = new PrismaClient(options);
 
-      // 型安全に扱える唯一のイベント（beforeExit）
-      (client as any).$on('beforeExit', async () => {
-        console.log('[DatabaseService] PrismaClient is about to exit');
-        DatabaseService.connectionInfo.isConnected = false;
-      });
+      // ✅ Prisma 5.0+ 対応: beforeExitフックを削除
+      // Prisma 5.0以降、beforeExitはlibrary engineでサポートされていない
+      // 代わりに、processレベルでイベントリスナーを登録
 
       // 接続情報更新
       DatabaseService.connectionInfo.isConnected = true;
@@ -119,7 +117,7 @@ export class DatabaseService {
     try {
       const prisma = DatabaseService.getInstance();
       await prisma.$queryRaw`SELECT 1 as test`;
-      
+
       DatabaseService.connectionInfo.isConnected = true;
       console.log('[DatabaseService] Connection test successful');
       return true;
@@ -128,9 +126,26 @@ export class DatabaseService {
       DatabaseService.connectionInfo.isConnected = false;
       DatabaseService.connectionInfo.lastErrorAt = new Date();
       DatabaseService.connectionInfo.lastError = error instanceof Error ? error.message : 'Unknown error';
-      
+
       console.error('[DatabaseService] Connection test failed:', error);
       return false;
+    }
+  }
+
+  /**
+   * データベース切断
+   */
+  static async disconnect(): Promise<void> {
+    if (DatabaseService.instance) {
+      try {
+        await DatabaseService.instance.$disconnect();
+        DatabaseService.connectionInfo.isConnected = false;
+        DatabaseService.instance = null;
+        console.log('[DatabaseService] Database disconnected successfully');
+      } catch (error) {
+        console.error('[DatabaseService] Error during disconnect:', error);
+        throw error;
+      }
     }
   }
 
@@ -142,52 +157,29 @@ export class DatabaseService {
   }
 
   /**
-   * データベース接続クリーンアップ
+   * トランザクション実行ヘルパー
    */
-  static async disconnect(): Promise<void> {
-    if (DatabaseService.instance) {
-      try {
-        await DatabaseService.instance.$disconnect();
-        console.log('[DatabaseService] Disconnected successfully');
-      } catch (error) {
-        console.error('[DatabaseService] Disconnect error:', error);
-      } finally {
-        DatabaseService.instance = null;
-        DatabaseService.connectionInfo.isConnected = false;
-      }
-    }
+  static async transaction<T>(
+    fn: (tx: Prisma.TransactionClient) => Promise<T>
+  ): Promise<T> {
+    const prisma = DatabaseService.getInstance();
+    return await prisma.$transaction(fn);
   }
 
   /**
-   * インスタンス強制リセット（テスト用）
-   */
-  static resetInstance(): void {
-    if (process.env.NODE_ENV !== 'test') {
-      console.warn('[DatabaseService] resetInstance() should only be used in test environment');
-    }
-    
-    DatabaseService.instance = null;
-    DatabaseService.isInitializing = false;
-    DatabaseService.connectionInfo = {
-      isConnected: false,
-      connectionCount: 0
-    };
-  }
-
-  /**
-   * ヘルスチェック実行
+   * ヘルスチェック
    */
   static async healthCheck(): Promise<{
     status: 'healthy' | 'unhealthy';
     connectionInfo: ConnectionInfo;
     timestamp: Date;
-    details?: string;
+    details: string;
   }> {
     const timestamp = new Date();
-    
+
     try {
       const isConnected = await DatabaseService.testConnection();
-      
+
       return {
         status: isConnected ? 'healthy' : 'unhealthy',
         connectionInfo: DatabaseService.getConnectionInfo(),
@@ -227,7 +219,12 @@ export const testDatabaseConnection = async (): Promise<boolean> => {
 /**
  * ヘルスチェック実行（export: config/database.tsから参照）
  */
-export const getDatabaseHealth = async () => {
+export const getDatabaseHealth = async (): Promise<{
+  status: 'healthy' | 'unhealthy';
+  connectionInfo: ConnectionInfo;
+  timestamp: Date;
+  details: string;
+}> => {
   return DatabaseService.healthCheck();
 };
 
@@ -237,10 +234,12 @@ export const getDatabaseHealth = async () => {
 export const DATABASE_SERVICE = DatabaseService;
 
 // =====================================
-// プロセス終了時のクリーンアップ
+// プロセス終了時のクリーンアップ（Prisma 5.0+ 対応）
 // =====================================
 
+// ✅ Prisma 5.0+ では、processレベルで直接イベントリスナーを登録
 process.on('beforeExit', async () => {
+  console.log('[DatabaseService] Process beforeExit event received');
   await DatabaseService.disconnect();
 });
 

@@ -6,33 +6,27 @@
 // 依存関係: middleware/auth.ts, middleware/errorHandler.ts, utils/errors.ts, utils/response.ts
 // =====================================
 
-import { Router, Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
 
 // 🎯 Phase 1完成基盤の活用（重複排除・統合版）
-import { 
+import {
   authenticateToken,
-  optionalAuth,
-  requireRole,
-  requireAdmin,
-  requireManager
+  requireAdmin
 } from '../middleware/auth';
-import { 
+import {
   asyncHandler,
-  getErrorStatistics,
-  getErrorHealthStatus 
+  getErrorHealthStatus,
+  getErrorStatistics
 } from '../middleware/errorHandler';
-import { 
-  AppError,
-  NotFoundError,
-  SystemError,
-  ERROR_CODES
+import {
+  ERROR_CODES,
+  NotFoundError
 } from '../utils/errors';
-import { 
-  sendSuccess,
-  sendError,
-  sendNotFound
-} from '../utils/response';
 import logger from '../utils/logger';
+import {
+  sendError,
+  sendSuccess
+} from '../utils/response';
 
 // 🎯 types/からの統一型定義インポート
 import type { AuthenticatedRequest } from '../types';
@@ -75,7 +69,7 @@ const routeStats: RouteStatistics = {
 /**
  * 安全なルートインポート・登録関数（統合版）
  * エラーハンドリング・ログ記録・統計収集機能付き
- * 
+ *
  * @param routeName - インポートするルートファイル名
  * @param path - ルートパス
  * @param router - Routerインスタンス
@@ -83,8 +77,8 @@ const routeStats: RouteStatistics = {
  * @returns 登録成功可否
  */
 const safeImportAndRegisterRoute = (
-  routeName: string, 
-  path: string, 
+  routeName: string,
+  path: string,
   router: Router,
   options: {
     priority?: 'high' | 'normal' | 'low';
@@ -105,14 +99,14 @@ const safeImportAndRegisterRoute = (
     // 動的インポート試行
     const routeModule = require(`./${routeName}`);
     const routeHandler = routeModule.default || routeModule;
-    
+
     // ルートハンドラー検証
     if (!routeHandler) {
       throw new Error('ルートハンドラーが見つかりません');
     }
 
-    if (typeof routeHandler !== 'function' && 
-        (!routeHandler || typeof routeHandler.use !== 'function')) {
+    if (typeof routeHandler !== 'function' &&
+      (!routeHandler || typeof routeHandler.use !== 'function')) {
       throw new Error('無効なルートハンドラー形式です');
     }
 
@@ -138,7 +132,7 @@ const safeImportAndRegisterRoute = (
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // 失敗統計更新
     routeStats.failedRegistrations++;
     routeStats.failedEndpoints.push({
@@ -205,7 +199,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     description: 'ダンプトラック運行記録・管理システム REST API',
     status: 'running',
     architecture: 'integrated', // 統合版であることを示す
-    
+
     // システム健全性情報
     health: {
       status: healthStatus.status,
@@ -223,7 +217,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
         refresh: 'POST /api/v1/auth/refresh',
         profile: 'GET /api/v1/auth/profile'
       },
-      
+
       // ユーザー管理（統合版）
       users: {
         list: 'GET /api/v1/users',
@@ -251,13 +245,13 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 
       // 位置・場所管理
       locations: 'GET,POST,PUT,DELETE /api/v1/locations',
-      
+
       // 品目管理
       items: 'GET,POST,PUT,DELETE /api/v1/items',
-      
+
       // 点検記録
       inspections: 'GET,POST,PUT,DELETE /api/v1/inspections',
-      
+
       // レポート
       reports: 'GET,POST /api/v1/reports',
 
@@ -317,7 +311,7 @@ router.get('/health', asyncHandler(async (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
-    
+
     // システム詳細情報
     system: {
       uptime: process.uptime(),
@@ -339,8 +333,8 @@ router.get('/health', asyncHandler(async (req: Request, res: Response) => {
     routes: {
       totalRegistered: routeStats.successfulRegistrations,
       totalFailed: routeStats.failedRegistrations,
-      registrationRate: routeStats.totalRoutes > 0 
-        ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100) 
+      registrationRate: routeStats.totalRoutes > 0
+        ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100)
         : 0
     },
 
@@ -354,18 +348,18 @@ router.get('/health', asyncHandler(async (req: Request, res: Response) => {
   };
 
   // 全体的な健全性判定
-  const overallStatus = healthStatus.status === 'healthy' && 
-                       routeStats.failedRegistrations === 0
-    ? 'healthy' 
+  const overallStatus = healthStatus.status === 'healthy' &&
+    routeStats.failedRegistrations === 0
+    ? 'healthy'
     : healthStatus.status === 'critical' || routeStats.failedRegistrations > 5
-    ? 'critical'
-    : 'warning';
+      ? 'critical'
+      : 'warning';
 
   healthInfo.status = overallStatus;
 
-  const statusCode = overallStatus === 'healthy' ? 200 
-                   : overallStatus === 'warning' ? 200 
-                   : 503;
+  const statusCode = overallStatus === 'healthy' ? 200
+    : overallStatus === 'warning' ? 200
+      : 503;
 
   return sendSuccess(res, healthInfo, 'ヘルスチェック完了', statusCode);
 }));
@@ -378,8 +372,8 @@ router.get('/health', asyncHandler(async (req: Request, res: Response) => {
  * システム統計情報（管理者限定）
  * GET /api/v1/system/stats
  */
-router.get('/system/stats', 
-  requireAdmin, 
+router.get('/system/stats',
+  requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const errorStats = getErrorStatistics();
     const healthStatus = getErrorHealthStatus();
@@ -394,8 +388,8 @@ router.get('/system/stats',
       // ルート統計詳細
       routes: {
         ...routeStats,
-        successRate: routeStats.totalRoutes > 0 
-          ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100) 
+        successRate: routeStats.totalRoutes > 0
+          ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100)
           : 0
       },
 
@@ -460,7 +454,7 @@ if (safeImportAndRegisterRoute('authRoutes', '/auth', router, {
   });
 }
 
-// 【重複解消2】ユーザールート統合  
+// 【重複解消2】ユーザールート統合
 // routes/userRoutes.ts を優先、routes/users.ts は非推奨
 if (safeImportAndRegisterRoute('userRoutes', '/users', router, {
   priority: 'high',
@@ -496,7 +490,7 @@ const businessRoutes = [
   },
   {
     name: 'tripRoutes',
-    path: '/trips', 
+    path: '/trips',
     priority: 'high' as const,
     requireAuth: true,
     description: '運行記録管理'
@@ -553,6 +547,13 @@ const locationTrackingRoutes = [
     priority: 'normal' as const,
     requireAuth: true,
     description: '運行管理・操作'
+  },
+  {
+    name: 'operationDetailRoutes',
+    path: '/operationDetails',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: '運行詳細管理・操作'
   }
 ];
 
@@ -573,7 +574,7 @@ if (safeImportAndRegisterRoute('mobile', '/mobile', router, {
 } else {
   // モバイルAPIフォールバック（基本機能のみ）
   logger.warn('⚠️ モバイルルートファイルが見つからないため、フォールバック機能を提供');
-  
+
   router.get('/mobile/health', asyncHandler(async (req: Request, res: Response) => {
     return sendSuccess(res, {
       status: 'healthy',
@@ -611,8 +612,8 @@ const registrationSummary = {
   total: routeStats.totalRoutes,
   successful: routeStats.successfulRegistrations,
   failed: routeStats.failedRegistrations,
-  successRate: routeStats.totalRoutes > 0 
-    ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100) 
+  successRate: routeStats.totalRoutes > 0
+    ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100)
     : 0,
   duplicatesResolved: routeStats.duplicateResolutions.length
 };
@@ -670,8 +671,18 @@ router.use('*', asyncHandler(async (req: Request, res: Response) => {
   // 利用可能なエンドポイントのヒント提供
   const suggestions = routeStats.registeredEndpoints
     .filter(endpoint => {
-      const path = endpoint.split(' ')[0];
-      return req.originalUrl.toLowerCase().includes(path.toLowerCase().split('/')[1] || '');
+      const parts = endpoint.split(' ');
+      if (parts.length < 2) return false;          // ✅ "METHOD PATH" 形式チェック
+
+      const pathPart = parts[1];                   // ✅ PATH部分取得
+      if (!pathPart) return false;                 // ✅ undefinedチェック
+
+      const pathSegments = pathPart.split('/');
+      const urlSegment = pathSegments[1];          // ✅ 最初のパスセグメント取得
+
+      if (!urlSegment) return false;               // ✅ undefinedチェック
+
+      return req.originalUrl.toLowerCase().includes(urlSegment.toLowerCase());
     })
     .slice(0, 3);
 
@@ -708,7 +719,7 @@ export const resetRouteStatistics = (): void => {
   routeStats.registeredEndpoints = [];
   routeStats.failedEndpoints = [];
   routeStats.duplicateResolutions = [];
-  
+
   logger.info('ルート統計をリセットしました');
 };
 
@@ -718,7 +729,7 @@ export const resetRouteStatistics = (): void => {
 
 /**
  * ✅ routes/index.ts統合完了
- * 
+ *
  * 【完了項目】
  * ✅ 重複ルート定義の解消（authRoutes.ts優先、userRoutes.ts優先）
  * ✅ middleware/auth.ts・middleware/errorHandler.ts統合基盤活用
@@ -730,10 +741,10 @@ export const resetRouteStatistics = (): void => {
  * ✅ アーキテクチャ指針準拠（型安全性・レイヤー責務明確化）
  * ✅ 企業レベルAPI基盤（統計・監視・ヘルスチェック）
  * ✅ 統一コメントポリシー適用（ファイルヘッダー・TSDoc・統合説明）
- * 
+ *
  * 【次のPhase 1対象】
  * 🎯 routes/authRoutes.ts: 認証ルート統合（API機能実現必須）
- * 
+ *
  * 【スコア向上】
  * 前回: 71/120点 → routes/index.ts完了: 76/120点（+5点改善）
  * routes/層: 0/17ファイル → 1/17ファイル（基盤確立）

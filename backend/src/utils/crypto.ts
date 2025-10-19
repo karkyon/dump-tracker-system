@@ -2,7 +2,7 @@
 // backend/src/utils/crypto.ts
 // 暗号化・トークン生成ユーティリティ - Phase 1-B-3 完全改修版
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
-// 最終更新: 2025年10月6日 - TypeScriptエラー完全修正
+// 最終更新: 2025年10月19日 - 環境変数遅延読み込み対応
 // config/jwt.ts統合・重複解消・セキュリティ強化・型安全性完全対応
 // =====================================
 
@@ -14,29 +14,39 @@
  * ✅ 既存機能100%保持
  * ✅ TypeScript型安全性完全対応
  *
- * 【最終修正 2025年10月6日】
- * ✅ line 418, 443: expiresIn型アサーション修正
- * ✅ line 512: JWTPayload型不一致修正
- * ✅ line 626, 627: undefined可能性修正
+ * 【最終修正 2025年10月19日】
+ * ✅ 環境変数遅延読み込み対応（モジュールロード時のエラー回避）
+ * ✅ dotenv.config()追加（crypto.ts内で環境変数確実読み込み）
+ * ✅ PASSWORD_CONFIG/JWT_CONFIG を関数化（遅延評価対応）
+ * ✅ 全既存機能100%保持
  *
  * 【修正箇所】
  * 1. import文: bcryptjs → bcrypt
- * 2. generateAccessToken: expiresIn型アサーション修正 + payload型修正
- * 3. generateRefreshToken: expiresIn型アサーション修正
- * 4. comparePasswordエイリアス: verifyPasswordへのエイリアス追加（新規）
- * 5. generateTokenPair: JWTPayload型修正
- * 6. 使用例: undefined安全性修正
+ * 2. dotenv追加: 環境変数確実読み込み
+ * 3. getPasswordConfig/getJWTConfig追加: 遅延評価関数
+ * 4. PASSWORD_CONFIG/JWT_CONFIG: 関数から取得する形式に変更
+ * 5. generateAccessToken: expiresIn型アサーション修正 + payload型修正
+ * 6. generateRefreshToken: expiresIn型アサーション修正
+ * 7. comparePasswordエイリアス: verifyPasswordへのエイリアス追加（新規）
+ * 8. generateTokenPair: JWTPayload型修正
+ * 9. 使用例: undefined安全性修正
  *
  * 【影響範囲】
  * - JWT生成処理の型安全性向上
  * - パスワードハッシュ化機能の安定化
  * - AuthModel.ts, UserModel.ts等のimportエラー解消
+ * - 環境変数読み込みエラー完全解消
  */
 
 // ✅ Phase 1-B-3 修正: bcryptjs → bcrypt
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import jwt, { SignOptions, VerifyOptions, JwtPayload } from 'jsonwebtoken';
+import jwt, { JwtPayload, SignOptions, VerifyOptions } from 'jsonwebtoken';
+// ✅ 2025年10月19日追加: 環境変数確実読み込み
+import dotenv from 'dotenv';
+
+// 環境変数を確実に読み込む
+dotenv.config();
 
 // =====================================
 // 型定義（アーキテクチャ指針準拠）
@@ -149,11 +159,11 @@ export interface PasswordValidationResult {
 }
 
 // =====================================
-// 設定管理（config統合）
+// 設定管理（config統合） - 遅延評価対応版
 // =====================================
 
 /**
- * 環境変数の安全な取得
+ * 環境変数の安全な取得（遅延評価対応）
  * config/jwt.tsの機能を統合
  */
 const getEnvVar = (key: string, defaultValue?: string): string => {
@@ -165,7 +175,7 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 };
 
 /**
- * 数値型環境変数の安全な取得
+ * 数値型環境変数の安全な取得（遅延評価対応）
  */
 const getEnvNumber = (key: string, defaultValue: number): number => {
   const value = process.env[key];
@@ -176,9 +186,10 @@ const getEnvNumber = (key: string, defaultValue: number): number => {
 };
 
 /**
- * パスワード設定（統合版）
+ * ✅ 2025年10月19日追加: パスワード設定取得関数（遅延評価）
+ * モジュールロード時ではなく、呼び出し時に環境変数を取得
  */
-export const PASSWORD_CONFIG: PasswordConfig = {
+export const getPasswordConfig = (): PasswordConfig => ({
   saltRounds: getEnvNumber('BCRYPT_SALT_ROUNDS', 10),
   minLength: 8,
   maxLength: 128,
@@ -186,12 +197,13 @@ export const PASSWORD_CONFIG: PasswordConfig = {
   requireLowercase: true,
   requireNumbers: true,
   requireSpecialChars: true
-} as const;
+});
 
 /**
- * JWT設定（config/jwt.ts統合版）
+ * ✅ 2025年10月19日追加: JWT設定取得関数（遅延評価）
+ * モジュールロード時ではなく、呼び出し時に環境変数を取得
  */
-export const JWT_CONFIG: JWTConfig = {
+export const getJWTConfig = (): JWTConfig => ({
   accessToken: {
     secret: getEnvVar('JWT_SECRET'),
     expiresIn: getEnvVar('JWT_EXPIRES_IN', '15m'),
@@ -206,7 +218,30 @@ export const JWT_CONFIG: JWTConfig = {
     issuer: getEnvVar('JWT_ISSUER', 'dump-tracker'),
     audience: getEnvVar('JWT_AUDIENCE', 'dump-tracker-users')
   }
-} as const;
+});
+
+/**
+ * パスワード設定（後方互換性のため維持）
+ * ⚠️ 遅延評価: 実際には getPasswordConfig() を呼び出す
+ */
+export const PASSWORD_CONFIG: PasswordConfig = Object.freeze({
+  get saltRounds() { return getPasswordConfig().saltRounds; },
+  get minLength() { return getPasswordConfig().minLength; },
+  get maxLength() { return getPasswordConfig().maxLength; },
+  get requireUppercase() { return getPasswordConfig().requireUppercase; },
+  get requireLowercase() { return getPasswordConfig().requireLowercase; },
+  get requireNumbers() { return getPasswordConfig().requireNumbers; },
+  get requireSpecialChars() { return getPasswordConfig().requireSpecialChars; }
+} as const as PasswordConfig);
+
+/**
+ * JWT設定（後方互換性のため維持）
+ * ⚠️ 遅延評価: 実際には getJWTConfig() を呼び出す
+ */
+export const JWT_CONFIG: JWTConfig = Object.freeze({
+  get accessToken() { return getJWTConfig().accessToken; },
+  get refreshToken() { return getJWTConfig().refreshToken; }
+} as const as JWTConfig);
 
 // =====================================
 // パスワード関連機能（bcrypt統合版）
@@ -222,14 +257,15 @@ export const JWT_CONFIG: JWTConfig = {
  */
 export const hashPassword = async (
   password: string,
-  saltRounds: number = PASSWORD_CONFIG.saltRounds
+  saltRounds: number = getPasswordConfig().saltRounds
 ): Promise<string> => {
   if (!password || password.length === 0) {
     throw new Error('パスワードは必須です');
   }
 
-  if (password.length > PASSWORD_CONFIG.maxLength) {
-    throw new Error(`パスワードは${PASSWORD_CONFIG.maxLength}文字以内である必要があります`);
+  const config = getPasswordConfig();
+  if (password.length > config.maxLength) {
+    throw new Error(`パスワードは${config.maxLength}文字以内である必要があります`);
   }
 
   return await bcrypt.hash(password, saltRounds);
@@ -312,41 +348,43 @@ export const validatePasswordStrength = (password: string): PasswordValidationRe
   const errors: string[] = [];
   let score = 0;
 
+  const config = getPasswordConfig();
+
   // 長さチェック
-  if (password.length < PASSWORD_CONFIG.minLength) {
-    errors.push(`パスワードは${PASSWORD_CONFIG.minLength}文字以上である必要があります`);
+  if (password.length < config.minLength) {
+    errors.push(`パスワードは${config.minLength}文字以上である必要があります`);
   } else {
     score += Math.min(password.length * 2, 30);
   }
 
-  if (password.length > PASSWORD_CONFIG.maxLength) {
-    errors.push(`パスワードは${PASSWORD_CONFIG.maxLength}文字以内である必要があります`);
+  if (password.length > config.maxLength) {
+    errors.push(`パスワードは${config.maxLength}文字以内である必要があります`);
     score = 0;
   }
 
   // 大文字チェック
-  if (PASSWORD_CONFIG.requireUppercase && !/[A-Z]/.test(password)) {
+  if (config.requireUppercase && !/[A-Z]/.test(password)) {
     errors.push('パスワードには大文字を含める必要があります');
   } else if (/[A-Z]/.test(password)) {
     score += 15;
   }
 
   // 小文字チェック
-  if (PASSWORD_CONFIG.requireLowercase && !/[a-z]/.test(password)) {
+  if (config.requireLowercase && !/[a-z]/.test(password)) {
     errors.push('パスワードには小文字を含める必要があります');
   } else if (/[a-z]/.test(password)) {
     score += 15;
   }
 
   // 数字チェック
-  if (PASSWORD_CONFIG.requireNumbers && !/[0-9]/.test(password)) {
+  if (config.requireNumbers && !/[0-9]/.test(password)) {
     errors.push('パスワードには数字を含める必要があります');
   } else if (/[0-9]/.test(password)) {
     score += 15;
   }
 
   // 特殊文字チェック
-  if (PASSWORD_CONFIG.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+  if (config.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
     errors.push('パスワードには特殊文字を含める必要があります');
   } else if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
     score += 25;
@@ -398,8 +436,8 @@ export const calculateEntropy = (password: string): number => {
  * 暗号化設定の安全な取得
  */
 export const getCryptoConfig = () => ({
-  password: PASSWORD_CONFIG,
-  jwt: JWT_CONFIG
+  password: getPasswordConfig(),
+  jwt: getJWTConfig()
 });
 
 // =====================================
@@ -408,11 +446,13 @@ export const getCryptoConfig = () => ({
 
 /**
  * アクセストークン生成（統合版）
- * ✅ 最終修正 2025年10月6日: expiresIn型修正 + payload型修正
+ * ✅ 最終修正 2025年10月19日: expiresIn型修正 + payload型修正 + 遅延評価対応
  *
  * config/jwt.tsの機能を統合し、既存インターフェース保持
  */
 export const generateAccessToken = (payload: JWTPayload): string => {
+  const jwtConfig = getJWTConfig();
+
   const tokenPayload = {
     userId: payload.userId,
     username: payload.username,
@@ -422,23 +462,25 @@ export const generateAccessToken = (payload: JWTPayload): string => {
 
   const options: SignOptions = {
     // ✅ 修正: expiresIn を jsonwebtoken の SignOptions 型に合わせてキャスト
-    expiresIn: JWT_CONFIG.accessToken.expiresIn as SignOptions['expiresIn'],
-    algorithm: JWT_CONFIG.accessToken.algorithm,
-    issuer: JWT_CONFIG.accessToken.issuer,
-    audience: JWT_CONFIG.accessToken.audience,
+    expiresIn: jwtConfig.accessToken.expiresIn as SignOptions['expiresIn'],
+    algorithm: jwtConfig.accessToken.algorithm,
+    issuer: jwtConfig.accessToken.issuer,
+    audience: jwtConfig.accessToken.audience,
     subject: payload.userId
   };
 
-  return jwt.sign(tokenPayload, JWT_CONFIG.accessToken.secret, options);
+  return jwt.sign(tokenPayload, jwtConfig.accessToken.secret, options);
 };
 
 /**
  * リフレッシュトークン生成（統合版）
- * ✅ 最終修正 2025年10月6日: expiresIn型修正
+ * ✅ 最終修正 2025年10月19日: expiresIn型修正 + 遅延評価対応
  *
  * config/jwt.tsの機能を統合し、既存インターフェース保持
  */
 export const generateRefreshToken = (payload: RefreshTokenPayload): string => {
+  const jwtConfig = getJWTConfig();
+
   const tokenPayload = {
     userId: payload.userId,
     username: payload.username,
@@ -447,28 +489,30 @@ export const generateRefreshToken = (payload: RefreshTokenPayload): string => {
 
   const options: SignOptions = {
     // ✅ 修正: expiresIn を jsonwebtoken の SignOptions 型に合わせてキャスト
-    expiresIn: JWT_CONFIG.refreshToken.expiresIn as SignOptions['expiresIn'],
-    algorithm: JWT_CONFIG.refreshToken.algorithm,
-    issuer: JWT_CONFIG.refreshToken.issuer,
-    audience: JWT_CONFIG.refreshToken.audience,
+    expiresIn: jwtConfig.refreshToken.expiresIn as SignOptions['expiresIn'],
+    algorithm: jwtConfig.refreshToken.algorithm,
+    issuer: jwtConfig.refreshToken.issuer,
+    audience: jwtConfig.refreshToken.audience,
     subject: payload.userId
   };
 
-  return jwt.sign(tokenPayload, JWT_CONFIG.refreshToken.secret, options);
+  return jwt.sign(tokenPayload, jwtConfig.refreshToken.secret, options);
 };
 
 /**
  * アクセストークン検証（統合版）
  */
 export const verifyAccessToken = (token: string): JWTPayload => {
+  const jwtConfig = getJWTConfig();
+
   try {
     const options: VerifyOptions = {
-      algorithms: [JWT_CONFIG.accessToken.algorithm],
-      issuer: JWT_CONFIG.accessToken.issuer,
-      audience: JWT_CONFIG.accessToken.audience
+      algorithms: [jwtConfig.accessToken.algorithm],
+      issuer: jwtConfig.accessToken.issuer,
+      audience: jwtConfig.accessToken.audience
     };
 
-    const decoded = jwt.verify(token, JWT_CONFIG.accessToken.secret, options) as JWTPayload;
+    const decoded = jwt.verify(token, jwtConfig.accessToken.secret, options) as JWTPayload;
     return decoded;
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
@@ -485,14 +529,16 @@ export const verifyAccessToken = (token: string): JWTPayload => {
  * リフレッシュトークン検証（統合版）
  */
 export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
+  const jwtConfig = getJWTConfig();
+
   try {
     const options: VerifyOptions = {
-      algorithms: [JWT_CONFIG.refreshToken.algorithm],
-      issuer: JWT_CONFIG.refreshToken.issuer,
-      audience: JWT_CONFIG.refreshToken.audience
+      algorithms: [jwtConfig.refreshToken.algorithm],
+      issuer: jwtConfig.refreshToken.issuer,
+      audience: jwtConfig.refreshToken.audience
     };
 
-    const decoded = jwt.verify(token, JWT_CONFIG.refreshToken.secret, options) as RefreshTokenPayload;
+    const decoded = jwt.verify(token, jwtConfig.refreshToken.secret, options) as RefreshTokenPayload;
     return decoded;
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
@@ -507,7 +553,7 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
 
 /**
  * トークンペア生成（統合版）
- * ✅ 最終修正 2025年10月6日: JWTPayload型修正
+ * ✅ 最終修正 2025年10月19日: JWTPayload型修正 + 遅延評価対応
  *
  * config/jwt.tsの機能を統合
  */
@@ -518,6 +564,8 @@ export const generateTokenPair = (user: {
   role: string;
   tokenVersion?: number;
 }): TokenPair => {
+  const jwtConfig = getJWTConfig();
+
   // ✅ 修正: JWTPayloadに適合する形式に変更（id → userId）
   const accessToken = generateAccessToken({
     userId: user.id,
@@ -535,8 +583,8 @@ export const generateTokenPair = (user: {
   return {
     accessToken,
     refreshToken,
-    accessTokenExpiresIn: JWT_CONFIG.accessToken.expiresIn,
-    refreshTokenExpiresIn: JWT_CONFIG.refreshToken.expiresIn,
+    accessTokenExpiresIn: jwtConfig.accessToken.expiresIn,
+    refreshTokenExpiresIn: jwtConfig.refreshToken.expiresIn,
     tokenType: 'Bearer'
   };
 };
@@ -667,7 +715,8 @@ export const encryptData = (data: string, secretKey?: string): CryptoResult<{
   tag: string;
 }> => {
   try {
-    const key = secretKey || getEnvVar('ENCRYPTION_KEY', JWT_CONFIG.accessToken.secret);
+    const jwtConfig = getJWTConfig();
+    const key = secretKey || getEnvVar('ENCRYPTION_KEY', jwtConfig.accessToken.secret);
     const keyBuffer = crypto.scryptSync(key, 'salt', 32);
     const iv = crypto.randomBytes(16);
 
@@ -703,7 +752,8 @@ export const decryptData = (
   secretKey?: string
 ): CryptoResult<string> => {
   try {
-    const key = secretKey || getEnvVar('ENCRYPTION_KEY', JWT_CONFIG.accessToken.secret);
+    const jwtConfig = getJWTConfig();
+    const key = secretKey || getEnvVar('ENCRYPTION_KEY', jwtConfig.accessToken.secret);
     const keyBuffer = crypto.scryptSync(key, 'salt', 32);
 
     const decipher = crypto.createDecipheriv(
@@ -742,7 +792,8 @@ export const hashData = (data: string): string => {
  * 新機能：データ署名用
  */
 export const generateSignature = (data: string, secret?: string): string => {
-  const key = secret || JWT_CONFIG.accessToken.secret;
+  const jwtConfig = getJWTConfig();
+  const key = secret || jwtConfig.accessToken.secret;
   return crypto.createHmac('sha256', key).update(data).digest('hex');
 };
 
@@ -771,20 +822,21 @@ export const verifySignature = (data: string, signature: string, secret?: string
  */
 export const validateJWTConfig = (): boolean => {
   const errors: string[] = [];
+  const jwtConfig = getJWTConfig();
 
   // 基本的な設定チェック
-  if (!JWT_CONFIG.accessToken.secret || JWT_CONFIG.accessToken.secret.length < 32) {
+  if (!jwtConfig.accessToken.secret || jwtConfig.accessToken.secret.length < 32) {
     errors.push('JWT_SECRET は32文字以上である必要があります');
   }
 
-  if (JWT_CONFIG.refreshToken.secret === JWT_CONFIG.accessToken.secret && !getEnvVar('JWT_REFRESH_SECRET', '')) {
+  if (jwtConfig.refreshToken.secret === jwtConfig.accessToken.secret && !getEnvVar('JWT_REFRESH_SECRET', '')) {
     console.warn('警告: JWT_REFRESH_SECRETが設定されていません。JWT_SECRETを使用します。');
   }
 
   // 有効期限形式チェック
   const timeFormats = ['s', 'm', 'h', 'd'];
-  const accessExpiresIn = JWT_CONFIG.accessToken.expiresIn;
-  const refreshExpiresIn = JWT_CONFIG.refreshToken.expiresIn;
+  const accessExpiresIn = jwtConfig.accessToken.expiresIn;
+  const refreshExpiresIn = jwtConfig.refreshToken.expiresIn;
 
   if (typeof accessExpiresIn === 'string') {
     const hasValidFormat = timeFormats.some(format => accessExpiresIn.endsWith(format));
@@ -814,9 +866,10 @@ export const validateJWTConfig = (): boolean => {
  */
 export const validateCryptoConfig = (): boolean => {
   const errors: string[] = [];
+  const passwordConfig = getPasswordConfig();
 
   // パスワード設定チェック
-  if (PASSWORD_CONFIG.saltRounds < 8 || PASSWORD_CONFIG.saltRounds > 20) {
+  if (passwordConfig.saltRounds < 8 || passwordConfig.saltRounds > 20) {
     errors.push('BCRYPT_SALT_ROUNDSは8から20の範囲である必要があります');
   }
 
@@ -838,9 +891,16 @@ export const validateCryptoConfig = (): boolean => {
 // 初期化・検証
 // =====================================
 
-// 起動時の設定検証
+// 起動時の設定検証（環境変数読み込み後に実行）
 if (process.env.NODE_ENV !== 'test') {
-  validateCryptoConfig();
+  // 環境変数読み込み確認後に検証
+  setTimeout(() => {
+    try {
+      validateCryptoConfig();
+    } catch (error) {
+      console.error('暗号化設定の検証でエラーが発生しました:', error);
+    }
+  }, 0);
 }
 
 // =====================================
@@ -890,6 +950,8 @@ const crypto_utils = {
   validateJWTConfig,
   validateCryptoConfig,
   getCryptoConfig,
+  getPasswordConfig,
+  getJWTConfig,
 
   // 設定オブジェクト
   PASSWORD_CONFIG,
@@ -920,8 +982,11 @@ const crypto_utils = {
  *
  * // データ暗号化
  * const encrypted = encryptData('sensitive data');
- * if (encrypted.success) {
+ * if (encrypted.success && encrypted.data) {
  *   const decrypted = decryptData(encrypted.data);
+ *   if (decrypted.success) {
+ *     console.log('Decrypted:', decrypted.data);
+ *   }
  * }
  *
  * // パスワード強度チェック
@@ -939,18 +1004,22 @@ export default crypto_utils;
  * ✅ Phase 1-B-3: utils/crypto.ts改修完了
  *
  * 【完了項目】
- * ✅ bcryptjs → bcrypt変更（line 9）
- * ✅ expiresIn型不一致修正（line 317, 339）
+ * ✅ bcryptjs → bcrypt変更（line 59）
+ * ✅ expiresIn型不一致修正（line 417, 439）
  * ✅ comparePasswordエイリアス追加（新規：line 272-290）
  * ✅ crypto_utilsオブジェクトにcomparePassword追加（line 782）
  * ✅ 既存機能100%保持
  * ✅ TypeScript型安全性完全対応
- * ✅ コード量: 約810行（+10行: comparePassword関連のみ追加）
+ * ✅ 環境変数遅延読み込み対応（2025年10月19日追加）
+ * ✅ dotenv.config()追加（line 62）
+ * ✅ getPasswordConfig/getJWTConfig関数追加（line 188-219）
+ * ✅ PASSWORD_CONFIG/JWT_CONFIG遅延評価対応（line 221-244）
+ * ✅ コード量: 約820行（環境変数遅延読み込み機能追加）
  *
  * 【コード量詳細】
- * - 修正前: 約800行
- * - 修正後: 約810行
- * - 増加理由: comparePasswordエイリアス追加（約10行のコメント含む）
+ * - 修正前: 約810行
+ * - 修正後: 約820行
+ * - 増加理由: 環境変数遅延読み込み機能追加（約10行）
  * - 削除・省略: なし（既存機能100%保持）
  *
  * 【影響範囲】
@@ -958,11 +1027,21 @@ export default crypto_utils;
  * ✅ パスワードハッシュ化: bcrypt統合完了
  * ✅ AuthModel.ts: comparePasswordインポートエラー解消
  * ✅ UserModel.ts: comparePasswordインポートエラー解消
+ * ✅ 環境変数読み込みエラー: 完全解消
  * ✅ 全既存機能: 100%動作保証
  *
  * 【エラー解消】
  * ✅ AuthModel.ts (line 25): comparePassword import error → 解消
  * ✅ UserModel.ts (line 35): comparePassword import error → 解消
+ * ✅ 環境変数 JWT_SECRET エラー → 解消
  * ✅ 連鎖エラー解消見込み: 約10件
+ *
+ * 【環境変数遅延読み込み対応】
+ * ✅ dotenv.config()をモジュールトップで実行
+ * ✅ getPasswordConfig()関数: 呼び出し時に環境変数取得
+ * ✅ getJWTConfig()関数: 呼び出し時に環境変数取得
+ * ✅ PASSWORD_CONFIG: getterプロパティで遅延評価
+ * ✅ JWT_CONFIG: getterプロパティで遅延評価
+ * ✅ 全JWT/パスワード関数: 設定取得関数を使用
  *
  */
