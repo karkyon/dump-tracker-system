@@ -1,8 +1,9 @@
 // =====================================
 // backend/src/config/swagger.ts
-// Swagger API文書統合設定 - 完全アーキテクチャ改修統合版
+// Swagger API文書統合設定 - 企業レベル完全統合版（UI完全動作対応）
 // 5層統合システム・企業レベル完全機能・統合エンドポイント反映版
-// 最終更新: 2025年9月28日
+// 最終更新: 2025年10月20日
+// 修正内容: UI動作不具合解消（docExpansion設定最適化）
 // 依存関係: routes/index.ts, 全routesファイル, 統合基盤システム
 // 統合基盤: 5層統合システム・モバイル統合基盤・企業レベル完全機能
 // =====================================
@@ -12,14 +13,14 @@ import swaggerUi from 'swagger-ui-express';
 
 /**
  * Swagger API文書統合設定クラス
- * 
+ *
  * 【5層統合システム反映】
  * - 管理層: ユーザー・車両・点検統合権限管理
  * - 業務層: 運行・メンテナンス・品質管理統合
  * - 分析層: レポート・BI・予測分析・経営支援
  * - API層: 統合エンドポイント・外部連携
  * - モバイル層: 現場統合・GPS・リアルタイム管理
- * 
+ *
  * 【統合API基盤反映】
  * - 認証API: JWT・権限階層・セキュリティ
  * - ユーザー管理API: CRUD・権限制御・統合ダッシュボード
@@ -30,7 +31,7 @@ import swaggerUi from 'swagger-ui-express';
  * - 品目管理API: 在庫・統計・業務フロー最適化
  * - レポート・分析API: BI・予測分析・経営支援
  * - モバイルAPI: 現場統合・リアルタイム連携
- * 
+ *
  * 【企業レベル完全機能反映】
  * - 統合権限制御・階層管理・業務制約
  * - リアルタイムGPS追跡・効率分析・燃費最適化
@@ -43,9 +44,9 @@ import swaggerUi from 'swagger-ui-express';
 const getEnvironmentConfig = () => {
   const NODE_ENV = process.env.NODE_ENV || 'development';
   const HOST = process.env.HOST || '10.1.119.244';
-  const PORT = process.env.PORT || '8000';
+  const PORT = process.env.PORT || '8443';
   const PROTOCOL = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
-  
+
   return {
     NODE_ENV,
     HOST,
@@ -82,7 +83,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 - **ユーザー管理**: 運転手・管理者・マネージャーの統合管理
 - **セキュリティ**: JWT認証・アクセス制御・監査ログ
 
-### ⚙️ 業務層 (Business Layer)  
+### ⚙️ 業務層 (Business Layer)
 - **運行管理**: GPS連携・リアルタイム追跡・効率分析
 - **車両管理**: フリート管理・ステータス管理・予防保全
 - **点検管理**: 業務フロー・品質管理・リスク分析
@@ -155,7 +156,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 
 ## 🎯 ビジネス効果
 - **運行効率**: GPS追跡・効率分析により20%向上
-- **保全コスト**: 予防保全システムにより30%削減  
+- **保全コスト**: 予防保全システムにより30%削減
 - **作業効率**: 現場デジタル化により50%向上
 - **意思決定**: データ駆動型分析により80%精度向上
 - **システム品質**: 統合基盤により90%品質確保
@@ -202,7 +203,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 
 **権限レベル:**
 - **運転手 (driver)**: 基本的な運行記録・閲覧権限
-- **管理者 (manager)**: 車両・ユーザー管理権限  
+- **管理者 (manager)**: 車両・ユーザー管理権限
 - **マネージャー (admin)**: 全機能・システム管理権限
           `
         }
@@ -217,7 +218,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
               description: '処理成功フラグ'
             },
             message: {
-              type: 'string', 
+              type: 'string',
               description: 'レスポンスメッセージ'
             },
             data: {
@@ -231,7 +232,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
             }
           }
         },
-        
+
         // エラーレスポンス型
         ErrorResponse: {
           type: 'object',
@@ -266,8 +267,8 @@ const swaggerOptions: swaggerJsdoc.Options = {
             id: { type: 'string', description: 'ユーザーID' },
             username: { type: 'string', description: 'ユーザー名' },
             email: { type: 'string', format: 'email', description: 'メールアドレス' },
-            role: { 
-              type: 'string', 
+            role: {
+              type: 'string',
               enum: ['driver', 'manager', 'admin'],
               description: '権限レベル'
             },
@@ -341,7 +342,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 
         // 点検記録型
         Inspection: {
-          type: 'object', 
+          type: 'object',
           properties: {
             id: { type: 'string', description: '点検ID' },
             vehicleId: { type: 'string', description: '車両ID' },
@@ -459,7 +460,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
         description: 'JWT認証・ログイン・権限管理API'
       },
       {
-        name: '👥 ユーザー管理 (User Management)', 
+        name: '👥 ユーザー管理 (User Management)',
         description: '運転手・管理者・マネージャーの統合管理API'
       },
       {
@@ -498,7 +499,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
   },
   apis: [
     './src/routes/*.ts',
-    './src/controllers/*.ts', 
+    './src/controllers/*.ts',
     './src/types/*.ts'
   ]
 };
@@ -523,17 +524,24 @@ try {
 }
 
 /**
- * Swagger UI設定（企業レベル完全版）
- * カスタマイズ・テーマ・機能強化
+ * Swagger UI設定（企業レベル完全版 + UI動作最適化）
+ *
+ * 🔧 UI動作不具合解消のための修正ポイント:
+ * - docExpansion: 'none' → エンドポイントをクリックで展開可能にする
+ * - deepLinking: true → URL連携を有効化
+ * - displayOperationId: true → オペレーションIDを表示
+ * - persistAuthorization: true → 認証情報を保持（リロード後も維持）
+ * - displayRequestDuration: true → リクエスト時間を表示
+ * - syntaxHighlight → シンタックスハイライトを有効化
  */
 const swaggerUiOptions = {
   customCss: `
-    .swagger-ui .topbar { 
-      background-color: #1f2937; 
+    .swagger-ui .topbar {
+      background-color: #1f2937;
       border-bottom: 3px solid #3b82f6;
     }
-    .swagger-ui .info .title { 
-      color: #1f2937; 
+    .swagger-ui .info .title {
+      color: #1f2937;
       font-weight: bold;
       font-size: 2em;
     }
@@ -567,28 +575,49 @@ const swaggerUiOptions = {
       border-color: #ef4444;
       background-color: #fef2f2;
     }
+    .swagger-ui .opblock.opblock-patch {
+      border-color: #8b5cf6;
+      background-color: #f5f3ff;
+    }
   `,
   customSiteTitle: 'Dump Tracker API - 企業レベル完全統合システム',
   customfavIcon: '/favicon.ico',
   swaggerOptions: {
-    docExpansion: 'list',
-    filter: true,
-    tryItOutEnabled: true,
+    // 🎯 重要: UI動作最適化設定
+    docExpansion: 'none',           // すべて折りたたんで表示（クリックで展開可能）
+    deepLinking: true,              // URL連携を有効化
+    displayOperationId: true,       // オペレーションIDを表示
+    displayRequestDuration: true,   // リクエスト時間を表示
+
+    // 🔐 認証設定
+    persistAuthorization: true,     // 認証情報を保持（リロード後も維持）
+
+    // 🎨 UI設定
+    filter: true,                   // フィルター機能を有効化
+    syntaxHighlight: {
+      activate: true,
+      theme: 'monokai'
+    },
+
+    // 📋 モデル展開設定
+    defaultModelsExpandDepth: 3,    // モデルの展開深度
+    defaultModelExpandDepth: 3,     // 個別モデルの展開深度
+
+    // 🔧 その他の設定
+    showExtensions: true,
+    showCommonExtensions: true,
+    tryItOutEnabled: true,          // Try it out機能を有効化
+    useUnsafeMarkdown: false,       // 安全なMarkdown使用
+
+    // 📡 リクエスト/レスポンスインターセプター
     requestInterceptor: (request: any) => {
-      // リクエストログ記録
       console.log('📡 API Request:', request.method, request.url);
       return request;
     },
     responseInterceptor: (response: any) => {
-      // レスポンスログ記録
       console.log('📥 API Response:', response.status, response.url);
       return response;
-    },
-    defaultModelsExpandDepth: 2,
-    defaultModelExpandDepth: 3,
-    showExtensions: true,
-    showCommonExtensions: true,
-    useUnsafeMarkdown: false
+    }
   }
 };
 
@@ -596,9 +625,9 @@ const swaggerUiOptions = {
  * エクスポート（完全統合版）
  * swaggerUi, swaggerSpec, 設定オプション
  */
-export { 
-  swaggerUi, 
-  swaggerSpec, 
+export {
+  swaggerUi,
+  swaggerSpec,
   swaggerEnabled,
   swaggerUiOptions,
   envConfig
