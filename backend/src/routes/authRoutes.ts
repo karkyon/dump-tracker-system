@@ -60,20 +60,109 @@ const router = Router();
 // =====================================
 
 /**
- * ユーザーログイン
- * POST /api/v1/auth/login
- * 企業レベル機能: JWT発行・セッション管理・セキュリティログ
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: ユーザーログイン
+ *     description: ユーザー名とパスワードでログインし、JWTトークンを取得
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 description: ユーザー名
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 description: パスワード
+ *           examples:
+ *             default:
+ *               summary: デフォルトログイン
+ *               value:
+ *                 username: admin
+ *                 password: Admin@123
+ *     responses:
+ *       200:
+ *         description: ログイン成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: ログインに成功しました
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
+ *                     token:
+ *                       type: string
+ *                       description: JWTアクセストークン
+ *                     refreshToken:
+ *                       type: string
+ *                       description: リフレッシュトークン
+ *       401:
+ *         description: 認証失敗
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   '/login',
   validateRequiredFields(['username', 'password']),
-  login  // authController内で既にasyncHandlerでラップ済み
+  login
 );
 
 /**
- * パスワードリセット要求
- * POST /api/v1/auth/password-reset
- * 企業レベル機能: メール送信・トークン発行・有効期限管理
+ * @swagger
+ * /auth/password-reset:
+ *   post:
+ *     summary: パスワードリセット要求
+ *     description: メールアドレスにパスワードリセット用のトークンを送信
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: メールアドレス
+ *                 example: admin@example.com
+ *     responses:
+ *       200:
+ *         description: リセットメール送信成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ *       404:
+ *         description: ユーザーが見つかりません
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   '/password-reset',
@@ -82,9 +171,40 @@ router.post(
 );
 
 /**
- * パスワードリセット確認
- * POST /api/v1/auth/password-reset/confirm
- * 企業レベル機能: トークン検証・パスワード更新・セキュリティログ
+ * @swagger
+ * /auth/password-reset:
+ *   post:
+ *     summary: パスワードリセット要求
+ *     description: メールアドレスにパスワードリセット用のトークンを送信
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: メールアドレス
+ *                 example: admin@example.com
+ *     responses:
+ *       200:
+ *         description: リセットメール送信成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ *       404:
+ *         description: ユーザーが見つかりません
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   '/password-reset/confirm',
@@ -97,9 +217,44 @@ router.post(
 // =====================================
 
 /**
- * トークンリフレッシュ
- * POST /api/v1/auth/refresh
- * 企業レベル機能: JWT更新・セキュリティ検証・セッション継続・自動ログアウト防止
+ * @swagger
+ * /auth/refresh:
+ *   post:
+ *     summary: トークンリフレッシュ
+ *     description: リフレッシュトークンを使用して新しいアクセストークンを取得
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: リフレッシュトークン
+ *     responses:
+ *       200:
+ *         description: トークン更新成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                     refreshToken:
+ *                       type: string
+ *       401:
+ *         description: 無効なリフレッシュトークン
  */
 router.post(
   '/refresh',
@@ -108,9 +263,29 @@ router.post(
 );
 
 /**
- * 現在のユーザー情報取得
- * GET /api/v1/auth/me
- * 企業レベル機能: プロフィール情報・権限情報・セッション情報
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: 現在のユーザー情報取得
+ *     description: 認証済みユーザーの情報を取得
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: ユーザー情報取得成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: 未認証
  */
 router.get(
   '/me',
@@ -119,9 +294,20 @@ router.get(
 );
 
 /**
- * ユーザーログアウト
- * POST /api/v1/auth/logout
- * 企業レベル機能: セッション無効化・トークン失効・セキュリティログ
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: ユーザーログアウト
+ *     description: 現在のセッションを無効化
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: ログアウト成功
+ *       401:
+ *         description: 未認証
  */
 router.post(
   '/logout',
@@ -130,9 +316,38 @@ router.post(
 );
 
 /**
- * パスワード変更
- * POST /api/v1/auth/change-password
- * 企業レベル機能: 現在のパスワード検証・強度チェック・履歴管理・強制ログアウト
+ * @swagger
+ * /auth/change-password:
+ *   post:
+ *     summary: パスワード変更
+ *     description: 現在のパスワードを検証して新しいパスワードに変更
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 format: password
+ *                 description: 現在のパスワード
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 description: 新しいパスワード
+ *     responses:
+ *       200:
+ *         description: パスワード変更成功
+ *       401:
+ *         description: 現在のパスワードが正しくありません
  */
 router.post(
   '/change-password',
@@ -146,9 +361,30 @@ router.post(
 // =====================================
 
 /**
- * 認証統計情報取得
- * GET /api/v1/auth/stats
- * 企業レベル機能: ログイン統計・セキュリティイベント・ダッシュボード・アラート
+ * @swagger
+ * /auth/stats:
+ *   get:
+ *     summary: 認証統計情報取得
+ *     description: ログイン統計やセキュリティイベントを取得（管理者のみ）
+ *     tags:
+ *       - 🔐 認証 (Authentication)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 統計情報取得成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   description: 認証統計データ
+ *       403:
+ *         description: 権限不足（管理者のみ）
  */
 router.get(
   '/stats',

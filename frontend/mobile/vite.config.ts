@@ -41,9 +41,10 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'https://10.1.119.244:8443/api/v1',
+        target: 'https://10.1.119.244:8443',  // HTTPSに変更
         changeOrigin: true,
-        secure: false
+        secure: false,  // 自己署名証明書を許可
+        rewrite: (path) => path.replace(/^\/api/, '/api/v1')
       }
     }
   },
