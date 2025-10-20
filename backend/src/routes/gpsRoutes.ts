@@ -123,7 +123,7 @@ router.get(
 router.get(
   '/tracks',
   requireManagerOrAdmin,
-  gpsController.getTracksData
+  gpsController.getVehicleTracks
 );
 
 // =====================================
@@ -212,7 +212,7 @@ router.get(
 router.get(
   '/idle-analysis',
   requireManagerOrAdmin,
-  gpsController.getIdleAnalysis
+  gpsController.getIdlingAnalysis
 );
 
 /**
@@ -229,7 +229,7 @@ router.get(
 router.get(
   '/analytics/patterns',
   requireManagerOrAdmin,
-  gpsController.analyzeMovementPatterns
+  gpsController.getMovementPatterns
 );
 
 /**
@@ -246,7 +246,7 @@ router.get(
 router.post(
   '/route-optimization',
   requireManagerOrAdmin,
-  gpsController.suggestRouteOptimization
+  gpsController.optimizeRoute
 );
 
 /**

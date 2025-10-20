@@ -281,8 +281,8 @@ export class GpsService {
       // ヒートマップポイント生成
       const heatmapPoints = Array.from(gridMap.entries()).map(([key, count]) => {
         const parts = key.split(',');
-        const lat = parseFloat(parts[0]);
-        const lon = parseFloat(parts[1]);
+        const lat = parseFloat(parts[0] ?? '0');
+        const lon = parseFloat(parts[1] ?? '0');
         return {
           latitude: lat + gridSizeKm / 2,
           longitude: lon + gridSizeKm / 2,
@@ -648,8 +648,8 @@ export class GpsService {
         .slice(0, 10)
         .map(([key, count]) => {
           const parts = key.split(',');
-          const lat = parseFloat(parts[0]);
-          const lon = parseFloat(parts[1]);
+          const lat = parseFloat(parts[0] ?? '0');
+          const lon = parseFloat(parts[1] ?? '0');
           return {
             centerPoint: {
               latitude: lat + gridSize / 2,
@@ -719,14 +719,14 @@ export class GpsService {
       // 総距離計算
       let totalDistance = 0;
       if (optimizedOrder.length > 0) {
-        const firstDest = destinations[optimizedOrder[0]];
+        const firstDest = destinations[optimizedOrder[0] ?? '0'];
         if (firstDest) {
           totalDistance = this.calculateDistanceSimple(startLocation, firstDest);
         }
 
         for (let i = 0; i < optimizedOrder.length - 1; i++) {
-          const currDest = destinations[optimizedOrder[i]];
-          const nextDest = destinations[optimizedOrder[i + 1]];
+          const currDest = destinations[optimizedOrder[i] ?? '0'];
+          const nextDest = destinations[optimizedOrder[i + 1]?? '0'];
           if (currDest && nextDest) {
             totalDistance += this.calculateDistanceSimple(currDest, nextDest);
           }
