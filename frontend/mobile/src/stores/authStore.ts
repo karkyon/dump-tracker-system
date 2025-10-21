@@ -1,8 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { apiService as authAPI } from '../services/api';
-import { User } from '../types';
+import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
+
+// User型定義
+export interface User {
+  id: string;
+  userId: string;
+  name: string;
+  role: string;
+  vehicleId: string;
+}
 
 // AuthState interface
 export interface AuthState {
@@ -38,13 +46,15 @@ export const useAuthStore = create<AuthState>()(
         try {
           console.log('[Auth Store] Login attempt started');
           
-          const response = await authAPI.login(credentials);
+          const response = await apiService.login(credentials);
           
           if (response.success && response.data) {
-            const { user, accessToken } = response.data;
+            // ✅ 修正: バックエンドの正しいレスポンス構造
+            const { user, token } = response.data;
             
             // Store token in localStorage
-            localStorage.setItem('auth_token', accessToken);
+            localStorage.setItem('auth_token', token);
+            localStorage.setItem('user_data', JSON.stringify(user));
             
             set({
               isAuthenticated: true,
@@ -54,7 +64,7 @@ export const useAuthStore = create<AuthState>()(
             });
             
             toast.success('ログインに成功しました');
-            console.log('[Auth Store] Login successful');
+            console.log('[Auth Store] Login successful:', user);
           } else {
             throw new Error(response.error || response.message || 'ログインに失敗しました');
           }
@@ -63,10 +73,19 @@ export const useAuthStore = create<AuthState>()(
           
           let errorMessage = 'ログインに失敗しました';
           
-          if (error.message) {
-            if (error.message.includes('INVALID_CREDENTIALS')) {
+          if (error.response) {
+            const status = error.response.status;
+            const data = error.response.data;
+            
+            if (status === 401) {
               errorMessage = 'ユーザー名またはパスワードが正しくありません';
-            } else if (error.message.includes('Network Error')) {
+            } else if (status === 403) {
+              errorMessage = 'アクセスが拒否されました';
+            } else if (data?.message) {
+              errorMessage = data.message;
+            }
+          } else if (error.message) {
+            if (error.message.includes('Network Error') || error.message.includes('ERR_CERT')) {
               errorMessage = 'サーバーに接続できません。HTTPS証明書を確認してください。';
             } else {
               errorMessage = error.message;
@@ -81,6 +100,7 @@ export const useAuthStore = create<AuthState>()(
           });
           
           toast.error(errorMessage);
+          throw new Error(errorMessage);
         }
       },
 
@@ -88,6 +108,7 @@ export const useAuthStore = create<AuthState>()(
         // Clear token from localStorage
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
+        localStorage.removeItem('remember_login');
         
         set({
           isAuthenticated: false,
@@ -106,15 +127,18 @@ export const useAuthStore = create<AuthState>()(
         try {
           // Check if we have a stored token
           const token = localStorage.getItem('auth_token');
+          const userData = localStorage.getItem('user_data');
           
-          if (token) {
+          if (token && userData) {
             // Verify the token with the server
-            const response = await authAPI.getCurrentUser();
+            const response = await apiService.getCurrentUser();
             
             if (response.success && response.data) {
+              const user = JSON.parse(userData);
+              
               set({
                 isAuthenticated: true,
-                user: response.data,
+                user,
                 loading: false,
                 error: null
               });
@@ -122,6 +146,7 @@ export const useAuthStore = create<AuthState>()(
             } else {
               // Token is invalid, clear it
               localStorage.removeItem('auth_token');
+              localStorage.removeItem('user_data');
               set({
                 isAuthenticated: false,
                 user: null,
@@ -144,8 +169,8 @@ export const useAuthStore = create<AuthState>()(
           
           let errorMessage = '';
           
-          if (error.message && error.message.includes('certificate')) {
-            errorMessage = 'HTTPS証明書エラー: サーバー証明書を信頼する必要があります';
+          if (error.message && (error.message.includes('certificate') || error.message.includes('ERR_CERT'))) {
+            errorMessage = 'HTTPS証明書エラー: https://10.1.119.244:8443 に直接アクセスして証明書を信頼してください';
           } else if (error.message && error.message.includes('Network Error')) {
             errorMessage = 'ネットワークエラー: サーバーに接続できません';
           }

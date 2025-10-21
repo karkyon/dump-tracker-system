@@ -1,7 +1,7 @@
 // frontend/mobile/src/pages/OperationRecord.tsx
-// 完全版GPS運行記録画面 - index.html機能完全統合版
+// GoogleMapWrapper統合版 - React Strict Mode完全対応
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { 
@@ -11,20 +11,12 @@ import {
   Coffee, 
   Fuel,
   Navigation,
-  Activity,
   Clock
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useGPS } from '../hooks/useGPS';
 import apiService from '../services/api';
-
-// Google Maps型定義
-declare global {
-  interface Window {
-    google: any;
-    initMap: () => void;
-  }
-}
+import GoogleMapWrapper from '../components/GoogleMapWrapper';
 
 // 運行状態型定義
 interface OperationState {
@@ -42,11 +34,11 @@ const OperationRecord: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   
-  // Google Map関連のref
-  const mapRef = useRef<HTMLDivElement>(null);
+  // Google Map関連のref（GoogleMapWrapperから受け取る）
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
+  const [isMapReady, setIsMapReady] = useState(false);
   
   // 運行状態
   const [operation, setOperation] = useState<OperationState>({
@@ -72,7 +64,7 @@ const OperationRecord: React.FC = () => {
     speed,
     accuracy,
     totalDistance,
-    averageSpeed,
+    averageSpeed: gpsAverageSpeed,
     pathCoordinates,
     startTracking,
     stopTracking,
@@ -86,6 +78,8 @@ const OperationRecord: React.FC = () => {
 
   // GPS更新ハンドラー
   function handleGPSUpdate(position: any, metadata: any) {
+    if (!isMapReady) return;
+
     // マップ更新
     if (mapInstanceRef.current && markerRef.current) {
       const newPos = {
@@ -93,21 +87,25 @@ const OperationRecord: React.FC = () => {
         lng: position.coords.longitude
       };
       
-      // マーカー位置更新
-      markerRef.current.setPosition(newPos);
-      
-      // マップ中心移動
-      mapInstanceRef.current.panTo(newPos);
-      
-      // ヘッドアップ回転(方位角)
-      if (metadata.heading !== null && metadata.speed > 1) {
-        mapInstanceRef.current.setHeading(metadata.heading);
-      }
-      
-      // 軌跡更新
-      if (polylineRef.current && pathCoordinates.length > 0) {
-        const path = pathCoordinates.map(p => ({ lat: p.lat, lng: p.lng }));
-        polylineRef.current.setPath(path);
+      try {
+        // マーカー位置更新
+        markerRef.current.setPosition(newPos);
+        
+        // マップ中心移動
+        mapInstanceRef.current.panTo(newPos);
+        
+        // ヘッドアップ回転(方位角)
+        if (metadata.heading !== null && metadata.speed > 1) {
+          mapInstanceRef.current.setHeading(metadata.heading);
+        }
+        
+        // 軌跡更新
+        if (polylineRef.current && pathCoordinates.length > 0) {
+          const path = pathCoordinates.map((p: any) => ({ lat: p.lat, lng: p.lng }));
+          polylineRef.current.setPath(path);
+        }
+      } catch (error) {
+        console.error('Error updating GPS on map:', error);
       }
     }
     
@@ -119,138 +117,96 @@ const OperationRecord: React.FC = () => {
     }));
   }
 
-  // Google Maps初期化
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    
-    window.initMap = () => {
-      if (!mapRef.current) return;
-      
-      // WebGL Vector Map初期化
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: { lat: 34.6937, lng: 135.5023 }, // 大阪デフォルト
-        zoom: 18,
-        mapId: 'DEMO_MAP_ID', // Vector Map有効化
-        heading: 0,
-        tilt: 0,
-        disableDefaultUI: true,
-        zoomControl: true,
-        gestureHandling: 'greedy',
-        tiltInteractionEnabled: true,
-        headingInteractionEnabled: true
-      });
-      
-      mapInstanceRef.current = map;
-      
-      // カスタムマーカー作成
-      const createMarkerIcon = (distance: number, speed: number) => {
-        const svg = `
-          <svg width="60" height="80" viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="30" cy="40" r="28" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-            <circle cx="30" cy="40" r="22" fill="rgba(255,255,255,0.9)" stroke="#4285F4" stroke-width="1"/>
-            <path d="M30 15 L25 25 L35 25 Z" fill="#4285F4"/>
-            <text x="30" y="35" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold" fill="#333">
-              ${distance.toFixed(1)}km
-            </text>
-            <text x="30" y="47" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="#4285F4">
-              ${Math.round(speed)}
-            </text>
-            <text x="30" y="55" text-anchor="middle" font-family="Arial" font-size="6" fill="#666">
-              km/h
-            </text>
-          </svg>
-        `;
-        return {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-          scaledSize: new window.google.maps.Size(60, 80),
-          anchor: new window.google.maps.Point(30, 40)
-        };
+  // ========================================================================
+  // マップ準備完了ハンドラー
+  // ========================================================================
+  const handleMapReady = (map: any, marker: any, polyline: any) => {
+    console.log('Map ready callback received');
+    mapInstanceRef.current = map;
+    markerRef.current = marker;
+    polylineRef.current = polyline;
+    setIsMapReady(true);
+
+    // 現在位置があれば移動
+    if (currentPosition) {
+      const pos = {
+        lat: currentPosition.coords.latitude,
+        lng: currentPosition.coords.longitude
       };
-      
-      // マーカー配置
-      const marker = new window.google.maps.Marker({
-        position: { lat: 34.6937, lng: 135.5023 },
-        map: map,
-        icon: createMarkerIcon(0, 0),
-        zIndex: 1000
-      });
-      
-      markerRef.current = marker;
-      
-      // 軌跡ポリライン
-      const polyline = new window.google.maps.Polyline({
-        path: [],
-        geodesic: true,
-        strokeColor: '#FF0000',
-        strokeOpacity: 1.0,
-        strokeWeight: 4,
-        zIndex: 999
-      });
-      
-      polyline.setMap(map);
-      polylineRef.current = polyline;
-      
-      // GPS位置取得後にマップ移動
-      if (currentPosition) {
-        const pos = {
-          lat: currentPosition.coords.latitude,
-          lng: currentPosition.coords.longitude
-        };
+      try {
         map.setCenter(pos);
         marker.setPosition(pos);
+      } catch (error) {
+        console.error('Error setting initial position:', error);
       }
-    };
-    
-    script.onload = () => window.initMap();
-    document.head.appendChild(script);
-    
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, []);
-  
-  // マーカーアイコン更新
-  useEffect(() => {
-    if (markerRef.current && window.google) {
-      const createMarkerIcon = (distance: number, speed: number) => {
-        const svg = `
-          <svg width="60" height="80" viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="30" cy="40" r="28" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-            <circle cx="30" cy="40" r="22" fill="rgba(255,255,255,0.9)" stroke="#4285F4" stroke-width="1"/>
-            <path d="M30 15 L25 25 L35 25 Z" fill="#4285F4"/>
-            <text x="30" y="35" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold" fill="#333">
-              ${distance.toFixed(1)}km
-            </text>
-            <text x="30" y="47" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="#4285F4">
-              ${Math.round(speed)}
-            </text>
-            <text x="30" y="55" text-anchor="middle" font-family="Arial" font-size="6" fill="#666">
-              km/h
-            </text>
-          </svg>
-        `;
-        return {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-          scaledSize: new window.google.maps.Size(60, 80),
-          anchor: new window.google.maps.Point(30, 40)
-        };
-      };
-      
-      markerRef.current.setIcon(createMarkerIcon(totalDistance, speed || 0));
     }
-  }, [totalDistance, speed]);
+  };
+
+  // ========================================================================
+  // マーカーアイコン動的更新
+  // ========================================================================
+  useEffect(() => {
+    if (!isMapReady || !markerRef.current || !window.google || !window.google.maps) {
+      return;
+    }
+
+    const createMarkerIcon = (distance: number, speedKmh: number) => {
+      const svg = `
+        <svg width="60" height="80" viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="30" cy="40" r="28" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
+          <circle cx="30" cy="40" r="22" fill="rgba(255,255,255,0.9)" stroke="#4285F4" stroke-width="1"/>
+          <path d="M30 15 L25 25 L35 25 Z" fill="#4285F4"/>
+          <text x="30" y="35" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold" fill="#333">
+            ${distance.toFixed(1)}km
+          </text>
+          <text x="30" y="47" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="#4285F4">
+            ${Math.round(speedKmh)}
+          </text>
+          <text x="30" y="55" text-anchor="middle" font-family="Arial" font-size="6" fill="#666">
+            km/h
+          </text>
+        </svg>
+      `;
+      return {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new window.google.maps.Size(60, 80),
+        anchor: new window.google.maps.Point(30, 40)
+      };
+    };
+
+    try {
+      markerRef.current.setIcon(createMarkerIcon(totalDistance || 0, speed || 0));
+    } catch (error) {
+      console.error('Failed to update marker icon:', error);
+    }
+  }, [totalDistance, speed, isMapReady]);
+  
+  // ========================================================================
+  // GPS位置更新時にマップを更新
+  // ========================================================================
+  useEffect(() => {
+    if (!isMapReady || !currentPosition || !mapInstanceRef.current || !markerRef.current) {
+      return;
+    }
+
+    const pos = {
+      lat: currentPosition.coords.latitude,
+      lng: currentPosition.coords.longitude
+    };
+    
+    try {
+      mapInstanceRef.current.setCenter(pos);
+      markerRef.current.setPosition(pos);
+    } catch (error) {
+      console.error('Failed to update map position:', error);
+    }
+  }, [currentPosition, isMapReady]);
 
   // 時刻更新
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
       
-      // 経過時間計算
       if (operation.startTime) {
         const elapsed = Date.now() - operation.startTime.getTime();
         const hours = Math.floor(elapsed / (1000 * 60 * 60));
@@ -313,7 +269,7 @@ const OperationRecord: React.FC = () => {
         totalDistance: totalDistance
       });
       
-      stopTracking();
+      await stopTracking();
       
       setOperation({
         id: null,
@@ -333,8 +289,8 @@ const OperationRecord: React.FC = () => {
     }
   };
 
-  // アクション記録
-  const handleAction = async (actionType: string) => {
+  // アクション処理
+  const handleAction = async (action: string) => {
     if (!operation.id || !currentPosition) {
       toast.error('運行中のみ操作可能です');
       return;
@@ -343,135 +299,86 @@ const OperationRecord: React.FC = () => {
     try {
       await apiService.recordAction({
         operationId: operation.id,
-        actionType,
+        actionType: action,
         latitude: currentPosition.coords.latitude,
         longitude: currentPosition.coords.longitude,
         location: '現在地'
       });
       
-      if (actionType === '積込場所到着') {
+      toast.success(`${action}を記録しました`);
+      
+      if (action === '積込場所到着') {
         setOperation(prev => ({ ...prev, loadingArrived: true }));
-      } else if (actionType === '積降場所到着') {
+      } else if (action === '積降場所到着') {
         setOperation(prev => ({ ...prev, unloadingArrived: true }));
       }
-      
-      toast.success(`${actionType}を記録しました`);
     } catch (error) {
       console.error('アクション記録エラー:', error);
       toast.error('記録に失敗しました');
     }
   };
 
-  // 方位を16方位に変換
-  const getDirection = (degrees: number): string => {
-    const directions = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
-    const index = Math.round(degrees / 45) % 8;
-    return directions[index];
-  };
-
+  // JSX
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-blue-900 to-blue-700">
+    <div className="flex flex-col h-screen bg-gray-50">
       {/* ヘッダー */}
-      <div className="bg-gradient-to-r from-blue-800 to-blue-900 text-white p-4 shadow-lg">
-        <div className="flex items-center justify-between">
-          {/* ステータス */}
-          <div className={`px-4 py-2 rounded-full font-bold text-sm ${
-            operation.status === 'running' 
-              ? 'bg-green-500 animate-pulse' 
-              : 'bg-gray-500'
-          }`}>
-            {operation.status === 'running' ? '運行中' : '待機中'}
-          </div>
-          
-          {/* 時刻 */}
-          <div className="text-center">
-            <div className="text-xl font-bold">
-              {currentTime.toLocaleTimeString('ja-JP')}
-            </div>
-            <div className="text-xs opacity-80">
-              {currentTime.toLocaleDateString('ja-JP', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </div>
-          </div>
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center">
+          <Navigation className="w-6 h-6 mr-2" />
+          <h1 className="text-lg font-bold">運行記録</h1>
+        </div>
+        <div className="flex items-center text-sm">
+          <Clock className="w-4 h-4 mr-1" />
+          {currentTime.toLocaleTimeString('ja-JP')}
         </div>
       </div>
 
-      {/* マップ */}
-      <div className="relative h-64 bg-gray-200">
-        <div ref={mapRef} className="w-full h-full" />
+      {/* 地図エリア */}
+      <div className="flex-1 relative bg-gray-100">
+        <GoogleMapWrapper
+          onMapReady={handleMapReady}
+          initialPosition={
+            currentPosition
+              ? {
+                  lat: currentPosition.coords.latitude,
+                  lng: currentPosition.coords.longitude,
+                }
+              : undefined
+          }
+        />
         
-        {/* 方位表示 */}
-        {heading !== null && (
-          <div className="absolute top-2 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs font-bold">
-            方位: {Math.round(heading)}° ({getDirection(heading)})
-          </div>
-        )}
-        
-        {/* 精度表示 */}
-        {accuracy !== null && (
-          <div className="absolute top-10 right-2 bg-black/70 text-white px-3 py-1 rounded-full text-xs">
-            精度: {Math.round(accuracy)}m
+        {!isMapReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <p className="text-gray-600">地図を読み込んでいます...</p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* 情報グリッド */}
-      <div className="bg-white p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-600">
-            <div className="text-xs text-gray-600 mb-1">積込場所</div>
-            <div className="font-bold text-sm">◯◯建設資材置場</div>
-          </div>
-          
-          <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-600">
-            <div className="text-xs text-gray-600 mb-1">積降場所</div>
-            <div className="font-bold text-sm">△△工事現場</div>
-          </div>
-          
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="text-xs text-gray-600 mb-1">積荷</div>
-            <div className="font-bold text-sm">砂利 12t</div>
-          </div>
-          
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="text-xs text-gray-600 mb-1 flex items-center">
-              <Clock className="w-3 h-3 mr-1" />
-              経過時間
-            </div>
-            <div className="font-bold text-sm">
-              {elapsedTime.hours}時間 {elapsedTime.minutes}分
+      {/* コントロールパネル */}
+      <div className="bg-white px-4 py-4 border-t shadow-lg">
+        {/* 運行情報 */}
+        <div className="grid grid-cols-3 gap-2 mb-4 text-center text-sm">
+          <div>
+            <div className="text-gray-500">経過時間</div>
+            <div className="font-bold text-lg">
+              {operation.startTime ? `${elapsedTime.hours}:${String(elapsedTime.minutes).padStart(2, '0')}:${String(elapsedTime.seconds).padStart(2, '0')}` : '0:00:00'}
             </div>
           </div>
-          
-          <div className="bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500">
-            <div className="text-xs text-gray-600 mb-1 flex items-center">
-              <Navigation className="w-3 h-3 mr-1" />
-              運行距離
-            </div>
-            <div className="font-bold text-sm text-orange-700">
-              {totalDistance.toFixed(1)} km
-            </div>
+          <div>
+            <div className="text-gray-500">運行距離</div>
+            <div className="font-bold text-lg">{(totalDistance || 0).toFixed(1)} km</div>
           </div>
-          
-          <div className="bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500">
-            <div className="text-xs text-gray-600 mb-1 flex items-center">
-              <Activity className="w-3 h-3 mr-1" />
-              平均速度
-            </div>
-            <div className="font-bold text-sm text-orange-700">
-              {averageSpeed.toFixed(1)} km/h
-            </div>
+          <div>
+            <div className="text-gray-500">平均速度</div>
+            <div className="font-bold text-lg">{(gpsAverageSpeed || 0).toFixed(1)} km/h</div>
           </div>
         </div>
-      </div>
 
-      {/* ボタングリッド */}
-      <div className="flex-1 bg-white p-4 overflow-y-auto">
-        <div className="grid grid-cols-2 gap-3">
-          {/* 積込場所到着 */}
+        {/* アクションボタン */}
+        <div className="grid grid-cols-4 gap-2 mb-4">
           <button
             onClick={() => handleAction('積込場所到着')}
             disabled={!operation.id || operation.loadingArrived}
@@ -482,24 +389,22 @@ const OperationRecord: React.FC = () => {
             }`}
           >
             <MapPin className="w-5 h-5 mx-auto mb-1" />
-            積込場所<br />到着
+            積込到着
           </button>
           
-          {/* 積降場所到着 */}
           <button
             onClick={() => handleAction('積降場所到着')}
             disabled={!operation.id || !operation.loadingArrived || operation.unloadingArrived}
             className={`p-4 rounded-lg font-bold text-sm transition-all ${
               operation.id && operation.loadingArrived && !operation.unloadingArrived
-                ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg hover:shadow-xl active:scale-95'
+                ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg hover:shadow-xl active:scale-95'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
             <MapPin className="w-5 h-5 mx-auto mb-1" />
-            積降場所<br />到着
+            積降到着
           </button>
           
-          {/* 休憩・荷待ち */}
           <button
             onClick={() => handleAction('休憩・荷待ち')}
             disabled={!operation.id}
@@ -510,10 +415,9 @@ const OperationRecord: React.FC = () => {
             }`}
           >
             <Coffee className="w-5 h-5 mx-auto mb-1" />
-            休憩・荷待ち
+            休憩
           </button>
           
-          {/* 給油 */}
           <button
             onClick={() => handleAction('給油')}
             disabled={!operation.id}

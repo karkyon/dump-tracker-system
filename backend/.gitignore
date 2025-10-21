@@ -60,3 +60,4 @@ temp/
 /src/generated/prisma
 
 /src/generated/prisma
+.cert/
