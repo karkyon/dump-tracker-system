@@ -1,62 +1,50 @@
 // =====================================
 // backend/src/services/authService.ts
 // 認証サービス統合 - Phase 2完全統合版（Prismaスキーマ完全対応・全エラー修正）
-// 最終更新: 2025年10月14日
+// 最終更新: 2025年10月22日
 // 総行数: 846行（全9個のエラー完全修正）
 // =====================================
 
-import type { User, UserRole, Prisma } from '@prisma/client';
-import type { PrismaClient } from '@prisma/client';
+import type { UserRole } from '@prisma/client';
 
 // 🎯 Phase 1完成基盤の活用
 import { DatabaseService } from '../utils/database';
 import {
   AppError,
-  ValidationError,
-  AuthenticationError,
   AuthorizationError,
   NotFoundError,
-  ConflictError
+  ValidationError
 } from '../utils/errors';
 import logger from '../utils/logger';
 
 // 🎯 暗号化・JWT機能の活用
 import {
-  hashPassword,
-  verifyPassword,
-  generateTokenPair,
-  generateAccessToken,
-  generateRefreshToken,
-  verifyAccessToken,
-  verifyRefreshToken,
   generateRandomToken,
+  generateTokenPair,
+  hashPassword,
   JWT_CONFIG,
-  PASSWORD_CONFIG
+  PASSWORD_CONFIG,
+  verifyAccessToken,
+  verifyPassword,
+  verifyRefreshToken
 } from '../utils/crypto';
 
 // 🎯 types/からの統一型定義インポート
 import type {
+  AuthConfig,
+  ChangePasswordRequest,
   LoginRequest,
   LoginResponse,
   LogoutRequest,
   RefreshTokenRequest,
   RefreshTokenResponse,
-  ChangePasswordRequest,
-  ResetPasswordRequest,
   ResetPasswordConfirmRequest,
-  AuthenticatedUser,
-  UserInfo,
-  SessionInfo,
+  ResetPasswordRequest,
   SecurityEvent,
-  LoginAttempt,
-  RolePermissions,
-  AuthConfig,
-  PasswordPolicy
+  UserInfo
 } from '../types/auth';
 
 import type {
-  PaginationQuery,
-  ApiResponse,
   OperationResult
 } from '../types/common';
 
@@ -499,15 +487,10 @@ class AuthService {
         data: {
           tableName: 'auth',
           operationType: 'LOGIN_ATTEMPT',
-          userId: '',
+          userId: null,  // ← nullに変更
           ipAddress: ipAddress || null,
           userAgent: userAgent || null,
-          newValues: {
-            username,
-            success,
-            reason,
-            sessionId
-          }
+          newValues: { username, success, reason, timestamp: new Date() }
         }
       });
 
@@ -535,7 +518,7 @@ class AuthService {
         data: {
           tableName: 'auth',
           operationType: event.event,
-          userId: event.userId || null,
+          userId: this.sanitizeUuidField(event.userId),  // ← sanitizeUuidFieldを使用
           ipAddress: event.ipAddress || null,
           userAgent: event.userAgent || null,
           newValues: event.details || {}
@@ -546,6 +529,17 @@ class AuthService {
     } catch (error) {
       logger.error('セキュリティイベント記録エラー', { error });
     }
+  }
+
+  /**
+   * ユーザーIDのサニタイズ（Phase 2完全統合版）
+   * ✅ 修正: nullまたは空文字をnullに変換
+   */
+  private sanitizeUuidField(value: string | null | undefined): string | null {
+    if (!value || value.trim() === '') {
+      return null;
+    }
+    return value;
   }
 
   // =====================================
