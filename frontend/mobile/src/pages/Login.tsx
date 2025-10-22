@@ -1,5 +1,5 @@
 // frontend/mobile/src/pages/Login.tsx
-// D1: ログイン画面 - 仕様概案書完全準拠版
+// D1: ログイン画面 - 修正版(未使用変数削除)
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +24,6 @@ const Login: React.FC = () => {
   });
   
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   // 認証済みの場合は車両情報画面へリダイレクト
   useEffect(() => {
@@ -221,7 +220,7 @@ const Login: React.FC = () => {
                   <Lock className="w-5 h-5 text-gray-400" />
                 </div>
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type="password"
                   id="password"
                   name="password"
                   value={formData.password}
