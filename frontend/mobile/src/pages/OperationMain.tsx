@@ -1,5 +1,5 @@
 // frontend/mobile/src/pages/OperationMain.tsx
-// D4: 運行中画面 - 仕様概案書完全準拠版
+// D4: 運行中画面 - 修正版
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,9 +12,7 @@ import {
   Home,
   Navigation,
   Clock,
-  Loader2,
   Play,
-  Pause,
   AlertCircle
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
@@ -50,7 +48,7 @@ const OperationMain: React.FC = () => {
     status: 'running',
     startTime: new Date(),
     elapsedSeconds: 0,
-    currentLatitude: 35.6812,  // デフォルト位置(東京)
+    currentLatitude: 35.6812,
     currentLongitude: 139.7671,
     distanceTraveled: 0
   });
@@ -59,11 +57,7 @@ const OperationMain: React.FC = () => {
   const [gpsPosition, setGpsPosition] = useState<GPSPosition | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [isGpsActive, setIsGpsActive] = useState(false);
-  const [isTracking, setIsTracking] = useState(true);
-  
-  // UI状態
-  const [isLoading, setIsLoading] = useState(false);
-  const [showMap, setShowMap] = useState(true);
+  const [isTracking] = useState(true);
   
   // Refs
   const watchIdRef = useRef<number | null>(null);
@@ -77,7 +71,6 @@ const OperationMain: React.FC = () => {
       return;
     }
     
-    // 点検完了チェック
     const inspectionCompleted = sessionStorage.getItem('inspection_completed');
     if (!inspectionCompleted) {
       toast.error('乗車前点検を完了してください');
@@ -85,7 +78,6 @@ const OperationMain: React.FC = () => {
       return;
     }
     
-    // 運行開始
     startOperation();
   }, [isAuthenticated, navigate]);
 
@@ -126,15 +118,12 @@ const OperationMain: React.FC = () => {
 
   // 運行開始
   const startOperation = async () => {
-    setIsLoading(true);
-    
     try {
       const vehicleId = sessionStorage.getItem('selected_vehicle_id');
       if (!vehicleId) {
         throw new Error('車両情報が見つかりません');
       }
       
-      // バックエンドAPI呼び出し(実装例)
       const response = await apiService.startOperation({
         vehicleId: vehicleId,
         driverId: user?.id || '',
@@ -144,10 +133,10 @@ const OperationMain: React.FC = () => {
         cargoInfo: '土砂'
       });
       
-      if (response.success && response.data) {
+      if (response.success && response.data?.id) {
         setOperation(prev => ({
           ...prev,
-          id: response.data.id,
+          id: response.data?.id || null,
           startTime: new Date()
         }));
         
@@ -156,8 +145,6 @@ const OperationMain: React.FC = () => {
     } catch (error: any) {
       console.error('運行開始エラー:', error);
       toast.error('運行開始に失敗しました');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -187,14 +174,12 @@ const OperationMain: React.FC = () => {
         setGpsError(null);
         setIsGpsActive(true);
         
-        // 運行状態更新
         setOperation(prev => ({
           ...prev,
           currentLatitude: newPosition.latitude,
           currentLongitude: newPosition.longitude
         }));
         
-        // バックエンドにGPS位置を送信
         sendGPSToBackend(newPosition);
       },
       (error) => {
@@ -258,16 +243,12 @@ const OperationMain: React.FC = () => {
   const handleLoadingArrival = () => {
     setOperation(prev => ({ ...prev, status: 'loading' }));
     toast.success('積込場所に到着しました');
-    // 積込場所画面へ遷移(実装時)
-    // navigate('/loading-location');
   };
 
   // 積降場所到着
   const handleUnloadingArrival = () => {
     setOperation(prev => ({ ...prev, status: 'unloading' }));
     toast.success('積降場所に到着しました');
-    // 積降場所画面へ遷移(実装時)
-    // navigate('/unloading-location');
   };
 
   // 休憩・荷待ち
@@ -285,15 +266,11 @@ const OperationMain: React.FC = () => {
   const handleRefueling = () => {
     setOperation(prev => ({ ...prev, status: 'refueling' }));
     toast.success('給油を記録します');
-    // 給油画面へ遷移(実装時)
-    // navigate('/refueling');
   };
 
   // 車庫到着
   const handleGarageArrival = () => {
     toast.success('車庫に到着しました');
-    // 乗車後点検画面へ遷移(実装時)
-    // navigate('/post-departure-inspection');
   };
 
   // ステータス表示用のテキスト
@@ -399,7 +376,7 @@ const OperationMain: React.FC = () => {
           </div>
         </div>
 
-        {/* 簡易マップ表示(プレースホルダー) */}
+        {/* 簡易マップ表示 */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-gray-800">現在地マップ</h3>
@@ -423,7 +400,6 @@ const OperationMain: React.FC = () => {
 
         {/* 操作ボタングループ */}
         <div className="space-y-3">
-          {/* 積込場所到着 */}
           <button
             onClick={handleLoadingArrival}
             className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 
@@ -435,7 +411,6 @@ const OperationMain: React.FC = () => {
             <span>積込場所到着</span>
           </button>
 
-          {/* 積降場所到着 */}
           <button
             onClick={handleUnloadingArrival}
             className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 
@@ -447,7 +422,6 @@ const OperationMain: React.FC = () => {
             <span>積降場所到着</span>
           </button>
 
-          {/* 休憩・荷待ち */}
           <button
             onClick={handleRest}
             className={`w-full py-4 font-semibold rounded-xl shadow-md hover:shadow-lg 
@@ -470,7 +444,6 @@ const OperationMain: React.FC = () => {
             )}
           </button>
 
-          {/* 給油 */}
           <button
             onClick={handleRefueling}
             className="w-full py-4 bg-gray-200 hover:bg-gray-300 text-gray-800 
@@ -481,7 +454,6 @@ const OperationMain: React.FC = () => {
             <span>給油</span>
           </button>
 
-          {/* 車庫到着 */}
           <button
             onClick={handleGarageArrival}
             className="w-full py-4 bg-gradient-to-r from-green-600 to-green-700 

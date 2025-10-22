@@ -1,5 +1,5 @@
 // frontend/mobile/src/pages/VehicleInfo.tsx
-// D2: 車両情報画面 - 仕様概案書完全準拠版
+// D2: 車両情報画面 - 修正版
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +9,6 @@ import {
   ArrowRight, 
   ArrowLeft, 
   Loader2,
-  CheckCircle,
   User,
   Calendar,
   Gauge
@@ -30,35 +29,28 @@ const VehicleInfo: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
   
-  // 状態管理
   const [vehicles, setVehicles] = useState<VehicleData[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [vehicleInfo, setVehicleInfo] = useState<VehicleData | null>(null);
   const [startMileage, setStartMileage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
 
-  // 認証チェック
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
-  // 車両リスト取得
   useEffect(() => {
     fetchVehicles();
   }, []);
 
-  // 車両リスト取得
   const fetchVehicles = async () => {
     setIsFetching(true);
     try {
-      // バックエンドから車両リストを取得
       const response = await apiService.getVehicleInfo();
       
       if (response.success && response.data) {
-        // ダミーデータ(実際のAPIレスポンスに応じて調整)
         const dummyVehicles: VehicleData[] = [
           {
             id: '1',
@@ -88,7 +80,6 @@ const VehicleInfo: React.FC = () => {
         
         setVehicles(dummyVehicles);
         
-        // ユーザーの割り当て車両IDがあれば自動選択
         if (user?.vehicleId) {
           setSelectedVehicleId(user.vehicleId);
           const vehicle = dummyVehicles.find(v => v.id === user.vehicleId);
@@ -106,7 +97,6 @@ const VehicleInfo: React.FC = () => {
     }
   };
 
-  // 車両選択ハンドラー
   const handleVehicleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const vehicleId = e.target.value;
     setSelectedVehicleId(vehicleId);
@@ -114,7 +104,6 @@ const VehicleInfo: React.FC = () => {
     const vehicle = vehicles.find(v => v.id === vehicleId);
     if (vehicle) {
       setVehicleInfo(vehicle);
-      // 前回の終了距離を開始距離として自動設定
       setStartMileage(vehicle.currentMileage.toString());
     } else {
       setVehicleInfo(null);
@@ -122,13 +111,11 @@ const VehicleInfo: React.FC = () => {
     }
   };
 
-  // 開始距離変更ハンドラー
   const handleMileageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^0-9]/g, ''); // 数字のみ
+    const value = e.target.value.replace(/[^0-9]/g, '');
     setStartMileage(value);
   };
 
-  // バリデーション
   const validateForm = (): boolean => {
     if (!selectedVehicleId) {
       toast.error('車番を選択してください');
@@ -148,13 +135,11 @@ const VehicleInfo: React.FC = () => {
     return true;
   };
 
-  // 次へ(乗車前点検画面へ)
   const handleNext = () => {
     if (!validateForm()) {
       return;
     }
     
-    // 車両情報を状態管理に保存(または sessionStorage)
     sessionStorage.setItem('selected_vehicle_id', selectedVehicleId);
     sessionStorage.setItem('start_mileage', startMileage);
     sessionStorage.setItem('vehicle_info', JSON.stringify(vehicleInfo));
@@ -163,7 +148,6 @@ const VehicleInfo: React.FC = () => {
     navigate('/pre-departure-inspection');
   };
 
-  // 戻る(ログアウト)
   const handleBack = () => {
     logout();
     navigate('/login', { replace: true });
@@ -182,7 +166,6 @@ const VehicleInfo: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
       <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="max-w-md mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
@@ -198,10 +181,8 @@ const VehicleInfo: React.FC = () => {
         </div>
       </header>
 
-      {/* メインコンテンツ */}
       <main className="max-w-md mx-auto px-6 py-8">
         <div className="bg-white rounded-2xl shadow-lg p-6 space-y-6">
-          {/* 車番選択 */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-3">
               車番
@@ -222,77 +203,67 @@ const VehicleInfo: React.FC = () => {
             </select>
           </div>
 
-          {/* 車種(自動表示) */}
           {vehicleInfo && (
-            <div className="animate-fade-in">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                車種
-              </label>
-              <div className="px-4 py-3.5 bg-blue-50 border-2 border-blue-200 rounded-xl
-                text-gray-800 font-medium flex items-center justify-between">
-                <span>{vehicleInfo.vehicleType}</span>
-                <Truck className="w-5 h-5 text-blue-600" />
+            <>
+              <div className="animate-fade-in">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  車種
+                </label>
+                <div className="px-4 py-3.5 bg-blue-50 border-2 border-blue-200 rounded-xl
+                  text-gray-800 font-medium flex items-center justify-between">
+                  <span>{vehicleInfo.vehicleType}</span>
+                  <Truck className="w-5 h-5 text-blue-600" />
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* 開始距離 */}
-          {vehicleInfo && (
-            <div className="animate-fade-in">
-              <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                <Gauge className="w-4 h-4 mr-2 text-gray-600" />
-                開始距離 (km)
-              </label>
-              <input
-                type="text"
-                value={startMileage}
-                onChange={handleMileageChange}
-                placeholder="開始距離を入力"
-                className="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                  transition-all duration-200 text-gray-800 font-medium text-right text-lg"
-              />
-              <p className="mt-2 text-sm text-gray-500">
-                前回終了距離: {vehicleInfo.currentMileage.toLocaleString()} km
-              </p>
-            </div>
-          )}
+              <div className="animate-fade-in">
+                <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <Gauge className="w-4 h-4 mr-2 text-gray-600" />
+                  開始距離 (km)
+                </label>
+                <input
+                  type="text"
+                  value={startMileage}
+                  onChange={handleMileageChange}
+                  placeholder="開始距離を入力"
+                  className="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                    transition-all duration-200 text-gray-800 font-medium text-right text-lg"
+                />
+                <p className="mt-2 text-sm text-gray-500">
+                  前回終了距離: {vehicleInfo.currentMileage.toLocaleString()} km
+                </p>
+              </div>
 
-          {/* 運転手名(自動表示) */}
-          {vehicleInfo && (
-            <div className="animate-fade-in">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                運転手名
-              </label>
-              <div className="px-4 py-3.5 bg-green-50 border-2 border-green-200 rounded-xl
-                text-gray-800 font-medium flex items-center justify-between">
-                <span>{user?.name}</span>
-                <User className="w-5 h-5 text-green-600" />
+              <div className="animate-fade-in">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  運転手名
+                </label>
+                <div className="px-4 py-3.5 bg-green-50 border-2 border-green-200 rounded-xl
+                  text-gray-800 font-medium flex items-center justify-between">
+                  <span>{user?.name}</span>
+                  <User className="w-5 h-5 text-green-600" />
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* 前回運転手名 */}
-          {vehicleInfo && (
-            <div className="animate-fade-in bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600 font-medium">前回運転手</span>
-                <span className="text-gray-800 font-semibold">{vehicleInfo.lastDriver}</span>
+              <div className="animate-fade-in bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 font-medium">前回運転手</span>
+                  <span className="text-gray-800 font-semibold">{vehicleInfo.lastDriver}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-2">
+                  <span className="text-gray-600 font-medium flex items-center">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    最終運行日
+                  </span>
+                  <span className="text-gray-800 font-semibold">{vehicleInfo.lastOperationDate}</span>
+                </div>
               </div>
-              <div className="flex items-center justify-between text-sm mt-2">
-                <span className="text-gray-600 font-medium flex items-center">
-                  <Calendar className="w-4 h-4 mr-1" />
-                  最終運行日
-                </span>
-                <span className="text-gray-800 font-semibold">{vehicleInfo.lastOperationDate}</span>
-              </div>
-            </div>
+            </>
           )}
         </div>
 
-        {/* ボタングループ */}
         <div className="mt-8 space-y-4">
-          {/* 進むボタン */}
           <button
             onClick={handleNext}
             disabled={!selectedVehicleId || !startMileage}
@@ -307,7 +278,6 @@ const VehicleInfo: React.FC = () => {
             <ArrowRight className="w-5 h-5" />
           </button>
 
-          {/* 戻るボタン */}
           <button
             onClick={handleBack}
             className="w-full py-4 rounded-xl font-semibold text-gray-700 text-lg

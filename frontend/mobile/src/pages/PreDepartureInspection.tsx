@@ -1,5 +1,5 @@
 // frontend/mobile/src/pages/PreDepartureInspection.tsx
-// D3: 乗車前点検画面 - 仕様概案書完全準拠版
+// D3: 乗車前点検画面 - 修正版
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -33,7 +33,6 @@ const PreDepartureInspection: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   
-  // 点検項目
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>([
     { id: '1', label: 'エンジンオイルの量', checked: false },
     { id: '2', label: 'タイヤの空気圧・摩耗・亀裂', checked: false },
@@ -47,8 +46,7 @@ const PreDepartureInspection: React.FC = () => {
     { id: '10', label: '燃料の量', checked: false },
   ]);
   
-  // 積込情報
-  const [loadingInfo, setLoadingInfo] = useState<LoadingInfo>({
+  const [loadingInfo] = useState<LoadingInfo>({
     customer: '○○建設株式会社',
     location: '東京都江東区豊洲1-2-3',
     cargoType: '土砂'
@@ -57,14 +55,12 @@ const PreDepartureInspection: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [cargoConfirmed, setCargoConfirmed] = useState(false);
 
-  // 認証チェック
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { replace: true });
       return;
     }
     
-    // 車両情報が選択されていない場合は戻る
     const vehicleId = sessionStorage.getItem('selected_vehicle_id');
     if (!vehicleId) {
       toast.error('車両情報を選択してください');
@@ -72,7 +68,6 @@ const PreDepartureInspection: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // 点検項目チェック切り替え
   const toggleInspectionItem = (id: string) => {
     setInspectionItems(prev =>
       prev.map(item =>
@@ -81,7 +76,6 @@ const PreDepartureInspection: React.FC = () => {
     );
   };
 
-  // 全てチェック
   const checkAll = () => {
     setInspectionItems(prev =>
       prev.map(item => ({ ...item, checked: true }))
@@ -89,18 +83,9 @@ const PreDepartureInspection: React.FC = () => {
     toast.success('全項目をチェックしました');
   };
 
-  // 全チェック解除
-  const uncheckAll = () => {
-    setInspectionItems(prev =>
-      prev.map(item => ({ ...item, checked: false }))
-    );
-  };
-
-  // 完了チェック
   const isAllChecked = inspectionItems.every(item => item.checked);
   const checkedCount = inspectionItems.filter(item => item.checked).length;
 
-  // バリデーション
   const validateForm = (): boolean => {
     if (!isAllChecked) {
       toast.error('すべての点検項目をチェックしてください');
@@ -115,7 +100,6 @@ const PreDepartureInspection: React.FC = () => {
     return true;
   };
 
-  // 運行開始
   const handleStartOperation = async () => {
     if (!validateForm()) {
       return;
@@ -124,13 +108,11 @@ const PreDepartureInspection: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // 点検情報を保存
       sessionStorage.setItem('inspection_completed', 'true');
       sessionStorage.setItem('loading_info', JSON.stringify(loadingInfo));
       
       toast.success('乗車前点検が完了しました');
       
-      // 運行中画面へ遷移
       setTimeout(() => {
         navigate('/operation-record');
       }, 500);
@@ -143,14 +125,12 @@ const PreDepartureInspection: React.FC = () => {
     }
   };
 
-  // 戻る
   const handleBack = () => {
     navigate('/vehicle-info');
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
       <header className="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg sticky top-0 z-10">
         <div className="max-w-md mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
@@ -165,9 +145,7 @@ const PreDepartureInspection: React.FC = () => {
         </div>
       </header>
 
-      {/* メインコンテンツ */}
       <main className="max-w-md mx-auto px-6 py-8">
-        {/* 積込情報カード */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border-2 border-blue-200">
           <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
             <Package className="w-5 h-5 mr-2 text-blue-600" />
@@ -175,7 +153,6 @@ const PreDepartureInspection: React.FC = () => {
           </h2>
           
           <div className="space-y-3">
-            {/* 客先名 */}
             <div className="flex items-start">
               <Building2 className="w-5 h-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" />
               <div>
@@ -184,7 +161,6 @@ const PreDepartureInspection: React.FC = () => {
               </div>
             </div>
             
-            {/* 積込場所 */}
             <div className="flex items-start">
               <MapPin className="w-5 h-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" />
               <div>
@@ -193,7 +169,6 @@ const PreDepartureInspection: React.FC = () => {
               </div>
             </div>
             
-            {/* 品目 */}
             <div className="flex items-start">
               <Package className="w-5 h-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" />
               <div>
@@ -203,7 +178,6 @@ const PreDepartureInspection: React.FC = () => {
             </div>
           </div>
           
-          {/* 積荷確認チェック */}
           <div className="mt-5 pt-4 border-t border-gray-200">
             <label className="flex items-center cursor-pointer">
               <input
@@ -220,7 +194,6 @@ const PreDepartureInspection: React.FC = () => {
           </div>
         </div>
 
-        {/* 点検項目カード */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-bold text-gray-800 flex items-center">
@@ -236,7 +209,6 @@ const PreDepartureInspection: React.FC = () => {
             </button>
           </div>
           
-          {/* 点検項目リスト */}
           <div className="space-y-2">
             {inspectionItems.map((item, index) => (
               <button
@@ -266,7 +238,6 @@ const PreDepartureInspection: React.FC = () => {
             ))}
           </div>
           
-          {/* 進捗バー */}
           <div className="mt-5 pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm mb-2">
               <span className="font-semibold text-gray-700">進捗状況</span>
@@ -285,9 +256,7 @@ const PreDepartureInspection: React.FC = () => {
           </div>
         </div>
 
-        {/* ボタングループ */}
         <div className="space-y-4">
-          {/* 運行開始ボタン */}
           <button
             onClick={handleStartOperation}
             disabled={!isAllChecked || !cargoConfirmed || isLoading}
@@ -311,7 +280,6 @@ const PreDepartureInspection: React.FC = () => {
             )}
           </button>
 
-          {/* 戻るボタン */}
           <button
             onClick={handleBack}
             disabled={isLoading}

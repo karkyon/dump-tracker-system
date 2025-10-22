@@ -1,5 +1,5 @@
 // frontend/mobile/src/types/index.ts
-// アプリケーション全体で使用する型定義
+// アプリケーション全体で使用する型定義 - 修正版
 
 // ============================================================================
 // ユーザー・認証関連
@@ -90,7 +90,8 @@ export interface OperationAction {
 // GPS・位置情報関連
 // ============================================================================
 
-export interface GPSPosition {
+// ✅ 追加: Position型定義
+export interface Position {
   coords: {
     latitude: number;
     longitude: number;
@@ -101,6 +102,9 @@ export interface GPSPosition {
   };
   timestamp: number;
 }
+
+// ✅ GPSPosition型はPositionのエイリアスとして定義
+export type GPSPosition = Position;
 
 export interface GPSLogData {
   latitude: number;
