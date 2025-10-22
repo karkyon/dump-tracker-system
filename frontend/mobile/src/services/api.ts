@@ -1,7 +1,7 @@
 // frontend/mobile/src/services/api.ts
 // 運行記録API完全統合版 - バックエンドmobileController完全対応
 
-import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
 
 // =============================================================================

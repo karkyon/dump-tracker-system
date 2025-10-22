@@ -194,6 +194,45 @@ export class MobileController {
     }
   });
 
+  /**
+   * 現在のユーザー情報取得
+   * GET /api/v1/mobile/auth/me
+   */
+  public getCurrentUser = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        sendError(res, '認証が必要です', 401, 'AUTHENTICATION_REQUIRED');
+        return;
+      }
+
+      this.collectStats('auth', req.user.userId);
+
+      const user = await this.userService.findById(req.user.userId);
+
+      if (!user) {
+        sendError(res, 'ユーザーが見つかりません', 404, 'USER_NOT_FOUND');
+        return;
+      }
+
+      const mobileResponse = {
+        id: user.id,
+        userId: user.username,
+        name: user.name,
+        role: user.role,
+        email: user.email,
+        isActive: user.isActive
+      };
+
+      sendSuccess(res, mobileResponse, '現在のユーザー情報を取得しました');
+
+    } catch (error) {
+      logger.error('現在のユーザー情報取得エラー', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      sendError(res, 'ユーザー情報の取得に失敗しました', 500, 'GET_CURRENT_USER_ERROR');
+    }
+  });
+
   // =====================================
   // 運行管理
   // =====================================

@@ -1,5 +1,6 @@
 // frontend/mobile/src/utils/constants.ts
 // GPS設定定数とアプリケーション設定
+// 修正: TIMEOUT を 10秒→30秒に延長（GPS取得時間を考慮）
 
 // =============================================================================
 // GPS設定
@@ -12,8 +13,9 @@ export const GPS_CONFIG = {
   // GPS高精度モード
   ENABLE_HIGH_ACCURACY: true,
   
-  // タイムアウト（ミリ秒）
-  TIMEOUT: 10000,
+  // ✅ 修正: タイムアウト（ミリ秒） 30秒→60秒
+  // 理由: 屋内・初回取得時・低信号環境でタイムアウトしないようにするため
+  TIMEOUT: 60000,
   
   // キャッシュ最大使用期限（ミリ秒）
   MAXIMUM_AGE: 0,
@@ -50,10 +52,10 @@ export const MAP_CONFIG = {
   // Google Maps APIキー
   API_KEY: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
   
-  // デフォルト中心座標（大阪）
+  // デフォルト中心座標（大阪城）
   DEFAULT_CENTER: {
-    lat: 34.6937,
-    lng: 135.5023
+    lat: 34.687,
+    lng: 135.526
   },
   
   // デフォルトズームレベル
@@ -96,8 +98,9 @@ export const API_CONFIG = {
   // ベースURL
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://10.1.119.244:8000/api/v1',
   
-  // タイムアウト（ミリ秒）
-  TIMEOUT: 30000,
+  // ✅ 修正: タイムアウト（ミリ秒） 30秒→60秒
+  // 理由: バックエンドの処理が重い場合に対応
+  TIMEOUT: 60000,
   
   // リトライ回数
   RETRY_COUNT: 3,

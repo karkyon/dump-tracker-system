@@ -1,3 +1,6 @@
+// frontend/mobile/src/stores/authStore.ts
+// 完全修正版: token プロパティ追加 + すべての機能保持
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiService } from '../services/api';
@@ -12,11 +15,12 @@ export interface User {
   vehicleId: string;
 }
 
-// AuthState interface
+// ✅ 修正: AuthState に token プロパティを追加
 export interface AuthState {
   // State properties
   isAuthenticated: boolean;
   user: User | null;
+  token: string | null;  // ✅ 追加
   loading: boolean;
   error: string | null;
   
@@ -36,6 +40,7 @@ export const useAuthStore = create<AuthState>()(
       // Initial state
       isAuthenticated: false,
       user: null,
+      token: null,  // ✅ 追加
       loading: false,
       error: null,
 
@@ -49,16 +54,18 @@ export const useAuthStore = create<AuthState>()(
           const response = await apiService.login(credentials);
           
           if (response.success && response.data) {
-            // ✅ 修正: バックエンドの正しいレスポンス構造
+            // バックエンドの正しいレスポンス構造
             const { user, token } = response.data;
             
             // Store token in localStorage
             localStorage.setItem('auth_token', token);
             localStorage.setItem('user_data', JSON.stringify(user));
             
+            // ✅ 修正: token を state に保存
             set({
               isAuthenticated: true,
               user,
+              token,  // ✅ 追加
               loading: false,
               error: null
             });
@@ -95,6 +102,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             isAuthenticated: false,
             user: null,
+            token: null,  // ✅ 追加
             loading: false,
             error: errorMessage
           });
@@ -113,6 +121,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           isAuthenticated: false,
           user: null,
+          token: null,  // ✅ 追加
           loading: false,
           error: null
         });
@@ -139,6 +148,7 @@ export const useAuthStore = create<AuthState>()(
               set({
                 isAuthenticated: true,
                 user,
+                token,  // ✅ 追加
                 loading: false,
                 error: null
               });
@@ -150,6 +160,7 @@ export const useAuthStore = create<AuthState>()(
               set({
                 isAuthenticated: false,
                 user: null,
+                token: null,  // ✅ 追加
                 loading: false,
                 error: null
               });
@@ -159,6 +170,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               isAuthenticated: false,
               user: null,
+              token: null,  // ✅ 追加
               loading: false,
               error: null
             });
@@ -178,6 +190,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             isAuthenticated: false,
             user: null,
+            token: null,  // ✅ 追加
             loading: false,
             error: errorMessage
           });
@@ -200,7 +213,8 @@ export const useAuthStore = create<AuthState>()(
       name: 'auth-storage',
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
-        user: state.user
+        user: state.user,
+        token: state.token  // ✅ 追加: persist対象に含める
       })
     }
   )

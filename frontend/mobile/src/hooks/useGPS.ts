@@ -1,11 +1,33 @@
-// src/hooks/useGPS.ts - 強化版GPS追跡フック
+// frontend/mobile/src/hooks/useGPS.ts
+// 強化版GPS追跡フック
+// ✅ コンパイルエラー完全修正版
+// 修正日時: 2025-10-22
+// 修正内容:
+//  1. GPSLogData型をローカルで定義（types.tsに存在しないため）
+//  2. mobileApi.logGPS() → updateGPSLocation() に修正
+//  3. GPS_CONFIG.MIN_DISTANCE_FOR_UPDATE → MIN_DISTANCE_METERS に修正
+//  4. GPS_CONFIG.GPS_UPDATE_INTERVAL → UPDATE_INTERVAL に修正
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Position, GPSLogData } from '../types';
+import { Position } from '../types';
 import { GPS_CONFIG } from '../utils/constants';
 import { calculateDistance, calculateBearing, smoothHeading, smoothSpeed, isValidCoordinate } from '../utils/helpers';
 import { apiService as mobileApi } from '../services/api';
 import { toast } from 'react-hot-toast';
+
+// ✅ 修正1: GPSLogData型定義をローカルで追加（types.tsに存在しない）
+export interface GPSLogData {
+  id: string;
+  operationId?: string;
+  vehicleId?: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  heading: number;
+  speed: number;
+  timestamp: Date;
+  createdAt?: Date;
+}
 
 // フック設定オプションの型定義
 interface UseGPSOptions {
@@ -161,8 +183,7 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     if (!options.enableLogging || !options.operationId) return;
 
     try {
-      const gpsData: GPSLogData = {
-        id: crypto.randomUUID(),
+      const gpsData = {
         operationId: options.operationId,
         vehicleId: options.vehicleId,
         latitude: position.coords.latitude,
@@ -170,17 +191,15 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
         accuracy: position.coords.accuracy,
         heading: metadata.heading,
         speed: metadata.speed,
-        timestamp: new Date(position.timestamp)
+        timestamp: new Date(position.timestamp).toISOString()
       };
 
-      const requestData = {
-        ...gpsData,
-        timestamp: gpsData.timestamp.toISOString()
-      };
-      await mobileApi.logGPS(requestData);
+      // ✅ 修正2: logGPS() → updateGPSLocation() に変更
+      await mobileApi.updateGPSLocation(gpsData);
       console.log('GPS data sent successfully');
     } catch (error) {
       console.error('GPS データ送信エラー:', error);
+      // エラーでもアプリケーションを止めない（オフライン対応）
     }
   }, [options.enableLogging, options.operationId, options.vehicleId]);
 
@@ -263,8 +282,9 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       setSpeed(smoothedSpeed);
       setHeading(smoothedHeading);
 
+      // ✅ 修正3: MIN_DISTANCE_FOR_UPDATE → MIN_DISTANCE_METERS
       // 統計データ更新
-      if (distance > GPS_CONFIG.MIN_DISTANCE_FOR_UPDATE) {
+      if (distance > GPS_CONFIG.MIN_DISTANCE_METERS / 1000) { // メートル→キロメートル変換
         setTotalDistance(prev => prev + distance);
         
         speedHistoryRef.current.push(smoothedSpeed);
@@ -283,7 +303,8 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
         heading: smoothedHeading
       };
 
-      if (distance > GPS_CONFIG.MIN_DISTANCE_FOR_UPDATE) {
+      // ✅ 修正3: MIN_DISTANCE_FOR_UPDATE → MIN_DISTANCE_METERS
+      if (distance > GPS_CONFIG.MIN_DISTANCE_METERS / 1000) { // メートル→キロメートル変換
         setPathCoordinates(prev => [...prev, pathPoint]);
       }
     } else {
@@ -324,8 +345,9 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       createdAt: new Date()
     };
 
+    // ✅ 修正4: GPS_UPDATE_INTERVAL → UPDATE_INTERVAL
     // 定期間隔でのみログに追加
-    if (now - lastGPSUpdateRef.current > GPS_CONFIG.GPS_UPDATE_INTERVAL) {
+    if (now - lastGPSUpdateRef.current > GPS_CONFIG.UPDATE_INTERVAL) {
       setGpsLogs(prev => [...prev, gpsLog]);
       
       // サーバーへのデータ送信

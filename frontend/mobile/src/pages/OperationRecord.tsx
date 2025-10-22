@@ -1,5 +1,6 @@
 // frontend/mobile/src/pages/OperationRecord.tsx
 // GoogleMapWrapper統合版 - React Strict Mode完全対応
+// 修正: GPS取得中表示追加 + エラーハンドリング改善
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +12,8 @@ import {
   Coffee, 
   Fuel,
   Navigation,
-  Clock
+  Clock,
+  Loader2  // ✅ 追加: ローディングアイコン
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useGPS } from '../hooks/useGPS';
@@ -52,6 +54,9 @@ const OperationRecord: React.FC = () => {
     averageSpeed: 0
   });
   
+  // ✅ 追加: API送信中フラグ（二重送信防止）
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   // 時刻表示
   const [currentTime, setCurrentTime] = useState(new Date());
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
@@ -60,20 +65,22 @@ const OperationRecord: React.FC = () => {
   const {
     currentPosition,
     isTracking,
-    heading,
+    // heading,  // ✅ 削除: 未使用変数
     speed,
-    accuracy,
+    // accuracy,  // ✅ 削除: 未使用変数
     totalDistance,
     averageSpeed: gpsAverageSpeed,
     pathCoordinates,
     startTracking,
     stopTracking,
+    error: gpsError  // ✅ 追加: GPSエラー取得
   } = useGPS({
     enableHighAccuracy: true,
     enableLogging: operation.id !== null,
     operationId: operation.id || undefined,
     vehicleId: user?.vehicleId,
     onPositionUpdate: handleGPSUpdate,
+    autoStart: true,  // ページ読み込み時にGPS開始
   });
 
   // GPS更新ハンドラー
@@ -185,23 +192,22 @@ const OperationRecord: React.FC = () => {
   // GPS位置更新時にマップを更新
   // ========================================================================
   useEffect(() => {
-    if (!isMapReady || !currentPosition || !mapInstanceRef.current || !markerRef.current) {
-      return;
-    }
-
-    const pos = {
-      lat: currentPosition.coords.latitude,
-      lng: currentPosition.coords.longitude
-    };
-    
-    try {
+    if (currentPosition && isMapReady && mapInstanceRef.current) {
+      const pos = {
+        lat: currentPosition.coords.latitude,
+        lng: currentPosition.coords.longitude
+      };
+      
+      // 初回GPS取得時に地図を強制移動
       mapInstanceRef.current.setCenter(pos);
-      markerRef.current.setPosition(pos);
-    } catch (error) {
-      console.error('Failed to update map position:', error);
+      mapInstanceRef.current.setZoom(18);
+      
+      if (markerRef.current) {
+        markerRef.current.setPosition(pos);
+      }
     }
-  }, [currentPosition, isMapReady]);
-
+  }, [currentPosition, isMapReady]); // currentPositionの変更を監視
+  
   // 時刻更新
   useEffect(() => {
     const timer = setInterval(() => {
@@ -219,14 +225,45 @@ const OperationRecord: React.FC = () => {
     return () => clearInterval(timer);
   }, [operation.startTime]);
 
+  // ========================================================================
+  // ✅ 追加: GPSエラー監視（タイムアウトは警告のみ、権限エラーは強調表示）
+  // ========================================================================
+  useEffect(() => {
+    if (gpsError) {
+      // タイムアウトエラーは警告レベル（位置取得中の可能性）
+      if (gpsError.includes('タイムアウト') || gpsError.includes('Timeout')) {
+        console.warn('⚠️ GPS Timeout:', gpsError);
+        // タイムアウトはトーストを表示しない（煩わしいため）
+      } else {
+        // 権限エラーなどはユーザーに通知
+        console.error('❌ GPS Error:', gpsError);
+        toast.error(gpsError, { duration: 5000 });
+      }
+    }
+  }, [gpsError]);
+
   // 運行開始
   const handleStartOperation = async () => {
+    // ✅ 二重送信防止
+    if (isSubmitting) {
+      console.warn('⚠️ 送信中です。しばらくお待ちください。');
+      return;
+    }
+    
     if (!currentPosition) {
       toast.error('GPS位置を取得中です。しばらくお待ちください。');
       return;
     }
     
+    setIsSubmitting(true); // ✅ 送信開始
+    
     try {
+      console.log('📍 運行開始リクエスト送信...', {
+        vehicleId: user?.vehicleId,
+        driverId: user?.id,
+        position: currentPosition.coords
+      });
+      
       const response = await apiService.startOperation({
         vehicleId: user?.vehicleId || '',
         driverId: user?.id || '',
@@ -249,10 +286,39 @@ const OperationRecord: React.FC = () => {
         
         await startTracking();
         toast.success('運行を開始しました');
+        console.log('✅ 運行開始成功:', response.data);
       }
-    } catch (error) {
-      console.error('運行開始エラー:', error);
-      toast.error('運行開始に失敗しました');
+    } catch (error: any) {
+      console.error('❌ 運行開始エラー:', error);
+      
+      // ✅ 改善: エラーの詳細な処理
+      if (error?.response?.status === 401) {
+        // 認証エラー - ログアウトして再ログインを促す
+        toast.error('認証エラーが発生しました。再度ログインしてください。', { duration: 5000 });
+        setTimeout(() => {
+          logout();
+          navigate('/login');
+        }, 2000);
+      } else if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        // ✅ タイムアウトエラー - より詳細なメッセージ
+        toast.error('サーバーの応答がタイムアウトしました。\nバックエンドサーバーの状態を確認してください。', { 
+          duration: 6000,
+          style: {
+            maxWidth: '400px',
+            whiteSpace: 'pre-line'
+          }
+        });
+        console.error('🔴 バックエンドタイムアウト: サーバーが30秒以内に応答しませんでした');
+      } else if (error?.message?.includes('Network Error')) {
+        // ネットワークエラー
+        toast.error('ネットワークエラーが発生しました。接続を確認してください。', { duration: 5000 });
+      } else {
+        // その他のエラー
+        const errorMsg = error?.response?.data?.message || error?.message || '運行開始に失敗しました';
+        toast.error(errorMsg, { duration: 4000 });
+      }
+    } finally {
+      setIsSubmitting(false); // ✅ 送信完了（成功・失敗に関わらず）
     }
   };
 
@@ -260,7 +326,20 @@ const OperationRecord: React.FC = () => {
   const handleEndOperation = async () => {
     if (!operation.id || !currentPosition) return;
     
+    // ✅ 二重送信防止
+    if (isSubmitting) {
+      console.warn('⚠️ 送信中です。しばらくお待ちください。');
+      return;
+    }
+    
+    setIsSubmitting(true); // ✅ 送信開始
+    
     try {
+      console.log('📍 運行終了リクエスト送信...', {
+        operationId: operation.id,
+        position: currentPosition.coords
+      });
+      
       await apiService.endOperation({
         operationId: operation.id,
         endLatitude: currentPosition.coords.latitude,
@@ -283,9 +362,30 @@ const OperationRecord: React.FC = () => {
       });
       
       toast.success('運行を終了しました');
-    } catch (error) {
-      console.error('運行終了エラー:', error);
-      toast.error('運行終了に失敗しました');
+      console.log('✅ 運行終了成功');
+    } catch (error: any) {
+      console.error('❌ 運行終了エラー:', error);
+      
+      // ✅ 改善: エラーの詳細な処理
+      if (error?.response?.status === 401) {
+        toast.error('認証エラーが発生しました。再度ログインしてください。', { duration: 5000 });
+        setTimeout(() => {
+          logout();
+          navigate('/login');
+        }, 2000);
+      } else if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        toast.error('サーバーの応答がタイムアウトしました。\nバックエンドサーバーの状態を確認してください。', { 
+          duration: 6000,
+          style: {
+            maxWidth: '400px',
+            whiteSpace: 'pre-line'
+          }
+        });
+      } else {
+        toast.error('運行終了に失敗しました', { duration: 4000 });
+      }
+    } finally {
+      setIsSubmitting(false); // ✅ 送信完了
     }
   };
 
@@ -296,7 +396,17 @@ const OperationRecord: React.FC = () => {
       return;
     }
     
+    // ✅ 二重送信防止
+    if (isSubmitting) {
+      console.warn('⚠️ 送信中です。しばらくお待ちください。');
+      return;
+    }
+    
+    setIsSubmitting(true); // ✅ 送信開始
+    
     try {
+      console.log(`📍 アクション記録送信: ${action}`);
+      
       await apiService.recordAction({
         operationId: operation.id,
         actionType: action,
@@ -312,9 +422,31 @@ const OperationRecord: React.FC = () => {
       } else if (action === '積降場所到着') {
         setOperation(prev => ({ ...prev, unloadingArrived: true }));
       }
-    } catch (error) {
-      console.error('アクション記録エラー:', error);
-      toast.error('記録に失敗しました');
+      
+      console.log(`✅ アクション記録成功: ${action}`);
+    } catch (error: any) {
+      console.error(`❌ アクション記録エラー (${action}):`, error);
+      
+      // ✅ 改善: エラーの詳細な処理
+      if (error?.response?.status === 401) {
+        toast.error('認証エラーが発生しました。再度ログインしてください。', { duration: 5000 });
+        setTimeout(() => {
+          logout();
+          navigate('/login');
+        }, 2000);
+      } else if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        toast.error('サーバーの応答がタイムアウトしました。\nバックエンドサーバーの状態を確認してください。', { 
+          duration: 6000,
+          style: {
+            maxWidth: '400px',
+            whiteSpace: 'pre-line'
+          }
+        });
+      } else {
+        toast.error('記録に失敗しました', { duration: 4000 });
+      }
+    } finally {
+      setIsSubmitting(false); // ✅ 送信完了
     }
   };
 
@@ -347,12 +479,31 @@ const OperationRecord: React.FC = () => {
           }
         />
         
+        {/* 地図ローディング表示 */}
         {!isMapReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
               <p className="text-gray-600">地図を読み込んでいます...</p>
             </div>
+          </div>
+        )}
+        
+        {/* ✅ 追加: GPS位置取得中の明示的な表示 */}
+        {isMapReady && !currentPosition && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <span className="text-sm font-medium">GPS位置を取得しています...</span>
+          </div>
+        )}
+        
+        {/* ✅ 追加: GPSエラー表示（権限エラーなど） */}
+        {isMapReady && gpsError && !gpsError.includes('タイムアウト') && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center max-w-md">
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <span className="text-sm font-medium">{gpsError}</span>
           </div>
         )}
       </div>
@@ -381,9 +532,9 @@ const OperationRecord: React.FC = () => {
         <div className="grid grid-cols-4 gap-2 mb-4">
           <button
             onClick={() => handleAction('積込場所到着')}
-            disabled={!operation.id || operation.loadingArrived}
+            disabled={!operation.id || operation.loadingArrived || isSubmitting}
             className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id && !operation.loadingArrived
+              operation.id && !operation.loadingArrived && !isSubmitting
                 ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg hover:shadow-xl active:scale-95'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -394,9 +545,9 @@ const OperationRecord: React.FC = () => {
           
           <button
             onClick={() => handleAction('積降場所到着')}
-            disabled={!operation.id || !operation.loadingArrived || operation.unloadingArrived}
+            disabled={!operation.id || !operation.loadingArrived || operation.unloadingArrived || isSubmitting}
             className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id && operation.loadingArrived && !operation.unloadingArrived
+              operation.id && operation.loadingArrived && !operation.unloadingArrived && !isSubmitting
                 ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg hover:shadow-xl active:scale-95'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -407,9 +558,9 @@ const OperationRecord: React.FC = () => {
           
           <button
             onClick={() => handleAction('休憩・荷待ち')}
-            disabled={!operation.id}
+            disabled={!operation.id || isSubmitting}
             className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id
+              operation.id && !isSubmitting
                 ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl active:scale-95'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -420,9 +571,9 @@ const OperationRecord: React.FC = () => {
           
           <button
             onClick={() => handleAction('給油')}
-            disabled={!operation.id}
+            disabled={!operation.id || isSubmitting}
             className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id
+              operation.id && !isSubmitting
                 ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl active:scale-95'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -437,19 +588,38 @@ const OperationRecord: React.FC = () => {
           {operation.status === 'idle' ? (
             <button
               onClick={handleStartOperation}
-              disabled={!currentPosition}
+              disabled={!currentPosition || isSubmitting}
               className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-bold text-lg shadow-xl hover:shadow-2xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              <Play className="w-6 h-6 mr-2" />
-              運行開始
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+                  送信中...
+                </>
+              ) : (
+                <>
+                  <Play className="w-6 h-6 mr-2" />
+                  運行開始
+                </>
+              )}
             </button>
           ) : (
             <button
               onClick={handleEndOperation}
-              className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-bold text-lg shadow-xl hover:shadow-2xl active:scale-95 transition-all flex items-center justify-center"
+              disabled={isSubmitting}
+              className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-bold text-lg shadow-xl hover:shadow-2xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              <Square className="w-6 h-6 mr-2" />
-              運行終了
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+                  送信中...
+                </>
+              ) : (
+                <>
+                  <Square className="w-6 h-6 mr-2" />
+                  運行終了
+                </>
+              )}
             </button>
           )}
         </div>
@@ -458,10 +628,10 @@ const OperationRecord: React.FC = () => {
       {/* フッター */}
       <div className="bg-gray-50 px-4 py-3 border-t flex items-center justify-between">
         <div className="flex items-center text-xs text-gray-600">
-          <div className="w-4 h-4 bg-green-500 rounded-full mr-2 relative">
+          <div className={`w-4 h-4 rounded-full mr-2 relative ${isTracking ? 'bg-green-500' : 'bg-gray-400'}`}>
             <div className="absolute inset-1 bg-white rounded-full" />
           </div>
-          GPS接続中
+          {isTracking ? 'GPS追跡中' : 'GPS停止中'}
         </div>
         
         <div className="text-xs text-gray-500 text-right">
