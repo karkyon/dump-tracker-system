@@ -1,233 +1,317 @@
+// frontend/mobile/src/pages/Login.tsx
+// D1: ログイン画面 - 仕様概案書完全準拠版
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Truck, Loader } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { User, Lock, Loader, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuthStore();
+  const { login, isAuthenticated, loading, error, clearError } = useAuthStore();
   
+  // フォーム状態
   const [formData, setFormData] = useState({
-    userId: '',
-    password: ''
+    username: '',
+    password: '',
+    rememberMe: false,
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberLogin, setRememberLogin] = useState(false);
+  
+  const [validationErrors, setValidationErrors] = useState({
+    username: '',
+    password: '',
+  });
+  
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showPassword, setShowPassword] = useState(false);
 
-  // 既にログイン済みの場合は運行記録画面にリダイレクト
+  // 認証済みの場合は車両情報画面へリダイレクト
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/operation', { replace: true });
-    }
-    
-    // 記憶されたログイン情報をチェック
-    const rememberedLogin = localStorage.getItem('remember_login');
-    const authToken = localStorage.getItem('auth_token');
-    
-    if (rememberedLogin === 'true' && authToken) {
-      setRememberLogin(true);
+      navigate('/vehicle-info', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
-  const clearError = (field: string) => {
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+  // エラーメッセージの表示
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      clearError();
+    }
+  }, [error, clearError]);
+
+  // ローカルストレージから保存されたユーザーIDを復元
+  useEffect(() => {
+    const savedUsername = localStorage.getItem('saved_username');
+    const rememberMe = localStorage.getItem('remember_me') === 'true';
+    
+    if (savedUsername && rememberMe) {
+      setFormData(prev => ({
+        ...prev,
+        username: savedUsername,
+        rememberMe: true,
+      }));
+    }
+  }, []);
+
+  // 入力変更ハンドラー
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+    
+    // バリデーションエラーをクリア
+    if (validationErrors[name as keyof typeof validationErrors]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [name]: '',
+      }));
     }
   };
 
-  const validateForm = () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!formData.userId.trim()) {
-      newErrors.userId = 'ユーザーIDを入力してください';
+  // バリデーション
+  const validateForm = (): boolean => {
+    const errors = {
+      username: '',
+      password: '',
+    };
+    
+    let isValid = true;
+    
+    if (!formData.username.trim()) {
+      errors.username = 'ユーザーIDを入力してください';
+      isValid = false;
     }
-
+    
     if (!formData.password.trim()) {
-      newErrors.password = 'パスワードを入力してください';
+      errors.password = 'パスワードを入力してください';
+      isValid = false;
+    } else if (formData.password.length < 6) {
+      errors.password = 'パスワードは6文字以上である必要があります';
+      isValid = false;
     }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    setValidationErrors(errors);
+    return isValid;
   };
 
+  // ログイン処理
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (isLoading || !validateForm()) return;
-
+    // バリデーション
+    if (!validateForm()) {
+      toast.error('入力内容を確認してください');
+      return;
+    }
+    
     setIsLoading(true);
-
+    
     try {
-      await login({ username: formData.userId, password: formData.password });
+      // ログイン実行
+      await login({
+        username: formData.username,
+        password: formData.password,
+      });
       
-      if (rememberLogin) {
-        localStorage.setItem('remember_login', 'true');
+      // ユーザーID保存設定
+      if (formData.rememberMe) {
+        localStorage.setItem('saved_username', formData.username);
+        localStorage.setItem('remember_me', 'true');
       } else {
-        localStorage.removeItem('remember_login');
+        localStorage.removeItem('saved_username');
+        localStorage.removeItem('remember_me');
       }
       
-      // 運行記録画面に遷移
-      navigate('/operation', { replace: true });
-    } catch (error: any) {
-      console.error('ログインエラー:', error);
-      setErrors({ 
-        password: error.message || 'ログインに失敗しました。ユーザーIDとパスワードを確認してください。' 
-      });
+      toast.success('ログインに成功しました');
+      
+      // 車両情報画面へ遷移
+      navigate('/vehicle-info', { replace: true });
+      
+    } catch (err: any) {
+      console.error('Login error:', err);
+      toast.error(err.message || 'ログインに失敗しました');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    clearError(field);
+  // Enterキーでのログイン
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isLoading) {
+      handleSubmit(e as any);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm mx-auto">
-        {/* モバイル専用コンテナ */}
-        <div 
-          className="bg-white rounded-2xl shadow-2xl overflow-hidden transform transition-all duration-300"
-          style={{ 
-            width: '100%',
-            maxWidth: '390px',
-            minHeight: '600px'
-          }}
-        >
-          {/* ヘッダー */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-12 text-center text-white relative">
-            <div className="absolute inset-x-0 -bottom-6 h-12 bg-white rounded-t-[50%]"></div>
-            
-            <div className="relative z-10">
-              <div className="w-20 h-20 bg-white/20 rounded-full mx-auto mb-4 flex items-center justify-center border-3 border-white/30">
-                <Truck className="w-9 h-9 text-white" />
-              </div>
-              <h1 className="text-2xl font-bold mb-2 tracking-wide">
-                ダンプ運行記録
-              </h1>
-              <p className="text-sm opacity-90">運行管理システム</p>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* ヘッダー */}
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-white/10 backdrop-blur-lg rounded-full mb-6 shadow-2xl">
+            <User className="w-12 h-12 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">運転日報アプリ</h1>
+          <p className="text-blue-100 text-sm">ダンプトラック運行記録システム</p>
+        </div>
+
+        {/* ログインカード */}
+        <div className="bg-white rounded-2xl shadow-2xl p-8 animate-slide-up">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 text-center mb-2">ログイン</h2>
+            <p className="text-gray-500 text-sm text-center">運転手アカウントでログインしてください</p>
           </div>
 
-          {/* フォーム */}
-          <div className="px-8 py-12">
-            <div className="text-center mb-10">
-              <h2 className="text-2xl font-bold text-blue-600 mb-2">ログイン</h2>
-              <p className="text-gray-600 text-sm">
-                ユーザーIDとパスワードを<br />入力してください
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* ユーザーID */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 pl-1">
-                  ユーザーID
-                </label>
+          {/* ログインフォーム */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* ユーザーID入力 */}
+            <div>
+              <label htmlFor="username" className="block text-sm font-semibold text-gray-700 mb-2">
+                ユーザーID
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User className="w-5 h-5 text-gray-400" />
+                </div>
                 <input
                   type="text"
-                  value={formData.userId}
-                  onChange={(e) => handleInputChange('userId', e.target.value)}
-                  className={`w-full px-5 py-4 border-2 rounded-xl text-base transition-all duration-200 ${
-                    errors.userId 
-                      ? 'border-red-300 bg-red-50 focus:border-red-500' 
-                      : 'border-gray-200 bg-gray-50 focus:border-blue-500 focus:bg-white'
-                  } focus:outline-none focus:ring-4 focus:ring-blue-100`}
+                  id="username"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  onKeyPress={handleKeyPress}
                   placeholder="ユーザーIDを入力"
+                  disabled={isLoading}
+                  className={`w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 rounded-xl 
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                    transition-all duration-200 text-gray-800 placeholder-gray-400
+                    disabled:bg-gray-100 disabled:cursor-not-allowed
+                    ${validationErrors.username 
+                      ? 'border-red-300 focus:ring-red-500' 
+                      : 'border-gray-200'
+                    }`}
                   autoComplete="username"
-                  disabled={isLoading}
+                  autoFocus
                 />
-                {errors.userId && (
-                  <p className="text-red-500 text-xs mt-2 pl-1">{errors.userId}</p>
-                )}
-              </div>
-
-              {/* パスワード */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 pl-1">
-                  パスワード
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
-                    className={`w-full px-5 py-4 pr-12 border-2 rounded-xl text-base transition-all duration-200 ${
-                      errors.password 
-                        ? 'border-red-300 bg-red-50 focus:border-red-500' 
-                        : 'border-gray-200 bg-gray-50 focus:border-blue-500 focus:bg-white'
-                    } focus:outline-none focus:ring-4 focus:ring-blue-100`}
-                    placeholder="パスワードを入力"
-                    autoComplete="current-password"
-                    disabled={isLoading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
-                    disabled={isLoading}
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="text-red-500 text-xs mt-2 pl-1">{errors.password}</p>
-                )}
-              </div>
-
-              {/* ログイン状態を保持 */}
-              <div className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  id="rememberLogin"
-                  checked={rememberLogin}
-                  onChange={(e) => setRememberLogin(e.target.checked)}
-                  className="w-5 h-5 text-blue-600 border-2 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                  disabled={isLoading}
-                />
-                <label 
-                  htmlFor="rememberLogin" 
-                  className="text-sm text-gray-700 cursor-pointer select-none"
-                >
-                  ログイン状態を保持する
-                </label>
-              </div>
-
-              {/* ログインボタン */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className={`w-full py-4 px-6 rounded-xl text-white font-bold text-lg transition-all duration-200 ${
-                  isLoading
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:transform active:scale-[0.98] shadow-lg hover:shadow-xl'
-                }`}
-              >
-                {isLoading ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <Loader className="w-5 h-5 animate-spin" />
-                    <span>認証中...</span>
+                {validationErrors.username && (
+                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+                    <AlertCircle className="w-5 h-5 text-red-500" />
                   </div>
-                ) : (
-                  'ログイン'
                 )}
-              </button>
-            </form>
-
-            {/* フッター */}
-            <div className="text-center mt-8 text-xs text-gray-500 leading-relaxed">
-              パスワードをお忘れの場合は<br />
-              管理者にお問い合わせください
+              </div>
+              {validationErrors.username && (
+                <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {validationErrors.username}
+                </p>
+              )}
             </div>
+
+            {/* パスワード入力 */}
+            <div>
+              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+                パスワード
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="w-5 h-5 text-gray-400" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  onKeyPress={handleKeyPress}
+                  placeholder="パスワードを入力"
+                  disabled={isLoading}
+                  className={`w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 rounded-xl 
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                    transition-all duration-200 text-gray-800 placeholder-gray-400
+                    disabled:bg-gray-100 disabled:cursor-not-allowed
+                    ${validationErrors.password 
+                      ? 'border-red-300 focus:ring-red-500' 
+                      : 'border-gray-200'
+                    }`}
+                  autoComplete="current-password"
+                />
+                {validationErrors.password && (
+                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+                    <AlertCircle className="w-5 h-5 text-red-500" />
+                  </div>
+                )}
+              </div>
+              {validationErrors.password && (
+                <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {validationErrors.password}
+                </p>
+              )}
+            </div>
+
+            {/* 次回ログインIDを記録 */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                name="rememberMe"
+                checked={formData.rememberMe}
+                onChange={handleChange}
+                disabled={isLoading}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded 
+                  focus:ring-blue-500 focus:ring-2 cursor-pointer
+                  disabled:cursor-not-allowed"
+              />
+              <label 
+                htmlFor="rememberMe" 
+                className="ml-3 text-sm font-medium text-gray-700 cursor-pointer select-none"
+              >
+                次回ログインIDを記録
+              </label>
+            </div>
+
+            {/* ログインボタン */}
+            <button
+              type="submit"
+              disabled={isLoading || loading}
+              className={`w-full py-4 rounded-xl font-semibold text-white text-lg
+                transition-all duration-200 flex items-center justify-center space-x-3
+                ${isLoading || loading
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:transform active:scale-[0.98] shadow-lg hover:shadow-xl'
+                }`}
+            >
+              {isLoading || loading ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <Loader className="w-5 h-5 animate-spin" />
+                  <span>認証中...</span>
+                </div>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>ログイン</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* フッター */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <p className="text-center text-sm text-gray-600 leading-relaxed">
+              パスワードをお忘れの場合は<br />
+              <span className="font-semibold text-blue-600">管理者</span>にお問い合わせください
+            </p>
           </div>
         </div>
 
         {/* バージョン情報 */}
         <div className="text-center mt-6">
-          <p className="text-white/70 text-xs">Version 1.0.0</p>
+          <p className="text-white/70 text-sm">Version 1.0.0</p>
+          <p className="text-white/50 text-xs mt-1">© 2025 Dump Tracker System</p>
         </div>
       </div>
     </div>
