@@ -74,5 +74,5 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 if (import.meta.env.DEV) {
   console.log('✅ アプリケーション起動完了');
   console.log('📱 モバイルアプリケーションが正常に起動しました');
-  console.log('🌐 アクセスURL: http://localhost:3002');
+  console.log('🌐 アクセスURL: https://localhost:3002');
 }

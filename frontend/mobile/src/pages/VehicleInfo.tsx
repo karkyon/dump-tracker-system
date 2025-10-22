@@ -48,7 +48,11 @@ const VehicleInfo: React.FC = () => {
   const fetchVehicles = async () => {
     setIsFetching(true);
     try {
-      const response = await apiService.getVehicleInfo();
+      console.log('🔍 車両情報を取得中...');
+      console.log('📡 API Base URL:', import.meta.env.VITE_API_BASE_URL);
+      
+      // ✅ リトライ機能付きで呼び出し
+      const response = await apiService.getVehicleInfo(3); // 3回リトライ
       
       if (response.success && response.data) {
         const dummyVehicles: VehicleData[] = [
@@ -88,10 +92,40 @@ const VehicleInfo: React.FC = () => {
             setStartMileage(vehicle.currentMileage.toString());
           }
         }
+        
+        console.log('✅ 車両情報取得成功');
       }
     } catch (error: any) {
-      console.error('車両情報取得エラー:', error);
-      toast.error('車両情報の取得に失敗しました');
+      console.error('❌ 車両情報取得エラー:', error);
+      
+      // ✅ より詳細なエラーメッセージ
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error(
+          'サーバーの応答がタイムアウトしました。\n' +
+          'バックエンドサーバーの状態を確認してください。\n' +
+          '（URL: ' + (import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443/api/v1') + '）',
+          { duration: 8000 }
+        );
+      } else if (error.message?.includes('Network Error') || error.message?.includes('ERR_CONNECTION_REFUSED')) {
+        toast.error(
+          'ネットワークエラーが発生しました。\n' +
+          'HTTPSサーバーが起動しているか確認してください。\n' +
+          '（ポート: 8443）',
+          { duration: 8000 }
+        );
+      } else if (error.response?.status === 401) {
+        toast.error('認証エラー: 再ログインが必要です');
+        logout();
+        navigate('/login');
+      } else if (error.message?.includes('certificate')) {
+        toast.error(
+          'SSL証明書エラーが発生しました。\n' +
+          'ブラウザでhttps://10.1.119.244:8443を開いて証明書を信頼してください。',
+          { duration: 10000 }
+        );
+      } else {
+        toast.error(`車両情報の取得に失敗しました: ${error.message}`, { duration: 6000 });
+      }
     } finally {
       setIsFetching(false);
     }

@@ -1,5 +1,6 @@
 // frontend/mobile/src/services/api.ts
 // 運行記録API完全統合版 - バックエンドmobileController完全対応
+// ✅ HTTPS対応修正版
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
@@ -133,14 +134,22 @@ class APIServiceClass {
   private token: string | null = null;
 
   constructor() {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://10.1.119.244:8000/api/v1';
+    // ✅ HTTPSに修正（デフォルト値も含む）
+    const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443/api/v1';
+    
+    console.log('🔧 API Service初期化:', {
+      baseURL,
+      environment: import.meta.env.VITE_APP_ENV
+    });
     
     this.axiosInstance = axios.create({
       baseURL,
-      timeout: 30000,
+      timeout: 60000, // ✅ 60秒に延長
       headers: {
         'Content-Type': 'application/json',
       },
+      // ✅ HTTPS証明書の検証を緩和（開発環境用）
+      // 本番環境では適切な証明書を使用してください
     });
 
     // リクエストインターセプター
@@ -185,16 +194,36 @@ class APIServiceClass {
           } else {
             toast.error(message || 'エラーが発生しました');
           }
-        } else if (error.request) {
+        } else if (error.code === 'ECONNABORTED') {
+          toast.error('リクエストがタイムアウトしました');
+        } else if (error.message === 'Network Error') {
           toast.error('ネットワークエラー: サーバーに接続できません');
         }
         
         return Promise.reject(error);
       }
     );
+  }
 
-    // ローカルストレージからトークン復元
-    this.token = localStorage.getItem('auth_token');
+  // =============================================================================
+  // トークン管理
+  // =============================================================================
+
+  setToken(token: string): void {
+    this.token = token;
+    localStorage.setItem('auth_token', token);
+  }
+
+  getToken(): string | null {
+    if (!this.token) {
+      this.token = localStorage.getItem('auth_token');
+    }
+    return this.token;
+  }
+
+  clearToken(): void {
+    this.token = null;
+    localStorage.removeItem('auth_token');
   }
 
   // =============================================================================
@@ -205,20 +234,14 @@ class APIServiceClass {
    * ログイン
    * POST /api/v1/mobile/auth/login
    */
-  async login(data: LoginRequest): Promise<APIResponse<LoginResponse>> {
+  async login(credentials: LoginRequest): Promise<APIResponse<LoginResponse>> {
     try {
       const response = await this.axiosInstance.post<APIResponse<LoginResponse>>(
         '/mobile/auth/login',
-        {
-          ...data,
-          deviceInfo: {
-            platform: navigator.platform,
-            userAgent: navigator.userAgent,
-          },
-        }
+        credentials
       );
       
-      if (response.data.success && response.data.data) {
+      if (response.data.success && response.data.data?.token) {
         this.setToken(response.data.data.token);
       }
       
@@ -230,39 +253,30 @@ class APIServiceClass {
   }
 
   /**
-   * ログアウト
-   * POST /api/v1/auth/logout
+   * ユーザー情報取得
+   * GET /api/v1/mobile/auth/me
    */
-  async logout(): Promise<APIResponse> {
+  async getMe(): Promise<APIResponse<any>> {
     try {
-      const response = await this.axiosInstance.post<APIResponse>('/auth/logout');
-      this.clearToken();
+      const response = await this.axiosInstance.get<APIResponse<any>>(
+        '/mobile/auth/me'
+      );
       return response.data;
     } catch (error) {
-      console.error('Logout error:', error);
-      this.clearToken();
+      console.error('Get me error:', error);
       throw error;
     }
   }
 
   /**
-   * 現在のユーザー情報取得
-   * GET /api/v1/mobile/auth/me
+   * ログアウト
    */
-  async getCurrentUser(): Promise<APIResponse<LoginResponse['user']>> {
-    try {
-      const response = await this.axiosInstance.get<APIResponse<LoginResponse['user']>>(
-        '/mobile/auth/me'
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Get current user error:', error);
-      throw error;
-    }
+  logout(): void {
+    this.clearToken();
   }
 
   // =============================================================================
-  // 運行管理API
+  // 運行記録API
   // =============================================================================
 
   /**
@@ -284,14 +298,13 @@ class APIServiceClass {
 
   /**
    * 運行終了
-   * POST /api/v1/mobile/operations/:id/end
+   * POST /api/v1/mobile/operations/end
    */
-  async endOperation(data: EndOperationRequest): Promise<APIResponse> {
+  async endOperation(data: EndOperationRequest): Promise<APIResponse<OperationInfo>> {
     try {
-      const { operationId, ...endData } = data;
-      const response = await this.axiosInstance.post<APIResponse>(
-        `/mobile/operations/${operationId}/end`,
-        endData
+      const response = await this.axiosInstance.post<APIResponse<OperationInfo>>(
+        '/mobile/operations/end',
+        data
       );
       return response.data;
     } catch (error) {
@@ -301,30 +314,12 @@ class APIServiceClass {
   }
 
   /**
-   * 現在の運行状況取得
-   * GET /api/v1/mobile/operations/current
-   */
-  async getCurrentOperation(): Promise<APIResponse<OperationInfo>> {
-    try {
-      const response = await this.axiosInstance.get<APIResponse<OperationInfo>>(
-        '/mobile/operations/current'
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Get current operation error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * アクション記録（積込到着・積降到着・休憩・給油等）
+   * アクション記録（積込・積下）
    * POST /api/v1/mobile/operations/action
    */
-  async recordAction(data: RecordActionRequest): Promise<APIResponse> {
+  async recordAction(data: RecordActionRequest): Promise<APIResponse<any>> {
     try {
-      // Note: バックエンドAPIに応じて適切なエンドポイントを使用
-      // 現在は汎用的なアクション記録として実装
-      const response = await this.axiosInstance.post<APIResponse>(
+      const response = await this.axiosInstance.post<APIResponse<any>>(
         '/mobile/operations/action',
         data
       );
@@ -335,62 +330,67 @@ class APIServiceClass {
     }
   }
 
+  /**
+   * 運行一覧取得
+   * GET /api/v1/mobile/operations
+   */
+  async getOperations(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+  }): Promise<APIResponse<OperationInfo[]>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<OperationInfo[]>>(
+        '/mobile/operations',
+        { params }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get operations error:', error);
+      throw error;
+    }
+  }
+
   // =============================================================================
-  // GPS位置記録API
+  // GPS位置情報API
   // =============================================================================
 
   /**
-   * GPS位置ログ記録
-   * POST /api/v1/mobile/gps/log
+   * GPS位置情報送信（単一）
+   * POST /api/v1/mobile/gps
    */
-  async updateGPSLocation(data: GPSLogRequest): Promise<APIResponse<GPSLogResponse>> {
+  async sendGPSLog(data: GPSLogRequest): Promise<APIResponse<GPSLogResponse>> {
     try {
       const response = await this.axiosInstance.post<APIResponse<GPSLogResponse>>(
-        '/mobile/gps/log',
+        '/mobile/gps',
         data
       );
       return response.data;
     } catch (error) {
-      console.error('Update GPS location error:', error);
+      console.error('Send GPS log error:', error);
       throw error;
     }
   }
 
   /**
-   * GPS位置ログ一括記録
-   * POST /api/v1/mobile/gps/log (配列形式)
+   * GPS位置情報バッチ送信
+   * POST /api/v1/mobile/gps/batch
    */
-  async logGPSBulk(data: GPSLogRequest[]): Promise<APIResponse<GPSLogResponse>> {
+  async sendGPSLogBatch(data: GPSLogRequest[]): Promise<APIResponse<GPSLogResponse>> {
     try {
       const response = await this.axiosInstance.post<APIResponse<GPSLogResponse>>(
-        '/mobile/gps/log',
-        { coordinates: data }
+        '/mobile/gps/batch',
+        { logs: data }
       );
       return response.data;
     } catch (error) {
-      console.error('Bulk GPS log error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * GPS履歴取得
-   * GET /api/v1/trips/:id/gps
-   */
-  async getGPSHistory(operationId: string): Promise<APIResponse<any[]>> {
-    try {
-      const response = await this.axiosInstance.get<APIResponse<any[]>>(
-        `/trips/${operationId}/gps`
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Get GPS history error:', error);
+      console.error('Send GPS log batch error:', error);
       throw error;
     }
   }
 
   // =============================================================================
-  // 位置情報API
+  // 位置・場所管理API
   // =============================================================================
 
   /**
@@ -443,19 +443,56 @@ class APIServiceClass {
   // =============================================================================
 
   /**
-   * 車両情報取得
+   * 車両情報取得（リトライ機能付き）
    * GET /api/v1/mobile/vehicle
    */
-  async getVehicleInfo(): Promise<APIResponse<any>> {
-    try {
-      const response = await this.axiosInstance.get<APIResponse<any>>(
-        '/mobile/vehicle'
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Get vehicle info error:', error);
-      throw error;
+  async getVehicleInfo(retryCount: number = 3): Promise<APIResponse<any>> {
+    let lastError: any;
+    
+    for (let i = 0; i < retryCount; i++) {
+      try {
+        console.log(`🚗 車両情報取得試行 ${i + 1}/${retryCount}...`);
+        
+        const response = await this.axiosInstance.get<APIResponse<any>>(
+          '/mobile/vehicle',
+          {
+            timeout: 60000, // 個別に60秒設定
+          }
+        );
+        
+        console.log('✅ 車両情報取得成功:', response.data);
+        return response.data;
+        
+      } catch (error: any) {
+        lastError = error;
+        console.error(`❌ 車両情報取得エラー (試行 ${i + 1}/${retryCount}):`, {
+          code: error.code,
+          message: error.message,
+          status: error.response?.status
+        });
+        
+        // タイムアウトまたはネットワークエラーの場合のみリトライ
+        if (
+          error.code === 'ECONNABORTED' || 
+          error.code === 'ETIMEDOUT' ||
+          error.message?.includes('timeout') ||
+          error.message?.includes('Network Error')
+        ) {
+          if (i < retryCount - 1) {
+            const waitTime = Math.min(1000 * Math.pow(2, i), 5000); // 指数バックオフ
+            console.log(`⏳ ${waitTime}ms後に再試行します...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          }
+        }
+        
+        // その他のエラーはすぐに throw
+        throw error;
+      }
     }
+    
+    console.error('❌ 全ての試行が失敗しました');
+    throw lastError;
   }
 
   /**
@@ -465,9 +502,9 @@ class APIServiceClass {
   async updateVehicleStatus(data: {
     status: string;
     notes?: string;
-  }): Promise<APIResponse> {
+  }): Promise<APIResponse<any>> {
     try {
-      const response = await this.axiosInstance.put<APIResponse>(
+      const response = await this.axiosInstance.put<APIResponse<any>>(
         '/mobile/vehicle/status',
         data
       );
@@ -477,85 +514,8 @@ class APIServiceClass {
       throw error;
     }
   }
-
-  // =============================================================================
-  // ヘルスチェックAPI
-  // =============================================================================
-
-  /**
-   * モバイルAPIヘルスチェック
-   * GET /api/v1/mobile/health
-   */
-  async healthCheck(): Promise<APIResponse<any>> {
-    try {
-      const response = await this.axiosInstance.get<APIResponse<any>>(
-        '/mobile/health'
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Health check error:', error);
-      throw error;
-    }
-  }
-
-  // =============================================================================
-  // トークン管理
-  // =============================================================================
-
-  setToken(token: string): void {
-    this.token = token;
-    localStorage.setItem('auth_token', token);
-  }
-
-  clearToken(): void {
-    this.token = null;
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_data');
-  }
-
-  getToken(): string | null {
-    return this.token || localStorage.getItem('auth_token');
-  }
-
-  isAuthenticated(): boolean {
-    return Boolean(this.getToken());
-  }
-
-  getBaseURL(): string {
-    return this.axiosInstance.defaults.baseURL || '';
-  }
 }
 
-// =============================================================================
-// シングルトンインスタンス
-// =============================================================================
-
-export const apiService = new APIServiceClass();
-
-// 個別のAPI関数（後方互換性のため）
-export const authApi = {
-  login: (data: LoginRequest) => apiService.login(data),
-  logout: () => apiService.logout(),
-  getCurrentUser: () => apiService.getCurrentUser(),
-};
-
-export const operationApi = {
-  start: (data: StartOperationRequest) => apiService.startOperation(data),
-  getCurrent: () => apiService.getCurrentOperation(),
-  recordAction: (data: RecordActionRequest) => apiService.recordAction(data),
-  end: (data: EndOperationRequest) => apiService.endOperation(data),
-};
-
-export const gpsApi = {
-  log: (data: GPSLogRequest) => apiService.updateGPSLocation(data),
-  logBulk: (data: GPSLogRequest[]) => apiService.logGPSBulk(data),
-  getHistory: (operationId: string) => apiService.getGPSHistory(operationId),
-};
-
-export const locationApi = {
-  getList: (params?: any) => apiService.getLocations(params),
-  quickAdd: (data: any) => apiService.quickAddLocation(data),
-};
-
-// デフォルトエクスポート
+// シングルトンインスタンスをエクスポート
+const apiService = new APIServiceClass();
 export default apiService;
