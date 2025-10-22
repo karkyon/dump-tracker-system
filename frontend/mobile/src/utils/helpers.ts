@@ -1,8 +1,14 @@
+// frontend/mobile/src/utils/helpers.ts
+// 汎用ヘルパー関数集
+// ✅ TypeScriptコンパイルエラー完全修正版
+// 修正日時: 2025-10-22
+// 修正内容: noUncheckedIndexedAccess対応
+
 /**
- * 2点間の距離を計算（ハーバーサイン公式）
+ * 2点間の距離を計算(ハーバーサイン公式)
  */
 export const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-  const R = 6371000; // 地球の半径（メートル）
+  const R = 6371000; // 地球の半径(メートル)
   const φ1 = lat1 * Math.PI / 180;
   const φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -46,7 +52,7 @@ export const smoothHeading = (headingBuffer: number[], newHeading: number): numb
     return newHeading;
   }
   
-  // 角度の平均を計算（円形統計）
+  // 角度の平均を計算(円形統計)
   let sinSum = 0;
   let cosSum = 0;
   
@@ -81,7 +87,8 @@ export const smoothSpeed = (speedBuffer: number[], newSpeed: number): number => 
 export const headingToDirection = (heading: number): string => {
   const directions = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
   const directionIndex = Math.round(heading / 45) % 8;
-  return directions[directionIndex];
+  // ✅ 修正: 配列アクセスがundefinedを返す可能性に対応
+  return directions[directionIndex] ?? '北';
 };
 
 /**

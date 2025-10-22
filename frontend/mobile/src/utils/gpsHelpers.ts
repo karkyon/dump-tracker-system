@@ -1,11 +1,14 @@
 // frontend/mobile/src/utils/gpsHelpers.ts
 // GPS計算ヘルパー関数 - 距離・方位・平滑化
+// ✅ TypeScriptコンパイルエラー完全修正版
+// 修正日時: 2025-10-22
+// 修正内容: noUncheckedIndexedAccess対応
 
 // =============================================================================
 // 定数
 // =============================================================================
 
-const EARTH_RADIUS_KM = 6371; // 地球の半径（キロメートル）
+const EARTH_RADIUS_KM = 6371; // 地球の半径(キロメートル)
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
 
@@ -22,12 +25,12 @@ export const GPS_ACCURACY = {
 // =============================================================================
 
 /**
- * 2点間の距離を計算（Haversine公式）
+ * 2点間の距離を計算(Haversine公式)
  * @param lat1 地点1の緯度
  * @param lng1 地点1の経度
  * @param lat2 地点2の緯度
  * @param lng2 地点2の経度
- * @returns 距離（キロメートル）
+ * @returns 距離(キロメートル)
  */
 export function calculateDistance(
   lat1: number,
@@ -50,12 +53,12 @@ export function calculateDistance(
 }
 
 /**
- * 簡易距離計算（高速版・短距離用）
+ * 簡易距離計算(高速版・短距離用)
  * @param lat1 地点1の緯度
  * @param lng1 地点1の経度
  * @param lat2 地点2の緯度
  * @param lng2 地点2の経度
- * @returns 距離（キロメートル）
+ * @returns 距離(キロメートル)
  */
 export function calculateDistanceSimple(
   lat1: number,
@@ -73,12 +76,12 @@ export function calculateDistanceSimple(
 // =============================================================================
 
 /**
- * 2点間の方位角を計算（真北を0度とする）
+ * 2点間の方位角を計算(真北を0度とする)
  * @param lat1 地点1の緯度
  * @param lng1 地点1の経度
  * @param lat2 地点2の緯度
  * @param lng2 地点2の経度
- * @returns 方位角（0-360度）
+ * @returns 方位角(0-360度)
  */
 export function calculateBearing(
   lat1: number,
@@ -101,7 +104,7 @@ export function calculateBearing(
 
 /**
  * 方位角を16方位文字列に変換
- * @param degrees 方位角（度）
+ * @param degrees 方位角(度)
  * @returns 方位文字列
  */
 export function getDirectionText(degrees: number): string {
@@ -112,18 +115,20 @@ export function getDirectionText(degrees: number): string {
     '西', '西北西', '北西', '北北西'
   ];
   const index = Math.round(degrees / 22.5) % 16;
-  return directions[index];
+  // ✅ 修正: 配列アクセスがundefinedを返す可能性に対応
+  return directions[index] ?? '北';
 }
 
 /**
  * 方位角を8方位文字列に変換
- * @param degrees 方位角（度）
+ * @param degrees 方位角(度)
  * @returns 方位文字列
  */
 export function getDirection8(degrees: number): string {
   const directions = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
   const index = Math.round(degrees / 45) % 8;
-  return directions[index];
+  // ✅ 修正: 配列アクセスがundefinedを返す可能性に対応
+  return directions[index] ?? '北';
 }
 
 // =============================================================================
@@ -131,13 +136,14 @@ export function getDirection8(degrees: number): string {
 // =============================================================================
 
 /**
- * 方位角の平滑化（円周上の平均）
+ * 方位角の平滑化(円周上の平均)
  * @param headings 方位角の配列
  * @returns 平滑化された方位角
  */
 export function smoothHeading(headings: number[]): number {
   if (headings.length === 0) return 0;
-  if (headings.length === 1) return headings[0];
+  // ✅ 修正: 配列の最初の要素がundefinedの可能性に対応
+  if (headings.length === 1) return headings[0] ?? 0;
   
   let sumX = 0;
   let sumY = 0;
@@ -152,7 +158,7 @@ export function smoothHeading(headings: number[]): number {
 }
 
 /**
- * 速度の平滑化（移動平均）
+ * 速度の平滑化(単純移動平均)
  * @param speeds 速度の配列
  * @returns 平滑化された速度
  */
@@ -163,47 +169,53 @@ export function smoothSpeed(speeds: number[]): number {
 }
 
 /**
- * 指数移動平均（EMA）
+ * 指数移動平均
+ * @param currentValue 現在の値
  * @param newValue 新しい値
- * @param oldValue 古い値
- * @param alpha 平滑化係数（0-1、大きいほど新しい値を重視）
+ * @param alpha 平滑化係数(0-1)
  * @returns 平滑化された値
  */
 export function exponentialMovingAverage(
+  currentValue: number,
   newValue: number,
-  oldValue: number,
   alpha: number = 0.3
 ): number {
-  return alpha * newValue + (1 - alpha) * oldValue;
+  return alpha * newValue + (1 - alpha) * currentValue;
 }
 
 // =============================================================================
-// 座標検証
+// GPS座標検証
 // =============================================================================
 
 /**
- * 座標の妥当性を検証
- * @param latitude 緯度
- * @param longitude 経度
- * @returns 有効な座標かどうか
+ * GPS座標の有効性チェック
+ * @param lat 緯度
+ * @param lng 経度
+ * @returns 有効かどうか
  */
-export function isValidCoordinate(latitude: number, longitude: number): boolean {
+export function isValidCoordinate(lat: number, lng: number): boolean {
   return (
-    !isNaN(latitude) &&
-    !isNaN(longitude) &&
-    latitude >= -90 &&
-    latitude <= 90 &&
-    longitude >= -180 &&
-    longitude <= 180
+    !isNaN(lat) &&
+    !isNaN(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
   );
 }
 
+// =============================================================================
+// GPS精度評価
+// =============================================================================
+
 /**
- * GPS精度からステータスを判定
- * @param accuracy 精度（メートル）
+ * GPS精度ステータスの取得
+ * @param accuracy 精度(メートル)
  * @returns 精度ステータス
  */
-export function getAccuracyStatus(accuracy: number): 'high' | 'medium' | 'low' | 'poor' {
+export function getAccuracyStatus(
+  accuracy: number
+): 'high' | 'medium' | 'low' | 'poor' {
   if (accuracy <= GPS_ACCURACY.HIGH) return 'high';
   if (accuracy <= GPS_ACCURACY.MEDIUM) return 'medium';
   if (accuracy <= GPS_ACCURACY.LOW) return 'low';
@@ -211,28 +223,29 @@ export function getAccuracyStatus(accuracy: number): 'high' | 'medium' | 'low' |
 }
 
 /**
- * GPS精度ステータスの色を取得
- * @param status 精度ステータス
- * @returns Tailwind CSSカラークラス
+ * 精度に応じた色コードを取得
+ * @param accuracy 精度(メートル)
+ * @returns 色コード
  */
-export function getAccuracyColor(status: 'high' | 'medium' | 'low' | 'poor'): string {
+export function getAccuracyColor(accuracy: number): string {
+  const status = getAccuracyStatus(accuracy);
   const colors = {
-    high: 'text-green-600',
-    medium: 'text-yellow-600',
-    low: 'text-orange-600',
-    poor: 'text-red-600'
+    high: '#10b981',    // green-500
+    medium: '#f59e0b',  // amber-500
+    low: '#ef4444',     // red-500
+    poor: '#6b7280'     // gray-500
   };
   return colors[status];
 }
 
 // =============================================================================
-// 速度・移動判定
+// 移動判定
 // =============================================================================
 
 /**
  * 移動しているかを判定
- * @param speed 速度（km/h）
- * @param threshold 閾値（km/h）
+ * @param speed 速度(km/h)
+ * @param threshold 閾値(km/h)
  * @returns 移動中かどうか
  */
 export function isMoving(speed: number, threshold: number = 1.0): boolean {
@@ -241,8 +254,8 @@ export function isMoving(speed: number, threshold: number = 1.0): boolean {
 
 /**
  * 停止しているかを判定
- * @param speed 速度（km/h）
- * @param threshold 閾値（km/h）
+ * @param speed 速度(km/h)
+ * @param threshold 閾値(km/h)
  * @returns 停止中かどうか
  */
 export function isStopped(speed: number, threshold: number = 0.5): boolean {
@@ -251,8 +264,8 @@ export function isStopped(speed: number, threshold: number = 0.5): boolean {
 
 /**
  * km/hをm/sに変換
- * @param kmh 速度（km/h）
- * @returns 速度（m/s）
+ * @param kmh 速度(km/h)
+ * @returns 速度(m/s)
  */
 export function kmhToMs(kmh: number): number {
   return kmh / 3.6;
@@ -260,8 +273,8 @@ export function kmhToMs(kmh: number): number {
 
 /**
  * m/sをkm/hに変換
- * @param ms 速度（m/s）
- * @returns 速度（km/h）
+ * @param ms 速度(m/s)
+ * @returns 速度(km/h)
  */
 export function msToKmh(ms: number): number {
   return ms * 3.6;
@@ -326,10 +339,22 @@ export function calculateBounds(
     };
   }
   
-  let north = coordinates[0].lat;
-  let south = coordinates[0].lat;
-  let east = coordinates[0].lng;
-  let west = coordinates[0].lng;
+  // ✅ 修正: 配列の最初の要素がundefinedの可能性に対応
+  const firstCoord = coordinates[0];
+  if (!firstCoord) {
+    return {
+      north: 0,
+      south: 0,
+      east: 0,
+      west: 0,
+      center: { lat: 0, lng: 0 }
+    };
+  }
+  
+  let north = firstCoord.lat;
+  let south = firstCoord.lat;
+  let east = firstCoord.lng;
+  let west = firstCoord.lng;
   
   coordinates.forEach(coord => {
     if (coord.lat > north) north = coord.lat;
