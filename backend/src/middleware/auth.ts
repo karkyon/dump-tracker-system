@@ -7,8 +7,8 @@
 // コンパイルエラー完全修正版
 // =====================================
 
+import { Router, Request, Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
-import { NextFunction, Request, Response } from 'express';
 
 // 🎯 Phase 1完成基盤の活用（重複排除・統合版)
 import {
@@ -28,6 +28,23 @@ import type {
   AuthenticatedRequest,
   AuthenticatedUser as TypesAuthenticatedUser
 } from '../types/auth';
+
+// =====================================
+// 🔍 デバッグログユーティリティ (汎用)
+// =====================================
+
+/**
+ * ミドルウェアデバッグログ出力
+ * @param middlewareName - ミドルウェア名
+ * @param stage - ステージ名
+ * @param data - 追加データ (オプション)
+ */
+const logMiddleware = (middlewareName: string, stage: string, data?: any): void => {
+  const isoParts = new Date().toISOString().split('T');
+  const timestamp = isoParts[1]?.slice(0, -1) ?? isoParts[0];
+  const dataStr = data ? ` | データ: ${JSON.stringify(data)}` : '';
+  console.log(`🟦 [${middlewareName}] ${stage} (${timestamp})${dataStr}`);
+};
 
 // =====================================
 // 型定義（統合版）
@@ -131,13 +148,19 @@ const extractToken = (authHeader: string | undefined): string | null => {
  */
 export function authenticateToken(options: AuthMiddlewareOptions = {}) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    logMiddleware('authenticateToken', '開始', { url: req.originalUrl });
+
     try {
       // JWT設定の事前検証
+      logMiddleware('authenticateToken', 'JWT設定検証開始');
+
       if (!validateJWTConfig()) {
         logger.error('JWT設定が無効です');
         sendError(res, 'サーバー設定エラー', 500, 'JWT_CONFIG_ERROR');
         return;
       }
+
+      logMiddleware('authenticateToken', 'JWT設定検証完了');
 
       const authHeader = req.headers['authorization'];
       const token = extractToken(authHeader);
@@ -145,9 +168,11 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
       // トークン未提供時の処理
       if (!token) {
         if (options.optional) {
+          logMiddleware('authenticateToken', 'トークンなし(オプショナル) - スキップ');
           return next();
         }
 
+        logMiddleware('authenticateToken', 'トークンなし - エラー');
         logger.warn('認証トークンが提供されていません', {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
@@ -159,11 +184,16 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
       }
 
       // JWT検証（utils/crypto.ts統合機能使用）
+      logMiddleware('authenticateToken', 'JWT検証開始');
+
       let decoded: JWTPayload;
       try {
         decoded = verifyAccessToken(token);
+        logMiddleware('authenticateToken', 'JWT検証成功', { userId: decoded.userId });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+
+        logMiddleware('authenticateToken', 'JWT検証失敗', { error: errorMessage });
 
         logger.warn('JWT検証失敗', {
           error: errorMessage,
@@ -178,7 +208,11 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
       }
 
       // ユーザーのアクティブ状態チェック
+      logMiddleware('authenticateToken', 'アクティブ状態チェック', { isActive: decoded.isActive });
+
       if (!options.allowInactive && decoded.isActive === false) {
+        logMiddleware('authenticateToken', '非アクティブユーザー - 拒否');
+
         logger.warn('非アクティブユーザーのアクセス試行', {
           userId: decoded.userId,
           username: decoded.username,
@@ -193,23 +227,37 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
 
       // 役割チェック
       if (options.requiredRole && !checkRoleHierarchy(decoded.role, options.requiredRole)) {
-        logger.warn('権限不足アクセス試行', {
-          userId: decoded.userId,
+        logMiddleware('authenticateToken', '役割チェック開始', {
           userRole: decoded.role,
-          requiredRole: options.requiredRole,
-          url: req.originalUrl
+          requiredRole: options.requiredRole
         });
 
-        throw new AuthorizationError(
-          'この操作を実行する権限がありません',
-          'INSUFFICIENT_PERMISSIONS'
-        );
+        if (!checkRoleHierarchy(decoded.role, options.requiredRole)) {
+          logMiddleware('authenticateToken', '役割チェック失敗 - 権限不足');
+
+          logger.warn('権限不足アクセス試行', {
+            userId: decoded.userId,
+            userRole: decoded.role,
+            requiredRole: options.requiredRole,
+            url: req.originalUrl
+          });
+
+          throw new AuthorizationError(
+            'この操作を実行する権限がありません',
+            'INSUFFICIENT_PERMISSIONS'
+          );
+        }
+        logMiddleware('authenticateToken', '役割チェック成功');
       }
 
       // カスタム検証
       if (options.customValidator) {
+        logMiddleware('authenticateToken', 'カスタム検証開始');
+
         const isValid = await Promise.resolve(options.customValidator(decoded));
         if (!isValid) {
+          logMiddleware('authenticateToken', 'カスタム検証失敗');
+
           logger.warn('カスタム検証失敗', {
             userId: decoded.userId,
             url: req.originalUrl
@@ -220,9 +268,12 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
             'CUSTOM_VALIDATION_FAILED'
           );
         }
+        logMiddleware('authenticateToken', 'カスタム検証成功');
       }
 
       // 認証成功ログ
+      logMiddleware('authenticateToken', '認証完了 - next()呼び出し', { userId: decoded.userId });
+
       logger.info('認証成功', {
         userId: decoded.userId,
         username: decoded.username,
@@ -246,6 +297,10 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
       next();
 
     } catch (error) {
+      logMiddleware('authenticateToken', 'エラー発生', {
+        error: error instanceof Error ? error.message : 'unknown'
+      });
+
       // エラーハンドリング（utils/errors.ts統合）
       if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
         sendError(res, error.message, error.statusCode, error.code);
@@ -271,18 +326,73 @@ export function authenticateToken(options: AuthMiddlewareOptions = {}) {
  */
 export function requireRole(roles: UserRole | UserRole[]) {
   const roleArray = Array.isArray(roles) ? roles : [roles];
-  const highestRole = roleArray.reduce((highest, current) => {
-    const roleHierarchy: Record<UserRole, number> = {
-      'ADMIN': 3,
-      'MANAGER': 2,
-      'DRIVER': 1
-    };
 
-    return roleHierarchy[current] > roleHierarchy[highest] ? current : highest;
-  });
+  return (req: Request, res: Response, next: NextFunction): void => {
+    logMiddleware('requireRole', '開始', { requiredRoles: roleArray });
 
-  return authenticateToken({ requiredRole: highestRole });
+    try {
+      const authReq = req as AuthenticatedRequest;
+
+      if (!authReq.user) {
+        logMiddleware('requireRole', 'ユーザー情報なし - エラー');
+
+        logger.warn('requireRole: ユーザー情報がありません', {
+          url: req.originalUrl,
+          ip: req.ip
+        });
+
+        sendError(res, '認証が必要です', 401, 'AUTHENTICATION_REQUIRED');
+        return;
+      }
+
+      logMiddleware('requireRole', '役割確認', {
+        userRole: authReq.user.role,
+        requiredRoles: roleArray
+      });
+
+      const hasRequiredRole = roleArray.some(role =>
+        checkRoleHierarchy(authReq.user!.role, role)
+      );
+
+      if (!hasRequiredRole) {
+        logMiddleware('requireRole', '役割不一致 - 拒否', {
+          userRole: authReq.user.role
+        });
+
+        logger.warn('requireRole: 権限不足', {
+          userId: authReq.user.userId,
+          userRole: authReq.user.role,
+          requiredRoles: roleArray,
+          url: req.originalUrl
+        });
+
+        sendError(
+          res,
+          'この操作を実行する権限がありません',
+          403,
+          'INSUFFICIENT_PERMISSIONS'
+        );
+        return;
+      }
+
+      logMiddleware('requireRole', '役割確認成功 - next()呼び出し');
+      next();
+
+    } catch (error) {
+      logMiddleware('requireRole', 'エラー発生', {
+        error: error instanceof Error ? error.message : 'unknown'
+      });
+
+      logger.error('requireRole: 予期しないエラー', {
+        error,
+        url: req.originalUrl
+      });
+
+      sendError(res, 'サーバー内部エラー', 500, 'ROLE_CHECK_ERROR');
+    }
+  };
 }
+
 
 /**
  * 役割要求ミドルウェア（エイリアス）

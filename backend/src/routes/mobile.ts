@@ -20,17 +20,11 @@
  * tripRoutes.ts, userRoutes.ts, vehicleRoutes.ts等と同じパターンを採用
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 
 // 🎯 Phase 1完了基盤の活用（tripRoutes.tsパターン準拠）
-import {
-  authenticateToken,
-  requireRole
-} from '../middleware/auth';
-import {
-  validateId,
-  validatePaginationQuery
-} from '../middleware/validation';
+import { authenticateToken,requireRole } from '../middleware/auth';
+import { validateId,validatePaginationQuery } from '../middleware/validation';
 import logger from '../utils/logger';
 
 // 🎯 完成済みcontrollers層との密連携
@@ -43,6 +37,21 @@ import { getMobileController } from '../controllers/mobileController';
 
 const router = Router();
 const mobileController = getMobileController();
+
+// =====================================
+// 🔍 ログミドルウェア (共通)
+// =====================================
+
+/**
+ * ルートアクセスログ出力
+ * @param path - ログに表示するパス (例: 'GET /mobile/vehicle')
+ */
+const logRequest = (path: string): RequestHandler => {
+  return (_req: Request, _res: Response, next: NextFunction): void => {
+    console.log(`🔵 [Route] ${path} が呼ばれました`);
+    next();
+  };
+};
 
 // =====================================
 // 📱 モバイルAPIエンドポイント（全機能実装）
@@ -88,7 +97,10 @@ const mobileController = getMobileController();
  * - GPS権限事前確認
  * - オフライン対応準備
  */
-router.post('/auth/login', mobileController.login);
+router.post('/auth/login',
+  logRequest('POST /mobile/auth/login'),
+  mobileController.login
+);
 
 /**
  * ✅ 修正: 現在のユーザー情報取得
@@ -104,7 +116,11 @@ router.post('/auth/login', mobileController.login);
  * - /mobile/auth/me エンドポイントが必要
  * - getAuthInfo の代わりに getCurrentUser を使用
  */
-router.get('/auth/me', authenticateToken, mobileController.getCurrentUser);
+router.get('/auth/me',
+  logRequest('GET /mobile/auth/me'),
+  authenticateToken,
+  mobileController.getCurrentUser
+);
 
 /**
  * モバイル認証情報取得（詳細版）
@@ -117,7 +133,11 @@ router.get('/auth/me', authenticateToken, mobileController.getCurrentUser);
  *
  * 注: /auth/me より詳細な情報を返す
  */
-router.get('/auth/info', authenticateToken, mobileController.getAuthInfo);
+router.get('/auth/info',
+  logRequest('GET /mobile/auth/info'),
+  authenticateToken,
+  mobileController.getAuthInfo
+);
 
 // =====================================
 // 🚛 モバイル運行管理エンドポイント
@@ -134,6 +154,7 @@ router.get('/auth/info', authenticateToken, mobileController.getAuthInfo);
  * - オフライン同期準備
  */
 router.post('/operations/start',
+  logRequest('POST /mobile/operations/start'),
   authenticateToken,
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.startOperation
@@ -150,6 +171,7 @@ router.post('/operations/start',
  * - 運行サマリー生成
  */
 router.post('/operations/:id/end',
+  logRequest('POST /mobile/operations/:id/end'),
   authenticateToken,
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   validateId,
@@ -166,10 +188,12 @@ router.post('/operations/:id/end',
  * - 運転手用機能
  */
 router.get('/operations/current',
+  logRequest('GET /mobile/operations/current'),
   authenticateToken,
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.getCurrentOperation
 );
+
 
 // =====================================
 // 📍 モバイルGPS・位置管理エンドポイント
@@ -186,6 +210,7 @@ router.get('/operations/current',
  * - オフライン同期・データ圧縮
  */
 router.post('/gps/log',
+  logRequest('POST /mobile/gps/log'),
   authenticateToken,
   mobileController.logGpsPosition
 );
@@ -201,6 +226,7 @@ router.post('/gps/log',
  * - 簡単選択・クイック登録
  */
 router.get('/locations',
+  logRequest('GET /mobile/locations'),
   authenticateToken,
   validatePaginationQuery,
   mobileController.getLocations
@@ -216,6 +242,7 @@ router.get('/locations',
  * - GPS自動取得
  */
 router.post('/locations/quick',
+  logRequest('POST /mobile/locations/quick'),
   authenticateToken,
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.quickAddLocation
@@ -235,6 +262,7 @@ router.post('/locations/quick',
  * - メンテナンス情報
  */
 router.get('/vehicle',
+  logRequest('GET /mobile/vehicle'),
   authenticateToken,
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.getVehicleInfo
@@ -249,6 +277,7 @@ router.get('/vehicle',
  * - リアルタイム反映
  */
 router.put('/vehicle/status',
+  logRequest('PUT /mobile/vehicle/status'),
   authenticateToken,
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.updateVehicleStatus
@@ -268,7 +297,10 @@ router.put('/vehicle/status',
  * - 統計情報取得
  * - エンドポイント一覧
  */
-router.get('/health', mobileController.healthCheck);
+router.get('/health',
+  logRequest('GET /mobile/health'),
+  mobileController.healthCheck
+);
 
 // =====================================
 // 🚫 404ハンドラー

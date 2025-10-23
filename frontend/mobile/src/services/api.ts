@@ -144,7 +144,7 @@ class APIServiceClass {
     
     this.axiosInstance = axios.create({
       baseURL,
-      timeout: 60000, // ✅ 60秒に延長
+      timeout: 10000, // ✅ 10秒に延長
       headers: {
         'Content-Type': 'application/json',
       },
@@ -518,4 +518,7 @@ class APIServiceClass {
 
 // シングルトンインスタンスをエクスポート
 const apiService = new APIServiceClass();
-export default apiService;
+
+// ✅ デフォルトエクスポートと名前付きエクスポートの両方を提供
+export { apiService };           // 名前付きエクスポート
+export default apiService;       // デフォルトエクスポート
