@@ -4,6 +4,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import fs from 'fs';
+import path from 'path';
 
 export default defineConfig({
   plugins: [
@@ -70,13 +72,16 @@ export default defineConfig({
   ],
   server: {
     port: 3002,
-    host: true,
+    host: '0.0.0.0', // すべてのIPからアクセス可能
+    https: {
+      key: fs.readFileSync(path.resolve(__dirname, '.cert/localhost-key.pem')),
+      cert: fs.readFileSync(path.resolve(__dirname, '.cert/localhost-cert.pem')),
+    },
     proxy: {
       '/api': {
-        // ✅ HTTPSに修正
-        target: process.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443',
+        target: 'https://10.1.119.244:8443',
         changeOrigin: true,
-        secure: false, // ✅ 自己署名証明書を許可（開発環境用）
+        secure: false,
         rewrite: (path) => path.replace(/^\/api/, '/api/v1'),
       },
     },
