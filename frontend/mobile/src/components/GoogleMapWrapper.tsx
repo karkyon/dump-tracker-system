@@ -1,5 +1,5 @@
 // frontend/mobile/src/components/GoogleMapWrapper.tsx
-// ✅ 地図表示問題を完全修正
+// ✅ React Strict Mode完全対応版 - 地図表示問題を完全修正
 
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -31,6 +31,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   const mountedRef = useRef(true);
 
   useEffect(() => {
+    // ✅ React Strict Mode対応: 常にtrueをセット（クリーンアップで false にしない）
     mountedRef.current = true;
     console.log('🗺️ [GoogleMapWrapper] useEffect開始');
 
@@ -38,12 +39,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     if (isGlobalMapInitialized && globalMapInstance) {
       console.log('♻️ [GoogleMapWrapper] 既存のマップインスタンスを再利用');
       
-      // マウントされていることを確認
-      if (!mountedRef.current) {
-        console.log('⚠️ コンポーネントがアンマウントされています');
-        return;
-      }
-
       // 既存のマップを現在のコンテナに再アタッチ
       if (mapContainerRef.current) {
         const mapDiv = globalMapInstance.getDiv();
@@ -54,7 +49,12 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       }
       
       setIsLoading(false);
-      onMapReady?.(globalMapInstance, globalMarkerInstance, globalPolylineInstance);
+      
+      // ✅ 再マウント時もコールバックを実行
+      if (onMapReady) {
+        console.log('🔄 再マウント時のコールバック実行');
+        onMapReady(globalMapInstance, globalMarkerInstance, globalPolylineInstance);
+      }
       return;
     }
 
@@ -66,8 +66,9 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
     // 地図初期化関数
     const initializeMap = () => {
-      if (!mountedRef.current) {
-        console.log('⚠️ コンポーネントがアンマウント済み - 初期化をスキップ');
+      // ✅ DOM確認のみ（mountedRef.currentはチェックしない）
+      if (!mapContainerRef.current) {
+        console.error('❌ mapContainerがありません - 初期化をスキップ');
         return;
       }
 
@@ -78,12 +79,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
       initializationInProgress = true;
       console.log('🔧 [GoogleMapWrapper] initializeMap開始');
-      
-      if (!mapContainerRef.current) {
-        console.error('❌ mapContainerがありません');
-        initializationInProgress = false;
-        return;
-      }
 
       if (!window.google || !window.google.maps || !window.google.maps.Map) {
         console.error('❌ Google Maps APIが完全に読み込まれていません');
@@ -146,12 +141,10 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         initializationInProgress = false;
 
         // ローディング状態を解除
-        if (mountedRef.current) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
 
         // コールバック実行
-        if (onMapReady && mountedRef.current) {
+        if (onMapReady) {
           onMapReady(map, marker, polyline);
           console.log('✅ onMapReadyコールバック実行完了');
         }
@@ -160,9 +153,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       } catch (error) {
         console.error('❌ マップ初期化エラー:', error);
         initializationInProgress = false;
-        if (mountedRef.current) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
@@ -198,24 +189,22 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     script.onerror = () => {
       console.error('❌ スクリプトロードエラー');
       initializationInProgress = false;
-      if (mountedRef.current) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     };
     
     document.head.appendChild(script);
 
-    // クリーンアップ
+    // ✅ React Strict Mode対応: クリーンアップでmountedRef.currentをfalseにしない
     return () => {
-      console.log('🔄 [GoogleMapWrapper] コンポーネントアンマウント');
-      mountedRef.current = false;
+      console.log('🔄 [GoogleMapWrapper] クリーンアップ実行（React Strict Mode対応）');
+      // mountedRef.current = false; ← 削除！これが原因で再マウント時に表示されなかった
       // グローバルマップは削除しない（他のインスタンスで再利用）
     };
   }, []);
 
   // 初期位置が変わったときの処理
   useEffect(() => {
-    if (isGlobalMapInitialized && globalMapInstance && globalMarkerInstance && initialPosition && mountedRef.current) {
+    if (isGlobalMapInitialized && globalMapInstance && globalMarkerInstance && initialPosition) {
       console.log('📍 初期位置を更新:', initialPosition);
       globalMapInstance.setCenter(initialPosition);
       globalMarkerInstance.setPosition(initialPosition);

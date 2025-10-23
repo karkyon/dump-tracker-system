@@ -548,13 +548,12 @@ const OperationRecord: React.FC = () => {
         </div>
 
         {/* ✅ 修正: 地図エリア - 明示的な高さ指定 */}
-        <div style={{ 
-          position: 'relative',
-          width: '100%',
-          height: '50vh',
-          minHeight: '400px',
-          flex: '1 1 auto'
-        }}>
+        <div 
+          className="relative w-full overflow-hidden bg-gray-100"
+          style={{ 
+            height: '450px',
+          }}
+>
           <GoogleMapWrapper
             onMapReady={handleMapReady}
             initialPosition={
@@ -566,14 +565,6 @@ const OperationRecord: React.FC = () => {
                 : undefined
             }
           />
-          
-          {/* GPS状態表示 */}
-          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg px-3 py-2 text-xs z-10">
-            <div className={`flex items-center ${isTracking ? 'text-green-600' : 'text-gray-400'}`}>
-              <div className={`w-2 h-2 rounded-full mr-2 ${isTracking ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-              {isTracking ? 'GPS追跡中' : 'GPS停止中'}
-            </div>
-          </div>
         </div>
         
         {/* コントロールパネル */}
