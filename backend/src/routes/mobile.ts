@@ -118,7 +118,7 @@ router.post('/auth/login',
  */
 router.get('/auth/me',
   logRequest('GET /mobile/auth/me'),
-  authenticateToken,
+  authenticateToken(),
   mobileController.getCurrentUser
 );
 
@@ -135,7 +135,7 @@ router.get('/auth/me',
  */
 router.get('/auth/info',
   logRequest('GET /mobile/auth/info'),
-  authenticateToken,
+  authenticateToken(),
   mobileController.getAuthInfo
 );
 
@@ -155,7 +155,7 @@ router.get('/auth/info',
  */
 router.post('/operations/start',
   logRequest('POST /mobile/operations/start'),
-  authenticateToken,
+  authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.startOperation
 );
@@ -172,7 +172,7 @@ router.post('/operations/start',
  */
 router.post('/operations/:id/end',
   logRequest('POST /mobile/operations/:id/end'),
-  authenticateToken,
+  authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   validateId,
   mobileController.endOperation
@@ -189,7 +189,7 @@ router.post('/operations/:id/end',
  */
 router.get('/operations/current',
   logRequest('GET /mobile/operations/current'),
-  authenticateToken,
+  authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.getCurrentOperation
 );
@@ -211,7 +211,7 @@ router.get('/operations/current',
  */
 router.post('/gps/log',
   logRequest('POST /mobile/gps/log'),
-  authenticateToken,
+  authenticateToken(),
   mobileController.logGpsPosition
 );
 
@@ -227,7 +227,7 @@ router.post('/gps/log',
  */
 router.get('/locations',
   logRequest('GET /mobile/locations'),
-  authenticateToken,
+  authenticateToken(),
   validatePaginationQuery,
   mobileController.getLocations
 );
@@ -243,7 +243,7 @@ router.get('/locations',
  */
 router.post('/locations/quick',
   logRequest('POST /mobile/locations/quick'),
-  authenticateToken,
+  authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.quickAddLocation
 );
@@ -263,7 +263,7 @@ router.post('/locations/quick',
  */
 router.get('/vehicle',
   logRequest('GET /mobile/vehicle'),
-  authenticateToken,
+  authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.getVehicleInfo
 );
@@ -278,7 +278,7 @@ router.get('/vehicle',
  */
 router.put('/vehicle/status',
   logRequest('PUT /mobile/vehicle/status'),
-  authenticateToken,
+  authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.updateVehicleStatus
 );
