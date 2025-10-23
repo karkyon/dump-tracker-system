@@ -2,7 +2,7 @@
 // backend/src/models/OperationModel.ts
 // 運行モデル（既存完全実装 + types/trip.ts統合版 + 正しいPrismaリレーション名使用版）
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
-// 最終更新: Mon Oct 13 15:30:00 JST 2025 - schema.camel.prisma準拠リレーション名修正
+// 最終更新: Thu Oct 23 14:00:00 JST 2025 - operationNumber登録エラー修正
 // アーキテクチャ指針準拠版 - types/trip.ts完全統合対応
 // =====================================
 
@@ -152,6 +152,8 @@ export interface TripOperationModel {
   idleTime?: number;
 
   // 運行状態管理（拡張フィールド）
+  // 注意: tripStatusはOperationStatusのエイリアスのため、使用可能な値は以下のみ:
+  // 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
   tripStatus: TripStatus;
   vehicleOperationStatus: VehicleOperationStatus;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -607,7 +609,7 @@ export class OperationService {
 
   /**
    * 🚀 Phase 1-B-16新機能: 運行開始
-   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
+   * ✅ 修正: operationNumberが確実に登録されるように修正
    */
   async startTrip(request: StartTripOperationRequest): Promise<TripOperationModel> {
     try {
@@ -618,25 +620,42 @@ export class OperationService {
         throw new ValidationError('車両IDとドライバーIDは必須です');
       }
 
+      // ユーザーと車両の存在確認
+      const [user, vehicle] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: request.driverId } }),
+        this.prisma.vehicle.findUnique({ where: { id: request.vehicleId } })
+      ]);
+
+      if (!user) {
+        throw new ValidationError('指定されたドライバーが見つかりません');
+      }
+
+      if (!vehicle) {
+        throw new ValidationError('指定された車両が見つかりません');
+      }
+
+      // 運行番号を生成
+      const operationNumber = await this.generateOperationNumber();
+      logger.info('運行番号生成完了', { operationNumber });
+
       // 車両のステータス更新（運行開始時）
       const vehicleStatus = TripVehicleStatusManager.getStartTripStatus();
 
-      // 運行作成データ
-      const operationData: OperationCreateInput = {
-        operationNumber: await this.generateOperationNumber(),
-        vehicles: {                              // ✅ 修正: vehicles (複数形)
-          connect: { id: request.vehicleId }
-        },
-        usersOperationsDriverIdTousers: {        // ✅ 修正: ドライバー用リレーション名
-          connect: { id: request.driverId }
-        },
-        status: 'IN_PROGRESS',
+      // 運行作成データ（スカラーフィールドとリレーションを明示的に分離）
+      const operationData = {
+        operationNumber: operationNumber,  // ✅ 修正: 生成した運行番号を明示的に指定
+        vehicleId: request.vehicleId,      // ✅ 修正: 直接IDを指定
+        driverId: request.driverId,        // ✅ 修正: 直接IDを指定
+        status: 'IN_PROGRESS' as const,
         plannedStartTime: request.plannedStartTime || new Date(),
+        actualStartTime: new Date(),       // ✅ 追加: 実際の開始時刻を設定
         plannedEndTime: request.plannedEndTime,
         notes: request.notes,
         createdAt: new Date(),
         updatedAt: new Date()
       };
+
+      logger.info('運行作成データ', { operationData });
 
       const operation = await this.prisma.operation.create({
         data: operationData,
@@ -648,6 +667,7 @@ export class OperationService {
 
       logger.info('運行開始完了', {
         operationId: operation.id,
+        operationNumber: operation.operationNumber,
         vehicleId: request.vehicleId,
         driverId: request.driverId
       });
@@ -719,10 +739,9 @@ export class OperationService {
 
       logger.info('運行終了完了', { operationId });
 
-      // TripOperationModel への変換
       const tripOperation: TripOperationModel = {
         ...updatedOperation,
-        tripStatus: updatedOperation.status || 'COMPLETED',
+        tripStatus: 'COMPLETED',
         vehicleOperationStatus: vehicleStatus,
         vehicle: updatedOperation.vehicles,                       // ✅ vehicles → vehicle
         driver: updatedOperation.usersOperationsDriverIdTousers   // ✅ usersOperationsDriverIdTousers → driver
@@ -731,60 +750,9 @@ export class OperationService {
       return tripOperation;
 
     } catch (error) {
-      logger.error('運行終了エラー', { error, operationId, endData });
+      logger.error('運行終了エラー', { error, operationId });
       if (error instanceof ValidationError || error instanceof NotFoundError) throw error;
       throw new DatabaseError('運行の終了に失敗しました');
-    }
-  }
-
-  /**
-   * 🚀 Phase 1-B-16新機能: 運行一時停止
-   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
-   */
-  async pauseTrip(operationId: string, reason?: string): Promise<TripOperationModel> {
-    try {
-      logger.info('運行一時停止処理開始', { operationId, reason });
-
-      if (!operationId) {
-        throw new ValidationError('運行IDは必須です');
-      }
-
-      const operation = await this.findByKey(operationId);
-      if (!operation) {
-        throw new NotFoundError('指定された運行が見つかりません');
-      }
-
-      // 一時停止用のステータス（今回は IN_PROGRESS を維持）
-      const updateData: OperationUpdateInput = {
-        notes: reason ? `${operation.notes || ''}\n[一時停止] ${reason}` : operation.notes,
-        updatedAt: new Date()
-      };
-
-      const updatedOperation = await this.prisma.operation.update({
-        where: { id: operationId },
-        data: updateData,
-        include: {
-          vehicles: true,                       // ✅ 修正: vehicles (複数形)
-          usersOperationsDriverIdTousers: true  // ✅ 修正: ドライバー用リレーション名
-        }
-      });
-
-      logger.info('運行一時停止完了', { operationId });
-
-      const tripOperation: TripOperationModel = {
-        ...updatedOperation,
-        tripStatus: updatedOperation.status || 'IN_PROGRESS',
-        vehicleOperationStatus: 'AVAILABLE',
-        vehicle: updatedOperation.vehicles,                       // ✅ vehicles → vehicle
-        driver: updatedOperation.usersOperationsDriverIdTousers   // ✅ usersOperationsDriverIdTousers → driver
-      };
-
-      return tripOperation;
-
-    } catch (error) {
-      logger.error('運行一時停止エラー', { error, operationId });
-      if (error instanceof ValidationError || error instanceof NotFoundError) throw error;
-      throw new DatabaseError('運行の一時停止に失敗しました');
     }
   }
 

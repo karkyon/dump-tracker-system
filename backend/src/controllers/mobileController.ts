@@ -261,7 +261,7 @@ export class MobileController {
       const tripData = {
         vehicleId: req.body.vehicleId,
         driverId: req.user.userId,
-        startTime: new Date(),
+        actualStartTime: new Date(),
         startPosition,
         plannedRoute: req.body.plannedRoute,
         estimatedDuration: req.body.estimatedDuration

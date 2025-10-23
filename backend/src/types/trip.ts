@@ -50,7 +50,7 @@ export interface OperationDetailCreateDTO {
 export interface CreateTripRequest {
   vehicleId: string;
   driverId?: string;
-  startTime: Date | string;
+  actualStartTime: Date | string;
   notes?: string;
 }
 

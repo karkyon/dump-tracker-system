@@ -269,6 +269,21 @@ router.get('/vehicle',
 );
 
 /**
+ * 車両一覧取得
+ * GET /api/v1/mobile/vehicle
+ *
+ * 実装機能:
+ * - 利用可能な車両一覧取得
+ * - フィルタリング・検索機能
+ */
+router.get('/vehicles',
+  logRequest('GET /mobile/vehicles'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  mobileController.getVehiclesList
+);
+
+/**
  * 車両ステータス更新
  * PUT /api/v1/mobile/vehicle/status
  *

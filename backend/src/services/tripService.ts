@@ -169,11 +169,9 @@ class TripService {
         vehicles: {
           connect: { id: request.vehicleId }
         },
-        startTime: request.startTime || new Date(),
+        actualStartTime: request.actualStartTime || new Date(),
         status: 'IN_PROGRESS',
-        notes: request.notes,
-        operationType: 'TRIP',
-        priority: 'MEDIUM'
+        notes: request.notes
       };
 
       // ドライバーIDがある場合のみ接続
@@ -189,8 +187,7 @@ class TripService {
       const tripOperation: TripOperationModel = {
         ...operation,
         tripStatus: 'IN_PROGRESS' as TripStatus,
-        vehicleOperationStatus: statusResult.newStatus as VehicleOperationStatus,
-        priority: 'MEDIUM'
+        vehicleOperationStatus: statusResult.newStatus as VehicleOperationStatus
       };
 
       logger.info('運行開始完了', {

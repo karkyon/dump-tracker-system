@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import apiService from '../services/api';
+import axios from 'axios';
 
 // ✅ 修正: バックエンドAPIのレスポンス型に合わせる
 interface VehicleData {
@@ -31,7 +32,7 @@ interface VehicleData {
 // ✅ 修正: 表示用の車両データ型
 interface VehicleDisplay {
   id: string;
-  vehicleNumber: string;  // 表示用（車番）
+  vehicleNumber: string;  // 表示用(車番)
   vehicleType: string;
   currentMileage: number;
   lastDriver?: string;
@@ -65,14 +66,25 @@ const VehicleInfo: React.FC = () => {
       console.log('🔍 車両情報を取得中...');
       console.log('📡 API Base URL:', import.meta.env.VITE_API_BASE_URL);
       
-      // ✅ モバイル専用の軽量エンドポイントを使用
+      // ✅ 修正: axiosを直接使用してAPIを呼び出す
+      const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443/api/v1';
+      const token = apiService.getToken();
+      
+      const axiosInstance = axios.create({
+        baseURL,
+        timeout: 15000,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      });
+      
       // GET /api/v1/mobile/vehicles (モバイル専用 - 高速)
-      const response = await apiService.axiosInstance.get('/mobile/vehicles', {
+      const response = await axiosInstance.get('/mobile/vehicles', {
         params: {
           page: 1,
           limit: 100
-        },
-        timeout: 15000  // タイムアウトを15秒に延長
+        }
       });
       
       console.log('📦 APIレスポンス:', response.data);
@@ -88,21 +100,26 @@ const VehicleInfo: React.FC = () => {
         
         // ✅ APIレスポンスを表示用データに変換
         const vehicleList: VehicleDisplay[] = apiVehicles.map((v: VehicleData) => {
-          // notesから運転手名と最終運行日を抽出（存在する場合）
-          let lastDriver = '';
-          let lastOperationDate = '';
+          // notesから運転手名と最終運行日を抽出(存在する場合)
+          let lastDriver: string | undefined;
+          let lastOperationDate: string | undefined;
           
           if (v.notes) {
             const driverMatch = v.notes.match(/運転手[:：]\s*([^\s/]+)/);
             const dateMatch = v.notes.match(/最終運行[:：]\s*(\d{4}-\d{2}-\d{2})/);
             
-            if (driverMatch) lastDriver = driverMatch[1];
-            if (dateMatch) lastOperationDate = dateMatch[1];
+            // ✅ 修正: undefinedチェックを追加
+            if (driverMatch && driverMatch[1]) {
+              lastDriver = driverMatch[1];
+            }
+            if (dateMatch && dateMatch[1]) {
+              lastOperationDate = dateMatch[1];
+            }
           }
           
           return {
             id: v.id,  // ✅ UUID形式のIDをそのまま使用
-            vehicleNumber: v.plateNumber,  // 車番（ナンバープレート）
+            vehicleNumber: v.plateNumber,  // 車番(ナンバープレート)
             vehicleType: v.vehicleType,
             currentMileage: v.currentMileage,
             lastDriver: lastDriver || '未割当',
