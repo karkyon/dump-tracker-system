@@ -4,6 +4,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
+import type { GPSLogData } from '../types/index';
 
 // =============================================================================
 // 型定義
@@ -434,6 +435,23 @@ class APIServiceClass {
       return response.data;
     } catch (error) {
       console.error('Quick add location error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * GPS位置更新ログ
+   * POST /api/v1/mobile/gps/log
+   */
+  async updateGPSLocation(data: GPSLogData): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        '/mobile/gps/log',
+        data
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Update GPS location error:', error);
       throw error;
     }
   }

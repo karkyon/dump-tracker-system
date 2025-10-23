@@ -140,7 +140,7 @@ export const useAuthStore = create<AuthState>()(
           
           if (token && userData) {
             // Verify the token with the server
-            const response = await apiService.getCurrentUser();
+            const response = await apiService.getMe();
             
             if (response.success && response.data) {
               const user = JSON.parse(userData);
