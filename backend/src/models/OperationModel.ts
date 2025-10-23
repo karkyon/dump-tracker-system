@@ -945,6 +945,7 @@ export class OperationService {
 
   /**
    * 🚀 Phase 1-B-16新機能: 運行番号生成
+   * ✅ 競合対策: 重複チェックと再試行ロジックを追加
    */
   private async generateOperationNumber(): Promise<string> {
     const now = new Date();
@@ -954,17 +955,56 @@ export class OperationService {
 
     const prefix = `OP${year}${month}${day}`;
 
-    // 同じ日付の運行数を取得
-    const count = await this.prisma.operation.count({
-      where: {
-        operationNumber: {
-          startsWith: prefix
-        }
-      }
-    });
+    let attempts = 0;
+    const maxAttempts = 5;
 
-    const sequence = String(count + 1).padStart(4, '0');
-    return `${prefix}-${sequence}`;
+    while (attempts < maxAttempts) {
+      try {
+        // 同じ日付の運行数を取得
+        const count = await this.prisma.operation.count({
+          where: {
+            operationNumber: {
+              startsWith: prefix
+            }
+          }
+        });
+
+        const sequence = String(count + 1).padStart(4, '0');
+        const operationNumber = `${prefix}-${sequence}`;
+
+        // ✅ 重複チェック（念のため）
+        const existing = await this.prisma.operation.findUnique({
+          where: { operationNumber }
+        });
+
+        if (!existing) {
+          return operationNumber;
+        }
+
+        // 重複が見つかった場合は再試行
+        attempts++;
+        logger.warn('運行番号の重複を検出、再生成します', {
+          operationNumber,
+          attempt: attempts
+        });
+
+        // 短い待機時間を追加（競合を避けるため）
+        await new Promise(resolve => setTimeout(resolve, 10 * attempts));
+
+      } catch (error) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw error;
+        }
+        logger.warn('運行番号生成エラー、再試行します', {
+          error,
+          attempt: attempts
+        });
+        await new Promise(resolve => setTimeout(resolve, 10 * attempts));
+      }
+    }
+
+    throw new Error('運行番号の生成に失敗しました（最大試行回数を超えました）');
   }
 
   /**

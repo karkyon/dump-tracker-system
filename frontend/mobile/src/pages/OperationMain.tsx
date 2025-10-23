@@ -1,5 +1,5 @@
 // frontend/mobile/src/pages/OperationMain.tsx
-// D4: 運行中画面 - 修正版
+// D4: 運行中画面 - F5リロード対応版（運行中なら復元、未運行なら開始）
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +13,8 @@ import {
   Navigation,
   Clock,
   Play,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import apiService from '../services/api';
@@ -46,7 +47,7 @@ const OperationMain: React.FC = () => {
   const [operation, setOperation] = useState<OperationState>({
     id: null,
     status: 'running',
-    startTime: new Date(),
+    startTime: null,
     elapsedSeconds: 0,
     currentLatitude: 35.6812,
     currentLongitude: 139.7671,
@@ -59,12 +60,21 @@ const OperationMain: React.FC = () => {
   const [isGpsActive, setIsGpsActive] = useState(false);
   const [isTracking] = useState(true);
   
+  // ✅ 追加: API送信中・初期化中フラグ
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  
   // Refs
   const watchIdRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  
+  // ✅ 追加: 初期化済みフラグ（React Strict Mode対応）
+  const initializedRef = useRef(false);
 
-  // 認証チェック
+  // ========================================================================
+  // ✅ 修正: 初期化処理 - 運行中チェック → 復元 or 新規開始
+  // ========================================================================
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { replace: true });
@@ -78,8 +88,119 @@ const OperationMain: React.FC = () => {
       return;
     }
     
-    startOperation();
+    // ✅ 一度だけ実行
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      initializeOperation();
+    }
   }, [isAuthenticated, navigate]);
+
+  // ========================================================================
+  // ✅ 新規追加: 運行初期化処理
+  // ========================================================================
+  const initializeOperation = async () => {
+    setIsInitializing(true);
+    
+    try {
+      console.log('🔄 運行状態を確認中...');
+      
+      // ✅ 現在の運行中データを取得
+      const response = await apiService.getCurrentOperation();
+      
+      if (response.success && response.data) {
+        // ✅ 運行中データが存在 → 復元
+        console.log('✅ 運行中データを復元:', response.data);
+        
+        const currentOp = response.data;
+        const startTime = currentOp.startTime ? new Date(currentOp.startTime) : new Date();
+        
+        setOperation({
+          id: currentOp.tripId || currentOp.id,
+          status: 'running',
+          startTime: startTime,
+          elapsedSeconds: Math.floor((Date.now() - startTime.getTime()) / 1000),
+          currentLatitude: 35.6812,
+          currentLongitude: 139.7671,
+          distanceTraveled: currentOp.totalDistance || 0
+        });
+        
+        toast.success('運行中データを復元しました', { duration: 2000 });
+      } else {
+        // ✅ 運行中データなし → 新規運行開始
+        console.log('📝 運行中データなし。新規運行を開始します');
+        await startNewOperation();
+      }
+    } catch (error: any) {
+      console.error('❌ 運行状態確認エラー:', error);
+      
+      // エラーが404（運行なし）の場合は新規開始
+      if (error?.response?.status === 404) {
+        console.log('📝 運行データが見つかりません。新規運行を開始します');
+        await startNewOperation();
+      } else {
+        toast.error('運行状態の確認に失敗しました');
+      }
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  // ========================================================================
+  // ✅ 新規追加: 新規運行開始
+  // ========================================================================
+  const startNewOperation = async () => {
+    if (isSubmitting) {
+      console.warn('⚠️ 既に運行開始処理中です');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      const vehicleId = sessionStorage.getItem('selected_vehicle_id');
+      if (!vehicleId) {
+        throw new Error('車両情報が見つかりません');
+      }
+      
+      console.log('📍 新規運行開始リクエスト送信...', {
+        vehicleId,
+        driverId: user?.id,
+        timestamp: new Date().toISOString()
+      });
+      
+      const response = await apiService.startOperation({
+        vehicleId: vehicleId,
+        driverId: user?.id || '',
+        startLatitude: operation.currentLatitude,
+        startLongitude: operation.currentLongitude,
+        startLocation: '出発地点',
+        cargoInfo: '土砂'
+      });
+      
+      if (response.success && response.data?.id) {
+        setOperation(prev => ({
+          ...prev,
+          id: response.data?.id || null,
+          startTime: new Date()
+        }));
+        
+        toast.success('運行を開始しました');
+        console.log('✅ 運行開始成功:', response.data);
+      }
+    } catch (error: any) {
+      console.error('❌ 運行開始エラー:', error);
+      
+      if (error?.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else if (error?.message) {
+        toast.error(error.message);
+      } else {
+        toast.error('運行開始に失敗しました');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // タイマー開始
   useEffect(() => {
@@ -105,7 +226,7 @@ const OperationMain: React.FC = () => {
 
   // GPS追跡開始
   useEffect(() => {
-    if (isTracking) {
+    if (isTracking && !isInitializing) {
       startGPSTracking();
     } else {
       stopGPSTracking();
@@ -114,39 +235,7 @@ const OperationMain: React.FC = () => {
     return () => {
       stopGPSTracking();
     };
-  }, [isTracking]);
-
-  // 運行開始
-  const startOperation = async () => {
-    try {
-      const vehicleId = sessionStorage.getItem('selected_vehicle_id');
-      if (!vehicleId) {
-        throw new Error('車両情報が見つかりません');
-      }
-      
-      const response = await apiService.startOperation({
-        vehicleId: vehicleId,
-        driverId: user?.id || '',
-        startLatitude: operation.currentLatitude,
-        startLongitude: operation.currentLongitude,
-        startLocation: '出発地点',
-        cargoInfo: '土砂'
-      });
-      
-      if (response.success && response.data?.id) {
-        setOperation(prev => ({
-          ...prev,
-          id: response.data?.id || null,
-          startTime: new Date()
-        }));
-        
-        toast.success('運行を開始しました');
-      }
-    } catch (error: any) {
-      console.error('運行開始エラー:', error);
-      toast.error('運行開始に失敗しました');
-    }
-  };
+  }, [isTracking, isInitializing]);
 
   // GPS追跡開始
   const startGPSTracking = () => {
@@ -275,6 +364,8 @@ const OperationMain: React.FC = () => {
 
   // ステータス表示用のテキスト
   const getStatusText = (): string => {
+    if (isInitializing) return '初期化中...';
+    
     switch (operation.status) {
       case 'running':
         return '運行中';
@@ -293,6 +384,8 @@ const OperationMain: React.FC = () => {
 
   // ステータス表示用の色
   const getStatusColor = (): string => {
+    if (isInitializing) return 'bg-gray-500';
+    
     switch (operation.status) {
       case 'running':
         return 'bg-blue-600';
@@ -308,6 +401,19 @@ const OperationMain: React.FC = () => {
         return 'bg-blue-600';
     }
   };
+
+  // ✅ ローディング画面
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-600 mx-auto mb-4 animate-spin" />
+          <p className="text-gray-700 font-semibold">運行状態を確認中...</p>
+          <p className="text-gray-500 text-sm mt-2">しばらくお待ちください</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

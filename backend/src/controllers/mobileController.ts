@@ -378,9 +378,10 @@ export class MobileController {
 
       this.collectStats('operation', req.user.userId);
 
+      // ✅ 修正: status を配列から単一値に変更
       const filter: TripFilter = {
         driverId: req.user.userId,
-        status: [OperationStatus.IN_PROGRESS], // ✅ 修正: enum値を使用
+        status: OperationStatus.IN_PROGRESS,  // ← 配列ではなく単一値
         page: 1,
         limit: 1
       };
@@ -412,17 +413,20 @@ export class MobileController {
           id: currentTrip.vehicle.id,
           plateNumber: currentTrip.vehicle.plateNumber,
           model: currentTrip.vehicle.model
-        } : null,
-        lastUpdate: new Date()
+        } : undefined,
+        driverInfo: currentTrip.driver ? {
+          id: currentTrip.driver.id,
+          name: currentTrip.driver.name
+        } : undefined
       };
 
-      sendSuccess(res, mobileResponse, '現在の運行状況');
+      sendSuccess(res, mobileResponse, '現在の運行状況を取得しました');
 
     } catch (error) {
       logger.error('モバイル現在運行状況取得エラー', {
         error: error instanceof Error ? error.message : String(error)
       });
-      sendError(res, '運行状況の取得に失敗しました', 500, 'CURRENT_OPERATION_ERROR');
+      sendError(res, '運行状況の取得に失敗しました', 500, 'GET_CURRENT_OPERATION_ERROR');
     }
   });
 

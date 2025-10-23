@@ -72,7 +72,7 @@ export interface Trip extends Operation {
 export interface TripFilter extends PaginationQuery, SearchQuery, DateRange {
   driverId?: string;
   vehicleId?: string;
-  status?: OperationStatus[];
+  status?: OperationStatus | OperationStatus[];  // ✅ 単一値と配列の両方を許可
   operationType?: string;
   hasGpsData?: boolean;
 }

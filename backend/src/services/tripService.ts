@@ -146,6 +146,7 @@ class TripService {
 
   /**
    * 運行開始（Phase 2完全統合版）
+   * ✅ 修正: OperationService.startTrip() を直接呼び出すように変更
    */
   async startTrip(request: CreateTripRequest): Promise<ApiResponse<TripOperationModel>> {
     try {
@@ -153,6 +154,11 @@ class TripService {
 
       // バリデーション
       await this.validateStartTripRequest(request);
+
+      // driverIdの必須チェック
+      if (!request.driverId) {
+        throw new ValidationError('ドライバーIDは必須です', 'driverId');
+      }
 
       // 車両状態確認・更新
       const statusResult = await this.checkAndUpdateVehicleStatus(
@@ -164,35 +170,22 @@ class TripService {
         throw new ConflictError(statusResult.message || '車両が使用できません');
       }
 
-      // Operation作成データ準備
-      const operationData: any = {
-        vehicles: {
-          connect: { id: request.vehicleId }
-        },
-        actualStartTime: request.actualStartTime || new Date(),
-        status: 'IN_PROGRESS',
+      // ✅ 修正: CreateTripRequestからStartTripOperationRequestへマッピング
+      const startTripRequest: StartTripOperationRequest = {
+        vehicleId: request.vehicleId,
+        driverId: request.driverId,  // すでに上でチェック済み
+        plannedStartTime: typeof request.actualStartTime === 'string'
+          ? new Date(request.actualStartTime)
+          : request.actualStartTime,
         notes: request.notes
       };
 
-      // ドライバーIDがある場合のみ接続
-      if (request.driverId) {
-        operationData.usersOperationsDriverIdTousers = {
-          connect: { id: request.driverId }
-        };
-      }
-
-      const operation = await this.operationService.create(operationData);
-
-      // TripOperationModel構築
-      const tripOperation: TripOperationModel = {
-        ...operation,
-        tripStatus: 'IN_PROGRESS' as TripStatus,
-        vehicleOperationStatus: statusResult.newStatus as VehicleOperationStatus
-      };
+      // OperationService.startTrip() を呼び出し（運行番号が自動生成される）
+      const tripOperation = await this.operationService.startTrip(startTripRequest);
 
       logger.info('運行開始完了', {
-        operationId: operation.id,
-        vehicleId: request.vehicleId
+        tripId: tripOperation.id,
+        operationNumber: tripOperation.operationNumber
       });
 
       return {
@@ -203,6 +196,14 @@ class TripService {
 
     } catch (error) {
       logger.error('運行開始エラー', { error, request });
+
+      // エラー時は車両ステータスをロールバック
+      try {
+        await this.checkAndUpdateVehicleStatus(request.vehicleId, 'AVAILABLE');
+      } catch (rollbackError) {
+        logger.error('車両ステータスロールバックエラー', { rollbackError });
+      }
+
       throw error;
     }
   }
@@ -272,54 +273,59 @@ class TripService {
   /**
    * 運行一覧取得（Phase 2完全統合版）
    */
-  async getAllTrips(filter: TripFilter = {}): Promise<PaginatedTripResponse<TripWithDetails>> {
-    try {
-      logger.info('運行一覧取得開始', { filter });
+async getAllTrips(filter: TripFilter = {}): Promise<PaginatedTripResponse<TripWithDetails>> {
+  try {
+    logger.info('運行一覧取得開始', { filter });
 
-      const page = filter.page || 1;
-      const pageSize = filter.limit || 10;
+    const page = filter.page || 1;
+    const pageSize = filter.limit || 10;
 
-      // ⚠️ 修正: operationType を where 句から削除（存在しないプロパティ）
-      const result = await this.operationService.findManyWithPagination({
-        where: {
-          ...(filter.vehicleId && { vehicleId: filter.vehicleId }),
-          ...(filter.driverId && { driverId: filter.driverId }),
-          ...(filter.status && { status: filter.status as any }),
-          ...(filter.startDate && filter.endDate && {
-            startTime: {
-              gte: new Date(filter.startDate),
-              lte: new Date(filter.endDate)
-            }
-          })
-        },
-        orderBy: { createdAt: 'desc' },
-        page,
-        pageSize
-      });
+    // ✅ statusを配列に正規化
+    const statusArray = filter.status
+      ? (Array.isArray(filter.status) ? filter.status : [filter.status])
+      : undefined;
 
-      const trips: TripWithDetails[] = await Promise.all(
-        result.data.map((operation: any) =>
-          this.buildTripWithDetails(operation, filter.hasGpsData)
-        )
-      );
+    const result = await this.operationService.findManyWithPagination({
+      where: {
+        ...(filter.vehicleId && { vehicleId: filter.vehicleId }),
+        ...(filter.driverId && { driverId: filter.driverId }),
+        // ✅ 配列形式で { in: array } として渡す
+        ...(statusArray && { status: { in: statusArray } }),
+        ...(filter.startDate && filter.endDate && {
+          startTime: {
+            gte: new Date(filter.startDate),
+            lte: new Date(filter.endDate)
+          }
+        })
+      },
+      orderBy: { createdAt: 'desc' },
+      page,
+      pageSize
+    });
 
-      return {
-        success: true,
-        data: trips,
-        message: '運行一覧を取得しました',
-        pagination: {
-          currentPage: result.page,
-          totalPages: result.totalPages,
-          totalItems: result.total,
-          itemsPerPage: result.pageSize
-        }
-      };
+    const trips: TripWithDetails[] = await Promise.all(
+      result.data.map((operation: any) =>
+        this.buildTripWithDetails(operation, filter.hasGpsData)
+      )
+    );
 
-    } catch (error) {
-      logger.error('運行一覧取得エラー', { error, filter });
-      throw error;
-    }
+    return {
+      success: true,
+      data: trips,
+      message: '運行一覧を取得しました',
+      pagination: {
+        currentPage: result.page,
+        totalPages: result.totalPages,
+        totalItems: result.total,
+        itemsPerPage: result.pageSize
+      }
+    };
+
+  } catch (error) {
+    logger.error('運行一覧取得エラー', { error, filter });
+    throw error;
   }
+}
 
   /**
    * 運行詳細取得（Phase 2完全統合版）

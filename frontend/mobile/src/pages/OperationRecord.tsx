@@ -60,7 +60,70 @@ const OperationRecord: React.FC = () => {
   // 時刻表示
   const [currentTime, setCurrentTime] = useState(new Date());
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
-  
+
+  // ✅ 初期化済みフラグ
+  const initializedRef = useRef(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // ========================================================================
+  // ✅ 運行状態確認と復元
+  // ========================================================================
+  const checkAndRestoreOperation = async () => {
+    setIsInitializing(true);
+    
+    try {
+      console.log('🔄 運行状態を確認中...');
+      
+      const response = await apiService.getCurrentOperation();
+      
+      if (response.success && response.data) {
+        // ✅ 運行中データが存在 → 復元
+        console.log('✅ 運行中データを復元:', response.data);
+        
+        const currentOp = response.data;
+        const startTime = currentOp.startTime ? new Date(currentOp.startTime) : new Date();
+        
+        setOperation({
+          id: currentOp.tripId || currentOp.id,
+          status: 'running',
+          startTime: startTime,
+          loadingArrived: false,
+          unloadingArrived: false,
+          distance: currentOp.totalDistance || 0,
+          duration: Math.floor((Date.now() - startTime.getTime()) / 1000),
+          averageSpeed: 0
+        });
+        
+        // GPS追跡を開始
+        await startTracking();
+        
+        toast.success('運行中データを復元しました', { duration: 2000 });
+      } else {
+        // ✅ 運行中データなし → idle状態で待機（ユーザーが運行開始ボタンを押すのを待つ）
+        console.log('📝 運行中データなし。運行開始待機中');
+        setOperation(prev => ({
+          ...prev,
+          status: 'idle'
+        }));
+      }
+    } catch (error: any) {
+      console.error('❌ 運行状態確認エラー:', error);
+      
+      // エラーが404（運行なし）の場合はidle状態
+      if (error?.response?.status === 404) {
+        console.log('📝 運行データなし。運行開始待機中');
+        setOperation(prev => ({
+          ...prev,
+          status: 'idle'
+        }));
+      } else {
+        toast.error('運行状態の確認に失敗しました');
+      }
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
   // GPS追跡フック
   const {
     currentPosition,
@@ -148,6 +211,16 @@ const OperationRecord: React.FC = () => {
       }
     }
   };
+
+  // ========================================================================
+  // ✅ ページロード時の運行状態チェック
+  // ========================================================================
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      checkAndRestoreOperation();
+    }
+  }, []);
 
   // ========================================================================
   // マーカーアイコン動的更新
@@ -242,26 +315,39 @@ const OperationRecord: React.FC = () => {
     }
   }, [gpsError]);
 
-  // 運行開始
-  const handleStartOperation = async () => {
-    // ✅ 二重送信防止
+  // 運行開始処理（既存のhandleStartOperationを更新）
+  const handleStartOperation = async (e?: React.MouseEvent<HTMLButtonElement>) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // ✅ 既に運行中の場合はエラー
+    if (operation.status !== 'idle') {
+      toast.error('既に運行中です');
+      return;
+    }
+    
     if (isSubmitting) {
       console.warn('⚠️ 送信中です。しばらくお待ちください。');
       return;
     }
     
     if (!currentPosition) {
-      toast.error('GPS位置を取得中です。しばらくお待ちください。');
+      toast.error('GPS位置を取得中です。しばらくお待ちください。', {
+        duration: 3000
+      });
       return;
     }
     
-    setIsSubmitting(true); // ✅ 送信開始
+    setIsSubmitting(true);
     
     try {
       console.log('📍 運行開始リクエスト送信...', {
         vehicleId: user?.vehicleId,
         driverId: user?.id,
-        position: currentPosition.coords
+        position: currentPosition.coords,
+        timestamp: new Date().toISOString()
       });
       
       const response = await apiService.startOperation({
@@ -285,22 +371,21 @@ const OperationRecord: React.FC = () => {
         });
         
         await startTracking();
-        toast.success('運行を開始しました');
+        toast.success('運行を開始しました', {
+          duration: 3000
+        });
         console.log('✅ 運行開始成功:', response.data);
       }
     } catch (error: any) {
       console.error('❌ 運行開始エラー:', error);
       
-      // ✅ 改善: エラーの詳細な処理
       if (error?.response?.status === 401) {
-        // 認証エラー - ログアウトして再ログインを促す
         toast.error('認証エラーが発生しました。再度ログインしてください。', { duration: 5000 });
         setTimeout(() => {
           logout();
           navigate('/login');
         }, 2000);
       } else if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        // ✅ タイムアウトエラー - より詳細なメッセージ
         toast.error('サーバーの応答がタイムアウトしました。\nバックエンドサーバーの状態を確認してください。', { 
           duration: 6000,
           style: {
@@ -308,17 +393,13 @@ const OperationRecord: React.FC = () => {
             whiteSpace: 'pre-line'
           }
         });
-        console.error('🔴 バックエンドタイムアウト: サーバーが30秒以内に応答しませんでした');
-      } else if (error?.message?.includes('Network Error')) {
-        // ネットワークエラー
-        toast.error('ネットワークエラーが発生しました。接続を確認してください。', { duration: 5000 });
+      } else if (error?.response?.data?.message) {
+        toast.error(error.response.data.message, { duration: 4000 });
       } else {
-        // その他のエラー
-        const errorMsg = error?.response?.data?.message || error?.message || '運行開始に失敗しました';
-        toast.error(errorMsg, { duration: 4000 });
+        toast.error('運行開始に失敗しました', { duration: 4000 });
       }
     } finally {
-      setIsSubmitting(false); // ✅ 送信完了（成功・失敗に関わらず）
+      setIsSubmitting(false);
     }
   };
 
@@ -451,200 +532,202 @@ const OperationRecord: React.FC = () => {
   };
 
   // JSX
-  return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* ヘッダー */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center">
-          <Navigation className="w-6 h-6 mr-2" />
-          <h1 className="text-lg font-bold">運行記録</h1>
+  if (isInitializing) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-50">
+        {/* ヘッダー */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center">
+            <Navigation className="w-6 h-6 mr-2" />
+            <h1 className="text-lg font-bold">運行記録</h1>
+          </div>
+          <div className="flex items-center text-sm">
+            <Clock className="w-4 h-4 mr-1" />
+            {currentTime.toLocaleTimeString('ja-JP')}
+          </div>
         </div>
-        <div className="flex items-center text-sm">
-          <Clock className="w-4 h-4 mr-1" />
-          {currentTime.toLocaleTimeString('ja-JP')}
-        </div>
-      </div>
 
-      {/* 地図エリア */}
-      <div className="flex-1 relative bg-gray-100">
-        <GoogleMapWrapper
-          onMapReady={handleMapReady}
-          initialPosition={
-            currentPosition
-              ? {
-                  lat: currentPosition.coords.latitude,
-                  lng: currentPosition.coords.longitude,
-                }
-              : undefined
-          }
-        />
-        
-        {/* 地図ローディング表示 */}
-        {!isMapReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
-              <p className="text-gray-600">地図を読み込んでいます...</p>
+        {/* 地図エリア */}
+        <div className="flex-1 relative bg-gray-100">
+          <GoogleMapWrapper
+            onMapReady={handleMapReady}
+            initialPosition={
+              currentPosition
+                ? {
+                    lat: currentPosition.coords.latitude,
+                    lng: currentPosition.coords.longitude,
+                  }
+                : undefined
+            }
+          />
+          
+          {/* 地図ローディング表示 */}
+          {!isMapReady && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-gray-600">地図を読み込んでいます...</p>
+              </div>
             </div>
-          </div>
-        )}
-        
-        {/* ✅ 追加: GPS位置取得中の明示的な表示 */}
-        {isMapReady && !currentPosition && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center">
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            <span className="text-sm font-medium">GPS位置を取得しています...</span>
-          </div>
-        )}
-        
-        {/* ✅ 追加: GPSエラー表示（権限エラーなど） */}
-        {isMapReady && gpsError && !gpsError.includes('タイムアウト') && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center max-w-md">
-            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <span className="text-sm font-medium">{gpsError}</span>
-          </div>
-        )}
-      </div>
-
-      {/* コントロールパネル */}
-      <div className="bg-white px-4 py-4 border-t shadow-lg">
-        {/* 運行情報 */}
-        <div className="grid grid-cols-3 gap-2 mb-4 text-center text-sm">
-          <div>
-            <div className="text-gray-500">経過時間</div>
-            <div className="font-bold text-lg">
-              {operation.startTime ? `${elapsedTime.hours}:${String(elapsedTime.minutes).padStart(2, '0')}:${String(elapsedTime.seconds).padStart(2, '0')}` : '0:00:00'}
+          )}
+          
+          {/* ✅ 追加: GPS位置取得中の明示的な表示 */}
+          {isMapReady && !currentPosition && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center">
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <span className="text-sm font-medium">GPS位置を取得しています...</span>
             </div>
-          </div>
-          <div>
-            <div className="text-gray-500">運行距離</div>
-            <div className="font-bold text-lg">{(totalDistance || 0).toFixed(1)} km</div>
-          </div>
-          <div>
-            <div className="text-gray-500">平均速度</div>
-            <div className="font-bold text-lg">{(gpsAverageSpeed || 0).toFixed(1)} km/h</div>
-          </div>
-        </div>
-
-        {/* アクションボタン */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          <button
-            onClick={() => handleAction('積込場所到着')}
-            disabled={!operation.id || operation.loadingArrived || isSubmitting}
-            className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id && !operation.loadingArrived && !isSubmitting
-                ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg hover:shadow-xl active:scale-95'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            <MapPin className="w-5 h-5 mx-auto mb-1" />
-            積込到着
-          </button>
+          )}
           
-          <button
-            onClick={() => handleAction('積降場所到着')}
-            disabled={!operation.id || !operation.loadingArrived || operation.unloadingArrived || isSubmitting}
-            className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id && operation.loadingArrived && !operation.unloadingArrived && !isSubmitting
-                ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg hover:shadow-xl active:scale-95'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            <MapPin className="w-5 h-5 mx-auto mb-1" />
-            積降到着
-          </button>
-          
-          <button
-            onClick={() => handleAction('休憩・荷待ち')}
-            disabled={!operation.id || isSubmitting}
-            className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id && !isSubmitting
-                ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl active:scale-95'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            <Coffee className="w-5 h-5 mx-auto mb-1" />
-            休憩
-          </button>
-          
-          <button
-            onClick={() => handleAction('給油')}
-            disabled={!operation.id || isSubmitting}
-            className={`p-4 rounded-lg font-bold text-sm transition-all ${
-              operation.id && !isSubmitting
-                ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl active:scale-95'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            <Fuel className="w-5 h-5 mx-auto mb-1" />
-            給油
-          </button>
-        </div>
-        
-        {/* 運行開始/終了ボタン */}
-        <div className="mt-4">
-          {operation.status === 'idle' ? (
-            <button
-              onClick={handleStartOperation}
-              disabled={!currentPosition || isSubmitting}
-              className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-bold text-lg shadow-xl hover:shadow-2xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-6 h-6 mr-2 animate-spin" />
-                  送信中...
-                </>
-              ) : (
-                <>
-                  <Play className="w-6 h-6 mr-2" />
-                  運行開始
-                </>
-              )}
-            </button>
-          ) : (
-            <button
-              onClick={handleEndOperation}
-              disabled={isSubmitting}
-              className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-bold text-lg shadow-xl hover:shadow-2xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-6 h-6 mr-2 animate-spin" />
-                  送信中...
-                </>
-              ) : (
-                <>
-                  <Square className="w-6 h-6 mr-2" />
-                  運行終了
-                </>
-              )}
-            </button>
+          {/* ✅ 追加: GPSエラー表示（権限エラーなど） */}
+          {isMapReady && gpsError && !gpsError.includes('タイムアウト') && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center max-w-md">
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span className="text-sm font-medium">{gpsError}</span>
+            </div>
           )}
         </div>
-      </div>
 
-      {/* フッター */}
-      <div className="bg-gray-50 px-4 py-3 border-t flex items-center justify-between">
-        <div className="flex items-center text-xs text-gray-600">
-          <div className={`w-4 h-4 rounded-full mr-2 relative ${isTracking ? 'bg-green-500' : 'bg-gray-400'}`}>
-            <div className="absolute inset-1 bg-white rounded-full" />
+        {/* コントロールパネル */}
+        <div className="bg-white px-4 py-4 border-t shadow-lg">
+          {/* 運行情報 */}
+          <div className="grid grid-cols-3 gap-2 mb-4 text-center text-sm">
+            <div>
+              <div className="text-gray-500">経過時間</div>
+              <div className="font-bold text-lg">
+                {operation.startTime ? `${elapsedTime.hours}:${String(elapsedTime.minutes).padStart(2, '0')}:${String(elapsedTime.seconds).padStart(2, '0')}` : '0:00:00'}
+              </div>
+            </div>
+            <div>
+              <div className="text-gray-500">運行距離</div>
+              <div className="font-bold text-lg">{(totalDistance || 0).toFixed(1)} km</div>
+            </div>
+            <div>
+              <div className="text-gray-500">平均速度</div>
+              <div className="font-bold text-lg">{(gpsAverageSpeed || 0).toFixed(1)} km/h</div>
+            </div>
           </div>
-          {isTracking ? 'GPS追跡中' : 'GPS停止中'}
+
+          {/* アクションボタン */}
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            <button
+              onClick={() => handleAction('積込場所到着')}
+              disabled={!operation.id || operation.loadingArrived || isSubmitting}
+              className={`p-4 rounded-lg font-bold text-sm transition-all ${
+                operation.id && !operation.loadingArrived && !isSubmitting
+                  ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg hover:shadow-xl active:scale-95'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <MapPin className="w-5 h-5 mx-auto mb-1" />
+              積込到着
+            </button>
+            
+            <button
+              onClick={() => handleAction('積降場所到着')}
+              disabled={!operation.id || !operation.loadingArrived || operation.unloadingArrived || isSubmitting}
+              className={`p-4 rounded-lg font-bold text-sm transition-all ${
+                operation.id && operation.loadingArrived && !operation.unloadingArrived && !isSubmitting
+                  ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg hover:shadow-xl active:scale-95'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <MapPin className="w-5 h-5 mx-auto mb-1" />
+              積降到着
+            </button>
+            
+            <button
+              onClick={() => handleAction('休憩・荷待ち')}
+              disabled={!operation.id || isSubmitting}
+              className={`p-4 rounded-lg font-bold text-sm transition-all ${
+                operation.id && !isSubmitting
+                  ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl active:scale-95'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <Coffee className="w-5 h-5 mx-auto mb-1" />
+              休憩
+            </button>
+            
+            <button
+              onClick={() => handleAction('給油')}
+              disabled={!operation.id || isSubmitting}
+              className={`p-4 rounded-lg font-bold text-sm transition-all ${
+                operation.id && !isSubmitting
+                  ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl active:scale-95'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <Fuel className="w-5 h-5 mx-auto mb-1" />
+              給油
+            </button>
+          </div>
+          
+          {/* 運行開始/終了ボタン */}
+          <div className="mt-4">
+            {operation.status === 'idle' ? (
+              <button
+                onClick={handleStartOperation}
+                disabled={!currentPosition || isSubmitting}
+                className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-bold text-lg shadow-xl hover:shadow-2xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+                    送信中...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-6 h-6 mr-2" />
+                    運行開始
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={handleEndOperation}
+                disabled={isSubmitting}
+                className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-bold text-lg shadow-xl hover:shadow-2xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+                    送信中...
+                  </>
+                ) : (
+                  <>
+                    <Square className="w-6 h-6 mr-2" />
+                    運行終了
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
-        
-        <div className="text-xs text-gray-500 text-right">
-          {currentPosition && (
-            <>
-              緯度: {currentPosition.coords.latitude.toFixed(6)}<br />
-              経度: {currentPosition.coords.longitude.toFixed(6)}
-            </>
-          )}
+
+        {/* フッター */}
+        <div className="bg-gray-50 px-4 py-3 border-t flex items-center justify-between">
+          <div className="flex items-center text-xs text-gray-600">
+            <div className={`w-4 h-4 rounded-full mr-2 relative ${isTracking ? 'bg-green-500' : 'bg-gray-400'}`}>
+              <div className="absolute inset-1 bg-white rounded-full" />
+            </div>
+            {isTracking ? 'GPS追跡中' : 'GPS停止中'}
+          </div>
+          
+          <div className="text-xs text-gray-500 text-right">
+            {currentPosition && (
+              <>
+                緯度: {currentPosition.coords.latitude.toFixed(6)}<br />
+                経度: {currentPosition.coords.longitude.toFixed(6)}
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 };
 
 export default OperationRecord;

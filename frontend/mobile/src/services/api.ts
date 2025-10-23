@@ -298,6 +298,32 @@ class APIServiceClass {
   }
 
   /**
+   * 現在の運行状況取得
+   * GET /api/v1/mobile/operations/current
+   */
+  async getCurrentOperation(): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<any>>(
+        '/mobile/operations/current'
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('Get current operation error:', error);
+      
+      // 404エラー（運行なし）の場合は正常系として扱う
+      if (error?.response?.status === 404) {
+        return {
+          success: true,
+          data: null,
+          message: '進行中の運行はありません'
+        };
+      }
+      
+      throw error;
+    }
+  }
+  
+  /**
    * 運行終了
    * POST /api/v1/mobile/operations/end
    */
