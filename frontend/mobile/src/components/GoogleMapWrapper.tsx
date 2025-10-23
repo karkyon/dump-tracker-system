@@ -1,5 +1,5 @@
 // frontend/mobile/src/components/GoogleMapWrapper.tsx
-// ✅ 完全修正版: 再レンダリングで消えない対応
+// ✅ 完全修正版: DOMを確実に保持 + TypeScriptエラー修正
 
 import React, { useEffect, useRef } from 'react';
 
@@ -20,65 +20,49 @@ let globalMapInstance: any = null;
 let globalMarkerInstance: any = null;
 let globalPolylineInstance: any = null;
 let isGlobalMapInitialized = false;
-let initializationInProgress = false;
+let globalMapContainer: HTMLDivElement | null = null;
 
 const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({ 
   onMapReady, 
   initialPosition 
 }) => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    console.log('🗺️ [GoogleMapWrapper] useEffect開始');
+    if (mountedRef.current) return;
+    mountedRef.current = true;
 
-    // 既に初期化済みの場合は再利用
-    if (isGlobalMapInitialized && globalMapInstance) {
-      console.log('♻️ [GoogleMapWrapper] 既存のマップインスタンスを再利用');
-      
-      // 既存のマップを現在のコンテナに再アタッチ
-      if (mapContainerRef.current && globalMapInstance.getDiv().parentElement !== mapContainerRef.current) {
-        console.log('🔄 既存のマップを現在のコンテナに再アタッチ');
-        mapContainerRef.current.appendChild(globalMapInstance.getDiv());
+    console.log('🗺️ [GoogleMapWrapper] 初期化開始');
+
+    // 既存のマップがある場合は再利用
+    if (isGlobalMapInitialized && globalMapInstance && globalMapContainer) {
+      console.log('♻️ 既存のマップを再利用');
+      if (wrapperRef.current && !wrapperRef.current.contains(globalMapContainer)) {
+        wrapperRef.current.appendChild(globalMapContainer);
       }
-      
       onMapReady?.(globalMapInstance, globalMarkerInstance, globalPolylineInstance);
       return;
     }
 
-    // 初期化中の場合は待機
-    if (initializationInProgress) {
-      console.log('⏳ 初期化処理実行中...');
-      return;
-    }
-
-    // 地図初期化関数
     const initializeMap = () => {
-      if (initializationInProgress || isGlobalMapInitialized) {
-        return;
-      }
+      if (!wrapperRef.current || isGlobalMapInitialized) return;
 
-      initializationInProgress = true;
-      console.log('🔧 [GoogleMapWrapper] initializeMap開始');
+      console.log('🔧 地図初期化中...');
+
+      // 永続的なコンテナを作成
+      globalMapContainer = document.createElement('div');
+      globalMapContainer.id = 'permanent-map-container';
+      globalMapContainer.style.width = '100%';
+      globalMapContainer.style.height = '100%';
+      globalMapContainer.style.minHeight = '400px';
       
-      if (!mapContainerRef.current) {
-        console.error('❌ mapContainerがありません');
-        initializationInProgress = false;
-        return;
-      }
-
-      if (!window.google || !window.google.maps || !window.google.maps.Map) {
-        console.error('❌ Google Maps APIが完全に読み込まれていません');
-        initializationInProgress = false;
-        return;
-      }
+      wrapperRef.current.appendChild(globalMapContainer);
 
       try {
-        console.log('🚀 地図を初期化中...');
-
         const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 };
 
-        // 地図作成
-        const map = new window.google.maps.Map(mapContainerRef.current, {
+        const map = new window.google.maps.Map(globalMapContainer, {
           center: centerPosition,
           zoom: 18,
           disableDefaultUI: false,
@@ -89,9 +73,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           fullscreenControl: false,
         });
         
-        console.log('✅ Mapインスタンス作成成功');
+        console.log('✅ Map作成成功');
 
-        // マーカー作成
         const marker = new window.google.maps.Marker({
           map: map,
           position: centerPosition,
@@ -106,9 +89,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           },
         });
 
-        console.log('✅ Markerインスタンス作成成功');
+        console.log('✅ Marker作成成功');
 
-        // ポリライン作成
         const polyline = new window.google.maps.Polyline({
           map: map,
           path: [],
@@ -117,25 +99,18 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           strokeWeight: 4,
         });
 
-        console.log('✅ Polylineインスタンス作成成功');
+        console.log('✅ Polyline作成成功');
 
-        // グローバル変数に保存
         globalMapInstance = map;
         globalMarkerInstance = marker;
         globalPolylineInstance = polyline;
         isGlobalMapInitialized = true;
-        initializationInProgress = false;
 
-        // コールバック実行
-        if (onMapReady) {
-          onMapReady(map, marker, polyline);
-          console.log('✅ onMapReadyコールバック実行完了');
-        }
+        onMapReady?.(map, marker, polyline);
         
-        console.log('🎉 地図の初期化が完全に完了しました!');
+        console.log('🎉 地図初期化完了!');
       } catch (error) {
-        console.error('❌ マップ初期化エラー:', error);
-        initializationInProgress = false;
+        console.error('❌ 地図初期化エラー:', error);
       }
     };
 
@@ -146,69 +121,75 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       return;
     }
 
-    // 既にスクリプトが読み込まれている場合
-    const existingScript = document.getElementById('google-maps-script');
-    if (existingScript) {
-      if (window.google && window.google.maps && window.google.maps.Map) {
-        console.log('✅ Google Maps APIは完全にロード済み');
-        setTimeout(initializeMap, 100);
+    if (window.google && window.google.maps && window.google.maps.Map) {
+      console.log('✅ Google Maps API読み込み済み');
+      setTimeout(initializeMap, 100);
+    } else {
+      const existingScript = document.getElementById('google-maps-script');
+      if (existingScript) {
+        window.initGoogleMap = initializeMap;
       } else {
         window.initGoogleMap = initializeMap;
+        
+        const script = document.createElement('script');
+        script.id = 'google-maps-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap`;
+        script.async = true;
+        script.defer = true;
+        script.onerror = () => console.error('❌ スクリプトロードエラー');
+        
+        document.head.appendChild(script);
       }
-      return;
     }
 
-    // 新しくスクリプトを追加
-    window.initGoogleMap = initializeMap;
-    
-    const script = document.createElement('script');
-    script.id = 'google-maps-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap`;
-    script.async = true;
-    script.defer = true;
-    
-    script.onerror = () => {
-      console.error('❌ スクリプトロードエラー');
-      initializationInProgress = false;
-    };
-    
-    document.head.appendChild(script);
-
-    // クリーンアップ: マップのDOMは削除しない
     return () => {
-      console.log('🔄 [GoogleMapWrapper] コンポーネントアンマウント(マップは保持)');
-      // グローバルマップは削除しない
+      console.log('🔄 アンマウント(マップは保持)');
     };
-  }, []);
+  }, [onMapReady, initialPosition]);
 
-  // 初期位置が変わったときの処理
+  // 初期位置変更時
   useEffect(() => {
     if (isGlobalMapInitialized && globalMapInstance && globalMarkerInstance && initialPosition) {
-      console.log('📍 初期位置を更新:', initialPosition);
       globalMapInstance.setCenter(initialPosition);
       globalMarkerInstance.setPosition(initialPosition);
     }
   }, [initialPosition]);
 
   return (
-    <div className="w-full h-full relative" style={{ minHeight: '400px' }}>
-      {/* 地図コンテナ - キーを使って安定化 */}
-      <div 
-        key="google-map-container"
-        ref={mapContainerRef} 
-        className="w-full h-full bg-gray-100"
-        style={{ minHeight: '400px' }}
-      />
-      
-      {/* ローディングオーバーレイ - グローバル状態を直接チェック */}
+    <div 
+      ref={wrapperRef} 
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: '400px',
+        position: 'relative',
+        backgroundColor: '#f3f4f6'
+      }}
+    >
       {!isGlobalMapInitialized && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10 pointer-events-none">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-700 font-semibold">地図を読み込んでいます...</p>
-            <p className="text-xs text-gray-500 mt-2">
-              GPS位置を取得中...
-            </p>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          zIndex: 10
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              margin: '0 auto 16px',
+              border: '2px solid #e5e7eb',
+              borderTopColor: '#2563eb',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <p style={{ color: '#374151', fontWeight: 600 }}>地図を読み込んでいます...</p>
           </div>
         </div>
       )}

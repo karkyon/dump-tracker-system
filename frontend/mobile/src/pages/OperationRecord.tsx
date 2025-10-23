@@ -548,7 +548,13 @@ const OperationRecord: React.FC = () => {
         </div>
 
         {/* ✅ 修正: 地図エリア - 明示的な高さ指定 */}
-        <div className="flex-1 relative" style={{ minHeight: '400px', height: '50vh' }}>
+        <div style={{ 
+          position: 'relative',
+          width: '100%',
+          height: '50vh',
+          minHeight: '400px',
+          flex: '1 1 auto'
+        }}>
           <GoogleMapWrapper
             onMapReady={handleMapReady}
             initialPosition={
@@ -561,25 +567,15 @@ const OperationRecord: React.FC = () => {
             }
           />
           
-          {/* 地図ローディング表示 */}
-          {!isMapReady && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                <p className="text-gray-600">地図を読み込んでいます...</p>
-              </div>
+          {/* GPS状態表示 */}
+          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg px-3 py-2 text-xs z-10">
+            <div className={`flex items-center ${isTracking ? 'text-green-600' : 'text-gray-400'}`}>
+              <div className={`w-2 h-2 rounded-full mr-2 ${isTracking ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              {isTracking ? 'GPS追跡中' : 'GPS停止中'}
             </div>
-          )}
-          
-          {/* ✅ 追加: GPS位置取得中の明示的な表示 */}
-          {isMapReady && !currentPosition && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center">
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              <span className="text-sm font-medium">GPS位置を取得しています...</span>
-            </div>
-          )}
+          </div>
         </div>
-
+        
         {/* コントロールパネル */}
         <div className="bg-white px-4 py-4 border-t shadow-lg">
           {/* 運行情報 */}

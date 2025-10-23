@@ -50,11 +50,7 @@ if (!container) {
 const root = ReactDOM.createRoot(container);
 
 // React Strict Modeでレンダリング
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+root.render(<App />);
 
 // Service Worker登録(PWA対応)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
