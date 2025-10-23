@@ -547,8 +547,8 @@ const OperationRecord: React.FC = () => {
           </div>
         </div>
 
-        {/* 地図エリア */}
-        <div className="flex-1 relative bg-gray-100">
+        {/* ✅ 修正: 地図エリア - 明示的な高さ指定 */}
+        <div className="flex-1 relative" style={{ minHeight: '400px', height: '50vh' }}>
           <GoogleMapWrapper
             onMapReady={handleMapReady}
             initialPosition={
@@ -576,16 +576,6 @@ const OperationRecord: React.FC = () => {
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center">
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               <span className="text-sm font-medium">GPS位置を取得しています...</span>
-            </div>
-          )}
-          
-          {/* ✅ 追加: GPSエラー表示（権限エラーなど） */}
-          {isMapReady && gpsError && !gpsError.includes('タイムアウト') && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-lg shadow-lg z-20 flex items-center max-w-md">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm font-medium">{gpsError}</span>
             </div>
           )}
         </div>
