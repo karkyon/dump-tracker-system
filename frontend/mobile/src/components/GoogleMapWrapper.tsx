@@ -212,19 +212,19 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   }, [initialPosition]);
 
   return (
-    <div className="w-full h-full relative bg-gray-200" style={{ minHeight: '400px' }}>
+    <div className="w-full h-full relative bg-gray-200" style={{ minHeight: '200px' }}>
       {/* 地図コンテナ - 常に表示 */}
       <div 
         key="google-map-container"
         ref={mapContainerRef} 
         className="w-full h-full"
         style={{ 
-          minHeight: '400px',
+          minHeight: '200px',
           width: '100%',
           height: '100%',
           position: 'absolute',
-          top: 0,
-          left: 0
+          top: 10,
+          left: 10
         }}
       />
       

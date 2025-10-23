@@ -1,6 +1,6 @@
 // frontend/mobile/src/pages/OperationRecord.tsx
-// GoogleMapWrapper統合版 - React Strict Mode完全対応
-// 修正: GPS取得中表示追加 + エラーハンドリング改善
+// 完全修正版 - 初期化後のメインUI完全実装
+// 地図エリアとコントロールパネルを正しく表示
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +13,7 @@ import {
   Fuel,
   Navigation,
   Clock,
-  Loader2  // ✅ 追加: ローディングアイコン
+  Loader2
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useGPS } from '../hooks/useGPS';
@@ -54,16 +54,17 @@ const OperationRecord: React.FC = () => {
     averageSpeed: 0
   });
   
-  // ✅ 追加: API送信中フラグ（二重送信防止）
+  // ✅ API送信中フラグ（二重送信防止）
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // 時刻表示
   const [currentTime, setCurrentTime] = useState(new Date());
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
-  // ✅ 初期化済みフラグ
+  // 初期化済みフラグ
   const initializedRef = useRef(false);
   const [isInitializing, setIsInitializing] = useState(true);
+
 
   // ========================================================================
   // ✅ 運行状態確認と復元
@@ -77,6 +78,7 @@ const OperationRecord: React.FC = () => {
       const response = await apiService.getCurrentOperation();
       
       if (response.success && response.data) {
+
         // ✅ 運行中データが存在 → 復元
         console.log('✅ 運行中データを復元:', response.data);
         
@@ -96,10 +98,10 @@ const OperationRecord: React.FC = () => {
         
         // GPS追跡を開始
         await startTracking();
-        
+
+        // ✅ 運行中データなし → idle状態で待機（ユーザーが運行開始ボタンを押すのを待つ）
         toast.success('運行中データを復元しました', { duration: 2000 });
       } else {
-        // ✅ 運行中データなし → idle状態で待機（ユーザーが運行開始ボタンを押すのを待つ）
         console.log('📝 運行中データなし。運行開始待機中');
         setOperation(prev => ({
           ...prev,
@@ -109,13 +111,9 @@ const OperationRecord: React.FC = () => {
     } catch (error: any) {
       console.error('❌ 運行状態確認エラー:', error);
       
-      // エラーが404（運行なし）の場合はidle状態
       if (error?.response?.status === 404) {
         console.log('📝 運行データなし。運行開始待機中');
-        setOperation(prev => ({
-          ...prev,
-          status: 'idle'
-        }));
+        setOperation(prev => ({ ...prev, status: 'idle' }));
       } else {
         toast.error('運行状態の確認に失敗しました');
       }
@@ -128,29 +126,25 @@ const OperationRecord: React.FC = () => {
   const {
     currentPosition,
     isTracking,
-    // heading,  // ✅ 削除: 未使用変数
-    speed,
-    // accuracy,  // ✅ 削除: 未使用変数
     totalDistance,
     averageSpeed: gpsAverageSpeed,
     pathCoordinates,
     startTracking,
     stopTracking,
-    error: gpsError  // ✅ 追加: GPSエラー取得
+    error: gpsError
   } = useGPS({
     enableHighAccuracy: true,
     enableLogging: operation.id !== null,
     operationId: operation.id || undefined,
     vehicleId: user?.vehicleId,
     onPositionUpdate: handleGPSUpdate,
-    autoStart: true,  // ページ読み込み時にGPS開始
+    autoStart: true,
   });
 
   // GPS更新ハンドラー
   function handleGPSUpdate(position: any, metadata: any) {
     if (!isMapReady) return;
 
-    // マップ更新
     if (mapInstanceRef.current && markerRef.current) {
       const newPos = {
         lat: position.coords.latitude,
@@ -158,18 +152,13 @@ const OperationRecord: React.FC = () => {
       };
       
       try {
-        // マーカー位置更新
         markerRef.current.setPosition(newPos);
-        
-        // マップ中心移動
         mapInstanceRef.current.panTo(newPos);
         
-        // ヘッドアップ回転(方位角)
         if (metadata.heading !== null && metadata.speed > 1) {
           mapInstanceRef.current.setHeading(metadata.heading);
         }
         
-        // 軌跡更新
         if (polylineRef.current && pathCoordinates.length > 0) {
           const path = pathCoordinates.map((p: any) => ({ lat: p.lat, lng: p.lng }));
           polylineRef.current.setPath(path);
@@ -179,7 +168,6 @@ const OperationRecord: React.FC = () => {
       }
     }
     
-    // 運行統計更新
     setOperation(prev => ({
       ...prev,
       distance: metadata.totalDistance,
@@ -187,9 +175,7 @@ const OperationRecord: React.FC = () => {
     }));
   }
 
-  // ========================================================================
   // マップ準備完了ハンドラー
-  // ========================================================================
   const handleMapReady = (map: any, marker: any, polyline: any) => {
     console.log('Map ready callback received');
     mapInstanceRef.current = map;
@@ -197,7 +183,6 @@ const OperationRecord: React.FC = () => {
     polylineRef.current = polyline;
     setIsMapReady(true);
 
-    // 現在位置があれば移動
     if (currentPosition) {
       const pos = {
         lat: currentPosition.coords.latitude,
@@ -212,9 +197,7 @@ const OperationRecord: React.FC = () => {
     }
   };
 
-  // ========================================================================
-  // ✅ ページロード時の運行状態チェック
-  // ========================================================================
+  // ページロード時の運行状態チェック
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
@@ -222,98 +205,39 @@ const OperationRecord: React.FC = () => {
     }
   }, []);
 
-  // ========================================================================
-  // マーカーアイコン動的更新
-  // ========================================================================
+  // 経過時間更新
   useEffect(() => {
-    if (!isMapReady || !markerRef.current || !window.google || !window.google.maps) {
-      return;
-    }
-
-    const createMarkerIcon = (distance: number, speedKmh: number) => {
-      const svg = `
-        <svg width="60" height="80" viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="30" cy="40" r="28" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-          <circle cx="30" cy="40" r="22" fill="rgba(255,255,255,0.9)" stroke="#4285F4" stroke-width="1"/>
-          <path d="M30 15 L25 25 L35 25 Z" fill="#4285F4"/>
-          <text x="30" y="35" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold" fill="#333">
-            ${distance.toFixed(1)}km
-          </text>
-          <text x="30" y="47" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="#4285F4">
-            ${Math.round(speedKmh)}
-          </text>
-          <text x="30" y="55" text-anchor="middle" font-family="Arial" font-size="6" fill="#666">
-            km/h
-          </text>
-        </svg>
-      `;
-      return {
-        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-        scaledSize: new window.google.maps.Size(60, 80),
-        anchor: new window.google.maps.Point(30, 40)
-      };
-    };
-
-    try {
-      markerRef.current.setIcon(createMarkerIcon(totalDistance || 0, speed || 0));
-    } catch (error) {
-      console.error('Failed to update marker icon:', error);
-    }
-  }, [totalDistance, speed, isMapReady]);
-  
-  // ========================================================================
-  // GPS位置更新時にマップを更新
-  // ========================================================================
-  useEffect(() => {
-    if (currentPosition && isMapReady && mapInstanceRef.current) {
-      const pos = {
-        lat: currentPosition.coords.latitude,
-        lng: currentPosition.coords.longitude
-      };
-      
-      // 初回GPS取得時に地図を強制移動
-      mapInstanceRef.current.setCenter(pos);
-      mapInstanceRef.current.setZoom(18);
-      
-      if (markerRef.current) {
-        markerRef.current.setPosition(pos);
-      }
-    }
-  }, [currentPosition, isMapReady]); // currentPositionの変更を監視
-  
-  // 時刻更新
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-      
-      if (operation.startTime) {
-        const elapsed = Date.now() - operation.startTime.getTime();
-        const hours = Math.floor(elapsed / (1000 * 60 * 60));
-        const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((elapsed % (1000 * 60)) / 1000);
+    if (operation.startTime && operation.status === 'running') {
+      const interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - operation.startTime!.getTime()) / 1000);
+        const hours = Math.floor(elapsed / 3600);
+        const minutes = Math.floor((elapsed % 3600) / 60);
+        const seconds = elapsed % 60;
         setElapsedTime({ hours, minutes, seconds });
-      }
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, [operation.startTime]);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+    return undefined;
+  }, [operation.startTime, operation.status]);
 
-  // ========================================================================
-  // ✅ 追加: GPSエラー監視（タイムアウトは警告のみ、権限エラーは強調表示）
-  // ========================================================================
+  // 現在時刻更新
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // GPSエラー監視
   useEffect(() => {
     if (gpsError) {
-      // タイムアウトエラーは警告レベル（位置取得中の可能性）
       if (gpsError.includes('タイムアウト') || gpsError.includes('Timeout')) {
         console.warn('⚠️ GPS Timeout:', gpsError);
-        // タイムアウトはトーストを表示しない（煩わしいため）
       } else {
-        // 権限エラーなどはユーザーに通知
         console.error('❌ GPS Error:', gpsError);
         toast.error(gpsError, { duration: 5000 });
       }
     }
   }, [gpsError]);
+
 
   // 運行開始処理（既存のhandleStartOperationを更新）
   const handleStartOperation = async (e?: React.MouseEvent<HTMLButtonElement>) => {
@@ -531,6 +455,9 @@ const OperationRecord: React.FC = () => {
     }
   };
 
+  // ========================================================================
+  // 初期化中の表示
+  // ========================================================================
   // JSX
   if (isInitializing) {
     return (
@@ -549,11 +476,13 @@ const OperationRecord: React.FC = () => {
 
         {/* ✅ 修正: 地図エリア - 明示的な高さ指定 */}
         <div 
-          className="relative w-full overflow-hidden bg-gray-100"
+          className="relative w-full overflow-hidden"
           style={{ 
-            height: '450px',
+            height: '600px',        // 大きめに設定
+            backgroundColor: 'red', // 赤色で確認
+            border: '5px solid blue', // 青い枠線
           }}
->
+        >
           <GoogleMapWrapper
             onMapReady={handleMapReady}
             initialPosition={
@@ -565,6 +494,14 @@ const OperationRecord: React.FC = () => {
                 : undefined
             }
           />
+          
+          {/* GPS状態表示 */}
+          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg px-3 py-2 text-xs z-10">
+            <div className={`flex items-center ${isTracking ? 'text-green-600' : 'text-gray-400'}`}>
+              <div className={`w-2 h-2 rounded-full mr-2 ${isTracking ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              {isTracking ? 'GPS追跡中' : 'GPS停止中'}
+            </div>
+          </div>
         </div>
         
         {/* コントロールパネル */}
