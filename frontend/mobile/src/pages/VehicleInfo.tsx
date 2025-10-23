@@ -1,5 +1,5 @@
 // frontend/mobile/src/pages/VehicleInfo.tsx
-// D2: 車両情報画面 - 修正版
+// D2: 車両情報画面 - データベース連携版
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,22 +16,35 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import apiService from '../services/api';
 
+// ✅ 修正: バックエンドAPIのレスポンス型に合わせる
 interface VehicleData {
+  id: string;  // UUID形式
+  plateNumber: string;
+  vehicleType: string;
+  model: string;
+  manufacturer: string;
+  currentMileage: number;
+  status: string;
+  notes?: string;
+}
+
+// ✅ 修正: 表示用の車両データ型
+interface VehicleDisplay {
   id: string;
-  vehicleNumber: string;
+  vehicleNumber: string;  // 表示用（車番）
   vehicleType: string;
   currentMileage: number;
-  lastDriver: string;
-  lastOperationDate: string;
+  lastDriver?: string;
+  lastOperationDate?: string;
 }
 
 const VehicleInfo: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
   
-  const [vehicles, setVehicles] = useState<VehicleData[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleDisplay[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
-  const [vehicleInfo, setVehicleInfo] = useState<VehicleData | null>(null);
+  const [vehicleInfo, setVehicleInfo] = useState<VehicleDisplay | null>(null);
   const [startMileage, setStartMileage] = useState('');
   const [isFetching, setIsFetching] = useState(true);
 
@@ -45,92 +58,114 @@ const VehicleInfo: React.FC = () => {
     fetchVehicles();
   }, []);
 
+  // ✅ 修正: 実際にAPIから車両データを取得
   const fetchVehicles = async () => {
     setIsFetching(true);
     try {
       console.log('🔍 車両情報を取得中...');
       console.log('📡 API Base URL:', import.meta.env.VITE_API_BASE_URL);
       
-      // ✅ リトライ機能付きで呼び出し
-      const response = await apiService.getVehicleInfo(3); // 3回リトライ
+      // ✅ モバイル専用の軽量エンドポイントを使用
+      // GET /api/v1/mobile/vehicles (モバイル専用 - 高速)
+      const response = await apiService.axiosInstance.get('/mobile/vehicles', {
+        params: {
+          page: 1,
+          limit: 100
+        },
+        timeout: 15000  // タイムアウトを15秒に延長
+      });
       
-      if (response.success && response.data) {
-        const dummyVehicles: VehicleData[] = [
-          {
-            id: '1',
-            vehicleNumber: '1号車',
-            vehicleType: '4tダンプ',
-            currentMileage: 12345,
-            lastDriver: '田中太郎',
-            lastOperationDate: '2025-10-21'
-          },
-          {
-            id: '2',
-            vehicleNumber: '2号車',
-            vehicleType: '大型ダンプ',
-            currentMileage: 98765,
-            lastDriver: '山田花子',
-            lastOperationDate: '2025-10-21'
-          },
-          {
-            id: '3',
-            vehicleNumber: '3号車',
-            vehicleType: '中型ダンプ',
-            currentMileage: 45678,
-            lastDriver: '佐藤次郎',
-            lastOperationDate: '2025-10-20'
-          }
-        ];
+      console.log('📦 APIレスポンス:', response.data);
+      
+      if (response.data.success && response.data.data) {
+        // ✅ バックエンドからのデータを変換
+        const apiVehicles = response.data.data.vehicles || response.data.data;
         
-        setVehicles(dummyVehicles);
-        
-        if (user?.vehicleId) {
-          setSelectedVehicleId(user.vehicleId);
-          const vehicle = dummyVehicles.find(v => v.id === user.vehicleId);
-          if (vehicle) {
-            setVehicleInfo(vehicle);
-            setStartMileage(vehicle.currentMileage.toString());
-          }
+        if (!Array.isArray(apiVehicles)) {
+          console.error('❌ 車両データが配列ではありません:', apiVehicles);
+          throw new Error('車両データの形式が不正です');
         }
         
-        console.log('✅ 車両情報取得成功');
+        // ✅ APIレスポンスを表示用データに変換
+        const vehicleList: VehicleDisplay[] = apiVehicles.map((v: VehicleData) => {
+          // notesから運転手名と最終運行日を抽出（存在する場合）
+          let lastDriver = '';
+          let lastOperationDate = '';
+          
+          if (v.notes) {
+            const driverMatch = v.notes.match(/運転手[:：]\s*([^\s/]+)/);
+            const dateMatch = v.notes.match(/最終運行[:：]\s*(\d{4}-\d{2}-\d{2})/);
+            
+            if (driverMatch) lastDriver = driverMatch[1];
+            if (dateMatch) lastOperationDate = dateMatch[1];
+          }
+          
+          return {
+            id: v.id,  // ✅ UUID形式のIDをそのまま使用
+            vehicleNumber: v.plateNumber,  // 車番（ナンバープレート）
+            vehicleType: v.vehicleType,
+            currentMileage: v.currentMileage,
+            lastDriver: lastDriver || '未割当',
+            lastOperationDate: lastOperationDate || '－'
+          };
+        });
+        
+        console.log('✅ 車両リスト取得成功:', vehicleList);
+        setVehicles(vehicleList);
+        
+        // ✅ ユーザーに割り当てられた車両がある場合は自動選択
+        if (user?.vehicleId && vehicleList.length > 0) {
+          const assignedVehicle = vehicleList.find(v => v.id === user.vehicleId);
+          if (assignedVehicle) {
+            setSelectedVehicleId(assignedVehicle.id);
+            setVehicleInfo(assignedVehicle);
+            setStartMileage(assignedVehicle.currentMileage.toString());
+          }
+        }
+      } else {
+        console.error('❌ APIレスポンスが不正:', response.data);
+        throw new Error('車両データの取得に失敗しました');
       }
+      
     } catch (error: any) {
       console.error('❌ 車両情報取得エラー:', error);
       
-      // ✅ より詳細なエラーメッセージ
+      // ✅ エラーメッセージを詳細に表示
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
         toast.error(
           'サーバーの応答がタイムアウトしました。\n' +
-          'バックエンドサーバーの状態を確認してください。\n' +
-          '（URL: ' + (import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443/api/v1') + '）',
-          { duration: 8000 }
+          'バックエンドサーバーの状態を確認してください。',
+          { duration: 6000 }
         );
       } else if (error.message?.includes('Network Error') || error.message?.includes('ERR_CONNECTION_REFUSED')) {
         toast.error(
-          'ネットワークエラーが発生しました。\n' +
-          'HTTPSサーバーが起動しているか確認してください。\n' +
-          '（ポート: 8443）',
-          { duration: 8000 }
+          'サーバーに接続できません。\n' +
+          'バックエンドサーバーが起動しているか確認してください。',
+          { duration: 6000 }
         );
       } else if (error.response?.status === 401) {
         toast.error('認証エラー: 再ログインが必要です');
         logout();
-        navigate('/login');
-      } else if (error.message?.includes('certificate')) {
-        toast.error(
-          'SSL証明書エラーが発生しました。\n' +
-          'ブラウザでhttps://10.1.119.244:8443を開いて証明書を信頼してください。',
-          { duration: 10000 }
-        );
+        navigate('/login', { replace: true });
+        return;
+      } else if (error.response?.status === 404) {
+        toast.error('車両情報のAPIエンドポイントが見つかりません');
       } else {
-        toast.error(`車両情報の取得に失敗しました: ${error.message}`, { duration: 6000 });
+        toast.error(
+          `車両情報の取得に失敗しました\n${error.message}`,
+          { duration: 6000 }
+        );
       }
+      
+      // ✅ エラー時は空のリストを設定
+      setVehicles([]);
+      
     } finally {
       setIsFetching(false);
     }
   };
 
+  // ✅ 車両選択時の処理
   const handleVehicleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const vehicleId = e.target.value;
     setSelectedVehicleId(vehicleId);
@@ -174,9 +209,16 @@ const VehicleInfo: React.FC = () => {
       return;
     }
     
+    // ✅ UUID形式のIDをsessionStorageに保存
     sessionStorage.setItem('selected_vehicle_id', selectedVehicleId);
     sessionStorage.setItem('start_mileage', startMileage);
     sessionStorage.setItem('vehicle_info', JSON.stringify(vehicleInfo));
+    
+    console.log('✅ 車両情報を保存:', {
+      vehicleId: selectedVehicleId,
+      startMileage,
+      vehicleInfo
+    });
     
     toast.success('車両情報を保存しました');
     navigate('/pre-departure-inspection');
@@ -187,6 +229,7 @@ const VehicleInfo: React.FC = () => {
     navigate('/login', { replace: true });
   };
 
+  // ✅ ローディング中の表示
   if (isFetching) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -194,6 +237,54 @@ const VehicleInfo: React.FC = () => {
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">車両情報を読み込み中...</p>
         </div>
+      </div>
+    );
+  }
+
+  // ✅ 車両データが取得できなかった場合の表示
+  if (vehicles.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
+          <div className="max-w-md mx-auto px-6 py-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Truck className="w-7 h-7" />
+                <h1 className="text-xl font-bold">車両情報</h1>
+              </div>
+              <div className="text-sm text-blue-100">
+                <User className="w-4 h-4 inline mr-1" />
+                {user?.name}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-md mx-auto px-6 py-8">
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <div className="text-center py-8">
+              <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-600 mb-4">利用可能な車両がありません</p>
+              <button
+                onClick={() => fetchVehicles()}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                再読み込み
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-between">
+            <button
+              onClick={handleBack}
+              className="flex items-center space-x-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl
+                hover:bg-gray-300 transition-colors duration-200 font-medium"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>戻る</span>
+            </button>
+          </div>
+        </main>
       </div>
     );
   }
@@ -217,6 +308,7 @@ const VehicleInfo: React.FC = () => {
 
       <main className="max-w-md mx-auto px-6 py-8">
         <div className="bg-white rounded-2xl shadow-lg p-6 space-y-6">
+          {/* ✅ 車番選択 */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-3">
               車番
@@ -231,12 +323,13 @@ const VehicleInfo: React.FC = () => {
               <option value="">車両を選択してください</option>
               {vehicles.map(vehicle => (
                 <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.vehicleNumber}
+                  {vehicle.vehicleNumber} ({vehicle.vehicleType})
                 </option>
               ))}
             </select>
           </div>
 
+          {/* ✅ 選択した車両の詳細情報 */}
           {vehicleInfo && (
             <>
               <div className="animate-fade-in">
@@ -262,65 +355,63 @@ const VehicleInfo: React.FC = () => {
                   placeholder="開始距離を入力"
                   className="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                    transition-all duration-200 text-gray-800 font-medium text-right text-lg"
+                    transition-all duration-200 text-gray-800 font-medium"
                 />
                 <p className="mt-2 text-sm text-gray-500">
-                  前回終了距離: {vehicleInfo.currentMileage.toLocaleString()} km
+                  前回終了距離: <span className="font-semibold">{vehicleInfo.currentMileage.toLocaleString()} km</span>
                 </p>
               </div>
 
-              <div className="animate-fade-in">
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  運転手名
-                </label>
-                <div className="px-4 py-3.5 bg-green-50 border-2 border-green-200 rounded-xl
-                  text-gray-800 font-medium flex items-center justify-between">
-                  <span>{user?.name}</span>
-                  <User className="w-5 h-5 text-green-600" />
+              <div className="animate-fade-in grid grid-cols-2 gap-4 pt-4 border-t">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">運転手名</label>
+                  <div className="text-sm font-medium text-gray-800">
+                    {user?.name || '未設定'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1 flex items-center">
+                    <Calendar className="w-3 h-3 mr-1" />
+                    前回運転手
+                  </label>
+                  <div className="text-sm font-medium text-gray-800">
+                    {vehicleInfo.lastDriver || '－'}
+                  </div>
                 </div>
               </div>
 
-              <div className="animate-fade-in bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 font-medium">前回運転手</span>
-                  <span className="text-gray-800 font-semibold">{vehicleInfo.lastDriver}</span>
+              {vehicleInfo.lastOperationDate && (
+                <div className="animate-fade-in">
+                  <label className="block text-xs text-gray-500 mb-1">最終運行日</label>
+                  <div className="text-sm font-medium text-gray-800">
+                    {vehicleInfo.lastOperationDate}
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-sm mt-2">
-                  <span className="text-gray-600 font-medium flex items-center">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    最終運行日
-                  </span>
-                  <span className="text-gray-800 font-semibold">{vehicleInfo.lastOperationDate}</span>
-                </div>
-              </div>
+              )}
             </>
           )}
         </div>
 
-        <div className="mt-8 space-y-4">
-          <button
-            onClick={handleNext}
-            disabled={!selectedVehicleId || !startMileage}
-            className={`w-full py-4 rounded-xl font-semibold text-white text-lg
-              transition-all duration-200 flex items-center justify-center space-x-3
-              ${!selectedVehicleId || !startMileage
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:scale-[0.98] shadow-lg hover:shadow-xl'
-              }`}
-          >
-            <span>進む</span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
-
+        {/* ✅ 進む・戻るボタン */}
+        <div className="mt-6 flex justify-between">
           <button
             onClick={handleBack}
-            className="w-full py-4 rounded-xl font-semibold text-gray-700 text-lg
-              bg-gray-200 hover:bg-gray-300 active:scale-[0.98]
-              transition-all duration-200 flex items-center justify-center space-x-3
-              shadow-md hover:shadow-lg"
+            className="flex items-center space-x-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl
+              hover:bg-gray-300 transition-colors duration-200 font-medium"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>戻る</span>
+          </button>
+
+          <button
+            onClick={handleNext}
+            disabled={!selectedVehicleId || !startMileage}
+            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700
+              text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200
+              font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span>進む</span>
+            <ArrowRight className="w-5 h-5" />
           </button>
         </div>
       </main>
