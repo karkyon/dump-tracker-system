@@ -10,7 +10,7 @@ import { useAuthStore } from './stores/authStore';
 import Login from './pages/Login';
 import VehicleInfo from './pages/VehicleInfo';
 import PreDepartureInspection from './pages/PreDepartureInspection';
-import OperationMain from './pages/OperationMain';
+import OperationRecord from './pages/OperationRecord'; // ✅ 修正: Google Maps対応版
 
 // Protected Route Component
 interface ProtectedRouteProps {
@@ -100,7 +100,7 @@ const App: React.FC = () => {
           path="/operation-record"
           element={
             <ProtectedRoute>
-              <OperationMain />
+              <OperationRecord />
             </ProtectedRoute>
           }
         />

@@ -1,12 +1,12 @@
 // frontend/mobile/src/components/GoogleMapWrapper.tsx
-// React管理外でGoogle Mapsを完全に制御するラッパーコンポーネント
+// ✅ 最終完成版: DOM競合を解決
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-// 🔧 TypeScript型定義を追加
 declare global {
   interface Window {
     google: any;
+    initGoogleMap?: () => void;
   }
 }
 
@@ -15,7 +15,7 @@ interface GoogleMapWrapperProps {
   initialPosition?: { lat: number; lng: number };
 }
 
-// グローバル状態（コンポーネント外で管理）
+// グローバル状態
 let globalMapInstance: any = null;
 let globalMarkerInstance: any = null;
 let globalPolylineInstance: any = null;
@@ -26,148 +26,187 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   initialPosition 
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const initializationAttemptedRef = useRef(false);
+  const callbackFiredRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 既に初期化済みの場合
+    console.log('🗺️ [GoogleMapWrapper] useEffect開始');
+
+    // 既に初期化済みの場合は再利用
     if (isGlobalMapInitialized && globalMapInstance) {
-      console.log('[GoogleMapWrapper] Using existing map instance');
+      console.log('♻️ [GoogleMapWrapper] 既存のマップインスタンスを再利用');
+      setIsLoading(false);
       onMapReady?.(globalMapInstance, globalMarkerInstance, globalPolylineInstance);
       return;
     }
 
-    // 初期化を1度だけ試行
-    if (initializationAttemptedRef.current) {
-      console.log('[GoogleMapWrapper] Initialization already attempted');
-      return;
-    }
-
-    initializationAttemptedRef.current = true;
-
+    // 地図初期化関数
     const initializeMap = () => {
-      if (!mapContainerRef.current || !window.google || !window.google.maps) {
-        console.warn('[GoogleMapWrapper] Cannot initialize: missing requirements');
+      if (callbackFiredRef.current) {
+        return;
+      }
+      callbackFiredRef.current = true;
+
+      console.log('🔧 [GoogleMapWrapper] initializeMap開始');
+      
+      if (!mapContainerRef.current) {
+        console.error('❌ mapContainerがありません');
+        return;
+      }
+
+      if (!window.google || !window.google.maps || !window.google.maps.Map) {
+        console.error('❌ Google Maps APIが完全に読み込まれていません');
         return;
       }
 
       if (isGlobalMapInitialized) {
-        console.log('[GoogleMapWrapper] Map already initialized globally');
         return;
       }
 
       try {
-        console.log('[GoogleMapWrapper] Initializing Google Map...');
+        console.log('🚀 地図を初期化中...');
 
+        const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 };
+
+        // 地図作成
         const map = new window.google.maps.Map(mapContainerRef.current, {
-          center: initialPosition || { lat: 34.6937, lng: 135.5023 },
+          center: centerPosition,
           zoom: 18,
-          mapId: 'DEMO_MAP_ID',
-          heading: 0,
-          tilt: 0,
-          disableDefaultUI: true,
+          disableDefaultUI: false,
           zoomControl: true,
           gestureHandling: 'greedy',
-          tiltInteractionEnabled: true,
-          headingInteractionEnabled: true
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
         });
+        
+        console.log('✅ Mapインスタンス作成成功');
 
-        const createMarkerIcon = (distance: number, speed: number) => {
-          const svg = `
-            <svg width="60" height="80" viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="30" cy="40" r="28" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-              <circle cx="30" cy="40" r="22" fill="rgba(255,255,255,0.9)" stroke="#4285F4" stroke-width="1"/>
-              <path d="M30 15 L25 25 L35 25 Z" fill="#4285F4"/>
-              <text x="30" y="35" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold" fill="#333">
-                ${distance.toFixed(1)}km
-              </text>
-              <text x="30" y="47" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="#4285F4">
-                ${Math.round(speed)}
-              </text>
-              <text x="30" y="55" text-anchor="middle" font-family="Arial" font-size="6" fill="#666">
-                km/h
-              </text>
-            </svg>
-          `;
-          return {
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-            scaledSize: new window.google.maps.Size(60, 80),
-            anchor: new window.google.maps.Point(30, 40)
-          };
-        };
-
+        // マーカー作成
         const marker = new window.google.maps.Marker({
-          position: initialPosition || { lat: 34.6937, lng: 135.5023 },
           map: map,
-          icon: createMarkerIcon(0, 0),
-          title: '現在地',
-          zIndex: 1000
+          position: centerPosition,
+          title: '現在位置',
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#4285F4',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 3,
+          },
         });
 
+        console.log('✅ Markerインスタンス作成成功');
+
+        // ポリライン作成
         const polyline = new window.google.maps.Polyline({
+          map: map,
           path: [],
-          geodesic: true,
-          strokeColor: '#FF0000',
-          strokeOpacity: 1.0,
+          strokeColor: '#4285F4',
+          strokeOpacity: 0.8,
           strokeWeight: 4,
-          zIndex: 999
         });
 
-        polyline.setMap(map);
+        console.log('✅ Polylineインスタンス作成成功');
 
-        // グローバルに保存
+        // グローバル変数に保存
         globalMapInstance = map;
         globalMarkerInstance = marker;
         globalPolylineInstance = polyline;
         isGlobalMapInitialized = true;
 
-        console.log('[GoogleMapWrapper] Map initialized successfully');
-        onMapReady?.(map, marker, polyline);
+        // ローディング終了
+        setIsLoading(false);
+
+        // コールバック実行
+        if (onMapReady) {
+          onMapReady(map, marker, polyline);
+          console.log('✅ onMapReadyコールバック実行完了');
+        }
+        
+        console.log('🎉 地図の初期化が完全に完了しました!');
       } catch (error) {
-        console.error('[GoogleMapWrapper] Failed to initialize map:', error);
+        console.error('❌ マップ初期化エラー:', error);
+        setIsLoading(false);
       }
     };
 
-    // Google Maps APIの読み込み
-    if (window.google && window.google.maps) {
-      initializeMap();
-    } else {
-      const existingScript = document.getElementById('google-maps-script');
-      if (existingScript) {
-        const checkGoogleMaps = setInterval(() => {
-          if (window.google && window.google.maps) {
-            clearInterval(checkGoogleMaps);
-            initializeMap();
-          }
-        }, 100);
-
-        setTimeout(() => clearInterval(checkGoogleMaps), 10000);
-      } else {
-        const script = document.createElement('script');
-        script.id = 'google-maps-script';
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&v=weekly&libraries=places`;
-        script.async = true;
-        script.defer = true;
-        script.onload = initializeMap;
-        document.head.appendChild(script);
-      }
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    
+    if (!apiKey) {
+      console.error('❌ APIキーが設定されていません');
+      setIsLoading(false);
+      return;
     }
 
-    // クリーンアップは何もしない（グローバルインスタンスを維持）
+    // 既にスクリプトが読み込まれている場合
+    const existingScript = document.getElementById('google-maps-script');
+    if (existingScript) {
+      if (window.google && window.google.maps && window.google.maps.Map) {
+        console.log('✅ Google Maps APIは完全にロード済み');
+        setTimeout(initializeMap, 100);
+      } else {
+        window.initGoogleMap = initializeMap;
+      }
+      return;
+    }
+
+    // 新しくスクリプトを追加
+    window.initGoogleMap = initializeMap;
+    
+    const script = document.createElement('script');
+    script.id = 'google-maps-script';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap`;
+    script.async = true;
+    script.defer = true;
+    
+    script.onerror = () => {
+      console.error('❌ スクリプトロードエラー');
+      setIsLoading(false);
+    };
+    
+    document.head.appendChild(script);
+
     return () => {
-      console.log('[GoogleMapWrapper] Component unmounting (keeping global map)');
+      // クリーンアップ不要(グローバルマップを保持)
     };
   }, []);
 
+  // 初期位置が変わったときの処理
+  useEffect(() => {
+    if (isGlobalMapInitialized && globalMapInstance && globalMarkerInstance && initialPosition) {
+      console.log('📍 初期位置を更新:', initialPosition);
+      globalMapInstance.setCenter(initialPosition);
+      globalMarkerInstance.setPosition(initialPosition);
+    }
+  }, [initialPosition]);
+
   return (
-    <div 
-      ref={mapContainerRef} 
-      className="w-full h-full"
-      style={{ minHeight: '400px' }}
-    />
+    <div className="w-full h-full relative" style={{ minHeight: '400px' }}>
+      {/* 地図コンテナ */}
+      <div 
+        ref={mapContainerRef} 
+        className="w-full h-full bg-gray-100"
+        style={{ minHeight: '400px' }}
+      />
+      
+      {/* ローディングオーバーレイ */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-700 font-semibold">地図を読み込んでいます...</p>
+            <p className="text-xs text-gray-500 mt-2">
+              GPS位置を取得中...
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
-// グローバルインスタンスへのアクセス用ヘルパー
 export const getGlobalMapInstance = () => globalMapInstance;
 export const getGlobalMarkerInstance = () => globalMarkerInstance;
 export const getGlobalPolylineInstance = () => globalPolylineInstance;
