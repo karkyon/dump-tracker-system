@@ -15,14 +15,7 @@ const HeadingIndicator: React.FC<HeadingIndicatorProps> = ({ heading, className 
   const getDirection = (deg: number): string => {
     const directions = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
     const index = Math.round(deg / 45) % 8;
-    return directions[index];
-  };
-
-  // 方位を英語表記に変換
-  const getDirectionEn = (deg: number): string => {
-    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    const index = Math.round(deg / 45) % 8;
-    return directions[index];
+    return directions[index] || '北';
   };
 
   return (

@@ -1,13 +1,8 @@
 // frontend/mobile/src/components/GoogleMapWrapper.tsx
-// 🗺️ 強化版Google Mapコンポーネント - WebGLベクターマップ対応
-// 作成日時: 2025-10-24
-// 
-// 実装機能:
-//  ✅ WebGLベクターマップ (renderingType: VECTOR)
-//  ✅ カスタムSVGマーカー (速度・距離表示付き)
-//  ✅ ヘッドアップ表示 (進行方向に地図回転)
-//  ✅ 走行軌跡トレース (Polyline)
-//  ✅ 方位インジケーター表示
+// 🗺️ Google Mapコンポーネント - 完全版
+// ✅ ヘッドアップ表示（地図回転）
+// ✅ 走行軌跡（赤いライン）
+// ✅ 三角矢印マーカー（進行方向を示す）
 
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -23,28 +18,35 @@ interface GoogleMapWrapperProps {
   initialPosition?: { lat: number; lng: number };
 }
 
-// グローバル状態
 let globalMapInstance: any = null;
 let globalMarkerInstance: any = null;
 let globalPolylineInstance: any = null;
 let isGlobalMapInitialized = false;
 let initializationInProgress = false;
 
-// 📍 カスタムSVGマーカー生成関数
-const createCustomMarkerSVG = (distance: number, speed: number): string => {
+// 📍 三角矢印付きマーカーSVG生成
+const createCustomMarkerSVG = (distance: number, speed: number, heading: number = 0): string => {
   return `
     <svg width="60" height="80" xmlns="http://www.w3.org/2000/svg">
-      <!-- 外側の円 (影) -->
-      <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)" />
+      <defs>
+        <!-- 回転用のグループ -->
+        <g id="arrow-marker">
+          <!-- 外側の円 (影) -->
+          <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)" />
+          
+          <!-- メインの円 -->
+          <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
+          
+          <!-- 🔺 進行方向を示す三角形 (上向き) -->
+          <path d="M 30 13 L 38 25 L 22 25 Z" fill="#ffffff" stroke="#1a73e8" stroke-width="1.5"/>
+          
+          <!-- 中心点 -->
+          <circle cx="30" cy="28" r="4" fill="#ffffff"/>
+        </g>
+      </defs>
       
-      <!-- メインの円 -->
-      <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-      
-      <!-- 内側の円 (パルス効果用) -->
-      <circle cx="30" cy="28" r="16" fill="#1a73e8" opacity="0.8"/>
-      
-      <!-- 中心点 -->
-      <circle cx="30" cy="28" r="6" fill="#ffffff"/>
+      <!-- 回転適用 (headingに基づいて回転) -->
+      <use href="#arrow-marker" transform="rotate(${heading} 30 28)"/>
       
       <!-- 情報ボックス背景 -->
       <rect x="8" y="52" width="44" height="24" rx="4" fill="#ffffff" stroke="#4285F4" stroke-width="2"/>
@@ -68,120 +70,62 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isVectorMap, setIsVectorMap] = useState<boolean | null>(null);
-  const [currentHeading, setCurrentHeading] = useState(0);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
-    console.log('🗺️ [GoogleMapWrapper] useEffect開始');
+    console.log('🗺️ GoogleMapWrapper 初期化開始');
 
-    // 既に初期化済みの場合は再利用
     if (isGlobalMapInitialized && globalMapInstance) {
-      console.log('♻️ [GoogleMapWrapper] 既存のマップインスタンスを再利用');
-      
-      if (mapContainerRef.current) {
-        const mapDiv = globalMapInstance.getDiv();
-        if (mapDiv.parentElement !== mapContainerRef.current) {
-          console.log('🔄 既存のマップを現在のコンテナに再アタッチ');
-          mapContainerRef.current.appendChild(mapDiv);
-        }
-      }
-      
+      console.log('♻️ 既存マップを再利用');
       setIsLoading(false);
-      
       if (onMapReady) {
-        console.log('🔄 再マウント時のコールバック実行');
         onMapReady(globalMapInstance, globalMarkerInstance, globalPolylineInstance);
       }
       return;
     }
 
     if (initializationInProgress) {
-      console.log('⏳ 初期化処理実行中...');
+      console.log('⏳ 初期化実行中');
       return;
     }
 
-    // 🗺️ 地図初期化関数
     const initializeMap = () => {
-      if (!mapContainerRef.current) {
-        console.error('❌ mapContainerがありません');
-        return;
-      }
-
-      if (initializationInProgress || isGlobalMapInitialized) {
-        console.log('⚠️ 既に初期化済みまたは初期化中');
+      if (!mapContainerRef.current || initializationInProgress || isGlobalMapInitialized) {
         return;
       }
 
       initializationInProgress = true;
-      console.log('🔧 [GoogleMapWrapper] initializeMap開始');
+      console.log('🚀 マップ初期化開始');
 
-      if (!window.google || !window.google.maps || !window.google.maps.Map) {
-        console.error('❌ Google Maps APIが読み込まれていません');
+      if (!window.google?.maps?.Map) {
+        console.error('❌ Google Maps API未読み込み');
         initializationInProgress = false;
         return;
       }
 
       try {
-        console.log('🚀 WebGLベクターマップを初期化中...');
-
         const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 };
 
-        // ✅ WebGLベクターマップの設定
         const mapOptions: any = {
           center: centerPosition,
           zoom: 18,
-          
-          // 🔥 重要: WebGLベクターマップの有効化
           renderingType: window.google.maps.RenderingType.VECTOR,
-          
-          // 🔥 重要: Map ID設定 (ベクターマップに必須)
-          // 注意: 本番環境では独自のMap IDを作成してください
           mapId: "DEMO_MAP_ID",
-          
-          // 🔥 重要: ヘッドアップ表示に必要な設定
-          heading: 0,  // 初期方位
-          tilt: 0,     // 傾き(0=真上から)
-          
-          // UI設定
+          heading: 0,
+          tilt: 0,
           disableDefaultUI: true,
           zoomControl: true,
           gestureHandling: 'greedy',
-          
-          // 🔥 重要: tiltとheadingの操作を有効化
           tiltInteractionEnabled: true,
           headingInteractionEnabled: true,
         };
 
-        // 地図インスタンス作成
         const map = new window.google.maps.Map(mapContainerRef.current, mapOptions);
-        
-        console.log('✅ Mapインスタンス作成成功');
+        console.log('✅ Map作成成功');
 
-        // 📍 マップレンダリングタイプの確認
-        map.addListener('renderingtype_changed', () => {
-          const renderingType = map.getRenderingType();
-          const isVector = (renderingType === window.google.maps.RenderingType.VECTOR);
-          setIsVectorMap(isVector);
-          
-          console.log(`🗺️ マップレンダリングタイプ: ${isVector ? 'VECTOR ✅' : 'RASTER ⚠️'}`);
-          
-          if (!isVector) {
-            console.warn('⚠️ ベクターマップが利用できません。ヘッドアップ表示は制限されます。');
-          }
-        });
-
-        // 初期レンダリングタイプの確認
-        setTimeout(() => {
-          const renderingType = map.getRenderingType();
-          const isVector = (renderingType === window.google.maps.RenderingType.VECTOR);
-          setIsVectorMap(isVector);
-          console.log(`🗺️ 初期マップレンダリングタイプ: ${isVector ? 'VECTOR ✅' : 'RASTER ⚠️'}`);
-        }, 1000);
-
-        // 🚗 カスタムマーカーの作成
-        const markerSVG = createCustomMarkerSVG(0, 0);
+        // 🚗 三角矢印マーカー作成
+        const markerSVG = createCustomMarkerSVG(0, 0, 0);
         const markerIcon = {
           url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
           scaledSize: new window.google.maps.Size(60, 80),
@@ -196,9 +140,9 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           zIndex: 1000,
         });
 
-        console.log('✅ カスタムMarkerインスタンス作成成功');
+        console.log('✅ 三角マーカー作成成功');
 
-        // 🛤️ 走行軌跡用Polylineの作成
+        // 🛤️ 走行軌跡用Polyline
         const polyline = new window.google.maps.Polyline({
           map: map,
           path: [],
@@ -209,25 +153,21 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           zIndex: 999,
         });
 
-        console.log('✅ Polylineインスタンス作成成功');
+        console.log('✅ Polyline作成成功');
 
-        // グローバル変数に保存
         globalMapInstance = map;
         globalMarkerInstance = marker;
         globalPolylineInstance = polyline;
         isGlobalMapInitialized = true;
         initializationInProgress = false;
 
-        // ローディング状態を解除
         setIsLoading(false);
 
-        // コールバック実行
         if (onMapReady) {
           onMapReady(map, marker, polyline);
-          console.log('✅ onMapReadyコールバック実行完了');
         }
         
-        console.log('🎉 WebGLベクターマップの初期化が完全に完了しました!');
+        console.log('🎉 マップ初期化完了!');
       } catch (error) {
         console.error('❌ マップ初期化エラー:', error);
         initializationInProgress = false;
@@ -238,16 +178,15 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     
     if (!apiKey) {
-      console.error('❌ APIキーが設定されていません');
+      console.error('❌ APIキー未設定');
       setIsLoading(false);
       return;
     }
 
-    // 既にスクリプトが読み込まれている場合
     const existingScript = document.getElementById('google-maps-script');
     if (existingScript) {
-      if (window.google && window.google.maps && window.google.maps.Map) {
-        console.log('✅ Google Maps APIは完全にロード済み');
+      if (window.google?.maps?.Map) {
+        console.log('✅ Google Maps APIロード済み');
         setTimeout(initializeMap, 100);
       } else {
         window.initGoogleMap = initializeMap;
@@ -255,7 +194,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       return;
     }
 
-    // 新しくスクリプトを追加
     window.initGoogleMap = initializeMap;
     
     const script = document.createElement('script');
@@ -273,14 +211,12 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     document.head.appendChild(script);
 
     return () => {
-      console.log('🔄 [GoogleMapWrapper] クリーンアップ実行');
+      console.log('🔄 クリーンアップ');
     };
   }, []);
 
-  // 初期位置が変わったときの処理
   useEffect(() => {
     if (isGlobalMapInitialized && globalMapInstance && globalMarkerInstance && initialPosition) {
-      console.log('📍 初期位置を更新:', initialPosition);
       globalMapInstance.setCenter(initialPosition);
       globalMarkerInstance.setPosition(initialPosition);
     }
@@ -288,7 +224,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
   return (
     <div className="w-full h-full relative bg-gray-200" style={{ minHeight: '300px' }}>
-      {/* 地図コンテナ */}
       <div 
         key="google-map-container"
         ref={mapContainerRef} 
@@ -297,14 +232,10 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           minHeight: '300px',
           width: '100%',
           height: '100%',
-          position: 'relative',
-          top: 0,
-          left: 0,
-          zIndex: 1
+          position: 'relative'
         }}
       />
       
-      {/* ローディングオーバーレイ */}
       {isLoading && (
         <div 
           className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-95"
@@ -312,24 +243,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         >
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-700 font-semibold">WebGLベクターマップを読み込んでいます...</p>
-            <p className="text-xs text-gray-500 mt-2">
-              GPS位置を取得中...
-            </p>
+            <p className="text-gray-700 font-semibold">地図を読み込んでいます...</p>
           </div>
-        </div>
-      )}
-
-      {/* 🗺️ マップタイプインジケーター */}
-      {!isLoading && isVectorMap !== null && (
-        <div 
-          className="absolute top-2 left-2 px-2 py-1 rounded text-xs font-bold text-white z-10"
-          style={{ 
-            backgroundColor: isVectorMap ? 'rgba(255,0,0,0.8)' : 'rgba(128,128,128,0.8)',
-            zIndex: 1000
-          }}
-        >
-          マップ: {isVectorMap ? 'VECTOR' : 'RASTER'}
         </div>
       )}
     </div>
@@ -341,20 +256,16 @@ export const getGlobalMapInstance = () => globalMapInstance;
 export const getGlobalMarkerInstance = () => globalMarkerInstance;
 export const getGlobalPolylineInstance = () => globalPolylineInstance;
 
-// 🔧 ユーティリティ関数のエクスポート
-
 /**
- * マーカーアイコンを更新する
- * @param distance 総走行距離 (km)
- * @param speed 現在速度 (km/h)
+ * 🔺 マーカーアイコンを更新（三角矢印の向きも更新）
  */
-export const updateMarkerIcon = (distance: number, speed: number) => {
+export const updateMarkerIcon = (distance: number, speed: number, heading: number = 0) => {
   if (!globalMarkerInstance) {
-    console.warn('⚠️ マーカーインスタンスが初期化されていません');
+    console.warn('⚠️ マーカー未初期化');
     return;
   }
 
-  const markerSVG = createCustomMarkerSVG(distance, speed);
+  const markerSVG = createCustomMarkerSVG(distance, speed, heading);
   const markerIcon = {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
     scaledSize: new window.google.maps.Size(60, 80),
@@ -365,51 +276,43 @@ export const updateMarkerIcon = (distance: number, speed: number) => {
 };
 
 /**
- * マーカー位置を更新する
- * @param lat 緯度
- * @param lng 経度
+ * マーカー位置を更新
  */
 export const updateMarkerPosition = (lat: number, lng: number) => {
   if (!globalMarkerInstance) {
-    console.warn('⚠️ マーカーインスタンスが初期化されていません');
+    console.warn('⚠️ マーカー未初期化');
     return;
   }
 
-  const newPosition = { lat, lng };
-  globalMarkerInstance.setPosition(newPosition);
+  globalMarkerInstance.setPosition({ lat, lng });
 };
 
 /**
- * 地図の中心を移動する (パンニング)
- * @param lat 緯度
- * @param lng 経度
+ * 地図の中心を移動
  */
 export const panMapToPosition = (lat: number, lng: number) => {
   if (!globalMapInstance) {
-    console.warn('⚠️ マップインスタンスが初期化されていません');
+    console.warn('⚠️ マップ未初期化');
     return;
   }
 
-  const newPosition = { lat, lng };
-  globalMapInstance.panTo(newPosition);
+  globalMapInstance.panTo({ lat, lng });
 };
 
 /**
- * 🧭 ヘッドアップ表示: 地図を回転させる
- * @param heading 方位角度 (0-360度、0=北)
+ * 🧭 ヘッドアップ表示: 地図を回転
  */
 export const setMapHeading = (heading: number) => {
   if (!globalMapInstance) {
-    console.warn('⚠️ マップインスタンスが初期化されていません');
+    console.warn('⚠️ マップ未初期化');
     return;
   }
 
-  // ベクターマップの確認
   const renderingType = globalMapInstance.getRenderingType();
   const isVector = (renderingType === window.google.maps.RenderingType.VECTOR);
 
   if (!isVector) {
-    console.warn('⚠️ ベクターマップではないため、ヘッドアップ表示は無効です');
+    console.warn('⚠️ ベクターマップではないため、ヘッドアップ無効');
     return;
   }
 
@@ -421,12 +324,10 @@ export const setMapHeading = (heading: number) => {
 
 /**
  * 🛤️ 走行軌跡に座標を追加
- * @param lat 緯度
- * @param lng 経度
  */
 export const addPathPoint = (lat: number, lng: number) => {
   if (!globalPolylineInstance) {
-    console.warn('⚠️ Polylineインスタンスが初期化されていません');
+    console.warn('⚠️ Polyline未初期化');
     return;
   }
 
@@ -439,12 +340,12 @@ export const addPathPoint = (lat: number, lng: number) => {
  */
 export const clearPath = () => {
   if (!globalPolylineInstance) {
-    console.warn('⚠️ Polylineインスタンスが初期化されていません');
+    console.warn('⚠️ Polyline未初期化');
     return;
   }
 
   globalPolylineInstance.setPath([]);
-  console.log('🗑️ 走行軌跡をクリアしました');
+  console.log('🗑️ 走行軌跡クリア');
 };
 
 export default GoogleMapWrapper;
