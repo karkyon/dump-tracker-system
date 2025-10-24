@@ -1,40 +1,53 @@
 // frontend/mobile/src/components/HeadingIndicator.tsx
-// 🧭 方位表示インジケーターコンポーネント
-// 作成日時: 2025-10-24
-//
-// 機能:
-//  ✅ 現在の方位角度を表示 (0-360度)
-//  ✅ 方位名を日本語で表示 (北、北東、東、など)
-//  ✅ 地図上にオーバーレイ表示
+// 🧭 方位インジケーター - デザイン改善版
+// 最終更新: 2025-10-24
 
 import React from 'react';
+import { Navigation } from 'lucide-react';
 
 interface HeadingIndicatorProps {
-  heading: number | null;
+  heading: number; // 方位角度 (0-360度)
   className?: string;
 }
 
 const HeadingIndicator: React.FC<HeadingIndicatorProps> = ({ heading, className = '' }) => {
-  // 方位名の取得
-  const getDirectionName = (deg: number): string => {
+  // 方位を8方位に変換
+  const getDirection = (deg: number): string => {
     const directions = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
-    const directionIndex = Math.round(deg / 45) % 8;
-    return directions[directionIndex];
+    const index = Math.round(deg / 45) % 8;
+    return directions[index];
   };
 
-  if (heading === null || isNaN(heading)) {
-    return null;
-  }
-
-  const directionName = getDirectionName(heading);
-  const roundedHeading = Math.round(heading);
+  // 方位を英語表記に変換
+  const getDirectionEn = (deg: number): string => {
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const index = Math.round(deg / 45) % 8;
+    return directions[index];
+  };
 
   return (
     <div 
-      className={`bg-black bg-opacity-70 text-white px-3 py-2 rounded-full text-xs font-bold shadow-lg ${className}`}
-      style={{ zIndex: 1000 }}
+      className={`flex flex-col items-center justify-center rounded-full bg-black bg-opacity-70 text-white p-3 shadow-lg ${className}`}
+      style={{
+        width: '70px',
+        height: '70px',
+        backdropFilter: 'blur(4px)'
+      }}
     >
-      方位: {roundedHeading}° ({directionName})
+      {/* 🧭 回転する矢印アイコン */}
+      <div style={{ transform: `rotate(${heading}deg)`, transition: 'transform 0.3s ease' }}>
+        <Navigation className="w-5 h-5 text-blue-400" fill="currentColor" />
+      </div>
+      
+      {/* 方位角度 */}
+      <div className="text-xs font-bold mt-1">
+        {Math.round(heading)}°
+      </div>
+      
+      {/* 方位名 */}
+      <div className="text-xs font-semibold">
+        {getDirection(heading)}
+      </div>
     </div>
   );
 };
