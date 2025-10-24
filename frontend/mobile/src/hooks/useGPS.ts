@@ -1,21 +1,26 @@
 // frontend/mobile/src/hooks/useGPS.ts
-// 強化版GPS追跡フック
-// ✅ コンパイルエラー完全修正版
-// 修正日時: 2025-10-22
+// 🔧 方位更新即時反映版
+// ✅ デモスクリプトのロジックを忠実に再現
+// 修正日時: 2025-10-24
 // 修正内容:
-//  1. GPSLogData型をローカルで定義（types.tsに存在しないため）
-//  2. mobileApi.logGPS() → updateGPSLocation() に修正
-//  3. GPS_CONFIG.MIN_DISTANCE_FOR_UPDATE → MIN_DISTANCE_METERS に修正
-//  4. GPS_CONFIG.GPS_UPDATE_INTERVAL → UPDATE_INTERVAL に修正
+//  1. refを使用して即座に方位を更新
+//  2. stateとrefの両方で値を管理
+//  3. 依存配列の問題を解決
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Position } from '../types';
 import { GPS_CONFIG } from '../utils/constants';
-import { calculateDistance, calculateBearing, smoothHeading, smoothSpeed, isValidCoordinate } from '../utils/helpers';
+import { 
+  calculateDistance, 
+  calculateBearing, 
+  smoothHeading, 
+  smoothSpeed, 
+  isValidCoordinate 
+} from '../utils/helpers';
 import { apiService as mobileApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 
-// ✅ 修正1: GPSLogData型定義をローカルで追加（types.tsに存在しない）
+// GPSログデータ型定義
 export interface GPSLogData {
   id: string;
   operationId?: string;
@@ -108,6 +113,10 @@ interface UseGPSReturn {
   updateOptions: (newOptions: Partial<UseGPSOptions>) => void;
 }
 
+// 平滑化バッファサイズ
+const HEADING_BUFFER_SIZE = 5;
+const SPEED_BUFFER_SIZE = 3;
+
 // 強化版GPS追跡フック
 export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   // 設定
@@ -127,11 +136,15 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   const [isPaused, setIsPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 測定データ
+  // 測定データ（stateとrefの両方で管理）
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
   const [altitude, setAltitude] = useState<number | null>(null);
+
+  // 🔧 重要: refで即座にアクセス可能な値を保持
+  const headingRef = useRef<number>(0);
+  const speedRef = useRef<number>(0);
 
   // 統計データ
   const [totalDistance, setTotalDistance] = useState(0);
@@ -153,17 +166,19 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   const speedBufferRef = useRef<number[]>([]);
   const speedHistoryRef = useRef<number[]>([]);
   const accuracyHistoryRef = useRef<number[]>([]);
+  const previousPositionRef = useRef<Position | null>(null);
+  const currentPositionRef = useRef<Position | null>(null);
 
   // 品質評価関数
-  const evaluateQuality = useCallback((acc: number): 'high' | 'medium' | 'low' | 'poor' => {
+  const evaluateQuality = (acc: number): 'high' | 'medium' | 'low' | 'poor' => {
     if (acc <= 5) return 'high';
     if (acc <= 15) return 'medium';
     if (acc <= 50) return 'low';
     return 'poor';
-  }, []);
+  };
 
   // 統計計算
-  const updateStatistics = useCallback(() => {
+  const updateStatistics = () => {
     if (speedHistoryRef.current.length > 0) {
       const avgSpeed = speedHistoryRef.current.reduce((sum, s) => sum + s, 0) / speedHistoryRef.current.length;
       setAverageSpeed(avgSpeed);
@@ -176,10 +191,10 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       const duration = (Date.now() - startTimeRef.current) / 1000; // seconds
       setTrackingDuration(duration);
     }
-  }, []);
+  };
 
   // GPS データ送信
-  const sendGPSData = useCallback(async (position: GeolocationPosition, metadata: GPSMetadata) => {
+  const sendGPSData = async (position: GeolocationPosition, metadata: GPSMetadata) => {
     if (!options.enableLogging || !options.operationId) return;
 
     try {
@@ -194,17 +209,15 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
         timestamp: new Date(position.timestamp).toISOString()
       };
 
-      // ✅ 修正2: logGPS() → updateGPSLocation() に変更
       await mobileApi.updateGPSLocation(gpsData);
-      console.log('GPS data sent successfully');
+      console.log('✅ GPS data sent successfully');
     } catch (error) {
-      console.error('GPS データ送信エラー:', error);
-      // エラーでもアプリケーションを止めない（オフライン対応）
+      console.error('❌ GPS データ送信エラー:', error);
     }
-  }, [options.enableLogging, options.operationId, options.vehicleId]);
+  };
 
   // 位置更新処理
-  const handlePositionUpdate = useCallback(async (position: GeolocationPosition) => {
+  const handlePositionUpdate = (position: GeolocationPosition) => {
     if (isPaused) return;
 
     const now = Date.now();
@@ -212,9 +225,17 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
 
     // 座標の有効性チェック
     if (!isValidCoordinate(coords.latitude, coords.longitude)) {
-      console.warn('Invalid coordinates received:', coords);
+      console.warn('⚠️ Invalid coordinates received:', coords);
       return;
     }
+
+    console.log('📍 GPS位置更新:', {
+      lat: coords.latitude.toFixed(6),
+      lng: coords.longitude.toFixed(6),
+      speed: coords.speed,
+      heading: coords.heading,
+      accuracy: coords.accuracy
+    });
 
     // 新しいPosition オブジェクト
     const newPosition: Position = {
@@ -246,46 +267,88 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     let calculatedSpeed = 0;
     let calculatedHeading = 0;
 
-    if (previousPosition) {
+    const prevPos = previousPositionRef.current;
+
+    if (prevPos) {
       // 距離計算
       const distance = calculateDistance(
-        previousPosition.coords.latitude,
-        previousPosition.coords.longitude,
+        prevPos.coords.latitude,
+        prevPos.coords.longitude,
         newPosition.coords.latitude,
         newPosition.coords.longitude
       );
 
-      // 速度計算（GPS速度がある場合は優先、なければ距離/時間で計算）
+      console.log(`📏 移動距離: ${(distance * 1000).toFixed(2)}m`);
+
+      // 🔧 速度計算（GPS速度がある場合は優先、なければ距離/時間で計算）
       if (coords.speed !== null && coords.speed !== undefined && coords.speed >= 0) {
         calculatedSpeed = coords.speed * 3.6; // m/s to km/h
+        console.log(`📡 GPS速度使用: ${calculatedSpeed.toFixed(1)}km/h`);
       } else if (now - lastGPSUpdateRef.current > 0) {
         const timeDiff = (now - lastGPSUpdateRef.current) / 1000; // seconds
         calculatedSpeed = (distance / timeDiff) * 3.6; // km/h
+        console.log(`🧮 計算速度使用: ${calculatedSpeed.toFixed(1)}km/h`);
       }
 
-      // 方位計算（GPS方位がある場合は優先、なければ計算）
+      // 🔧 方位計算 - デモスクリプトと同じロジック
+      // GPS方位がある場合は優先
       if (coords.heading !== null && coords.heading !== undefined && coords.heading >= 0) {
         calculatedHeading = coords.heading;
-      } else if (calculatedSpeed >= GPS_CONFIG.MIN_SPEED_FOR_HEADING) {
+        console.log(`📡 GPS方位使用: ${calculatedHeading.toFixed(1)}°`);
+      } 
+      // GPS方位がない、または速度が十分にある場合は2点間の方位を計算
+      else if (calculatedSpeed >= 0.5) { // 0.5km/h以上で方位を計算
         calculatedHeading = calculateBearing(
-          previousPosition.coords.latitude,
-          previousPosition.coords.longitude,
+          prevPos.coords.latitude,
+          prevPos.coords.longitude,
           newPosition.coords.latitude,
           newPosition.coords.longitude
         );
+        console.log(`🧮 計算方位使用: ${calculatedHeading.toFixed(1)}° (速度: ${calculatedSpeed.toFixed(1)}km/h)`);
+      } 
+      // 速度が遅すぎる場合は前回の方位を維持
+      else {
+        calculatedHeading = headingRef.current;
+        console.log(`⏸️ 方位維持: ${calculatedHeading.toFixed(1)}° (速度不足: ${calculatedSpeed.toFixed(1)}km/h)`);
       }
 
-      // 平滑化処理
-      const smoothedSpeed = smoothSpeed(speedBufferRef.current, calculatedSpeed);
-      const smoothedHeading = smoothHeading(headingBufferRef.current, calculatedHeading);
+      // バッファに値を追加
+      speedBufferRef.current.push(calculatedSpeed);
+      if (speedBufferRef.current.length > SPEED_BUFFER_SIZE) {
+        speedBufferRef.current.shift();
+      }
 
+      // 方位バッファ更新（移動中のみ）
+      if (calculatedSpeed >= 0.5) {
+        headingBufferRef.current.push(calculatedHeading);
+        if (headingBufferRef.current.length > HEADING_BUFFER_SIZE) {
+          headingBufferRef.current.shift();
+        }
+      }
+
+      // 平滑化
+      const smoothedSpeed = smoothSpeed(speedBufferRef.current);
+      const smoothedHeading = headingBufferRef.current.length > 0 
+        ? smoothHeading(headingBufferRef.current) 
+        : calculatedHeading;
+
+      console.log(`🎯 平滑化結果 - 速度: ${smoothedSpeed.toFixed(1)}km/h, 方位: ${smoothedHeading.toFixed(1)}°`);
+
+      // 🔧 重要: refに即座に保存（stateの更新を待たない）
+      speedRef.current = smoothedSpeed;
+      headingRef.current = smoothedHeading;
+
+      // stateも更新（UIの再レンダリング用）
       setSpeed(smoothedSpeed);
       setHeading(smoothedHeading);
 
-      // ✅ 修正3: MIN_DISTANCE_FOR_UPDATE → MIN_DISTANCE_METERS
       // 統計データ更新
-      if (distance > GPS_CONFIG.MIN_DISTANCE_METERS / 1000) { // メートル→キロメートル変換
-        setTotalDistance(prev => prev + distance);
+      if (distance > GPS_CONFIG.MIN_DISTANCE_METERS / 1000) {
+        setTotalDistance(prev => {
+          const newTotal = prev + distance;
+          console.log(`🛣️ 総走行距離: ${newTotal.toFixed(3)}km`);
+          return newTotal;
+        });
         
         speedHistoryRef.current.push(smoothedSpeed);
         if (speedHistoryRef.current.length > 50) {
@@ -303,14 +366,18 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
         heading: smoothedHeading
       };
 
-      // ✅ 修正3: MIN_DISTANCE_FOR_UPDATE → MIN_DISTANCE_METERS
-      if (distance > GPS_CONFIG.MIN_DISTANCE_METERS / 1000) { // メートル→キロメートル変換
+      if (distance > GPS_CONFIG.MIN_DISTANCE_METERS / 1000) {
         setPathCoordinates(prev => [...prev, pathPoint]);
       }
     } else {
       // 初回位置設定
+      console.log('🎬 初回GPS位置設定');
       setSpeed(0);
       setHeading(0);
+      speedRef.current = 0;
+      headingRef.current = 0;
+      speedBufferRef.current = [0];
+      headingBufferRef.current = [0];
       speedHistoryRef.current = [0];
     }
 
@@ -345,19 +412,22 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       createdAt: new Date()
     };
 
-    // ✅ 修正4: GPS_UPDATE_INTERVAL → UPDATE_INTERVAL
     // 定期間隔でのみログに追加
     if (now - lastGPSUpdateRef.current > GPS_CONFIG.UPDATE_INTERVAL) {
       setGpsLogs(prev => [...prev, gpsLog]);
       
       // サーバーへのデータ送信
-      await sendGPSData(position, metadata);
+      sendGPSData(position, metadata);
       
       lastGPSUpdateRef.current = now;
     }
 
+    // 位置参照の更新
+    previousPositionRef.current = currentPositionRef.current;
+    currentPositionRef.current = newPosition;
+
     // 状態更新
-    setPreviousPosition(currentPosition);
+    setPreviousPosition(previousPositionRef.current);
     setCurrentPosition(newPosition);
     setLastUpdateTime(new Date());
 
@@ -369,14 +439,10 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     options.onAccuracyChange?.(currentAccuracy);
     options.onSpeedChange?.(calculatedSpeed);
     options.onHeadingChange?.(calculatedHeading);
-
-  }, [
-    isPaused, previousPosition, currentPosition, totalDistance, averageSpeed, maxSpeed, 
-    trackingDuration, options, sendGPSData, updateStatistics, evaluateQuality
-  ]);
+  };
 
   // エラーハンドリング
-  const handleError = useCallback((error: GeolocationPositionError) => {
+  const handleError = (error: GeolocationPositionError) => {
     let errorMessage = '位置情報の取得に失敗しました';
 
     switch (error.code) {
@@ -393,10 +459,10 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
 
     setError(errorMessage);
     toast.error(errorMessage);
-    console.error('GPS Error:', error);
+    console.error('❌ GPS Error:', error);
 
     options.onError?.(error);
-  }, [options]);
+  };
 
   // 追跡開始
   const startTracking = useCallback(async (): Promise<void> => {
@@ -408,7 +474,7 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     }
 
     if (isTracking) {
-      console.warn('GPS tracking is already active');
+      console.warn('⚠️ GPS tracking is already active');
       return;
     }
 
@@ -418,33 +484,41 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       maximumAge: options.maximumAge ?? GPS_CONFIG.MAXIMUM_AGE
     };
 
+    console.log('🚀 GPS追跡開始 - オプション:', gpsOptions);
+
     try {
       // 初回位置取得
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, gpsOptions);
-      });
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('✅ 初回GPS位置取得成功');
+          handlePositionUpdate(position);
+        },
+        handleError,
+        gpsOptions
+      );
 
-      await handlePositionUpdate(position);
-      setError(null);
-      setIsTracking(true);
-      setIsPaused(false);
-      startTimeRef.current = Date.now();
-
-      // 継続監視開始
-      watchIdRef.current = navigator.geolocation.watchPosition(
+      // 継続追跡開始
+      const watchId = navigator.geolocation.watchPosition(
         handlePositionUpdate,
         handleError,
         gpsOptions
       );
 
-      toast.success('GPS追跡を開始しました');
-      console.log('GPS tracking started');
+      watchIdRef.current = watchId;
+      startTimeRef.current = Date.now();
+      lastGPSUpdateRef.current = Date.now();
+      setIsTracking(true);
+      setIsPaused(false);
+      setError(null);
 
-    } catch (error) {
-      handleError(error as GeolocationPositionError);
-      throw error;
+      toast.success('GPS追跡を開始しました');
+      console.log('🛰️ GPS追跡開始 - Watch ID:', watchId);
+    } catch (err) {
+      console.error('❌ GPS追跡開始エラー:', err);
+      handleError(err as GeolocationPositionError);
+      throw err;
     }
-  }, [isTracking, options, handlePositionUpdate, handleError]);
+  }, [isTracking, options]);
 
   // 追跡停止
   const stopTracking = useCallback(() => {
@@ -457,25 +531,23 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     setIsPaused(false);
     startTimeRef.current = null;
     
+    console.log('🛑 GPS追跡停止');
     toast.success('GPS追跡を停止しました');
-    console.log('GPS tracking stopped');
   }, []);
 
   // 追跡一時停止
   const pauseTracking = useCallback(() => {
-    if (isTracking) {
-      setIsPaused(true);
-      toast('GPS追跡を一時停止しました');
-    }
-  }, [isTracking]);
+    setIsPaused(true);
+    console.log('⏸️ GPS追跡一時停止');
+    toast('GPS追跡を一時停止しました');
+  }, []);
 
   // 追跡再開
   const resumeTracking = useCallback(() => {
-    if (isTracking && isPaused) {
-      setIsPaused(false);
-      toast.success('GPS追跡を再開しました');
-    }
-  }, [isTracking, isPaused]);
+    setIsPaused(false);
+    console.log('▶️ GPS追跡再開');
+    toast('GPS追跡を再開しました');
+  }, []);
 
   // パスクリア
   const clearPath = useCallback(() => {
@@ -484,51 +556,47 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     setTotalDistance(0);
     setAverageSpeed(0);
     setMaxSpeed(0);
-    setTrackingDuration(0);
     speedHistoryRef.current = [];
-    accuracyHistoryRef.current = [];
-    
-    toast.success('パスデータをクリアしました');
+    console.log('🗑️ パスデータクリア');
   }, []);
 
   // GPSデータエクスポート
   const exportGPSData = useCallback((): GPSLogData[] => {
-    return [...gpsLogs];
+    return gpsLogs;
   }, [gpsLogs]);
 
-  // 設定更新
+  // オプション更新
   const updateOptions = useCallback((newOptions: Partial<UseGPSOptions>) => {
     setOptions(prev => ({ ...prev, ...newOptions }));
   }, []);
 
   // 自動開始
   useEffect(() => {
-    if (options.autoStart && !isTracking) {
-      startTracking().catch(console.error);
+    if (options.autoStart) {
+      startTracking();
     }
-  }, [options.autoStart, isTracking, startTracking]);
 
-  // クリーンアップ
-  useEffect(() => {
     return () => {
-      stopTracking();
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
     };
-  }, [stopTracking]);
+  }, [options.autoStart]);
 
   return {
-    // 現在の状態
+    // 状態
     currentPosition,
     previousPosition,
     isTracking,
     error,
     
-    // 計測データ
+    // 測定データ
     accuracy,
     heading,
     speed,
     altitude,
     
-    // 統計データ
+    // 統計
     totalDistance,
     averageSpeed,
     maxSpeed,
@@ -538,7 +606,7 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     gpsLogs,
     pathCoordinates,
     
-    // 品質情報
+    // 品質
     qualityStatus,
     lastUpdateTime,
     

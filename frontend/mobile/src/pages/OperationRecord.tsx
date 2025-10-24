@@ -3,7 +3,8 @@
 // ✅ ヘッドアップ表示（地図回転）
 // ✅ 走行軌跡（赤いライン）
 // ✅ 三角矢印マーカー（進行方向）
-// ✅ 全ボタン機能実装
+// ✅ HeadingIndicator実装
+// ✅ ボタン状態遷移実装
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -18,10 +19,15 @@ import GoogleMapWrapper, {
   addPathPoint,
   clearPath
 } from '../components/GoogleMapWrapper';
+import HeadingIndicator from '../components/HeadingIndicator';
+
+// 運行状態の型定義
+type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
 
 interface OperationState {
   id: string | null;
   status: 'idle' | 'running';
+  phase: OperationPhase;
   startTime: Date | null;
   loadingLocation: string;
   unloadingLocation: string;
@@ -29,7 +35,7 @@ interface OperationState {
 }
 
 const MAP_UPDATE_INTERVAL = 3000;
-const MARKER_UPDATE_INTERVAL = 1000; // マーカー矢印は1秒ごとに更新
+const MARKER_UPDATE_INTERVAL = 1000;
 
 const OperationRecord: React.FC = () => {
   const navigate = useNavigate();
@@ -38,9 +44,11 @@ const OperationRecord: React.FC = () => {
   const lastMapUpdateRef = useRef<number>(0);
   const lastMarkerUpdateRef = useRef<number>(0);
   
+  // 運行状態（フェーズ管理を追加）
   const [operation, setOperation] = useState<OperationState>({
     id: null,
     status: 'running',
+    phase: 'TO_LOADING', // 初期状態: 積込場所へ向かう
     startTime: new Date(),
     loadingLocation: '○○建設資材置場',
     unloadingLocation: '△△工事現場',
@@ -107,6 +115,13 @@ const OperationRecord: React.FC = () => {
     const currentHeading = heading !== null ? heading : 0;
     const currentSpeed = gpsSpeed || 0;
 
+    console.log('🗺️ 地図更新:', {
+      heading: currentHeading,
+      speed: currentSpeed,
+      distance: totalDistance,
+      position: { lat, lng }
+    });
+
     // マーカー位置を即座に更新
     updateMarkerPosition(lat, lng);
 
@@ -114,7 +129,6 @@ const OperationRecord: React.FC = () => {
     if (now - lastMarkerUpdateRef.current >= MARKER_UPDATE_INTERVAL) {
       updateMarkerIcon(totalDistance, currentSpeed, currentHeading);
       lastMarkerUpdateRef.current = now;
-      console.log(`🔺 マーカー更新: ${currentHeading.toFixed(1)}°, ${currentSpeed.toFixed(1)}km/h`);
     }
 
     // 地図の中心移動
@@ -124,7 +138,6 @@ const OperationRecord: React.FC = () => {
       // 🧭 ヘッドアップ表示: 地図を回転（進行方向が常に上）
       if (currentSpeed > 1 && currentHeading !== null && !isNaN(currentHeading)) {
         setMapHeading(currentHeading);
-        console.log(`🧭 ヘッドアップ: ${currentHeading.toFixed(1)}°`);
       }
       
       lastMapUpdateRef.current = now;
@@ -136,9 +149,10 @@ const OperationRecord: React.FC = () => {
     }
   }, [currentPosition, isMapReady, heading, gpsSpeed, totalDistance, operation.status]);
 
-  // 積込場所到着
+  // 🔄 積込場所到着
   const handleLoadingArrival = async () => {
     if (!currentPosition) return;
+    
     try {
       setIsSubmitting(true);
       await apiService.recordAction({
@@ -148,7 +162,12 @@ const OperationRecord: React.FC = () => {
         longitude: currentPosition.coords.longitude,
         location: operation.loadingLocation
       });
+      
+      // 状態遷移: TO_LOADING → AT_LOADING
+      setOperation(prev => ({ ...prev, phase: 'AT_LOADING' }));
       toast.success('積込場所到着を記録しました');
+      
+      console.log('🚚 積込場所到着 → 次は積降場所へ');
     } catch (error) {
       toast.error('記録に失敗しました');
     } finally {
@@ -156,9 +175,10 @@ const OperationRecord: React.FC = () => {
     }
   };
 
-  // 積降場所到着
+  // 🔄 積降場所到着
   const handleUnloadingArrival = async () => {
     if (!currentPosition) return;
+    
     try {
       setIsSubmitting(true);
       await apiService.recordAction({
@@ -168,7 +188,12 @@ const OperationRecord: React.FC = () => {
         longitude: currentPosition.coords.longitude,
         location: operation.unloadingLocation
       });
+      
+      // 状態遷移: AT_LOADING → TO_UNLOADING → AT_UNLOADING
+      setOperation(prev => ({ ...prev, phase: 'TO_LOADING' })); // 次のサイクルへ
       toast.success('積降場所到着を記録しました');
+      
+      console.log('📦 積降場所到着 → 次は積込場所へ');
     } catch (error) {
       toast.error('記録に失敗しました');
     } finally {
@@ -179,6 +204,7 @@ const OperationRecord: React.FC = () => {
   // 休憩・荷待ち
   const handleBreak = async () => {
     if (!currentPosition) return;
+    
     try {
       setIsSubmitting(true);
       await apiService.recordAction({
@@ -188,6 +214,8 @@ const OperationRecord: React.FC = () => {
         longitude: currentPosition.coords.longitude,
         location: '休憩場所'
       });
+      
+      setOperation(prev => ({ ...prev, phase: 'BREAK' }));
       toast.success('休憩・荷待ちを記録しました');
     } catch (error) {
       toast.error('記録に失敗しました');
@@ -199,6 +227,7 @@ const OperationRecord: React.FC = () => {
   // 給油
   const handleRefuel = async () => {
     if (!currentPosition) return;
+    
     try {
       setIsSubmitting(true);
       await apiService.recordAction({
@@ -208,6 +237,8 @@ const OperationRecord: React.FC = () => {
         longitude: currentPosition.coords.longitude,
         location: '給油所'
       });
+      
+      setOperation(prev => ({ ...prev, phase: 'REFUEL' }));
       toast.success('給油を記録しました');
     } catch (error) {
       toast.error('記録に失敗しました');
@@ -216,12 +247,99 @@ const OperationRecord: React.FC = () => {
     }
   };
 
+  // 🎨 ボタンスタイル決定（フェーズに応じて有効/無効を切り替え）
+  const getButtonStyle = (buttonType: 'LOADING' | 'UNLOADING' | 'BREAK' | 'REFUEL') => {
+    const baseStyle = {
+      border: 'none',
+      borderRadius: '8px',
+      padding: '16px',
+      fontSize: '14px',
+      fontWeight: 'bold' as const,
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      minHeight: '70px',
+      cursor: 'pointer' as const,
+      transition: 'all 0.3s ease'
+    };
+
+    // 積込場所到着ボタン: TO_LOADING時のみ有効
+    if (buttonType === 'LOADING') {
+      if (operation.phase === 'TO_LOADING') {
+        return {
+          ...baseStyle,
+          background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+          color: 'white'
+        };
+      } else {
+        return {
+          ...baseStyle,
+          background: '#e0e0e0',
+          color: '#999',
+          cursor: 'not-allowed' as const
+        };
+      }
+    }
+
+    // 積降場所到着ボタン: AT_LOADING時のみ有効
+    if (buttonType === 'UNLOADING') {
+      if (operation.phase === 'AT_LOADING') {
+        return {
+          ...baseStyle,
+          background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+          color: 'white'
+        };
+      } else {
+        return {
+          ...baseStyle,
+          background: '#e0e0e0',
+          color: '#999',
+          cursor: 'not-allowed' as const
+        };
+      }
+    }
+
+    // 休憩・給油ボタン: 常に有効
+    if (buttonType === 'BREAK') {
+      return {
+        ...baseStyle,
+        background: 'linear-gradient(135deg, #FF9800, #F57C00)',
+        color: 'white'
+      };
+    }
+
+    if (buttonType === 'REFUEL') {
+      return {
+        ...baseStyle,
+        background: 'linear-gradient(135deg, #FFC107, #FFA000)',
+        color: 'white'
+      };
+    }
+
+    return baseStyle;
+  };
+
   const formatTime = (date: Date): string => {
     return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  // フェーズに応じたステータス表示
+  const getStatusText = (): string => {
+    switch (operation.phase) {
+      case 'TO_LOADING': return '積込場所へ移動中';
+      case 'AT_LOADING': return '積込場所到着';
+      case 'TO_UNLOADING': return '積降場所へ移動中';
+      case 'AT_UNLOADING': return '積降場所到着';
+      case 'BREAK': return '休憩中';
+      case 'REFUEL': return '給油中';
+      default: return '運行中';
+    }
   };
 
   return (
@@ -255,7 +373,7 @@ const OperationRecord: React.FC = () => {
           fontWeight: 'bold',
           animation: 'pulse 2s infinite'
         }}>
-          運行中
+          {getStatusText()}
         </div>
 
         <div style={{ textAlign: 'right' }}>
@@ -286,31 +404,27 @@ const OperationRecord: React.FC = () => {
           }
         />
 
-        {/* 方位表示 */}
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          right: '10px',
-          background: 'rgba(0,0,0,0.7)',
-          color: 'white',
-          padding: '8px 16px',
-          borderRadius: '20px',
-          fontSize: '12px',
-          fontWeight: 'bold',
-          zIndex: 1000
-        }}>
-          方位: {heading !== null ? Math.round(heading) : 0}° (北)
-        </div>
+        {/* 🧭 方位表示 - HeadingIndicatorコンポーネント使用 */}
+        {heading !== null && (
+          <div style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            zIndex: 1000
+          }}>
+            <HeadingIndicator heading={heading} />
+          </div>
+        )}
       </div>
 
       {/* コンテンツエリア */}
       <div style={{
         flex: 1,
-        overflowY: 'auto',
-        padding: '20px',
+        overflow: 'auto',
+        padding: '16px',
         background: '#f5f5f5'
       }}>
-        {/* 場所情報 */}
+        {/* 運行情報グリッド */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
@@ -457,88 +571,40 @@ const OperationRecord: React.FC = () => {
           gap: '12px',
           marginBottom: '16px'
         }}>
+          {/* 積込場所到着ボタン */}
           <button
             onClick={handleLoadingArrival}
-            disabled={isSubmitting}
-            style={{
-              background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '16px',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '70px'
-            }}
+            disabled={isSubmitting || operation.phase !== 'TO_LOADING'}
+            style={getButtonStyle('LOADING')}
           >
             <div>積込場所</div>
             <div>到着</div>
           </button>
 
+          {/* 積降場所到着ボタン */}
           <button
             onClick={handleUnloadingArrival}
-            disabled={isSubmitting}
-            style={{
-              background: '#e0e0e0',
-              color: '#999',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '16px',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: 'not-allowed',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '70px'
-            }}
+            disabled={isSubmitting || operation.phase !== 'AT_LOADING'}
+            style={getButtonStyle('UNLOADING')}
           >
             <div>積降場所</div>
             <div>到着</div>
           </button>
 
+          {/* 休憩・荷待ちボタン */}
           <button
             onClick={handleBreak}
             disabled={isSubmitting}
-            style={{
-              background: 'linear-gradient(135deg, #FF9800, #F57C00)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '16px',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              minHeight: '70px'
-            }}
+            style={getButtonStyle('BREAK')}
           >
             休憩・荷待ち
           </button>
 
+          {/* 給油ボタン */}
           <button
             onClick={handleRefuel}
             disabled={isSubmitting}
-            style={{
-              background: 'linear-gradient(135deg, #FFC107, #FFA000)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '16px',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              minHeight: '70px'
-            }}
+            style={getButtonStyle('REFUEL')}
           >
             給油
           </button>
