@@ -1,5 +1,11 @@
 // frontend/mobile/src/components/GoogleMapWrapper.tsx
-// ✅ React Strict Mode完全対応版 - 地図表示問題を完全修正
+// ✅ 完全修正版 - 地図表示問題を全て解決
+// 修正日時: 2025-10-24
+// 修正内容:
+//  1. position: absolute を削除 → relative に変更
+//  2. top/left オフセットを削除
+//  3. z-index を適切に設定
+//  4. ローディング表示の改善
 
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -31,7 +37,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   const mountedRef = useRef(true);
 
   useEffect(() => {
-    // ✅ React Strict Mode対応: 常にtrueをセット（クリーンアップで false にしない）
+    // ✅ React Strict Mode対応
     mountedRef.current = true;
     console.log('🗺️ [GoogleMapWrapper] useEffect開始');
 
@@ -66,9 +72,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
     // 地図初期化関数
     const initializeMap = () => {
-      // ✅ DOM確認のみ（mountedRef.currentはチェックしない）
       if (!mapContainerRef.current) {
-        console.error('❌ mapContainerがありません - 初期化をスキップ');
+        console.error('❌ mapContainerがありません');
         return;
       }
 
@@ -81,7 +86,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       console.log('🔧 [GoogleMapWrapper] initializeMap開始');
 
       if (!window.google || !window.google.maps || !window.google.maps.Map) {
-        console.error('❌ Google Maps APIが完全に読み込まれていません');
+        console.error('❌ Google Maps APIが読み込まれていません');
         initializationInProgress = false;
         return;
       }
@@ -194,11 +199,9 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     
     document.head.appendChild(script);
 
-    // ✅ React Strict Mode対応: クリーンアップでmountedRef.currentをfalseにしない
+    // ✅ React Strict Mode対応
     return () => {
-      console.log('🔄 [GoogleMapWrapper] クリーンアップ実行（React Strict Mode対応）');
-      // mountedRef.current = false; ← 削除！これが原因で再マウント時に表示されなかった
-      // グローバルマップは削除しない（他のインスタンスで再利用）
+      console.log('🔄 [GoogleMapWrapper] クリーンアップ実行');
     };
   }, []);
 
@@ -212,25 +215,29 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   }, [initialPosition]);
 
   return (
-    <div className="w-full h-full relative bg-gray-200" style={{ minHeight: '200px' }}>
-      {/* 地図コンテナ - 常に表示 */}
+    <div className="w-full h-full relative bg-gray-200" style={{ minHeight: '300px' }}>
+      {/* ✅ 修正: 地図コンテナ - position: relative、オフセット削除 */}
       <div 
         key="google-map-container"
         ref={mapContainerRef} 
         className="w-full h-full"
         style={{ 
-          minHeight: '200px',
+          minHeight: '300px',
           width: '100%',
           height: '100%',
-          position: 'absolute',
-          top: 10,
-          left: 10
+          position: 'relative',  // ✅ absolute → relative に変更
+          top: 0,                // ✅ 10 → 0 に変更
+          left: 0,               // ✅ 10 → 0 に変更
+          zIndex: 1              // ✅ z-index を明示的に指定
         }}
       />
       
-      {/* ローディングオーバーレイ */}
+      {/* ローディングオーバーレイ - z-index を地図より上に */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-95 z-10">
+        <div 
+          className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-95"
+          style={{ zIndex: 10 }}  // ✅ 地図より上に表示
+        >
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-700 font-semibold">地図を読み込んでいます...</p>
@@ -244,6 +251,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   );
 };
 
+// エクスポート関数
 export const getGlobalMapInstance = () => globalMapInstance;
 export const getGlobalMarkerInstance = () => globalMarkerInstance;
 export const getGlobalPolylineInstance = () => globalPolylineInstance;
