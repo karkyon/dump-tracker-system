@@ -2,7 +2,7 @@
 // 🗺️ Google Mapコンポーネント - 完全版
 // ✅ ヘッドアップ表示（地図回転）
 // ✅ 走行軌跡（赤いライン）
-// ✅ 三角矢印マーカー（進行方向を示す）
+// ✅ 三角矢印マーカー（進行方向・速度・距離表示）
 
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -24,20 +24,19 @@ let globalPolylineInstance: any = null;
 let isGlobalMapInitialized = false;
 let initializationInProgress = false;
 
-// 📍 三角矢印付きマーカーSVG生成
+// 📍 三角矢印付きマーカーSVG生成（回転対応）
 const createCustomMarkerSVG = (distance: number, speed: number, heading: number = 0): string => {
   return `
     <svg width="60" height="80" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <!-- 回転用のグループ -->
         <g id="arrow-marker">
-          <!-- 外側の円 (影) -->
+          <!-- 外側の円（影） -->
           <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)" />
           
           <!-- メインの円 -->
           <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
           
-          <!-- 🔺 進行方向を示す三角形 (上向き) -->
+          <!-- 🔺 進行方向を示す三角形（上向き） -->
           <path d="M 30 13 L 38 25 L 22 25 Z" fill="#ffffff" stroke="#1a73e8" stroke-width="1.5"/>
           
           <!-- 中心点 -->
@@ -45,7 +44,7 @@ const createCustomMarkerSVG = (distance: number, speed: number, heading: number 
         </g>
       </defs>
       
-      <!-- 回転適用 (headingに基づいて回転) -->
+      <!-- 回転適用（headingに基づいて回転） -->
       <use href="#arrow-marker" transform="rotate(${heading} 30 28)"/>
       
       <!-- 情報ボックス背景 -->
@@ -76,6 +75,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     mountedRef.current = true;
     console.log('🗺️ GoogleMapWrapper 初期化開始');
 
+    // 既存マップの再利用
     if (isGlobalMapInitialized && globalMapInstance) {
       console.log('♻️ 既存マップを再利用');
       setIsLoading(false);
@@ -105,13 +105,14 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       }
 
       try {
-        const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 };
+        const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 }; // 大阪城
 
+        // 🗺️ WebGLベクターマップ設定（ヘッドアップ表示に必須）
         const mapOptions: any = {
           center: centerPosition,
           zoom: 18,
           renderingType: window.google.maps.RenderingType.VECTOR,
-          mapId: "DEMO_MAP_ID",
+          mapId: "DEMO_MAP_ID", // 本番環境では実際のMap IDを使用
           heading: 0,
           tilt: 0,
           disableDefaultUI: true,
@@ -142,7 +143,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
         console.log('✅ 三角マーカー作成成功');
 
-        // 🛤️ 走行軌跡用Polyline
+        // 🛤️ 走行軌跡用Polyline（赤いライン）
         const polyline = new window.google.maps.Polyline({
           map: map,
           path: [],
@@ -155,6 +156,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
         console.log('✅ Polyline作成成功');
 
+        // グローバルインスタンスに保存
         globalMapInstance = map;
         globalMarkerInstance = marker;
         globalPolylineInstance = polyline;
@@ -168,6 +170,14 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         }
         
         console.log('🎉 マップ初期化完了!');
+
+        // レンダリングタイプ確認
+        map.addListener('renderingtype_changed', () => {
+          const renderingType = map.getRenderingType();
+          const isVector = (renderingType === window.google.maps.RenderingType.VECTOR);
+          console.log(`マップレンダリング: ${isVector ? 'VECTOR' : 'RASTER'}`);
+        });
+
       } catch (error) {
         console.error('❌ マップ初期化エラー:', error);
         initializationInProgress = false;
@@ -183,6 +193,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       return;
     }
 
+    // スクリプト読み込み
     const existingScript = document.getElementById('google-maps-script');
     if (existingScript) {
       if (window.google?.maps?.Map) {
@@ -198,7 +209,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     
     const script = document.createElement('script');
     script.id = 'google-maps-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&v=weekly`;
     script.async = true;
     script.defer = true;
     
@@ -211,10 +222,12 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     document.head.appendChild(script);
 
     return () => {
+      mountedRef.current = false;
       console.log('🔄 クリーンアップ');
     };
   }, []);
 
+  // 初期位置変更時の処理
   useEffect(() => {
     if (isGlobalMapInitialized && globalMapInstance && globalMarkerInstance && initialPosition) {
       globalMapInstance.setCenter(initialPosition);
@@ -251,7 +264,10 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   );
 };
 
+// =====================================
 // エクスポート関数
+// =====================================
+
 export const getGlobalMapInstance = () => globalMapInstance;
 export const getGlobalMarkerInstance = () => globalMarkerInstance;
 export const getGlobalPolylineInstance = () => globalPolylineInstance;
@@ -288,7 +304,7 @@ export const updateMarkerPosition = (lat: number, lng: number) => {
 };
 
 /**
- * 地図の中心を移動
+ * 地図の中心を移動（スムーズ移動）
  */
 export const panMapToPosition = (lat: number, lng: number) => {
   if (!globalMapInstance) {
