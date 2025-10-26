@@ -3,6 +3,7 @@
 // ✅ GPS距離・方位計算
 // ✅ データ平滑化
 // ✅ 座標検証
+// 🔧 修正: 距離の単位を明確化、バッファ管理の修正
 
 /**
  * 2点間の距離を計算（ハーバーサイン公式）
@@ -10,10 +11,10 @@
  * @param lng1 経度1
  * @param lat2 緯度2
  * @param lng2 経度2
- * @returns 距離（メートル）
+ * @returns 距離（キロメートル）
  */
 export const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-  const R = 6371000; // 地球の半径（メートル）
+  const R = 6371; // 地球の半径（キロメートル）← 修正: 6371000 → 6371
   const φ1 = lat1 * Math.PI / 180;
   const φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -24,7 +25,7 @@ export const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2
             Math.sin(Δλ/2) * Math.sin(Δλ/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-  return R * c;
+  return R * c; // キロメートルを返す
 };
 
 /**
@@ -49,20 +50,17 @@ export const calculateBearing = (lat1: number, lng1: number, lat2: number, lng2:
 
 /**
  * 方位角の平滑化（円形統計）
- * @param headingBuffer 方位角の配列
- * @param newHeading 新しい方位角
+ * 🔧 修正: バッファへの追加は呼び出し側で行う
+ * @param headingBuffer 方位角の配列（既に値が追加済み）
  * @returns 平滑化された方位角
  */
-export const smoothHeading = (headingBuffer: number[], newHeading: number): number => {
-  headingBuffer.push(newHeading);
-  
-  // バッファサイズを制限
-  if (headingBuffer.length > 5) {
-    headingBuffer.shift();
+export const smoothHeading = (headingBuffer: number[]): number => {
+  if (headingBuffer.length === 0) {
+    return 0;
   }
   
   if (headingBuffer.length === 1) {
-    return newHeading;
+    return headingBuffer[0]!;
   }
   
   // 角度の平均を計算（円形統計）
@@ -81,16 +79,13 @@ export const smoothHeading = (headingBuffer: number[], newHeading: number): numb
 
 /**
  * 速度の平滑化（単純移動平均）
- * @param speedBuffer 速度の配列
- * @param newSpeed 新しい速度
+ * 🔧 修正: バッファへの追加は呼び出し側で行う
+ * @param speedBuffer 速度の配列（既に値が追加済み）
  * @returns 平滑化された速度
  */
-export const smoothSpeed = (speedBuffer: number[], newSpeed: number): number => {
-  speedBuffer.push(newSpeed);
-  
-  // バッファサイズを制限
-  if (speedBuffer.length > 3) {
-    speedBuffer.shift();
+export const smoothSpeed = (speedBuffer: number[]): number => {
+  if (speedBuffer.length === 0) {
+    return 0;
   }
   
   // 単純平均
