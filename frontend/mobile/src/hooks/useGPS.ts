@@ -327,9 +327,9 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       }
 
       // 平滑化
-      const smoothedSpeed = smoothSpeed(speedBufferRef.current);
-      const smoothedHeading = headingBufferRef.current.length > 0 
-        ? smoothHeading(headingBufferRef.current) 
+      const smoothedSpeed: number = smoothSpeed(speedBufferRef.current, calculatedSpeed);
+      const smoothedHeading: number = headingBufferRef.current.length > 0 
+        ? smoothHeading(headingBufferRef.current, calculatedHeading) 
         : calculatedHeading;
 
       console.log(`🎯 平滑化結果 - 速度: ${smoothedSpeed.toFixed(1)}km/h, 方位: ${smoothedHeading.toFixed(1)}°`);
