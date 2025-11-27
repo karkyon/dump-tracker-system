@@ -7,7 +7,6 @@
 // ✅ ボタン状態遷移実装
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useGPS } from '../hooks/useGPS';
 import apiService from '../services/api';
@@ -16,8 +15,7 @@ import GoogleMapWrapper, {
   updateMarkerPosition,
   panMapToPosition,
   setMapHeading,
-  addPathPoint,
-  clearPath
+  addPathPoint
 } from '../components/GoogleMapWrapper';
 import HeadingIndicator from '../components/HeadingIndicator';
 
@@ -38,7 +36,6 @@ const MAP_UPDATE_INTERVAL = 3000;
 const MARKER_UPDATE_INTERVAL = 1000;
 
 const OperationRecord: React.FC = () => {
-  const navigate = useNavigate();
   
   const [isMapReady, setIsMapReady] = useState(false);
   const lastMapUpdateRef = useRef<number>(0);
@@ -63,7 +60,6 @@ const OperationRecord: React.FC = () => {
     currentPosition,
     isTracking,
     startTracking,
-    stopTracking,
     heading,
     speed: gpsSpeed,
     totalDistance,

@@ -1,6 +1,6 @@
 // frontend/mobile/src/services/api.ts
 // 運行記録API完全統合版 - バックエンドmobileController完全対応
-// ✅ HTTPS対応修正版
+// ✅ HTTPS対応修正版 + 点検項目API追加
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
@@ -555,6 +555,87 @@ class APIServiceClass {
       return response.data;
     } catch (error) {
       console.error('Update vehicle status error:', error);
+      throw error;
+    }
+  }
+
+  // =============================================================================
+  // ✅ 追加: 車両一覧取得API
+  // =============================================================================
+
+  /**
+   * 車両一覧取得
+   * GET /api/v1/mobile/vehicles
+   */
+  async getVehicles(params?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<any>>(
+        '/mobile/vehicles',
+        { params }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get vehicles error:', error);
+      throw error;
+    }
+  }
+
+  // =============================================================================
+  // ✅ 追加: 点検項目管理API
+  // =============================================================================
+
+  /**
+   * 点検項目一覧取得（乗車前/乗車後でフィルタ）
+   * GET /api/v1/inspections/items?inspectionType=PRE_TRIP
+   */
+  async getInspectionItems(params?: {
+    inspectionType?: 'PRE_TRIP' | 'POST_TRIP';
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<any>>(
+        '/inspections/items',
+        { params }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get inspection items error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 点検記録作成
+   * POST /api/v1/inspections/records
+   */
+  async createInspectionRecord(data: {
+    vehicleId: string;
+    inspectorId: string;
+    inspectionType: 'PRE_TRIP' | 'POST_TRIP';
+    results: Array<{
+      inspectionItemId: string;
+      resultValue: string;
+      isPassed: boolean;
+      notes?: string;
+    }>;
+    operationId?: string;
+    notes?: string;
+  }): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        '/inspections/records',
+        data
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Create inspection record error:', error);
       throw error;
     }
   }
