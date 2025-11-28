@@ -1,5 +1,5 @@
 // frontend/mobile/src/pages/PreDepartureInspection.tsx
-// D3: 乗車前点検画面 - 正しい仕様（積込情報なし、点検項目のみ）
+// D3: 乗車前点検画面 - エラーハンドリング強化版（ハードコードフォールバック完全削除）
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,7 +12,9 @@ import {
   Circle,
   Loader2,
   Truck,
-  AlertCircle
+  AlertCircle,
+  XCircle,
+  RefreshCcw
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useOperationStore } from '../stores/operationStore';
@@ -47,6 +49,7 @@ const PreDepartureInspection: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCriticalError, setIsCriticalError] = useState(false);
 
   // 画面初期化
   useEffect(() => {
@@ -67,24 +70,36 @@ const PreDepartureInspection: React.FC = () => {
 
   /**
    * 点検項目取得（バックエンドAPIから）
+   * ハードコードされたフォールバックは完全削除
    */
   const fetchInspectionItems = async () => {
     setIsFetching(true);
     setError(null);
+    setIsCriticalError(false);
 
     try {
-      console.log('[D3] 点検項目取得開始');
+      console.log('[D3] 📋 点検項目取得開始');
       
       const response = await apiService.getInspectionItems({
         inspectionType: 'PRE_TRIP',
         isActive: true
       });
 
+      console.log('[D3] 📡 API レスポンス:', response);
+
       if (response.success && response.data) {
         // APIレスポンスから点検項目を取得
         const items = Array.isArray(response.data) 
           ? response.data 
           : response.data.data || [];
+
+        if (items.length === 0) {
+          // データが0件の場合
+          setIsCriticalError(true);
+          setError('点検項目マスタが登録されていません。システム管理者に連絡してください。');
+          console.error('[D3] ❌ 点検項目が0件です');
+          return;
+        }
 
         // UI用のcheckedフィールドを追加
         const itemsWithChecked = items.map((item: any) => ({
@@ -96,32 +111,33 @@ const PreDepartureInspection: React.FC = () => {
         itemsWithChecked.sort((a, b) => a.displayOrder - b.displayOrder);
 
         setInspectionItems(itemsWithChecked);
-        console.log('[D3] 点検項目取得成功:', itemsWithChecked.length);
+        console.log('[D3] ✅ 点検項目取得成功:', itemsWithChecked.length, '件');
       } else {
         throw new Error(response.message || '点検項目の取得に失敗しました');
       }
 
     } catch (error: any) {
-      console.error('[D3] 点検項目取得エラー:', error);
-      const errorMessage = error.response?.data?.message || error.message || '点検項目の読み込みに失敗しました';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      console.error('[D3] ❌ 点検項目取得エラー:', error);
       
-      // フォールバック: デフォルトの点検項目を使用
-      const defaultItems: InspectionItem[] = [
-        { id: '1', name: 'エンジンオイルの量', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 1, isRequired: true, isActive: true, checked: false },
-        { id: '2', name: 'タイヤの空気圧・摩耗・亀裂', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 2, isRequired: true, isActive: true, checked: false },
-        { id: '3', name: 'ブレーキの効き', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 3, isRequired: true, isActive: true, checked: false },
-        { id: '4', name: 'ライト類の点灯確認', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 4, isRequired: true, isActive: true, checked: false },
-        { id: '5', name: 'ウインカー・ハザードの動作', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 5, isRequired: true, isActive: true, checked: false },
-        { id: '6', name: 'ミラーの調整', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 6, isRequired: true, isActive: true, checked: false },
-        { id: '7', name: 'シートベルトの状態', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 7, isRequired: true, isActive: true, checked: false },
-        { id: '8', name: '荷台の清掃・異物確認', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 8, isRequired: true, isActive: true, checked: false },
-        { id: '9', name: '各作動油の漏れ', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 9, isRequired: true, isActive: true, checked: false },
-        { id: '10', name: '燃料の量', inspectionType: 'PRE_TRIP', inputType: 'CHECKBOX', displayOrder: 10, isRequired: true, isActive: true, checked: false },
-      ];
-      setInspectionItems(defaultItems);
-      toast('デフォルトの点検項目を使用します', { icon: 'ℹ️' });
+      // エラーメッセージの詳細化
+      let errorMessage = '点検項目の読み込みに失敗しました';
+      let isCritical = true;
+
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'サーバーへの接続がタイムアウトしました。ネットワーク接続を確認してください。';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'サーバー内部エラーが発生しました。システム管理者に連絡してください。';
+      } else if (error.response?.status === 404) {
+        errorMessage = '点検項目APIが見つかりません。システム管理者に連絡してください。';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
+      setIsCriticalError(isCritical);
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setIsFetching(false);
     }
@@ -234,6 +250,13 @@ const PreDepartureInspection: React.FC = () => {
     navigate('/vehicle-info');
   };
 
+  /**
+   * リトライボタン
+   */
+  const handleRetry = () => {
+    fetchInspectionItems();
+  };
+
   const checkedCount = inspectionItems.filter(item => item.checked).length;
   const allChecked = inspectionItems.every(item => item.checked);
   const progressPercentage = inspectionItems.length > 0 
@@ -247,6 +270,65 @@ const PreDepartureInspection: React.FC = () => {
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">点検項目を読み込み中...</p>
+          <p className="text-sm text-gray-400 mt-2">しばらくお待ちください</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 致命的エラー（点検項目が取得できない）
+  if (isCriticalError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <div className="mb-6">
+              <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <XCircle className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                システムエラー
+              </h2>
+              <p className="text-gray-600 mb-4">
+                {error}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleRetry}
+                className="w-full px-6 py-3 bg-blue-600 text-white font-bold rounded-xl
+                  shadow-lg hover:bg-blue-700 transition-all duration-200
+                  flex items-center justify-center space-x-2"
+              >
+                <RefreshCcw className="w-5 h-5" />
+                <span>再試行</span>
+              </button>
+
+              <button
+                onClick={handleBack}
+                className="w-full px-6 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl
+                  hover:bg-gray-200 transition-all duration-200"
+              >
+                車両選択に戻る
+              </button>
+            </div>
+
+            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
+              <p className="text-sm text-yellow-800 font-medium mb-2">
+                📞 サポートが必要な場合
+              </p>
+              <p className="text-xs text-yellow-700">
+                システム管理者またはサポート窓口に以下の情報を伝えてください：
+              </p>
+              <ul className="text-xs text-yellow-700 mt-2 space-y-1 text-left">
+                <li>• エラー: 点検項目取得失敗</li>
+                <li>• 画面: D3 乗車前点検</li>
+                <li>• 車両ID: {vehicleId}</li>
+                <li>• 時刻: {new Date().toLocaleString('ja-JP')}</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -291,23 +373,6 @@ const PreDepartureInspection: React.FC = () => {
       </header>
 
       <main className="max-w-md mx-auto px-6 py-8">
-        {/* エラー表示 */}
-        {error && (
-          <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
-            <div className="flex items-start">
-              <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
-              <div className="flex-1">
-                <p className="text-sm text-yellow-800 font-medium">
-                  {error}
-                </p>
-                <p className="text-xs text-yellow-700 mt-1">
-                  デフォルトの点検項目を使用しています
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* 進捗バー */}
         <div className="bg-white rounded-2xl shadow-md p-4 mb-6">
           <div className="flex items-center justify-between mb-2">

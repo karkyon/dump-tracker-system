@@ -4,6 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { useOperationStore } from '../stores/operationStore';
+
 import { 
   Truck, 
   ArrowRight, 
@@ -42,6 +44,9 @@ interface VehicleDisplay {
 const VehicleInfo: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
+
+  // 別名をつけて Store の関数を取得
+  const { setVehicleInfo: saveVehicleToStore, setDriverInfo: saveDriverToStore } = useOperationStore();
   
   const [vehicles, setVehicles] = useState<VehicleDisplay[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
@@ -226,21 +231,28 @@ const VehicleInfo: React.FC = () => {
       return;
     }
     
-    // ✅ UUID形式のIDをsessionStorageに保存
-    sessionStorage.setItem('selected_vehicle_id', selectedVehicleId);
-    sessionStorage.setItem('start_mileage', startMileage);
-    sessionStorage.setItem('vehicle_info', JSON.stringify(vehicleInfo));
-    
-    console.log('✅ 車両情報を保存:', {
-      vehicleId: selectedVehicleId,
-      startMileage,
-      vehicleInfo
-    });
-    
-    toast.success('車両情報を保存しました');
-    navigate('/pre-departure-inspection');
+    // ✅ operationStoreに車両情報を保存（sessionStorageは使わない）
+if (vehicleInfo) {
+      saveVehicleToStore({
+        vehicleId: selectedVehicleId,
+        vehicleNumber: vehicleInfo.vehicleNumber,
+        vehicleType: vehicleInfo.vehicleType,
+        startMileage: parseInt(startMileage)
+      });
+      
+      if (user) {
+        saveDriverToStore({
+          driverId: user.id,
+          driverName: user.name
+        });
+      }
+      
+      toast.success('車両情報を保存しました');
+      navigate('/pre-departure-inspection');
+    } else {
+      toast.error('車両情報の取得に失敗しました');
+    }
   };
-
   const handleBack = () => {
     logout();
     navigate('/login', { replace: true });

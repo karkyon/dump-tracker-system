@@ -83,42 +83,32 @@ class InspectionController {
   public getAllInspectionItems = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const {
-        page = 1,
-        limit = 10,
-        category,
-        inputType,
-        isActive,
-        search,
-        sortBy = 'displayOrder',
-        sortOrder = 'asc',
-        includeInactive = false
+        inspectionType,
+        isActive
       } = req.query;
 
-      // 権限チェック: 非アクティブ項目は管理者以上のみ
-      if (includeInactive && req.user?.role !== 'ADMIN' && req.user?.role !== 'MANAGER') {
-        return sendUnauthorizedError(res, '非アクティブ項目の表示には管理者権限が必要です');
-      }
+      logger.info('📋 [Controller] 点検項目一覧取得開始', {
+        userId: req.user?.userId,
+        inspectionType,
+        isActive
+      });
 
+      // フィルタオプション
       const filterOptions: any = {
-        page: Number(page),
-        limit: Number(limit),
-        sortBy: sortBy as string,
-        sortOrder: sortOrder as 'asc' | 'desc',
-        category: category as string,
-        inputType: inputType as string,
-        isActive: includeInactive ? undefined : (isActive !== 'false'),
-        search: search as string
+        inspectionType: inspectionType as InspectionType,
+        isActive: isActive !== 'false'
       };
 
+      // Service層経由で取得（統計情報なし）
       const result = await this.inspectionService.getInspectionItems(
         filterOptions,
         req.user?.userId || '',
-        req.user?.role || 'DRIVER'
+        req.user?.role || 'DRIVER',
+        { includeSummary: false }  // ← 統計情報を含めない（高速化）
       );
 
-      logger.info(`📋 点検項目一覧取得成功`, {
+      logger.info('✅ [Controller] 点検項目一覧取得成功', {
         userId: req.user?.userId,
-        filters: filterOptions,
         resultCount: result.data?.length || 0,
         totalCount: result.meta?.total || 0
       });
@@ -126,7 +116,7 @@ class InspectionController {
       return sendSuccess(res, result, '点検項目一覧を取得しました');
 
     } catch (error) {
-      logger.error('📋 点検項目一覧取得エラー:', error);
+      logger.error('❌ [Controller] 点検項目一覧取得エラー:', error);
       return sendError(res, '点検項目一覧の取得に失敗しました', 500);
     }
   });

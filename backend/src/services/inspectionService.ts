@@ -9,20 +9,18 @@
 // =====================================
 
 // ✅ FIX 1: Decimalを通常のimportに変更（値として使用するため）
-import { UserRole, InspectionType, InspectionStatus, Prisma, PrismaClient } from '@prisma/client';
+import { InspectionStatus, InspectionType, Prisma, PrismaClient, UserRole } from '@prisma/client';
 // ✅ FIX 1-2: Decimalは@prisma/clientにないため、Prisma.Decimalを使用
 type Decimal = Prisma.Decimal;
 
 // 🎯 Phase 1完成基盤の活用（utils統合）
+import { DatabaseService } from '../utils/database';
 import {
   AppError,
-  ValidationError,
   AuthorizationError,
-  NotFoundError,
   ConflictError,
-  DatabaseError
+  NotFoundError
 } from '../utils/errors';
-import { DatabaseService } from '../utils/database';
 import logger from '../utils/logger';
 
 // 🔥 イベントエミッター導入（循環依存解消）
@@ -30,36 +28,25 @@ import EventEmitter from 'events';
 const eventEmitter = new EventEmitter();
 
 // 🎯 Phase 2 Services層完成基盤の活用（車両管理連携）
-import type { VehicleService } from './vehicleService';
-import type { UserService } from './userService';
-import { getLocationServiceWrapper } from './locationService';
 import type { LocationServiceWrapper } from './locationService';
+import { getLocationServiceWrapper } from './locationService';
+import type { UserService } from './userService';
+import type { VehicleService } from './vehicleService';
 
 // 🎯 types/からの統一型定義インポート（修正版）
 import type {
+  InspectionItemCreateInput,
+  InspectionItemListResponse,
   // 点検項目関連（models/InspectionItemModel.ts経由）
   InspectionItemModel,
   InspectionItemResponseDTO,
-  InspectionItemListResponse,
-  InspectionItemCreateInput,
-  InspectionItemUpdateInput,
-  InspectionItemWhereInput,
-  InspectionItemOrderByInput,
-
-  // 点検項目結果関連（models/InspectionItemResultModel.ts経由）
-  InspectionItemResultModel,
-  InspectionItemResultResponseDTO,
   InspectionItemResultCreateInput,
   InspectionItemResultUpdateInput,
-
-  // 点検記録関連（models/InspectionRecordModel.ts経由）
-  InspectionRecordModel,
-  InspectionRecordResponseDTO,
-  InspectionRecordListResponse,
+  InspectionItemUpdateInput,
   InspectionRecordCreateInput,
-  InspectionRecordUpdateInput,
-  InspectionRecordWhereInput,
-  InspectionRecordOrderByInput
+  InspectionRecordListResponse,
+  InspectionRecordResponseDTO,
+  InspectionRecordUpdateInput
 } from '../types';
 
 // 🎯 エイリアス定義（後方互換性のため - 修正版：Result系も追加）
@@ -77,28 +64,22 @@ export type InspectionItemResultUpdateDTO = InspectionItemResultUpdateInput;
 
 // 🎯 ファクトリ関数インポート（Services/Types/整合性問題解決）
 import {
-  getInspectionItemService,
   getInspectionItemResultService,
+  getInspectionItemService,
   getInspectionRecordService
 } from '../types';
 
 // 🎯 共通型定義の活用（types/common.ts）
 import type {
-  PaginationQuery,
-  ApiResponse,
-  ApiListResponse,
-  SearchQuery,
   DateRange,
-  OperationResult,
-  BulkOperationResult,
-  StatisticsBase,
-  ValidationResult
+  PaginationQuery,
+  SearchQuery,
+  StatisticsBase
 } from '../types/common';
 
 // 🎯 車両管理システム連携型定義
 import type {
-  VehicleResponseDTO,
-  VehicleMaintenanceRequest
+  VehicleResponseDTO
 } from '../types/vehicle';
 
 // =====================================
@@ -297,89 +278,85 @@ export class InspectionService {
   // =====================================
 
   /**
-   * 点検項目一覧取得（企業レベル統合版）
+   * 点検項目一覧取得（軽量版 - オプションで統計情報を制御）
    */
   async getInspectionItems(
     filter: InspectionFilter,
     requesterId: string,
-    requesterRole: UserRole
+    requesterRole: UserRole,
+    options?: {
+      includeSummary?: boolean;  // 統計情報を含めるか（デフォルト: false）
+    }
   ): Promise<InspectionItemListResponse> {
     try {
-      const {
-        page = 1,
-        limit = 20,
-        search,
-        sortBy = 'displayOrder',
-        sortOrder = 'asc',
-        inspectionType
-      } = filter;
+      // フィルタから値を取得（型安全に）
+      const inspectionType = (filter as any).inspectionType;
+      const isActive = (filter as any).isActive;
 
-      logger.info('点検項目一覧取得開始', {
+      logger.info('📋 [InspectionService] 点検項目一覧取得開始', {
         requesterId,
         requesterRole,
-        filter: { search, inspectionType, page, limit }
+        inspectionType,
+        isActive,
+        includeSummary: options?.includeSummary || false
       });
 
-      // 権限ベースフィルタリング
-      const where: InspectionItemWhereInput = {};
+      // シンプルなwhere条件
+      const where: any = {};
 
-      if (search) {
-        where.OR = [
-          { name: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } }
-        ];
+      // isActiveのフィルタ（デフォルトはtrue）
+      if (isActive !== undefined) {
+        where.isActive = isActive;
+      } else {
+        where.isActive = true;  // デフォルトはアクティブのみ
       }
 
+      // inspectionTypeのフィルタ
       if (inspectionType) {
-        where.inspectionType = Array.isArray(inspectionType)
-          ? { in: inspectionType }
-          : inspectionType;
+        where.inspectionType = inspectionType;
       }
 
-      // Prismaクエリ実行
-      const [items, total] = await Promise.all([
-        this.prisma.inspectionItem.findMany({
-          where,
-          skip: (page - 1) * limit,
-          take: limit,
-          orderBy: { [sortBy]: sortOrder }
-        }),
-        this.prisma.inspectionItem.count({ where })
-      ]);
-
-      // 統計情報の取得
-      const summary = await this.getInspectionItemSummary();
-
-      // ✅ 修正: totalPages を先に計算
-      const totalPages = Math.ceil(total / limit);
-
-      logger.info('点検項目一覧取得完了', {
-        itemCount: items.length,
-        total,
-        totalPages,
-        requesterId
+      // Prismaクエリ実行（1回のみ）
+      const items = await this.prisma.inspectionItem.findMany({
+        where,
+        orderBy: {
+          displayOrder: 'asc'
+        }
       });
 
-      // ✅ 修正: meta オブジェクトで totalPages を使用
+      // オプションで統計情報を取得
+      let summary = undefined;
+      if (options?.includeSummary) {
+        logger.info('📊 統計情報を取得中...');
+        summary = await this.getInspectionItemSummary();
+      }
+
+      logger.info('✅ [InspectionService] 点検項目一覧取得完了', {
+        itemCount: items.length,
+        requesterId,
+        includedSummary: !!summary
+      });
+
       return {
         success: true,
         data: items.map(item => this.toInspectionItemResponseDTO(item)),
         message: '点検項目一覧を取得しました',
         meta: {
-          total,
-          page,
-          pageSize: limit,
-          totalPages: totalPages,  // ✅ 短縮形ではなく明示的に指定
-          hasNextPage: page < totalPages,
-          hasPreviousPage: page > 1
+          total: items.length,
+          page: 1,
+          pageSize: items.length,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false
         },
-        timestamp: new Date().toISOString(),  // ✅ 追加: ISO 8601形式のタイムスタンプ
+        timestamp: new Date().toISOString(),
         summary
       };
 
     } catch (error) {
-      logger.error('点検項目一覧取得エラー', {
+      logger.error('❌ [InspectionService] 点検項目一覧取得エラー', {
         error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
         requesterId
       });
       throw error;
@@ -1288,12 +1265,12 @@ export class InspectionService {
 
       const averageCompletionTime = completedRecords.length > 0
         ? completedRecords.reduce((sum, record) => {
-            if (record.startedAt && record.completedAt) {
-              const duration = record.completedAt.getTime() - record.startedAt.getTime();
-              return sum + duration / (1000 * 60); // 分に変換
-            }
-            return sum;
-          }, 0) / completedRecords.length
+          if (record.startedAt && record.completedAt) {
+            const duration = record.completedAt.getTime() - record.startedAt.getTime();
+            return sum + duration / (1000 * 60); // 分に変換
+          }
+          return sum;
+        }, 0) / completedRecords.length
         : 0;
 
       const statistics: InspectionStatistics = {
