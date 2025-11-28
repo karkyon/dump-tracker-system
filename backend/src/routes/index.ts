@@ -2,6 +2,7 @@
 // backend/src/routes/index.ts
 // ルートエントリポイント - 完全アーキテクチャ改修統合版
 // API基盤統合・重複ルート解消・統一ミドルウェア活用版
+// 🔧 デバッグ出力追加版（既存機能100%保持）
 // 最終更新: 2025年9月28日
 // 依存関係: middleware/auth.ts, middleware/errorHandler.ts, utils/errors.ts, utils/response.ts
 // =====================================
@@ -89,6 +90,16 @@ const safeImportAndRegisterRoute = (
   try {
     routeStats.totalRoutes++;
 
+    // 🔧🔧🔧 デバッグ出力1: ルート登録開始
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] ルート登録開始', {
+      routeName,
+      path,
+      priority: options.priority || 'normal',
+      requireAuth: options.requireAuth || false,
+      description: options.description,
+      timestamp: new Date().toISOString()
+    });
+
     logger.debug('ルート登録開始', {
       routeName,
       path,
@@ -96,9 +107,33 @@ const safeImportAndRegisterRoute = (
       requireAuth: options.requireAuth || false
     });
 
+    // 🔧🔧🔧 デバッグ出力2: require実行前
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] require実行開始', {
+      modulePath: `./${routeName}`,
+      timestamp: new Date().toISOString()
+    });
+
     // 動的インポート試行
     const routeModule = require(`./${routeName}`);
+
+    // 🔧🔧🔧 デバッグ出力3: require実行後
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] require実行完了', {
+      routeName,
+      hasDefault: !!routeModule.default,
+      moduleKeys: Object.keys(routeModule),
+      timestamp: new Date().toISOString()
+    });
+
     const routeHandler = routeModule.default || routeModule;
+
+    // 🔧🔧🔧 デバッグ出力4: ルートハンドラー取得後
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] ルートハンドラー取得', {
+      routeName,
+      handlerType: typeof routeHandler,
+      isFunction: typeof routeHandler === 'function',
+      hasUse: routeHandler && typeof routeHandler.use === 'function',
+      timestamp: new Date().toISOString()
+    });
 
     // ルートハンドラー検証
     if (!routeHandler) {
@@ -110,12 +145,27 @@ const safeImportAndRegisterRoute = (
       throw new Error('無効なルートハンドラー形式です');
     }
 
+    // 🔧🔧🔧 デバッグ出力5: router.use実行前
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] router.use実行開始', {
+      routeName,
+      path,
+      requireAuth: options.requireAuth,
+      timestamp: new Date().toISOString()
+    });
+
     // 認証要求時の自動適用
     if (options.requireAuth) {
       router.use(path, authenticateToken, routeHandler);
     } else {
       router.use(path, routeHandler);
     }
+
+    // 🔧🔧🔧 デバッグ出力6: router.use実行後
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] router.use実行完了', {
+      routeName,
+      path,
+      timestamp: new Date().toISOString()
+    });
 
     // 成功統計更新
     routeStats.successfulRegistrations++;
@@ -128,10 +178,32 @@ const safeImportAndRegisterRoute = (
       total: `${routeStats.successfulRegistrations}/${routeStats.totalRoutes}`
     });
 
+    // 🔧🔧🔧 デバッグ出力7: inspectionRoutes専用の詳細ログ
+    if (routeName === 'inspectionRoutes') {
+      logger.info('🎯🎯🎯 [DEBUG-routes/index] inspectionRoutes登録完了（詳細）', {
+        path,
+        requireAuth: options.requireAuth,
+        authenticateTokenApplied: options.requireAuth,
+        routeHandlerType: typeof routeHandler,
+        stackInfo: new Error().stack?.split('\n').slice(0, 5),
+        timestamp: new Date().toISOString()
+      });
+    }
+
     return true;
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    // 🔧🔧🔧 デバッグ出力8: エラー詳細
+    logger.error('❌❌❌ [DEBUG-routes/index] ルート登録エラー（詳細）', {
+      routeName,
+      path,
+      error: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString()
+    });
 
     // 失敗統計更新
     routeStats.failedRegistrations++;
@@ -180,6 +252,11 @@ const recordDuplicateResolution = (
 // =====================================
 
 const router = Router();
+
+// 🔧🔧🔧 デバッグ出力: ルーター初期化確認
+logger.info('🔧🔧🔧 [DEBUG-routes/index] Router初期化完了', {
+  timestamp: new Date().toISOString()
+});
 
 // =====================================
 // システム情報・ヘルスチェックエンドポイント（統合版）
@@ -513,7 +590,7 @@ const businessRoutes = [
     name: 'inspectionRoutes',
     path: '/inspections',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: '点検記録管理'
   },
   {
@@ -525,8 +602,30 @@ const businessRoutes = [
   }
 ];
 
+// 🔧🔧🔧 デバッグ出力: businessRoutes登録開始
+logger.info('🔍🔍🔍 [DEBUG-routes/index] businessRoutes登録開始', {
+  totalRoutes: businessRoutes.length,
+  routes: businessRoutes.map(r => ({ name: r.name, path: r.path })),
+  timestamp: new Date().toISOString()
+});
+
 businessRoutes.forEach(route => {
+  // 🔧🔧🔧 デバッグ出力: 各ルート登録前
+  logger.info('🔍🔍🔍 [DEBUG-routes/index] businessRoute登録開始（個別）', {
+    name: route.name,
+    path: route.path,
+    description: route.description,
+    timestamp: new Date().toISOString()
+  });
+
   safeImportAndRegisterRoute(route.name, route.path, router, route);
+
+  // 🔧🔧🔧 デバッグ出力: 各ルート登録後
+  logger.info('🔍🔍🔍 [DEBUG-routes/index] businessRoute登録完了（個別）', {
+    name: route.name,
+    path: route.path,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // =====================================
@@ -695,11 +794,12 @@ router.use('*', asyncHandler(async (req: Request, res: Response) => {
 // 初期化完了ログ・エクスポート
 // =====================================
 
-logger.info('✅ routes/index.ts 統合完了', {
+logger.info('✅ routes/index.ts 統合完了（デバッグ出力追加）', {
   registeredRoutes: routeStats.successfulRegistrations,
   duplicatesResolved: routeStats.duplicateResolutions.length,
   integrationStatus: 'Phase 1 - API Foundation Complete',
   middleware: 'auth + errorHandler integrated',
+  debugMode: true,
   timestamp: new Date().toISOString()
 });
 
@@ -727,7 +827,7 @@ export const resetRouteStatistics = (): void => {
 // =====================================
 
 /**
- * ✅ routes/index.ts統合完了
+ * ✅ routes/index.ts統合完了（デバッグ出力追加版）
  *
  * 【完了項目】
  * ✅ 重複ルート定義の解消（authRoutes.ts優先、userRoutes.ts優先）
@@ -740,6 +840,7 @@ export const resetRouteStatistics = (): void => {
  * ✅ アーキテクチャ指針準拠（型安全性・レイヤー責務明確化）
  * ✅ 企業レベルAPI基盤（統計・監視・ヘルスチェック）
  * ✅ 統一コメントポリシー適用（ファイルヘッダー・TSDoc・統合説明）
+ * ✅ デバッグ出力追加（inspectionRoutes特化・全ルート対応）
  *
  * 【次のPhase 1対象】
  * 🎯 routes/authRoutes.ts: 認証ルート統合（API機能実現必須）

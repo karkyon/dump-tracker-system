@@ -81,11 +81,27 @@ class InspectionController {
    * 企業レベル機能: フィルタリング・ソート・ページネーション・権限制御
    */
   public getAllInspectionItems = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    // 🔧🔧🔧 デバッグ出力1: メソッド開始
+    logger.info('🔧🔧🔧 [DEBUG-Controller] getAllInspectionItems メソッド開始', {
+      userId: req.user?.userId,
+      role: req.user?.role,
+      query: req.query,
+      timestamp: new Date().toISOString()
+    });
+
     try {
       const {
         inspectionType,
         isActive
       } = req.query;
+
+      // 🔧🔧🔧 デバッグ出力2: クエリパラメータ確認
+      logger.info('🔍🔍🔍 [DEBUG-Controller] クエリパラメータ抽出完了', {
+        inspectionType,
+        isActive,
+        rawQuery: req.query,
+        timestamp: new Date().toISOString()
+      });
 
       logger.info('📋 [Controller] 点検項目一覧取得開始', {
         userId: req.user?.userId,
@@ -99,6 +115,21 @@ class InspectionController {
         isActive: isActive !== 'false'
       };
 
+      // 🔧🔧🔧 デバッグ出力3: フィルタオプション確認
+      logger.info('🔍🔍🔍 [DEBUG-Controller] フィルタオプション構築完了', {
+        filterOptions,
+        timestamp: new Date().toISOString()
+      });
+
+      // 🔧🔧🔧 デバッグ出力4: Service呼び出し前
+      logger.info('🔍🔍🔍 [DEBUG-Controller] Service層呼び出し開始', {
+        serviceName: 'inspectionService.getInspectionItems',
+        requesterId: req.user?.userId || '',
+        requesterRole: req.user?.role || 'DRIVER',
+        options: { includeSummary: false },
+        timestamp: new Date().toISOString()
+      });
+
       // Service層経由で取得（統計情報なし）
       const result = await this.inspectionService.getInspectionItems(
         filterOptions,
@@ -107,15 +138,39 @@ class InspectionController {
         { includeSummary: false }  // ← 統計情報を含めない（高速化）
       );
 
+      // 🔧🔧🔧 デバッグ出力5: Service呼び出し後
+      logger.info('🔍🔍🔍 [DEBUG-Controller] Service層呼び出し完了', {
+        resultSuccess: result.success,
+        dataLength: result.data?.length || 0,
+        metaTotal: result.meta?.total || 0,
+        timestamp: new Date().toISOString()
+      });
+
       logger.info('✅ [Controller] 点検項目一覧取得成功', {
         userId: req.user?.userId,
         resultCount: result.data?.length || 0,
         totalCount: result.meta?.total || 0
       });
 
+      // 🔧🔧🔧 デバッグ出力6: レスポンス送信前
+      logger.info('🔍🔍🔍 [DEBUG-Controller] レスポンス送信開始', {
+        statusCode: 200,
+        dataLength: result.data?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+
       return sendSuccess(res, result, '点検項目一覧を取得しました');
 
     } catch (error) {
+      // 🔧🔧🔧 デバッグ出力7: エラー詳細
+      logger.error('❌❌❌ [DEBUG-Controller] 点検項目一覧取得エラー（詳細）', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined,
+        userId: req.user?.userId,
+        timestamp: new Date().toISOString()
+      });
+
       logger.error('❌ [Controller] 点検項目一覧取得エラー:', error);
       return sendError(res, '点検項目一覧の取得に失敗しました', 500);
     }

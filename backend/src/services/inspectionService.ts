@@ -288,10 +288,27 @@ export class InspectionService {
       includeSummary?: boolean;  // 統計情報を含めるか（デフォルト: false）
     }
   ): Promise<InspectionItemListResponse> {
+    // 🔧🔧🔧 デバッグ出力1: メソッド開始
+    logger.info('🔧🔧🔧 [DEBUG-InspectionService] getInspectionItems メソッド開始', {
+      requesterId,
+      requesterRole,
+      filter,
+      options,
+      timestamp: new Date().toISOString()
+    });
+
     try {
       // フィルタから値を取得（型安全に）
       const inspectionType = (filter as any).inspectionType;
       const isActive = (filter as any).isActive;
+
+      // 🔧🔧🔧 デバッグ出力2: フィルタパラメータ抽出
+      logger.info('🔍🔍🔍 [DEBUG-InspectionService] フィルタパラメータ抽出完了', {
+        inspectionType,
+        isActive,
+        rawFilter: filter,
+        timestamp: new Date().toISOString()
+      });
 
       logger.info('📋 [InspectionService] 点検項目一覧取得開始', {
         requesterId,
@@ -316,12 +333,33 @@ export class InspectionService {
         where.inspectionType = inspectionType;
       }
 
+      // 🔧🔧🔧 デバッグ出力3: where条件確認
+      logger.info('🔍🔍🔍 [DEBUG-InspectionService] where条件構築完了', {
+        where,
+        timestamp: new Date().toISOString()
+      });
+
+      // 🔧🔧🔧 デバッグ出力4: Prismaクエリ実行前
+      logger.info('🔍🔍🔍 [DEBUG-InspectionService] Prismaクエリ実行開始', {
+        queryType: 'inspectionItem.findMany',
+        where,
+        orderBy: { displayOrder: 'asc' },
+        timestamp: new Date().toISOString()
+      });
+
       // Prismaクエリ実行（1回のみ）
       const items = await this.prisma.inspectionItem.findMany({
         where,
         orderBy: {
           displayOrder: 'asc'
         }
+      });
+
+      // 🔧🔧🔧 デバッグ出力5: Prismaクエリ実行後
+      logger.info('🔍🔍🔍 [DEBUG-InspectionService] Prismaクエリ実行完了', {
+        itemCount: items.length,
+        items: items.map(i => ({ id: i.id, name: i.name, inspectionType: i.inspectionType })),
+        timestamp: new Date().toISOString()
       });
 
       // オプションで統計情報を取得
@@ -337,7 +375,13 @@ export class InspectionService {
         includedSummary: !!summary
       });
 
-      return {
+      // 🔧🔧🔧 デバッグ出力6: レスポンス構築前
+      logger.info('🔍🔍🔍 [DEBUG-InspectionService] レスポンス構築開始', {
+        itemCount: items.length,
+        timestamp: new Date().toISOString()
+      });
+
+      const response = {
         success: true,
         data: items.map(item => this.toInspectionItemResponseDTO(item)),
         message: '点検項目一覧を取得しました',
@@ -353,7 +397,25 @@ export class InspectionService {
         summary
       };
 
+      // 🔧🔧🔧 デバッグ出力7: レスポンス構築完了
+      logger.info('🔍🔍🔍 [DEBUG-InspectionService] レスポンス構築完了', {
+        dataLength: response.data.length,
+        metaTotal: response.meta.total,
+        timestamp: new Date().toISOString()
+      });
+
+      return response;
+
     } catch (error) {
+      // 🔧🔧🔧 デバッグ出力8: エラー詳細
+      logger.error('❌❌❌ [DEBUG-InspectionService] 点検項目一覧取得エラー（詳細）', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined,
+        requesterId,
+        timestamp: new Date().toISOString()
+      });
+
       logger.error('❌ [InspectionService] 点検項目一覧取得エラー', {
         error: error instanceof Error ? error.message : error,
         stack: error instanceof Error ? error.stack : undefined,

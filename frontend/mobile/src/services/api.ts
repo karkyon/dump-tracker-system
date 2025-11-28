@@ -592,6 +592,7 @@ class APIServiceClass {
   /**
    * 点検項目一覧取得（乗車前/乗車後でフィルタ）
    * GET /api/v1/inspections/items?inspectionType=PRE_TRIP
+   * 🔧 デバッグ出力追加版
    */
   async getInspectionItems(params?: {
     inspectionType?: 'PRE_TRIP' | 'POST_TRIP';
@@ -600,12 +601,87 @@ class APIServiceClass {
     limit?: number;
   }): Promise<APIResponse<any>> {
     try {
+      // 🔧🔧🔧 デバッグ1: メソッド開始
+      console.log('🔧🔧🔧 [DEBUG-api.ts] getInspectionItems メソッド開始', {
+        params,
+        timestamp: new Date().toISOString()
+      });
+
+      // 🔧🔧🔧 デバッグ2: axiosInstance設定確認
+      console.log('🔍🔍🔍 [DEBUG-api.ts] axiosInstance設定', {
+        baseURL: this.axiosInstance.defaults.baseURL,
+        timeout: this.axiosInstance.defaults.timeout,
+        headers: this.axiosInstance.defaults.headers,
+        timestamp: new Date().toISOString()
+      });
+
+      // 🔧🔧🔧 デバッグ3: リクエストURL構築
+      const fullURL = `${this.axiosInstance.defaults.baseURL}/inspections/items`;
+      console.log('🔍🔍🔍 [DEBUG-api.ts] リクエストURL', {
+        fullURL,
+        params,
+        timestamp: new Date().toISOString()
+      });
+
+      // 🔧🔧🔧 デバッグ4: トークン確認
+      const token = this.getToken();
+      console.log('🔍🔍🔍 [DEBUG-api.ts] 認証トークン', {
+        hasToken: !!token,
+        tokenLength: token?.length,
+        tokenPreview: token ? `${token.substring(0, 20)}...` : 'なし',
+        timestamp: new Date().toISOString()
+      });
+
+      // 🔧🔧🔧 デバッグ5: axios.get実行前
+      console.log('🔍🔍🔍 [DEBUG-api.ts] axios.get実行開始', {
+        endpoint: '/inspections/items',
+        params,
+        timestamp: new Date().toISOString()
+      });
+
       const response = await this.axiosInstance.get<APIResponse<any>>(
         '/inspections/items',
         { params }
       );
+
+      // 🔧🔧🔧 デバッグ6: axios.get実行後
+      console.log('🔍🔍🔍 [DEBUG-api.ts] axios.get実行完了', {
+        status: response.status,
+        statusText: response.statusText,
+        dataKeys: Object.keys(response.data || {}),
+        timestamp: new Date().toISOString()
+      });
+
+      // 🔧🔧🔧 デバッグ7: レスポンスデータ詳細
+      console.log('🔍🔍🔍 [DEBUG-api.ts] レスポンスデータ詳細', {
+        success: response.data?.success,
+        dataLength: response.data?.data?.length,
+        message: response.data?.message,
+        timestamp: new Date().toISOString()
+      });
+
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      // 🔧🔧🔧 デバッグ8: エラー詳細
+      console.error('❌❌❌ [DEBUG-api.ts] getInspectionItems エラー（詳細）', {
+        errorType: error?.constructor?.name,
+        code: error?.code,
+        message: error?.message,
+        response: {
+          status: error?.response?.status,
+          statusText: error?.response?.statusText,
+          data: error?.response?.data
+        },
+        request: {
+          url: error?.config?.url,
+          method: error?.config?.method,
+          baseURL: error?.config?.baseURL,
+          timeout: error?.config?.timeout
+        },
+        stack: error?.stack,
+        timestamp: new Date().toISOString()
+      });
+
       console.error('Get inspection items error:', error);
       throw error;
     }

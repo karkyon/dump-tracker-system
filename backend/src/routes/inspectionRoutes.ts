@@ -2,6 +2,7 @@
 // backend/src/routes/inspectionRoute.ts
 // 点検管理ルート - コンパイルエラー完全解消版
 // tripRoutes.tsパターン適用・全28件エラー解消
+// 🔧 デバッグ出力追加版（既存機能100%保持）
 // 最終更新: 2025年10月18日
 // 依存関係: controllers/inspectionController.ts, middleware/auth.ts, middleware/validation.ts
 // 統合基盤: middleware層100%・utils層・controllers層統合活用
@@ -49,6 +50,12 @@ import type { AuthenticatedRequest } from '../types/auth';
 
 const router = Router();
 
+// 🔧🔧🔧 デバッグ出力追加: ルーター初期化確認
+logger.info('🔧🔧🔧 [DEBUG-InspectionRoutes] ルーター初期化開始', {
+  timestamp: new Date().toISOString(),
+  file: 'backend/src/routes/inspectionRoute.ts'
+});
+
 /**
  * 点検管理API統合ルーター
  *
@@ -69,6 +76,28 @@ const router = Router();
 // 全点検関連ルートに認証を適用
 router.use(authenticateToken);
 
+// 🔧🔧🔧 デバッグ出力追加: 全リクエストをログ
+router.use((req, res, next) => {
+  logger.info('🔍🔍🔍 [DEBUG-InspectionRoutes] リクエスト受信', {
+    method: req.method,
+    url: req.originalUrl,
+    path: req.path,
+    baseUrl: req.baseUrl,
+    query: req.query,
+    params: req.params,
+    headers: {
+      authorization: req.headers.authorization ? 'Bearer ***' : 'なし',
+      'content-type': req.headers['content-type']
+    },
+    user: (req as AuthenticatedRequest).user ? {
+      userId: (req as AuthenticatedRequest).user?.userId,
+      role: (req as AuthenticatedRequest).user?.role
+    } : 'なし',
+    timestamp: new Date().toISOString()
+  });
+  next();
+});
+
 // =====================================
 // 📋 点検項目管理API
 // =====================================
@@ -80,7 +109,28 @@ router.use(authenticateToken);
  */
 router.get(
   '/items',
+  (req, res, next) => {
+    logger.info('🎯🎯🎯 [DEBUG-InspectionRoutes] /items ルート到達 - validatePaginationQuery前', {
+      query: req.query,
+      timestamp: new Date().toISOString()
+    });
+    next();
+  },
   validatePaginationQuery,
+  (req, res, next) => {
+    logger.info('🎯🎯🎯 [DEBUG-InspectionRoutes] /items validatePaginationQuery通過', {
+      query: req.query,
+      timestamp: new Date().toISOString()
+    });
+    next();
+  },
+  (req, res, next) => {
+    logger.info('🎯🎯🎯 [DEBUG-InspectionRoutes] /items Controller呼び出し直前', {
+      controllerName: 'getAllInspectionItems',
+      timestamp: new Date().toISOString()
+    });
+    next();
+  },
   getAllInspectionItems
 );
 
@@ -252,11 +302,12 @@ router.use('*', (req, res, next) => {
 // 📤 エクスポート・統合完了確認
 // =====================================
 
-logger.info('✅ routes/inspectionRoutes.ts コンパイルエラー完全解消版統合完了', {
+logger.info('✅ routes/inspectionRoutes.ts コンパイルエラー完全解消版統合完了（デバッグ出力追加）', {
   totalEndpoints: 12,
   fixedErrors: 28,
+  debugMode: true,
   integrationStatus: 'controllers/inspectionController.ts - Full Integration',
-  middleware: 'auth + validation + errorHandler integrated',
+  middleware: 'auth + validation + errorHandler + DEBUG integrated',
   timestamp: new Date().toISOString()
 });
 
