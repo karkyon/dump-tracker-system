@@ -38,11 +38,10 @@ import {
   sendSuccess
 } from './utils/response';
 
-import logger from './utils/logger';
 import { DATABASE_SERVICE } from './utils/database';
+import logger from './utils/logger';
 
 // 🎯 完成済み統合基盤の100%活用（config層）
-import { config as environmentConfig } from './config/environment';
 import { swaggerSpec, swaggerUiOptions } from './config/swagger';
 
 // 🎯 統一型定義インポート（types層）
@@ -387,11 +386,11 @@ export class ExpressApp {
    */
   private registerIndividualRoutes(): void {
     const routeConfigs = [
-      { path: '/api/v1/auth', module: './routes/authRoute', name: '認証' },
-      { path: '/api/v1/users', module: './routes/userRoute', name: 'ユーザー' },
-      { path: '/api/v1/vehicles', module: './routes/vehicleRoute', name: '車両' },
-      { path: '/api/v1/trips', module: './routes/tripRoute', name: '運行' },
-      { path: '/api/v1/inspections', module: './routes/inspectionRoute', name: '点検' }
+      { path: '/api/v1/auth', module: './routes/authRoutes', name: '認証' },
+      { path: '/api/v1/users', module: './routes/userRoutes', name: 'ユーザー' },
+      { path: '/api/v1/vehicles', module: './routes/vehicleRoutes', name: '車両' },
+      { path: '/api/v1/trips', module: './routes/tripRoutes', name: '運行' },
+      { path: '/api/v1/inspections', module: './routes/inspectionRoutes', name: '点検' }
     ];
 
     for (const { path, module, name } of routeConfigs) {
