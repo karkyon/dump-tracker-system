@@ -20,7 +20,7 @@ import { getUserService } from '../services/userService';
 import { getVehicleService } from '../services/vehicleService';
 import type { AuthenticatedRequest } from '../types/auth';
 import type { PaginationQuery } from '../types/common';
-import type { EndTripRequest, TripFilter } from '../types/trip'; // ✅ 追加: EndTripRequestをインポート
+import type { CreateTripRequest, EndTripRequest, TripFilter } from '../types/trip';
 import type { VehicleFilter } from '../types/vehicle';
 import { DatabaseService } from '../utils/database';
 import { AuthorizationError, ValidationError } from '../utils/errors';
@@ -250,23 +250,23 @@ export class MobileController {
 
       this.collectStats('operation', req.user.userId);
 
-      const startPosition = req.body.startPosition || {
-        latitude: req.body.startLatitude || 0,
-        longitude: req.body.startLongitude || 0,
-        accuracy: req.body.gpsAccuracy || 10,
-        timestamp: new Date(),
-        source: 'mobile'
-      };
-
-      const tripData = {
+      // ✅ GPS開始位置情報を含むリクエスト
+      const tripData: CreateTripRequest = {
         vehicleId: req.body.vehicleId,
         driverId: req.user.userId,
         actualStartTime: new Date(),
-        startPosition,
-        plannedRoute: req.body.plannedRoute,
-        estimatedDuration: req.body.estimatedDuration
+        notes: req.body.notes,
+        startLocation: req.body.startLatitude && req.body.startLongitude ? {
+          latitude: req.body.startLatitude,
+          longitude: req.body.startLongitude,
+          accuracy: req.body.gpsAccuracy || 10,
+          address: req.body.startLocation
+        } : undefined
       };
 
+      logger.info('運行開始リクエスト', { tripData });
+
+      // tripService内部でGPS記録も含めて処理
       const tripResult = await this.tripService.startTrip(tripData);
 
       if (!tripResult.data) {
@@ -278,9 +278,10 @@ export class MobileController {
 
       const mobileResponse = {
         tripId: trip.id,
+        operationId: trip.id,
         status: 'in_progress',
         startTime: trip.actualStartTime || trip.plannedStartTime || new Date(),
-        currentPosition: startPosition,
+        currentPosition: tripData.startLocation,
         instructions: [
           '安全運転でお願いします',
           'GPS追跡が有効になっています',
@@ -297,7 +298,8 @@ export class MobileController {
 
     } catch (error) {
       logger.error('モバイル運行開始エラー', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       });
       sendError(res, '運行の開始に失敗しました', 500, 'OPERATION_START_ERROR');
     }

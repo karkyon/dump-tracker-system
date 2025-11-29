@@ -52,6 +52,13 @@ export interface CreateTripRequest {
   driverId?: string;
   actualStartTime: Date | string;
   notes?: string;
+  // 位置情報オプション
+  startLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    address?: string;
+  };
 }
 
 // 運行更新リクエスト型

@@ -10,96 +10,75 @@
 // 🎯 Phase 1完成基盤の活用
 import { DatabaseService } from '../utils/database';
 import {
-  AppError,
-  ValidationError,
-  AuthorizationError,
-  NotFoundError,
   ConflictError,
-  DatabaseError
+  NotFoundError,
+  ValidationError
 } from '../utils/errors';
 import { calculateDistance, validateGPSCoordinates } from '../utils/gpsCalculations';
 import logger from '../utils/logger';
 
 // 🎯 Phase 2 Services層基盤の活用
-import type { VehicleService } from './vehicleService';
 import type { UserService } from './userService';
+import type { VehicleService } from './vehicleService';
 
 // 🎯 Phase 3 Models層完成基盤の活用
 import {
   OperationService,
-  getOperationService,
-  type OperationModel,
-  type OperationCreateInput,
-  type OperationUpdateInput,
-  type OperationResponseDTO
+  getOperationService
 } from '../models/OperationModel';
 
 import {
   OperationDetailService,
   getOperationDetailService,
-  type OperationDetailModel,
-  type OperationDetailCreateInput,
   type OperationDetailResponseDTO
 } from '../models/OperationDetailModel';
 
 import {
   GpsLogService,
   getGpsLogService,
-  type GpsLogModel,
   type GpsLogCreateInput,
   type GpsLogResponseDTO
 } from '../models/GpsLogModel';
 
 // 🎯 Prismaからの型インポート
-import { ActivityType, Prisma } from '@prisma/client';
+import { ActivityType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
 // 🎯 types/からの統一型定義インポート
 import type {
-  Trip,
-  CreateTripRequest,
-  UpdateTripRequest,
-  EndTripRequest,
-  TripFilter,
-  PaginatedTripResponse,
-  CreateTripDetailRequest,
   CreateFuelRecordRequest,
+  CreateTripDetailRequest,
+  CreateTripRequest,
+  EndTripRequest,
+  GPSHistoryOptions,
+  GPSHistoryResponse,
+  GpsLocationUpdate,
+  PaginatedTripResponse,
+  PrismaVehicleStatus,
+  Trip,
+  TripFilter,
   TripStatistics,
   TripStatus,
-  VehicleOperationStatus,
-  TripDetail,
-  PrismaVehicleStatus,
-  BusinessVehicleStatus,
-  GpsLocationUpdate,
   TripWithDetails,
-  GPSHistoryOptions,
-  GPSHistoryResponse
+  UpdateTripRequest,
+  VehicleOperationStatus
 } from '../types/trip';
 
 import type { UserRole } from '../types';
 
 // ⚠️ 修正: import type ではなく通常インポートで実行時に使用可能にする
 import {
-  vehicleStatusHelper,
-  VEHICLE_STATUS_CONSTANTS,
-  TripVehicleStatusManager
+  vehicleStatusHelper
 } from '../types/trip';
 
 // 🎯 共通型定義の活用
 import type {
-  PaginationQuery,
   ApiResponse,
-  ApiListResponse,
-  OperationResult,
-  BulkOperationResult,
-  SearchQuery,
-  DateRange,
-  StatisticsBase
+  OperationResult
 } from '../types/common';
 
 // 🎯 運行統合型定義（既存完全実装保持）
-import type { TripOperationModel, OperationStatistics, OperationTripFilter, StartTripOperationRequest } from '../models/OperationModel';
-import { devNull } from 'os';
+import type { OperationStatistics, OperationTripFilter, StartTripOperationRequest, TripOperationModel } from '../models/OperationModel';
 
 // =====================================
 // 🚛 運行管理サービスクラス（Phase 2完全統合版）
@@ -155,7 +134,6 @@ class TripService {
       // バリデーション
       await this.validateStartTripRequest(request);
 
-      // driverIdの必須チェック
       if (!request.driverId) {
         throw new ValidationError('ドライバーIDは必須です', 'driverId');
       }
@@ -170,18 +148,56 @@ class TripService {
         throw new ConflictError(statusResult.message || '車両が使用できません');
       }
 
-      // ✅ 修正: CreateTripRequestからStartTripOperationRequestへマッピング
+      // StartTripOperationRequestへマッピング
       const startTripRequest: StartTripOperationRequest = {
         vehicleId: request.vehicleId,
-        driverId: request.driverId,  // すでに上でチェック済み
+        driverId: request.driverId,
         plannedStartTime: typeof request.actualStartTime === 'string'
           ? new Date(request.actualStartTime)
           : request.actualStartTime,
         notes: request.notes
       };
 
-      // OperationService.startTrip() を呼び出し（運行番号が自動生成される）
+      // 運行開始
       const tripOperation = await this.operationService.startTrip(startTripRequest);
+
+      // ✅ GPS開始位置を記録（運行開始直後）
+      if (request.startLocation) {
+        try {
+          await this.gpsLogService.create({
+            operations: {  // ✅ Prismaリレーション構文
+              connect: { id: tripOperation.id }
+            },
+            vehicles: {  // ✅ 車両リレーションも必須
+              connect: { id: request.vehicleId }
+            },
+            latitude: request.startLocation.latitude,
+            longitude: request.startLocation.longitude,
+            altitude: 0,  // オプション
+            speedKmh: 0,  // 開始時は0
+            heading: 0,   // オプション
+            accuracyMeters: request.startLocation.accuracy || 10,
+            recordedAt: tripOperation.actualStartTime || new Date()
+          });
+
+          logger.info('GPS開始位置記録完了', {
+            tripId: tripOperation.id,
+            location: request.startLocation
+          });
+        } catch (gpsError) {
+          // GPS記録失敗時は運行もロールバック
+          logger.error('GPS開始位置記録エラー - 運行をロールバック', { gpsError });
+
+          try {
+            await this.operationService.delete({ id: tripOperation.id });
+            await this.checkAndUpdateVehicleStatus(request.vehicleId, 'AVAILABLE');
+          } catch (rollbackError) {
+            logger.error('ロールバックエラー', { rollbackError });
+          }
+
+          throw new Error('GPS開始位置の記録に失敗したため、運行を開始できませんでした');
+        }
+      }
 
       logger.info('運行開始完了', {
         tripId: tripOperation.id,
@@ -273,59 +289,59 @@ class TripService {
   /**
    * 運行一覧取得（Phase 2完全統合版）
    */
-async getAllTrips(filter: TripFilter = {}): Promise<PaginatedTripResponse<TripWithDetails>> {
-  try {
-    logger.info('運行一覧取得開始', { filter });
+  async getAllTrips(filter: TripFilter = {}): Promise<PaginatedTripResponse<TripWithDetails>> {
+    try {
+      logger.info('運行一覧取得開始', { filter });
 
-    const page = filter.page || 1;
-    const pageSize = filter.limit || 10;
+      const page = filter.page || 1;
+      const pageSize = filter.limit || 10;
 
-    // ✅ statusを配列に正規化
-    const statusArray = filter.status
-      ? (Array.isArray(filter.status) ? filter.status : [filter.status])
-      : undefined;
+      // ✅ statusを配列に正規化
+      const statusArray = filter.status
+        ? (Array.isArray(filter.status) ? filter.status : [filter.status])
+        : undefined;
 
-    const result = await this.operationService.findManyWithPagination({
-      where: {
-        ...(filter.vehicleId && { vehicleId: filter.vehicleId }),
-        ...(filter.driverId && { driverId: filter.driverId }),
-        // ✅ 配列形式で { in: array } として渡す
-        ...(statusArray && { status: { in: statusArray } }),
-        ...(filter.startDate && filter.endDate && {
-          startTime: {
-            gte: new Date(filter.startDate),
-            lte: new Date(filter.endDate)
-          }
-        })
-      },
-      orderBy: { createdAt: 'desc' },
-      page,
-      pageSize
-    });
+      const result = await this.operationService.findManyWithPagination({
+        where: {
+          ...(filter.vehicleId && { vehicleId: filter.vehicleId }),
+          ...(filter.driverId && { driverId: filter.driverId }),
+          // ✅ 配列形式で { in: array } として渡す
+          ...(statusArray && { status: { in: statusArray } }),
+          ...(filter.startDate && filter.endDate && {
+            startTime: {
+              gte: new Date(filter.startDate),
+              lte: new Date(filter.endDate)
+            }
+          })
+        },
+        orderBy: { createdAt: 'desc' },
+        page,
+        pageSize
+      });
 
-    const trips: TripWithDetails[] = await Promise.all(
-      result.data.map((operation: any) =>
-        this.buildTripWithDetails(operation, filter.hasGpsData)
-      )
-    );
+      const trips: TripWithDetails[] = await Promise.all(
+        result.data.map((operation: any) =>
+          this.buildTripWithDetails(operation, filter.hasGpsData)
+        )
+      );
 
-    return {
-      success: true,
-      data: trips,
-      message: '運行一覧を取得しました',
-      pagination: {
-        currentPage: result.page,
-        totalPages: result.totalPages,
-        totalItems: result.total,
-        itemsPerPage: result.pageSize
-      }
-    };
+      return {
+        success: true,
+        data: trips,
+        message: '運行一覧を取得しました',
+        pagination: {
+          currentPage: result.page,
+          totalPages: result.totalPages,
+          totalItems: result.total,
+          itemsPerPage: result.pageSize
+        }
+      };
 
-  } catch (error) {
-    logger.error('運行一覧取得エラー', { error, filter });
-    throw error;
+    } catch (error) {
+      logger.error('運行一覧取得エラー', { error, filter });
+      throw error;
+    }
   }
-}
 
   /**
    * 運行詳細取得（Phase 2完全統合版）
@@ -1250,27 +1266,16 @@ export default TripService;
 
 // 🎯 Phase 2統合: 運行サービス機能の統合エクスポート
 export type {
-  TripOperationModel,
   OperationStatistics,
   OperationTripFilter,
-  StartTripOperationRequest
+  StartTripOperationRequest, TripOperationModel
 };
 
 // 🎯 Phase 2統合: types/trip.ts完全エクスポート（後方互換性維持）
 export type {
-  Trip,
-  CreateTripRequest,
-  UpdateTripRequest,
-  EndTripRequest,
-  TripFilter,
-  PaginatedTripResponse,
-  TripWithDetails,
-  TripStatistics,
-  TripStatus,
-  VehicleOperationStatus,
-  GpsLocationUpdate,
-  GPSHistoryOptions,
-  GPSHistoryResponse
+  CreateTripRequest, EndTripRequest, GPSHistoryOptions,
+  GPSHistoryResponse, GpsLocationUpdate, PaginatedTripResponse, Trip, TripFilter, TripStatistics,
+  TripStatus, TripWithDetails, UpdateTripRequest, VehicleOperationStatus
 };
 
 // =====================================

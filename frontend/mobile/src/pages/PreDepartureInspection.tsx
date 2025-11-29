@@ -234,7 +234,7 @@ const PreDepartureInspection: React.FC = () => {
       
       // 4. 運行中画面へ遷移
       setTimeout(() => {
-        navigate('/operation-main');
+        navigate('/operation-record');
       }, 500);
       
     } catch (error: any) {
