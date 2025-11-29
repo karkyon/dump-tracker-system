@@ -176,16 +176,12 @@ const swaggerOptions: swaggerJsdoc.Options = {
     },
     servers: [
       {
-        url: `${envConfig.BASE_URL}/api/${envConfig.API_VERSION}`,
-        description: `Production API Server (${envConfig.PROTOCOL.toUpperCase()})`
+        url: `https://10.1.119.244:8443/api/v1`,
+        description: 'Production API Server (HTTPS)'
       },
       {
-        url: `http://localhost:${envConfig.PORT}/api/${envConfig.API_VERSION}`,
-        description: 'Development API Server (HTTP)'
-      },
-      {
-        url: `https://localhost:8443/api/${envConfig.API_VERSION}`,
-        description: 'Development API Server (HTTPS)'
+        url: `http://10.1.119.244:8000/api/v1`,
+        description: 'Development API Server (HTTP - Auto redirect to HTTPS)'
       }
     ],
     components: {
@@ -626,11 +622,7 @@ const swaggerUiOptions = {
  * swaggerUi, swaggerSpec, 設定オプション
  */
 export {
-  swaggerUi,
-  swaggerSpec,
-  swaggerEnabled,
-  swaggerUiOptions,
-  envConfig
+  envConfig, swaggerEnabled, swaggerSpec, swaggerUi, swaggerUiOptions
 };
 
 /**
