@@ -5,17 +5,17 @@
 // 既存機能完全保持・全エラー解消
 // =====================================
 
-import type { PrismaClient, LocationType, UserRole } from '@prisma/client';
+import type { PrismaClient, UserRole } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
 // Phase 1-A完成基盤の活用
 import { DatabaseService } from '../utils/database';
 import {
   AppError,
-  ValidationError,
   AuthorizationError,
+  ConflictError,
   NotFoundError,
-  ConflictError
+  ValidationError
 } from '../utils/errors';
 import logger from '../utils/logger';
 
@@ -27,24 +27,24 @@ import {
 
 // 共通型定義の活用（types/common.tsから）
 import type {
-  OperationResult,
-  LocationStatistics
+  LocationStatistics,
+  OperationResult
 } from '../types/common';
 
 // Location関連型定義の活用
 import type {
-  LocationResponseDTO,
-  LocationFilter,
   CreateLocationRequest,
-  UpdateLocationRequest,
+  LocationFilter,
+  LocationResponseDTO,
+  NearbyLocation,
   NearbyLocationRequest,
-  NearbyLocation
+  UpdateLocationRequest
 } from '../types/location';
 
 // LocationModel型定義の活用
 import type {
-  LocationModel,
   LocationCreateInput,
+  LocationModel,
   LocationUpdateInput
 } from '../models/LocationModel';
 
@@ -213,124 +213,124 @@ class LocationServiceWrapper {
     }
   }
 
-/**
- * 位置一覧取得
- */
-async getLocations(
-  filter: LocationFilter = {},
-  requesterId: string,
-  requesterRole: UserRole
-): Promise<{ locations: LocationResponseDTO[]; total: number; hasMore: boolean }> {
-  try {
-    // 権限チェック
-    this.checkLocationAccess(requesterId, requesterRole, 'read');
+  /**
+   * 位置一覧取得
+   */
+  async getLocations(
+    filter: LocationFilter = {},
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<{ locations: LocationResponseDTO[]; total: number; hasMore: boolean }> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'read');
 
-    const { page = 1, limit = 50, sortBy = 'name', sortOrder = 'asc', ...filterConditions } = filter;
-    const offset = (page - 1) * limit;
+      const { page = 1, limit = 50, sortBy = 'name', sortOrder = 'asc', ...filterConditions } = filter;
+      const offset = (page - 1) * limit;
 
-    // フィルタ条件構築
-    const whereCondition: any = {};
+      // フィルタ条件構築
+      const whereCondition: any = {};
 
-    if (filterConditions.search) {
-      whereCondition.OR = [
-        { name: { contains: filterConditions.search, mode: 'insensitive' } },
-        { address: { contains: filterConditions.search, mode: 'insensitive' } },
-        { clientName: { contains: filterConditions.search, mode: 'insensitive' } }
-      ];
-    }
-
-    if (filterConditions.locationType && Array.isArray(filterConditions.locationType)) {
-      whereCondition.locationType = { in: filterConditions.locationType };
-    }
-
-    if (filterConditions.clientName) {
-      whereCondition.clientName = { contains: filterConditions.clientName, mode: 'insensitive' };
-    }
-
-    if (filterConditions.isActive !== undefined) {
-      whereCondition.isActive = filterConditions.isActive;
-    }
-
-    if (filterConditions.hasCoordinates !== undefined) {
-      if (filterConditions.hasCoordinates) {
-        whereCondition.AND = [
-          { latitude: { not: null } },
-          { longitude: { not: null } }
-        ];
-      } else {
+      if (filterConditions.search) {
         whereCondition.OR = [
-          { latitude: null },
-          { longitude: null }
+          { name: { contains: filterConditions.search, mode: 'insensitive' } },
+          { address: { contains: filterConditions.search, mode: 'insensitive' } },
+          { clientName: { contains: filterConditions.search, mode: 'insensitive' } }
         ];
       }
-    }
 
-    let locations: any[];
-    let total: number;
+      if (filterConditions.locationType && Array.isArray(filterConditions.locationType)) {
+        whereCondition.locationType = { in: filterConditions.locationType };
+      }
 
-    // 近隣検索の場合
-    if (filterConditions.within) {
-      const allLocations = await this.locationService.findMany({
-        where: whereCondition,
-        include: {
-          _count: {
-            select: { operationDetails: true }
-          }
+      if (filterConditions.clientName) {
+        whereCondition.clientName = { contains: filterConditions.clientName, mode: 'insensitive' };
+      }
+
+      if (filterConditions.isActive !== undefined) {
+        whereCondition.isActive = filterConditions.isActive;
+      }
+
+      if (filterConditions.hasCoordinates !== undefined) {
+        if (filterConditions.hasCoordinates) {
+          whereCondition.AND = [
+            { latitude: { not: null } },
+            { longitude: { not: null } }
+          ];
+        } else {
+          whereCondition.OR = [
+            { latitude: null },
+            { longitude: null }
+          ];
         }
-      });
+      }
 
-      const { latitude, longitude, radiusKm } = filterConditions.within;
+      let locations: any[];
+      let total: number;
 
-      const locationsWithDistance = allLocations
-        .filter(loc => loc.latitude !== null && loc.longitude !== null)
-        .map(location => ({
-          ...location,
-          distance: calculateDistance(
-            latitude,
-            longitude,
-            this.convertToNumber(location.latitude!),
-            this.convertToNumber(location.longitude!)
-          )
-        }))
-        .filter(location => location.distance <= radiusKm)
-        .sort((a, b) => a.distance - b.distance);
-
-      total = locationsWithDistance.length;
-      locations = locationsWithDistance.slice(offset, offset + limit);
-
-    } else {
-      // 通常検索
-      const [locationResults, totalCount] = await Promise.all([
-        this.locationService.findMany({
+      // 近隣検索の場合
+      if (filterConditions.within) {
+        const allLocations = await this.locationService.findMany({
           where: whereCondition,
           include: {
             _count: {
               select: { operationDetails: true }
             }
-          },
-          orderBy: sortBy === 'distance' ? { name: sortOrder } : { [sortBy]: sortOrder },
-          take: limit,
-          skip: offset
-        }),
-        // 修正: countメソッドは直接whereConditionを受け取る
-        this.locationService.count(whereCondition)
-      ]);
+          }
+        });
 
-      locations = locationResults;
-      total = totalCount;
+        const { latitude, longitude, radiusKm } = filterConditions.within;
+
+        const locationsWithDistance = allLocations
+          .filter(loc => loc.latitude !== null && loc.longitude !== null)
+          .map(location => ({
+            ...location,
+            distance: calculateDistance(
+              latitude,
+              longitude,
+              this.convertToNumber(location.latitude!),
+              this.convertToNumber(location.longitude!)
+            )
+          }))
+          .filter(location => location.distance <= radiusKm)
+          .sort((a, b) => a.distance - b.distance);
+
+        total = locationsWithDistance.length;
+        locations = locationsWithDistance.slice(offset, offset + limit);
+
+      } else {
+        // 通常検索
+        const [locationResults, totalCount] = await Promise.all([
+          this.locationService.findMany({
+            where: whereCondition,
+            include: {
+              _count: {
+                select: { operationDetails: true }
+              }
+            },
+            orderBy: sortBy === 'distance' ? { name: sortOrder } : { [sortBy]: sortOrder },
+            take: limit,
+            skip: offset
+          }),
+          // 修正: countメソッドは直接whereConditionを受け取る
+          this.locationService.count(whereCondition)
+        ]);
+
+        locations = locationResults;
+        total = totalCount;
+      }
+
+      return {
+        locations: locations.map(location => this.toResponseDTO(location)),
+        total,
+        hasMore: offset + locations.length < total
+      };
+
+    } catch (error) {
+      logger.error('位置一覧取得エラー', { error, filter, requesterId });
+      throw error;
     }
-
-    return {
-      locations: locations.map(location => this.toResponseDTO(location)),
-      total,
-      hasMore: offset + locations.length < total
-    };
-
-  } catch (error) {
-    logger.error('位置一覧取得エラー', { error, filter, requesterId });
-    throw error;
   }
-}
 
   /**
    * 位置更新
@@ -517,7 +517,11 @@ async getLocations(
         where: {
           isActive: true,
           latitude: { not: null },
-          longitude: { not: null }
+          longitude: { not: null },
+          // ✅ locationTypeフィルタ追加
+          ...(request.locationType && request.locationType.length > 0
+            ? { locationType: { in: request.locationType } }
+            : {})
         }
       });
 

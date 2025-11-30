@@ -66,7 +66,7 @@ const OperationMain: React.FC = () => {
   
   // Refs
   const watchIdRef = useRef<number | null>(null);
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<number | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   
   // ✅ 追加: 初期化済みフラグ（React Strict Mode対応）

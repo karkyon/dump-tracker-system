@@ -1,10 +1,10 @@
 // frontend/mobile/src/pages/OperationRecord.tsx
-// 🚛 運行記録画面 - 完全版
+// 🚛 運行記録画面 - 完全修正版
+// ✅ 運行開始直後は積込場所・積降場所・積荷ブランク
+// ✅ APIエラーハンドリング強化
 // ✅ ヘッドアップ表示（地図回転）
 // ✅ 走行軌跡（赤いライン）
 // ✅ 三角矢印マーカー（進行方向）
-// ✅ HeadingIndicator実装
-// ✅ ボタン状態遷移実装
 
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
@@ -18,6 +18,9 @@ import GoogleMapWrapper, {
   addPathPoint
 } from '../components/GoogleMapWrapper';
 import HeadingIndicator from '../components/HeadingIndicator';
+import { useNearbyLocationDetection } from '../hooks/useNearbyLocationDetection';
+import { LocationProximityPopup } from '../components/LocationProximityPopup';
+
 
 // 運行状態の型定義
 type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
@@ -41,15 +44,15 @@ const OperationRecord: React.FC = () => {
   const lastMapUpdateRef = useRef<number>(0);
   const lastMarkerUpdateRef = useRef<number>(0);
   
-  // 運行状態（フェーズ管理を追加）
+  // ✅ 修正: 運行開始直後はすべてブランク
   const [operation, setOperation] = useState<OperationState>({
     id: null,
     status: 'running',
     phase: 'TO_LOADING', // 初期状態: 積込場所へ向かう
     startTime: new Date(),
-    loadingLocation: '○○建設資材置場',
-    unloadingLocation: '△△工事現場',
-    cargoInfo: '砂利 12t'
+    loadingLocation: '',  // ✅ ブランク
+    unloadingLocation: '', // ✅ ブランク
+    cargoInfo: ''          // ✅ ブランク
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,6 +68,19 @@ const OperationRecord: React.FC = () => {
     totalDistance,
     averageSpeed: gpsAverageSpeed
   } = useGPS();
+
+  // ✅ 修正: enabled条件を厳格化（API負荷軽減）
+  const { detectedLocation, isPopupVisible, dismissPopup } = useNearbyLocationDetection({
+    currentLocation: currentPosition ? {
+      latitude: currentPosition.coords.latitude,
+      longitude: currentPosition.coords.longitude
+    } : null,
+    operationPhase: operation.phase,
+    enabled: isTracking && operation.status === 'running' && currentPosition !== null, // ✅ 修正
+    radiusMeters: 150,
+    checkIntervalMs: 10000, // ✅ 修正: 5秒 → 10秒（負荷軽減）
+    popupDurationMs: 5000
+  });
 
   // GPS追跡自動開始
   useEffect(() => {
@@ -111,13 +127,6 @@ const OperationRecord: React.FC = () => {
     const currentHeading = heading !== null ? heading : 0;
     const currentSpeed = gpsSpeed || 0;
 
-    console.log('🗺️ 地図更新:', {
-      heading: currentHeading,
-      speed: currentSpeed,
-      distance: totalDistance,
-      position: { lat, lng }
-    });
-
     // マーカー位置を即座に更新
     updateMarkerPosition(lat, lng);
 
@@ -156,7 +165,7 @@ const OperationRecord: React.FC = () => {
         actionType: 'LOADING_ARRIVAL',
         latitude: currentPosition.coords.latitude,
         longitude: currentPosition.coords.longitude,
-        location: operation.loadingLocation
+        location: operation.loadingLocation || '積込場所'
       });
       
       // 状態遷移: TO_LOADING → AT_LOADING
@@ -165,6 +174,7 @@ const OperationRecord: React.FC = () => {
       
       console.log('🚚 積込場所到着 → 次は積降場所へ');
     } catch (error) {
+      console.error('積込場所到着記録エラー:', error);
       toast.error('記録に失敗しました');
     } finally {
       setIsSubmitting(false);
@@ -182,7 +192,7 @@ const OperationRecord: React.FC = () => {
         actionType: 'UNLOADING_ARRIVAL',
         latitude: currentPosition.coords.latitude,
         longitude: currentPosition.coords.longitude,
-        location: operation.unloadingLocation
+        location: operation.unloadingLocation || '積降場所'
       });
       
       // 状態遷移: AT_LOADING → TO_UNLOADING → AT_UNLOADING
@@ -191,6 +201,7 @@ const OperationRecord: React.FC = () => {
       
       console.log('📦 積降場所到着 → 次は積込場所へ');
     } catch (error) {
+      console.error('積降場所到着記録エラー:', error);
       toast.error('記録に失敗しました');
     } finally {
       setIsSubmitting(false);
@@ -214,6 +225,7 @@ const OperationRecord: React.FC = () => {
       setOperation(prev => ({ ...prev, phase: 'BREAK' }));
       toast.success('休憩・荷待ちを記録しました');
     } catch (error) {
+      console.error('休憩記録エラー:', error);
       toast.error('記録に失敗しました');
     } finally {
       setIsSubmitting(false);
@@ -237,6 +249,7 @@ const OperationRecord: React.FC = () => {
       setOperation(prev => ({ ...prev, phase: 'REFUEL' }));
       toast.success('給油を記録しました');
     } catch (error) {
+      console.error('給油記録エラー:', error);
       toast.error('記録に失敗しました');
     } finally {
       setIsSubmitting(false);
@@ -411,6 +424,13 @@ const OperationRecord: React.FC = () => {
             <HeadingIndicator heading={heading} />
           </div>
         )}
+        {detectedLocation && (
+          <LocationProximityPopup
+            location={detectedLocation}
+            visible={isPopupVisible}
+            onDismiss={dismissPopup}
+          />
+        )}
       </div>
 
       {/* コンテンツエリア */}
@@ -443,9 +463,11 @@ const OperationRecord: React.FC = () => {
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '500',
-              border: '1px solid #e0e0e0'
+              border: '1px solid #e0e0e0',
+              color: operation.loadingLocation ? '#333' : '#999',
+              fontStyle: operation.loadingLocation ? 'normal' : 'italic'
             }}>
-              {operation.loadingLocation}
+              {operation.loadingLocation || '未設定'}
             </div>
           </div>
 
@@ -465,9 +487,11 @@ const OperationRecord: React.FC = () => {
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '500',
-              border: '1px solid #e0e0e0'
+              border: '1px solid #e0e0e0',
+              color: operation.unloadingLocation ? '#333' : '#999',
+              fontStyle: operation.unloadingLocation ? 'normal' : 'italic'
             }}>
-              {operation.unloadingLocation}
+              {operation.unloadingLocation || '未設定'}
             </div>
           </div>
 
@@ -487,9 +511,11 @@ const OperationRecord: React.FC = () => {
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '500',
-              border: '1px solid #e0e0e0'
+              border: '1px solid #e0e0e0',
+              color: operation.cargoInfo ? '#333' : '#999',
+              fontStyle: operation.cargoInfo ? 'normal' : 'italic'
             }}>
-              {operation.cargoInfo}
+              {operation.cargoInfo || '未設定'}
             </div>
           </div>
 

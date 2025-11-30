@@ -12,7 +12,6 @@ import {
   Circle,
   Loader2,
   Truck,
-  AlertCircle,
   XCircle,
   RefreshCcw
 } from 'lucide-react';
@@ -35,7 +34,7 @@ interface InspectionItem {
 
 const PreDepartureInspection: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const { 
     vehicleId, 
     vehicleNumber, 
@@ -108,7 +107,7 @@ const PreDepartureInspection: React.FC = () => {
         }));
 
         // displayOrderでソート
-        itemsWithChecked.sort((a, b) => a.displayOrder - b.displayOrder);
+        itemsWithChecked.sort((a: any, b: any) => a.displayOrder - b.displayOrder);
 
         setInspectionItems(itemsWithChecked);
         console.log('[D3] ✅ 点検項目取得成功:', itemsWithChecked.length, '件');
@@ -223,7 +222,7 @@ const PreDepartureInspection: React.FC = () => {
         throw new Error('運行開始に失敗しました');
       }
 
-      const operationId = operationResponse.data.id || operationResponse.data.operationId;
+      const operationId = operationResponse.data.id;
       console.log('[D3] 運行開始成功:', operationId);
 
       // 3. Store更新

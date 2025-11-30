@@ -441,6 +441,52 @@ class APIServiceClass {
     }
   }
 
+    /**
+     * 近隣地点検索（運行中専用）
+     * POST /api/v1/mobile/operations/nearby-locations
+     */
+    async getNearbyLocations(data: {
+      operationId?: string;
+      latitude: number;
+      longitude: number;
+      radiusMeters: number;
+      phase: 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
+    }): Promise<APIResponse<{
+      locations: Array<{
+        location: {
+          id: string;
+          name: string;
+          address: string;
+          locationType: string;
+          latitude: number;
+          longitude: number;
+          contactPerson?: string;
+          contactPhone?: string;
+        };
+        distance: number;
+        bearing: number;
+      }>;
+      searchCriteria: {
+        latitude: number;
+        longitude: number;
+        radiusMeters: number;
+        phase: string;
+        locationType?: string[];
+      };
+      timestamp: string;
+    }>> {
+      try {
+        const response = await this.axiosInstance.post<APIResponse<any>>(
+          '/mobile/operations/nearby-locations',
+          data
+        );
+        return response.data;
+      } catch (error) {
+        console.error('Get nearby locations error:', error);
+        throw error;
+      }
+    }
+
   /**
    * クイック位置登録
    * POST /api/v1/mobile/locations/quick
