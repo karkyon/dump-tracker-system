@@ -46,7 +46,7 @@ const router = Router();
 // 全ルートで認証必須
 // =====================================
 
-router.use(authenticateToken);
+router.use(authenticateToken());
 
 // =====================================
 // 品目管理APIエンドポイント

@@ -506,6 +506,8 @@ enum LocationType {
   DESTINATION
   REST_AREA
   FUEL_STATION
+  PICKUP
+  DELIVERY
 
   @@map("location_type")
 }

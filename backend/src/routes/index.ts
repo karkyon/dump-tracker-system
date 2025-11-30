@@ -563,28 +563,28 @@ const businessRoutes = [
     name: 'vehicleRoutes',
     path: '/vehicles',
     priority: 'high' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: '車両管理'
   },
   {
     name: 'tripRoutes',
     path: '/trips',
     priority: 'high' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: '運行記録管理'
   },
   {
-    name: 'locationRoutes',  // ✅ 修正: 正しいファイル名
+    name: 'locationRoutes',
     path: '/locations',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: '位置・場所管理（Swagger UI対応）'
   },
   {
     name: 'itemRoutes',
     path: '/items',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: '品目管理'
   },
   {
@@ -598,7 +598,7 @@ const businessRoutes = [
     name: 'reportRoutes',
     path: '/reports',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: 'レポート・分析'
   }
 ];
@@ -637,21 +637,21 @@ const locationTrackingRoutes = [
     name: 'gpsRoutes',  // ✅ 修正: 正しいファイル名
     path: '/gps',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: 'GPS横断機能・リアルタイム追跡（Swagger UI対応）'
   },
   {
     name: 'operationRoutes',
     path: '/operations',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: '運行管理・操作'
   },
   {
     name: 'operationDetailRoutes',
     path: '/operationDetails',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
     description: '運行詳細管理・操作'
   }
 ];

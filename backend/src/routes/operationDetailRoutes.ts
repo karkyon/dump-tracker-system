@@ -46,7 +46,7 @@ const operationDetailController = new OperationDetailController();
 // 全ルートで認証必須
 // =====================================
 
-router.use(authenticateToken);
+router.use(authenticateToken());
 
 // =====================================
 // 🚚 運行詳細管理APIエンドポイント（全機能実装）

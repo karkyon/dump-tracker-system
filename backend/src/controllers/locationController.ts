@@ -5,43 +5,35 @@
 // 最終更新: 2025年10月17日
 // =====================================
 
-import { Request, Response } from 'express';
-import { UserRole, LocationType } from '@prisma/client';
+import { LocationType, UserRole } from '@prisma/client';
+import { Response } from 'express';
 
 // Phase 1完成基盤の活用
 import { asyncHandler } from '../utils/asyncHandler';
-import {
-  AppError,
-  ValidationError,
-  AuthorizationError,
-  NotFoundError,
-  ConflictError
-} from '../utils/errors';
-import { successResponse, errorResponse } from '../utils/response';
-import { logger } from '../utils/logger';
 import { DatabaseService } from '../utils/database';
+import {
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError
+} from '../utils/errors';
+import { logger } from '../utils/logger';
+import { errorResponse, successResponse } from '../utils/response';
 
 // Phase 2 services/基盤の活用
 import { getLocationServiceWrapper } from '../services/locationService';
 
 // types/統合基盤の活用（完全な型安全性）
 import type {
-  LocationResponseDTO,
-  LocationFilter,
+  AuthenticatedRequest,
   CreateLocationRequest,
-  UpdateLocationRequest,
-  NearbyLocationRequest,
-  LocationStatistics,
+  LocationFilter,
   LocationListResponse,
-  NearbyLocation,
-  AuthenticatedRequest
+  NearbyLocationRequest,
+  UpdateLocationRequest
 } from '../types';
 
 // 共通型定義の活用（types/common.tsから）
-import type {
-  ApiResponse,
-  PaginationQuery
-} from '../types/common';
 
 // =====================================
 // LocationController クラス（完全統合版）
@@ -395,7 +387,31 @@ class LocationController {
         throw new AuthorizationError('認証が必要です');
       }
 
-      const nearbyRequest: NearbyLocationRequest = req.body;
+      // ✅ メートル単位の半径指定に対応
+      let radiusKm: number;
+
+      if (req.query.radiusMeters) {
+        // メートル指定があればキロメートルに変換
+        radiusKm = parseFloat(req.query.radiusMeters as string) / 1000;
+      } else if (req.query.radiusKm) {
+        // キロメートル指定
+        radiusKm = parseFloat(req.query.radiusKm as string);
+      } else {
+        throw new ValidationError('検索半径（radiusMetersまたはradiusKm）が必要です');
+      }
+
+      const nearbyRequest: NearbyLocationRequest = {
+        latitude: req.query.latitude ? parseFloat(req.query.latitude as string) : undefined as any,
+        longitude: req.query.longitude ? parseFloat(req.query.longitude as string) : undefined as any,
+        radiusKm: radiusKm,
+        limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+        locationType: req.query.locationType ?
+          (Array.isArray(req.query.locationType) ?
+            req.query.locationType as LocationType[] :
+            [req.query.locationType as LocationType])
+          : undefined,
+        isActiveOnly: req.query.isActiveOnly === 'false' ? false : true
+      };
 
       // バリデーション
       if (!nearbyRequest.latitude || !nearbyRequest.longitude) {
@@ -405,7 +421,6 @@ class LocationController {
         throw new ValidationError('有効な検索半径が必要です');
       }
 
-      // ✅ 修正: getNearbyLocations → findNearbyLocations
       const nearbyLocations = await this.locationServiceWrapper.findNearbyLocations(
         nearbyRequest,
         req.user.userId,
@@ -416,7 +431,7 @@ class LocationController {
       logger.info('近隣位置検索', {
         latitude: nearbyRequest.latitude,
         longitude: nearbyRequest.longitude,
-        radius: nearbyRequest.radiusKm,
+        radiusKm: nearbyRequest.radiusKm,
         resultCount: nearbyLocations.length,
         userId: req.user.userId
       });
