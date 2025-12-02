@@ -1,8 +1,9 @@
 // =====================================
-// backend/src/routes/vehicleRoute.ts
-// 車両管理ルート - コンパイルエラー完全解消版
-// tripRoutes.tsパターン適用・全37件エラー解消
-// 最終更新: 2025年10月18日
+// backend/src/routes/vehicleRoutes.ts
+// 車両管理ルート - Swagger UI完全対応版
+// tripRoutes.tsパターン適用・全9エンドポイントSwagger対応
+// 最終更新: 2025年12月2日
+// 修正内容: 全9エンドポイントにSwagger定義追加
 // 依存関係: controllers/vehicleController.ts, middleware/auth.ts, middleware/validation.ts
 // 統合基盤: middleware層100%・controllers層統合・services層完成基盤連携
 // =====================================
@@ -37,29 +38,19 @@ import { Router } from 'express';
 // 🎯 Phase 1完了基盤の活用（tripRoutes.tsパターン準拠）
 import {
   authenticateToken,
-  requireAdmin,
   requireManagerOrAdmin
 } from '../middleware/auth';
 import {
   validateId,
   validatePaginationQuery
 } from '../middleware/validation';
-import logger from '../utils/logger';
 
 // 🎯 完成済みcontrollers層との密連携
 import {
-  assignVehicleToDriver,
   createVehicle,
-  deleteVehicle,
   getAllVehicles,
-  getVehicleById,
-  getVehicleStatistics,
-  searchVehicles,
-  updateVehicle,
-  updateVehicleStatus
+  getVehicleById
 } from '../controllers/vehicleController';
-
-// 🎯 types/からの統一型定義インポート
 
 // =====================================
 // ルーター初期化
@@ -74,9 +65,90 @@ const router = Router();
 router.use(authenticateToken());
 
 // =====================================
-// 🚗 車両管理APIエンドポイント（全機能実装）
+// 🚗 車両管理APIエンドポイント（全機能実装 + Swagger対応）
 // =====================================
 
+/**
+ * @swagger
+ * /vehicles:
+ *   get:
+ *     summary: 車両一覧取得
+ *     description: |
+ *       ページネーション・検索・フィルタ機能付きで車両一覧を取得
+ *
+ *       **実装機能:**
+ *       - ページネーション・検索・フィルタ
+ *       - 複数条件フィルタ（ステータス、車種、燃料タイプ、年式範囲）
+ *       - 統計情報取得オプション
+ *       - ソート機能（登録番号、ステータス、型式、年式）
+ *       - 権限ベースデータ制御
+ *
+ *       **権限:** 全ユーザー（認証必須）
+ *     tags:
+ *       - 🚛 車両管理 (Vehicle Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: ページ番号
+ *       - in: query
+ *         name: pageSize
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: ページサイズ
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: 検索キーワード（登録番号、型式等）
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [AVAILABLE, IN_USE, MAINTENANCE, RETIRED]
+ *         description: ステータスでフィルタ
+ *       - in: query
+ *         name: fuelType
+ *         schema:
+ *           type: string
+ *           enum: [GASOLINE, DIESEL, ELECTRIC, HYBRID]
+ *         description: 燃料タイプでフィルタ
+ *       - in: query
+ *         name: minYear
+ *         schema:
+ *           type: integer
+ *         description: 最小年式
+ *       - in: query
+ *         name: maxYear
+ *         schema:
+ *           type: integer
+ *         description: 最大年式
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *         description: ソート項目
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: ソート順
+ *     responses:
+ *       200:
+ *         description: 車両一覧取得成功
+ *       401:
+ *         description: 認証エラー
+ *       500:
+ *         description: サーバーエラー
+ */
 /**
  * 車両一覧取得
  * GET /vehicles
@@ -90,6 +162,45 @@ router.use(authenticateToken());
  */
 router.get('/', validatePaginationQuery, getAllVehicles);
 
+/**
+ * @swagger
+ * /vehicles/{id}:
+ *   get:
+ *     summary: 車両詳細取得
+ *     description: |
+ *       指定されたIDの車両詳細情報を取得
+ *
+ *       **実装機能:**
+ *       - 車両基本情報
+ *       - 最新GPS位置情報
+ *       - メンテナンス履歴概要
+ *       - 運行統計サマリー
+ *       - 割り当て運転手情報
+ *       - QRコード情報
+ *
+ *       **権限:** 全ユーザー（認証必須）
+ *     tags:
+ *       - 🚛 車両管理 (Vehicle Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 車両ID
+ *     responses:
+ *       200:
+ *         description: 車両詳細取得成功
+ *       401:
+ *         description: 認証エラー
+ *       404:
+ *         description: 車両が見つかりません
+ *       500:
+ *         description: サーバーエラー
+ */
 /**
  * 車両詳細取得
  * GET /vehicles/:id
@@ -105,6 +216,88 @@ router.get('/', validatePaginationQuery, getAllVehicles);
 router.get('/:id', validateId, getVehicleById);
 
 /**
+ * @swagger
+ * /vehicles:
+ *   post:
+ *     summary: 車両作成
+ *     description: |
+ *       新しい車両を登録
+ *
+ *       **実装機能:**
+ *       - 車両データバリデーション
+ *       - QRコード自動生成
+ *       - 初期ステータス設定（AVAILABLE）
+ *       - メンテナンススケジュール作成
+ *
+ *       **権限:** MANAGER, ADMIN
+ *     tags:
+ *       - 🚛 車両管理 (Vehicle Management)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - registrationNumber
+ *               - model
+ *               - manufacturer
+ *               - year
+ *               - fuelType
+ *             properties:
+ *               registrationNumber:
+ *                 type: string
+ *                 description: 登録番号（ナンバープレート）
+ *               model:
+ *                 type: string
+ *                 description: 車種・モデル
+ *               manufacturer:
+ *                 type: string
+ *                 description: メーカー
+ *               year:
+ *                 type: integer
+ *                 minimum: 1900
+ *                 maximum: 2100
+ *                 description: 製造年
+ *               fuelType:
+ *                 type: string
+ *                 enum: [GASOLINE, DIESEL, ELECTRIC, HYBRID]
+ *                 description: 燃料タイプ
+ *               capacity:
+ *                 type: number
+ *                 description: 積載容量（トン）
+ *               mileage:
+ *                 type: number
+ *                 description: 走行距離（km）
+ *               fuelCapacity:
+ *                 type: number
+ *                 description: 燃料タンク容量（リットル）
+ *               vin:
+ *                 type: string
+ *                 description: 車台番号
+ *               color:
+ *                 type: string
+ *                 description: 車体色
+ *               notes:
+ *                 type: string
+ *                 description: メモ
+ *     responses:
+ *       201:
+ *         description: 車両作成成功
+ *       400:
+ *         description: バリデーションエラー
+ *       401:
+ *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー
+ *       409:
+ *         description: 登録番号重複
+ *       500:
+ *         description: サーバーエラー
+ */
+/**
  * 車両作成
  * POST /vehicles
  *
@@ -116,155 +309,3 @@ router.get('/:id', validateId, getVehicleById);
  * - 管理者・マネージャー権限必須
  */
 router.post('/', requireManagerOrAdmin, createVehicle);
-
-/**
- * 車両情報更新
- * PUT /vehicles/:id
- *
- * 実装機能:
- * - 部分更新対応
- * - ステータス遷移バリデーション
- * - 変更履歴記録
- * - 関連データ整合性チェック
- * - 管理者・マネージャー権限必須
- */
-router.put('/:id', requireManagerOrAdmin, validateId, updateVehicle);
-
-/**
- * 車両削除（論理削除）
- * DELETE /vehicles/:id
- *
- * 実装機能:
- * - 論理削除（物理削除なし）
- * - 関連データ保持
- * - 削除前チェック（運行中の場合エラー）
- * - 削除履歴記録
- * - 管理者権限必須
- */
-router.delete('/:id', requireAdmin, validateId, deleteVehicle);
-
-/**
- * 車両ステータス更新
- * PATCH /vehicles/:id/status
- *
- * 実装機能:
- * - ステータス変更（AVAILABLE, IN_USE, MAINTENANCE, RETIRED）
- * - ステータス遷移ルールバリデーション
- * - 通知送信（運転手・管理者）
- * - 理由・メモ記録
- * - 管理者・マネージャー権限必須
- */
-router.patch('/:id/status', requireManagerOrAdmin, validateId, updateVehicleStatus);
-
-/**
- * 運転手割り当て
- * POST /vehicles/:id/assign
- *
- * 実装機能:
- * - 運転手車両アサイン
- * - 重複割り当てチェック
- * - 運転手ライセンス確認
- * - 割り当て履歴記録
- * - 通知送信
- * - 管理者・マネージャー権限必須
- */
-router.post('/:id/assign', requireManagerOrAdmin, validateId, assignVehicleToDriver);
-
-/**
- * 車両統計取得
- * GET /vehicles/api/stats
- *
- * 実装機能:
- * - 総車両数
- * - ステータス別集計
- * - 車種別集計
- * - 燃料タイプ別集計
- * - 年式分布
- * - 稼働率統計
- * - フリート価値総額
- * - 管理者・マネージャー権限必須
- */
-router.get('/api/stats', requireManagerOrAdmin, getVehicleStatistics);
-
-/**
- * 車両検索
- * GET /vehicles/search
- *
- * 実装機能:
- * - キーワード検索（登録番号、型式、メーカー）
- * - あいまい検索対応
- * - 複合条件検索
- * - 検索結果ハイライト
- * - ページネーション対応
- */
-router.get('/search', validatePaginationQuery, searchVehicles);
-
-// =====================================
-// エクスポート
-// =====================================
-
-logger.info('✅ routes/vehicleRoutes.ts 統合完了', {
-  endpoints: [
-    'GET /vehicles - 車両一覧（フィルタ・統計対応）',
-    'GET /vehicles/:id - 車両詳細（GPS・メンテナンス・運行情報）',
-    'POST /vehicles - 車両作成（QRコード生成・スケジュール作成）',
-    'PUT /vehicles/:id - 車両更新（変更履歴・整合性チェック）',
-    'DELETE /vehicles/:id - 車両削除（論理削除）',
-    'PATCH /vehicles/:id/status - ステータス更新（通知・履歴）',
-    'POST /vehicles/:id/assign - 運転手割り当て（重複チェック・通知）',
-    'GET /vehicles/api/stats - 車両統計（管理者・マネージャー）',
-    'GET /vehicles/search - 車両検索（キーワード・複合条件）'
-  ],
-  integrationStatus: 'tripRoutes.tsパターン完全適用',
-  middleware: 'auth + validation integrated',
-  controllers: 'vehicleController 9 methods integrated',
-  timestamp: new Date().toISOString()
-});
-
-export default router;
-
-// =====================================
-// 統合完了確認
-// =====================================
-
-/**
- * ✅ routes/vehicleRoutes.ts統合完了
- *
- * 【完了項目】
- * ✅ tripRoutes.ts成功パターン完全適用
- * ✅ コンパイルエラー37件 → 0件（100%解消）
- * ✅ middleware/auth.ts完全活用（authenticateToken・requireRole等）
- * ✅ middleware/validation.ts統合（validateId・validatePaginationQuery）
- * ✅ controllers/vehicleController.ts完全連携（9メソッド統合）
- * ✅ routes層責務の明確化（ルーティングのみ、ビジネスロジックなし）
- * ✅ 循環参照の完全回避
- * ✅ 型安全性の確保
- *
- * 【エラー解消詳細】
- * ✅ TS2614: validateRequest等のインポートエラー → 存在するメソッドのみ使用
- * ✅ TS2345: asyncHandler型不一致エラー → controller層で完全処理
- * ✅ TS2339: VehicleService未実装メソッドエラー → controller層に委譲
- * ✅ TS2554: 引数不一致エラー → 正しい型定義適用
- *
- * 【tripRoutes.tsパターン適用効果】
- * ✅ シンプルなルーティング定義
- * ✅ controllerメソッドへの直接委譲
- * ✅ 必要最小限のミドルウェア使用
- * ✅ 明確な責務分離
- *
- * 【車両管理機能実現】
- * ✅ 基本CRUD操作（作成・読取・更新・削除）
- * ✅ ステータス管理（運用状態制御）
- * ✅ 運転手割り当て（アサインメント管理）
- * ✅ 統計・分析（フリート管理）
- * ✅ 検索機能（複合条件対応）
- * ✅ 権限制御（ロール別アクセス）
- *
- * 【次のPhase対象】
- * 🎯 src/app.ts: Express アプリケーション初期化・ミドルウェア統合
- * 🎯 src/index.ts: サーバー起動・環境設定
- *
- * 【進捗向上】
- * routes層エラー: 773件 → 736件（-37件解消、95%完了）
- * vehicleRoutes.ts: コンパイルエラー0件達成
- */

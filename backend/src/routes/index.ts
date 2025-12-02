@@ -1,1142 +1,913 @@
 // =====================================
-// backend/src/routes/tripRoute.ts
-// 運行管理ルート統合 - コンパイルエラー完全解消版
-// 運行記録CRUD・GPS連携・状態管理・リアルタイム追跡・統計分析
-// 最終更新: 2025年10月18日
-// 🆕 D5/D6機能対応: 2025年12月2日 - Swaggerアノテーション追加
-// 依存関係: middleware/auth.ts, controllers/tripController.ts, models/OperationModel.ts
+// backend/src/routes/index.ts
+// ルートエントリポイント - 完全アーキテクチャ改修統合版
+// API基盤統合・重複ルート解消・統一ミドルウェア活用版
+// 🔧 デバッグ出力追加版（既存機能100%保持）
+// 最終更新: 2025年9月28日
+// 依存関係: middleware/auth.ts, middleware/errorHandler.ts, utils/errors.ts, utils/response.ts
+// =====================================
+
+import { Request, Response, Router } from 'express';
+
+// 🎯 Phase 1完成基盤の活用（重複排除・統合版）
+import {
+  authenticateToken,
+  requireAdmin
+} from '../middleware/auth';
+import {
+  asyncHandler,
+  getErrorHealthStatus,
+  getErrorStatistics
+} from '../middleware/errorHandler';
+import {
+  ERROR_CODES,
+  NotFoundError
+} from '../utils/errors';
+import logger from '../utils/logger';
+import {
+  sendError,
+  sendSuccess
+} from '../utils/response';
+
+// 🎯 types/からの統一型定義インポート
+import type { AuthenticatedRequest } from '../types';
+
+// =====================================
+// ルート統計・監視機能
+// =====================================
+
+interface RouteStatistics {
+  totalRoutes: number;
+  successfulRegistrations: number;
+  failedRegistrations: number;
+  registeredEndpoints: string[];
+  failedEndpoints: Array<{
+    name: string;
+    path: string;
+    error: string;
+  }>;
+  duplicateResolutions: Array<{
+    preferred: string;
+    deprecated: string;
+    reason: string;
+  }>;
+}
+
+// ルート統計（インメモリ）
+const routeStats: RouteStatistics = {
+  totalRoutes: 0,
+  successfulRegistrations: 0,
+  failedRegistrations: 0,
+  registeredEndpoints: [],
+  failedEndpoints: [],
+  duplicateResolutions: []
+};
+
+// =====================================
+// 安全なルートインポート・登録機能（統合版）
 // =====================================
 
 /**
- * 【重要な設計決定の理由】
+ * 安全なルートインポート・登録関数（統合版）
+ * エラーハンドリング・ログ記録・統計収集機能付き
  *
- * 元のtripRoutes.tsは大量のビジネスロジックを直接実装していましたが、
- * これは以下の理由で不適切でした:
- *
- * 1. アーキテクチャ違反
- *    - routes層: エンドポイント定義のみを行うべき
- *    - ビジネスロジックはcontroller層・service層が担当
- *
- * 2. プロジェクトの整合性
- *    - userRoutes.ts, vehicleRoutes.ts等は全てcontrollerパターン採用済み
- *    - tripRoutesだけが直接実装では一貫性がない
- *
- * 3. 完成済み基盤の存在
- *    - tripController.ts: 完成済み（全13機能実装）
- *    - tripService.ts: 完成済み（ビジネスロジック実装）
- *    - これらを活用しないのは二重実装
- *
- * 4. エラーの根本原因
- *    - 107件のコンパイルエラーの大半は、routes層で直接
- *      データアクセス・型変換・バリデーションを行っていたため
- *
- * したがって、本修正では「機能削減」ではなく「適切な責務分離」を実現しています。
- * 全機能はcontroller/service層で実装済みであり、routes層はそれを呼び出すのみです。
+ * @param routeName - インポートするルートファイル名
+ * @param path - ルートパス
+ * @param router - Routerインスタンス
+ * @param options - 登録オプション
+ * @returns 登録成功可否
  */
+const safeImportAndRegisterRoute = (
+  routeName: string,
+  path: string,
+  router: Router,
+  options: {
+    priority?: 'high' | 'normal' | 'low';
+    requireAuth?: boolean;
+    description?: string;
+  } = {}
+): boolean => {
+  try {
+    routeStats.totalRoutes++;
 
-import { Router } from 'express';
+    // 🔧🔧🔧 デバッグ出力1: ルート登録開始
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] ルート登録開始', {
+      routeName,
+      path,
+      priority: options.priority || 'normal',
+      requireAuth: options.requireAuth || false,
+      description: options.description,
+      timestamp: new Date().toISOString()
+    });
 
-// 🎯 Phase 1完了基盤の活用
-import { authenticateToken, requireAdmin, requireManagerOrAdmin, requireRole } from '../middleware/auth';
+    logger.debug('ルート登録開始', {
+      routeName,
+      path,
+      priority: options.priority || 'normal',
+      requireAuth: options.requireAuth || false
+    });
 
-// 🎯 コントローラーの統合活用（全機能実装済み）
-import { TripController } from '../controllers/tripController';
+    // 🔧🔧🔧 デバッグ出力2: require実行前
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] require実行開始', {
+      modulePath: `./${routeName}`,
+      timestamp: new Date().toISOString()
+    });
+
+    // 動的インポート試行
+    const routeModule = require(`./${routeName}`);
+
+    // 🔧🔧🔧 デバッグ出力3: require実行後
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] require実行完了', {
+      routeName,
+      hasDefault: !!routeModule.default,
+      moduleKeys: Object.keys(routeModule),
+      timestamp: new Date().toISOString()
+    });
+
+    const routeHandler = routeModule.default || routeModule;
+
+    // 🔧🔧🔧 デバッグ出力4: ルートハンドラー取得後
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] ルートハンドラー取得', {
+      routeName,
+      handlerType: typeof routeHandler,
+      isFunction: typeof routeHandler === 'function',
+      hasUse: routeHandler && typeof routeHandler.use === 'function',
+      timestamp: new Date().toISOString()
+    });
+
+    // ルートハンドラー検証
+    if (!routeHandler) {
+      throw new Error('ルートハンドラーが見つかりません');
+    }
+
+    if (typeof routeHandler !== 'function' &&
+      (!routeHandler || typeof routeHandler.use !== 'function')) {
+      throw new Error('無効なルートハンドラー形式です');
+    }
+
+    // 🔧🔧🔧 デバッグ出力5: router.use実行前
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] router.use実行開始', {
+      routeName,
+      path,
+      requireAuth: options.requireAuth,
+      timestamp: new Date().toISOString()
+    });
+
+    // 認証要求時の自動適用
+    if (options.requireAuth) {
+      router.use(path, authenticateToken, routeHandler);
+    } else {
+      router.use(path, routeHandler);
+    }
+
+    // 🔧🔧🔧 デバッグ出力6: router.use実行後
+    logger.info('🔍🔍🔍 [DEBUG-routes/index] router.use実行完了', {
+      routeName,
+      path,
+      timestamp: new Date().toISOString()
+    });
+
+    // 成功統計更新
+    routeStats.successfulRegistrations++;
+    routeStats.registeredEndpoints.push(`${path} (${routeName})`);
+
+    logger.info('✅ ルート登録成功', {
+      routeName,
+      path,
+      description: options.description,
+      total: `${routeStats.successfulRegistrations}/${routeStats.totalRoutes}`
+    });
+
+    // 🔧🔧🔧 デバッグ出力7: inspectionRoutes専用の詳細ログ
+    if (routeName === 'inspectionRoutes') {
+      logger.info('🎯🎯🎯 [DEBUG-routes/index] inspectionRoutes登録完了（詳細）', {
+        path,
+        requireAuth: options.requireAuth,
+        authenticateTokenApplied: options.requireAuth,
+        routeHandlerType: typeof routeHandler,
+        stackInfo: new Error().stack?.split('\n').slice(0, 5),
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return true;
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    // 🔧🔧🔧 デバッグ出力8: エラー詳細
+    logger.error('❌❌❌ [DEBUG-routes/index] ルート登録エラー（詳細）', {
+      routeName,
+      path,
+      error: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString()
+    });
+
+    // 失敗統計更新
+    routeStats.failedRegistrations++;
+    routeStats.failedEndpoints.push({
+      name: routeName,
+      path,
+      error: errorMessage
+    });
+
+    logger.warn('⚠️ ルート登録失敗', {
+      routeName,
+      path,
+      error: errorMessage,
+      priority: options.priority,
+      total: `${routeStats.failedRegistrations} failures`
+    });
+
+    return false;
+  }
+};
+
+/**
+ * 重複ルート解消記録
+ * 重複ルート定義の解消結果を記録
+ */
+const recordDuplicateResolution = (
+  preferred: string,
+  deprecated: string,
+  reason: string
+): void => {
+  routeStats.duplicateResolutions.push({
+    preferred,
+    deprecated,
+    reason
+  });
+
+  logger.info('🔧 重複ルート解消', {
+    preferred,
+    deprecated,
+    reason
+  });
+};
 
 // =====================================
-// ルーター初期化
+// メインルーター初期化（統合版）
 // =====================================
 
 const router = Router();
-const tripController = new TripController();
+
+// 🔧🔧🔧 デバッグ出力: ルーター初期化確認
+logger.info('🔧🔧🔧 [DEBUG-routes/index] Router初期化完了', {
+  timestamp: new Date().toISOString()
+});
 
 // =====================================
-// 全ルートで認証必須
-// =====================================
-
-router.use(authenticateToken());
-
-// =====================================
-// 🚛 運行管理APIエンドポイント（全機能実装）
+// システム情報・ヘルスチェックエンドポイント（統合版）
 // =====================================
 
 /**
- * @swagger
- * /trips:
- *   get:
- *     summary: 運行記録一覧取得
- *     description: |
- *       フィルタリング・ソート・ページネーション対応の運行一覧を取得
- *
- *       **実装機能:**
- *       - ページネーション・検索・フィルタ
- *       - 複数条件フィルタ（車両ID、運転手ID、ステータス、期間）
- *       - 統計情報取得オプション
- *       - GPS情報フィルタ
- *       - 権限ベースデータ制御（運転手は自分の運行のみ）
- *
- *       **権限:** DRIVER, MANAGER, ADMIN
- *     tags:
- *       - 🚛 運行管理 (Trip Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 1
- *         description: ページ番号
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 100
- *           default: 10
- *         description: 1ページあたりの件数
- *       - in: query
- *         name: driverId
- *         schema:
- *           type: string
- *         description: 運転手IDでフィルタ
- *       - in: query
- *         name: vehicleId
- *         schema:
- *           type: string
- *         description: 車両IDでフィルタ
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [PLANNING, IN_PROGRESS, COMPLETED, CANCELLED]
- *         description: ステータスでフィルタ
- *       - in: query
- *         name: startDate
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 開始日時（この日時以降）
- *       - in: query
- *         name: endDate
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 終了日時（この日時以前）
- *     responses:
- *       200:
- *         description: 運行一覧取得成功
- *       401:
- *         description: 認証エラー
- *       500:
- *         description: サーバーエラー
+ * API基本情報エンドポイント
+ * GET /api/v1/
  */
-/**
- * 運行記録一覧取得
- * GET /trips
- *
- * 実装機能:
- * - ページネーション・検索・フィルタ
- * - 複数条件フィルタ（車両ID、運転手ID、ステータス、期間）
- * - 統計情報取得オプション
- * - GPS情報フィルタ
- * - 権限ベースデータ制御（運転手は自分の運行のみ）
- */
-router.get('/', tripController.getAllTrips);
+router.get('/', asyncHandler(async (req: Request, res: Response) => {
+  const healthStatus = getErrorHealthStatus();
+  const errorStats = getErrorStatistics();
+
+  const apiInfo = {
+    name: 'ダンプ運行記録システム API',
+    version: '1.0.0',
+    description: 'ダンプトラック運行記録・管理システム REST API',
+    status: 'running',
+    architecture: 'integrated', // 統合版であることを示す
+
+    // システム健全性情報
+    health: {
+      status: healthStatus.status,
+      errorRate: healthStatus.errorRate,
+      recentErrors: healthStatus.recentErrorCount,
+      uptime: process.uptime()
+    },
+
+    // API エンドポイント一覧
+    endpoints: {
+      // 認証関連（統合版）
+      auth: {
+        login: 'POST /api/v1/auth/login',
+        logout: 'POST /api/v1/auth/logout',
+        refresh: 'POST /api/v1/auth/refresh',
+        profile: 'GET /api/v1/auth/profile'
+      },
+
+      // ユーザー管理（統合版）
+      users: {
+        list: 'GET /api/v1/users',
+        create: 'POST /api/v1/users',
+        detail: 'GET /api/v1/users/:id',
+        update: 'PUT /api/v1/users/:id',
+        delete: 'DELETE /api/v1/users/:id'
+      },
+
+      // 車両管理
+      vehicles: {
+        list: 'GET /api/v1/vehicles',
+        create: 'POST /api/v1/vehicles',
+        detail: 'GET /api/v1/vehicles/:id',
+        update: 'PUT /api/v1/vehicles/:id'
+      },
+
+      // 運行記録
+      trips: {
+        list: 'GET /api/v1/trips',
+        create: 'POST /api/v1/trips',
+        detail: 'GET /api/v1/trips/:id',
+        update: 'PUT /api/v1/trips/:id'
+      },
+
+      // 位置・場所管理
+      locations: 'GET,POST,PUT,DELETE /api/v1/locations',
+
+      // 品目管理
+      items: 'GET,POST,PUT,DELETE /api/v1/items',
+
+      // 点検記録
+      inspections: 'GET,POST,PUT,DELETE /api/v1/inspections',
+
+      // レポート
+      reports: 'GET,POST /api/v1/reports',
+
+      // GPS・位置追跡
+      gps: 'GET,POST /api/v1/gps',
+
+      // モバイル専用API
+      mobile: {
+        health: 'GET /api/v1/mobile/health',
+        auth: 'POST /api/v1/mobile/auth/*',
+        operations: 'GET,POST /api/v1/mobile/operations/*',
+        gps: 'GET,POST /api/v1/mobile/gps/*'
+      },
+
+      // システム情報
+      system: {
+        health: 'GET /api/v1/health',
+        info: 'GET /api/v1/',
+        statistics: 'GET /api/v1/system/stats (Admin only)'
+      }
+    },
+
+    // 技術仕様
+    specifications: {
+      authentication: 'JWT Bearer Token',
+      contentType: 'application/json',
+      errorFormat: 'Unified Error Response',
+      pagination: 'Offset-based with metadata',
+      rateLimit: '100 requests/minute per user',
+      cors: 'Enabled for development'
+    },
+
+    // 開発情報
+    development: {
+      environment: process.env.NODE_ENV || 'development',
+      nodeVersion: process.version,
+      documentation: '/api/docs',
+      integrationStatus: 'Phase 1 - API Foundation Complete'
+    },
+
+    timestamp: new Date().toISOString()
+  };
+
+  return sendSuccess(res, apiInfo, 'API情報を取得しました');
+}));
 
 /**
- * @swagger
- * /trips/{id}:
- *   get:
- *     summary: 運行記録詳細取得
- *     description: |
- *       指定されたIDの運行詳細情報を取得
- *
- *       **実装機能:**
- *       - 運行基本情報
- *       - 関連車両情報
- *       - 関連運転手情報
- *       - GPS履歴
- *       - 運行詳細アクティビティ
- *       - 燃料記録
- *       - 統計情報
- *
- *       **権限:** DRIVER, MANAGER, ADMIN
- *     tags:
- *       - 🚛 運行管理 (Trip Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     responses:
- *       200:
- *         description: 運行詳細取得成功
- *       401:
- *         description: 認証エラー
- *       404:
- *         description: 運行記録が見つかりません
- *       500:
- *         description: サーバーエラー
+ * ヘルスチェックエンドポイント（統合版）
+ * GET /api/v1/health
  */
-/**
- * 運行記録詳細取得
- * GET /trips/:id
- *
- * 実装機能:
- * - 運行基本情報
- * - 関連車両情報
- * - 関連運転手情報
- * - GPS履歴
- * - 運行詳細アクティビティ
- * - 燃料記録
- * - 統計情報
- */
-router.get('/:id', tripController.getTripById);
+router.get('/health', asyncHandler(async (req: Request, res: Response) => {
+  const healthStatus = getErrorHealthStatus();
+  const errorStats = getErrorStatistics();
 
-/**
- * @swagger
- * /trips:
- *   post:
- *     summary: 運行作成/開始
- *     description: |
- *       新しい運行を作成・開始
- *
- *       **実装機能:**
- *       - GPS座標バリデーション
- *       - 車両状態チェック
- *       - 運転手アサイン
- *       - 初期GPS記録作成
- *       - 車両ステータス更新
- *
- *       **権限:** DRIVER, MANAGER, ADMIN
- *     tags:
- *       - 🚛 運行管理 (Trip Management)
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - vehicleId
- *               - actualStartTime
- *             properties:
- *               vehicleId:
- *                 type: string
- *                 description: 車両ID
- *               driverId:
- *                 type: string
- *                 description: 運転手ID（省略時は認証ユーザー）
- *               actualStartTime:
- *                 type: string
- *                 format: date-time
- *                 description: 運行開始時刻
- *               notes:
- *                 type: string
- *                 description: メモ
- *               startLocation:
- *                 type: object
- *                 properties:
- *                   latitude:
- *                     type: number
- *                     description: 開始地点の緯度
- *                   longitude:
- *                     type: number
- *                     description: 開始地点の経度
- *                   accuracy:
- *                     type: number
- *                     description: GPS精度（メートル）
- *                   address:
- *                     type: string
- *                     description: 住所
- *     responses:
- *       201:
- *         description: 運行開始成功
- *       400:
- *         description: バリデーションエラー
- *       401:
- *         description: 認証エラー
- *       409:
- *         description: 車両が既に使用中
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 運行作成/開始
- * POST /trips or POST /trips/start
- *
- * 実装機能:
- * - GPS座標バリデーション
- * - 車両状態チェック
- * - 運転手アサイン
- * - 初期GPS記録作成
- * - 車両ステータス更新
- *
- * 注: startTrip は createTrip のエイリアス
- */
-router.post('/', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.createTrip);
+  const healthInfo = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
 
-/**
- * @swagger
- * /trips/start:
- *   post:
- *     summary: 運行開始（エイリアス）
- *     description: |
- *       POST /trips のエイリアス
- *       モバイルアプリとの互換性のために提供
- *
- *       **実装機能:**
- *       - 運行作成と同じ
- *
- *       **権限:** DRIVER, MANAGER, ADMIN
- *     tags:
- *       - 🚛 運行管理 (Trip Management)
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       $ref: '#/components/requestBodies/CreateTripRequest'
- *     responses:
- *       201:
- *         description: 運行開始成功
- *       400:
- *         description: バリデーションエラー
- *       401:
- *         description: 認証エラー
- */
-router.post('/start', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.createTrip);
+    // システム詳細情報
+    system: {
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      pid: process.pid,
+      platform: process.platform,
+      nodeVersion: process.version
+    },
 
-/**
- * @swagger
- * /trips/{id}:
- *   put:
- *     summary: 運行更新
- *     description: |
- *       運行情報の更新
- *
- *       **実装機能:**
- *       - ステータス更新
- *       - メモ更新
- *       - 権限チェック（自分の運行または管理者）
- *
- *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
- *     tags:
- *       - 🚛 運行管理 (Trip Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               status:
- *                 type: string
- *                 enum: [PLANNING, IN_PROGRESS, COMPLETED, CANCELLED]
- *               notes:
- *                 type: string
- *     responses:
- *       200:
- *         description: 更新成功
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー
- *       404:
- *         description: 運行記録が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 運行更新
- * PUT /trips/:id
- *
- * 実装機能:
- * - ステータス更新
- * - メモ更新
- * - 権限チェック（自分の運行または管理者）
- */
-router.put('/:id', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.updateTrip);
+    // エラー統計
+    errors: {
+      status: healthStatus.status,
+      errorRate: healthStatus.errorRate,
+      recentCount: healthStatus.recentErrorCount,
+      totalErrors: errorStats.totalErrors
+    },
 
-/**
- * @swagger
- * /trips/{id}/end:
- *   post:
- *     summary: 運行終了
- *     description: |
- *       運行を終了し、統計情報を生成
- *
- *       **実装機能:**
- *       - 終了時刻記録
- *       - 最終GPS記録
- *       - 距離・燃費計算
- *       - 車両ステータス復帰
- *       - 運行統計生成
- *
- *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
- *     tags:
- *       - 🚛 運行管理 (Trip Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - endTime
- *             properties:
- *               endTime:
- *                 type: string
- *                 format: date-time
- *                 description: 運行終了時刻
- *               endMileage:
- *                 type: number
- *                 description: 終了時の走行距離（km）
- *               endLocation:
- *                 type: object
- *                 properties:
- *                   latitude:
- *                     type: number
- *                   longitude:
- *                     type: number
- *                   address:
- *                     type: string
- *               fuelConsumed:
- *                 type: number
- *                 description: 消費燃料（リットル）
- *               fuelCost:
- *                 type: number
- *                 description: 燃料費用（円）
- *               notes:
- *                 type: string
- *               completionStatus:
- *                 type: string
- *                 enum: [COMPLETED, COMPLETED_WITH_ISSUES, PARTIALLY_COMPLETED]
- *     responses:
- *       200:
- *         description: 運行終了成功
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー
- *       404:
- *         description: 運行記録が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 運行終了
- * POST /trips/:id/end
- *
- * 実装機能:
- * - 終了時刻記録
- * - 最終GPS記録
- * - 距離・燃費計算
- * - 車両ステータス復帰
- * - 運行統計生成
- */
-router.post('/:id/end', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.endTrip);
+    // ルート統計
+    routes: {
+      totalRegistered: routeStats.successfulRegistrations,
+      totalFailed: routeStats.failedRegistrations,
+      registrationRate: routeStats.totalRoutes > 0
+        ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100)
+        : 0
+    },
 
-/**
- * @swagger
- * /trips/{id}/location:
- *   post:
- *     summary: 運行中GPS位置更新
- *     description: |
- *       運行中のGPS位置情報をリアルタイム記録
- *
- *       **実装機能:**
- *       - リアルタイムGPS記録
- *       - 座標バリデーション
- *       - 距離累積計算
- *       - 移動経路記録
- *
- *       **呼び出し頻度:** 推奨5秒間隔
- *
- *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
- *     tags:
- *       - 📍 GPS追跡 (GPS Tracking)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - latitude
- *               - longitude
- *               - timestamp
- *             properties:
- *               latitude:
- *                 type: number
- *                 minimum: -90
- *                 maximum: 90
- *                 description: 緯度
- *               longitude:
- *                 type: number
- *                 minimum: -180
- *                 maximum: 180
- *                 description: 経度
- *               altitude:
- *                 type: number
- *                 description: 高度（メートル）
- *               speedKmh:
- *                 type: number
- *                 description: 速度（km/h）
- *               heading:
- *                 type: number
- *                 minimum: 0
- *                 maximum: 360
- *                 description: 方位角（度）
- *               accuracyMeters:
- *                 type: number
- *                 description: GPS精度（メートル）
- *               timestamp:
- *                 type: string
- *                 format: date-time
- *                 description: 記録日時
- *     responses:
- *       200:
- *         description: GPS位置更新成功
- *       400:
- *         description: バリデーションエラー
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー
- *       404:
- *         description: 運行記録が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 運行中GPS位置更新
- * POST /trips/:id/location
- *
- * 実装機能:
- * - リアルタイムGPS記録
- * - 座標バリデーション
- * - 距離累積計算
- * - 移動経路記録
- */
-router.post('/:id/location', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.updateGPSLocation);
+    // サービス状況
+    services: {
+      database: 'connected', // TODO: 実際のDB接続チェック
+      authentication: 'active',
+      errorHandling: 'active',
+      logging: 'active'
+    }
+  };
 
-/**
- * @swagger
- * /trips/{id}/gps-history:
- *   get:
- *     summary: GPS履歴取得
- *     description: |
- *       指定された運行のGPS履歴を取得
- *
- *       **実装機能:**
- *       - 時系列GPS履歴
- *       - ページネーション
- *       - 期間フィルタ
- *       - 移動ルート再構成
- *
- *       **権限:** DRIVER, MANAGER, ADMIN
- *     tags:
- *       - 📍 GPS追跡 (GPS Tracking)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *       - in: query
- *         name: startTime
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 開始日時
- *       - in: query
- *         name: endTime
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 終了日時
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 1000
- *           default: 100
- *         description: 取得件数
- *       - in: query
- *         name: includeAnalytics
- *         schema:
- *           type: boolean
- *           default: false
- *         description: 統計情報を含める
- *     responses:
- *       200:
- *         description: GPS履歴取得成功
- *       401:
- *         description: 認証エラー
- *       404:
- *         description: 運行記録が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * GPS履歴取得
- * GET /trips/:id/gps-history
- *
- * 実装機能:
- * - 時系列GPS履歴
- * - ページネーション
- * - 期間フィルタ
- * - 移動ルート再構成
- */
-router.get('/:id/gps-history', tripController.getGPSHistory);
+  // 全体的な健全性判定
+  const overallStatus = healthStatus.status === 'healthy' &&
+    routeStats.failedRegistrations === 0
+    ? 'healthy'
+    : healthStatus.status === 'critical' || routeStats.failedRegistrations > 5
+      ? 'critical'
+      : 'warning';
 
-/**
- * @swagger
- * /trips/{id}/fuel:
- *   post:
- *     summary: 燃料記録追加
- *     description: |
- *       運行中の給油記録を追加
- *
- *       **実装機能:**
- *       - 給油記録
- *       - 燃料コスト記録
- *       - 位置情報記録
- *
- *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
- *     tags:
- *       - ⛽ 燃料管理 (Fuel Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - fuelAmount
- *               - fuelCost
- *               - timestamp
- *             properties:
- *               fuelAmount:
- *                 type: number
- *                 minimum: 0
- *                 description: 給油量（リットル）
- *               fuelCost:
- *                 type: number
- *                 minimum: 0
- *                 description: 給油費用（円）
- *               location:
- *                 type: string
- *                 description: 給油場所
- *               timestamp:
- *                 type: string
- *                 format: date-time
- *                 description: 給油日時
- *               notes:
- *                 type: string
- *                 description: メモ
- *     responses:
- *       201:
- *         description: 燃料記録追加成功
- *       400:
- *         description: バリデーションエラー
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー
- *       404:
- *         description: 運行記録が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 燃料記録追加
- * POST /trips/:id/fuel
- *
- * 実装機能:
- * - 給油記録
- * - 燃料コスト記録
- * - 位置情報記録
- */
-router.post('/:id/fuel', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.addFuelRecord);
+  healthInfo.status = overallStatus;
 
-/**
- * @swagger
- * /trips/{id}/loading:
- *   post:
- *     summary: 積込記録追加（D5機能）
- *     description: |
- *       🆕 D5機能: 積込場所到着時にGPS座標と時刻を自動記録
- *
- *       **処理フロー:**
- *       1. モバイルアプリで「積込場所到着」ボタンをクリック
- *       2. GPS座標と現在時刻を自動取得
- *       3. 近隣地点検知APIで最も近い積込場所を自動選択
- *       4. 本APIで積込記録を作成
- *       5. D5画面（積込場所入力画面）へ遷移
- *
- *       **実装機能:**
- *       - 積込場所記録
- *       - 積載量記録
- *       - 品目記録
- *       - GPS位置記録
- *       - GPS座標バリデーション（緯度: -90~90, 経度: -180~180）
- *       - 到着時刻の自動記録
- *
- *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
- *     tags:
- *       - 📦 積込・積降管理 (Loading/Unloading)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - locationId
- *             properties:
- *               locationId:
- *                 type: string
- *                 description: 積込場所ID（近隣地点検知APIで取得）
- *               latitude:
- *                 type: number
- *                 minimum: -90
- *                 maximum: 90
- *                 description: 🆕 GPS緯度（直接指定・推奨）
- *               longitude:
- *                 type: number
- *                 minimum: -180
- *                 maximum: 180
- *                 description: 🆕 GPS経度（直接指定・推奨）
- *               accuracy:
- *                 type: number
- *                 minimum: 0
- *                 description: 🆕 GPS測位精度（メートル）
- *               arrivalTime:
- *                 type: string
- *                 format: date-time
- *                 description: 🆕 到着時刻（省略時は現在時刻）
- *               itemId:
- *                 type: string
- *                 description: 品目ID（オプション）
- *               quantity:
- *                 type: number
- *                 minimum: 0
- *                 description: 積載量（オプション）
- *               notes:
- *                 type: string
- *                 description: メモ（オプション）
- *               gpsLocation:
- *                 type: object
- *                 description: GPS座標（既存互換・latitude/longitudeと併用不可）
- *                 properties:
- *                   latitude:
- *                     type: number
- *                   longitude:
- *                     type: number
- *                   accuracy:
- *                     type: number
- *     responses:
- *       201:
- *         description: 積込記録追加成功
- *       400:
- *         description: バリデーションエラー（GPS座標が無効、locationIdが不正など）
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー（他の運転手の運行）
- *       404:
- *         description: 運行記録または場所が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 積込記録追加
- * POST /trips/:id/loading
- *
- * 実装機能:
- * - 積込場所記録
- * - 積載量記録
- * - 品目記録
- * - GPS位置記録
- */
-router.post('/:id/loading', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.addLoadingRecord);
+  const statusCode = overallStatus === 'healthy' ? 200
+    : overallStatus === 'warning' ? 200
+      : 503;
 
-/**
- * @swagger
- * /trips/{id}/unloading:
- *   post:
- *     summary: 積下記録追加（D6機能）
- *     description: |
- *       🆕 D6機能: 積降場所到着時にGPS座標と時刻を自動記録
- *
- *       **処理フロー:**
- *       1. モバイルアプリで「積降場所到着」ボタンをクリック
- *       2. GPS座標と現在時刻を自動取得
- *       3. 近隣地点検知APIで最も近い積降場所を自動選択
- *       4. 本APIで積降記録を作成
- *       5. D6画面（積降場所入力画面）へ遷移
- *
- *       **実装機能:**
- *       - 積下場所記録
- *       - 積下量記録
- *       - 品目記録
- *       - GPS位置記録
- *       - GPS座標バリデーション（緯度: -90~90, 経度: -180~180）
- *       - 到着時刻の自動記録
- *
- *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
- *     tags:
- *       - 📦 積込・積降管理 (Loading/Unloading)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - locationId
- *             properties:
- *               locationId:
- *                 type: string
- *                 description: 積降場所ID（近隣地点検知APIで取得）
- *               latitude:
- *                 type: number
- *                 minimum: -90
- *                 maximum: 90
- *                 description: 🆕 GPS緯度（直接指定・推奨）
- *               longitude:
- *                 type: number
- *                 minimum: -180
- *                 maximum: 180
- *                 description: 🆕 GPS経度（直接指定・推奨）
- *               accuracy:
- *                 type: number
- *                 minimum: 0
- *                 description: 🆕 GPS測位精度（メートル）
- *               arrivalTime:
- *                 type: string
- *                 format: date-time
- *                 description: 🆕 到着時刻（省略時は現在時刻）
- *               itemId:
- *                 type: string
- *                 description: 品目ID（オプション）
- *               quantity:
- *                 type: number
- *                 minimum: 0
- *                 description: 積降量（オプション）
- *               notes:
- *                 type: string
- *                 description: メモ（オプション）
- *               gpsLocation:
- *                 type: object
- *                 description: GPS座標（既存互換・latitude/longitudeと併用不可）
- *                 properties:
- *                   latitude:
- *                     type: number
- *                   longitude:
- *                     type: number
- *                   accuracy:
- *                     type: number
- *     responses:
- *       201:
- *         description: 積降記録追加成功
- *       400:
- *         description: バリデーションエラー（GPS座標が無効、locationIdが不正など）
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー（他の運転手の運行）
- *       404:
- *         description: 運行記録または場所が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 積下記録追加
- * POST /trips/:id/unloading
- *
- * 実装機能:
- * - 積下場所記録
- * - 積下量記録
- * - 品目記録
- * - GPS位置記録
- */
-router.post('/:id/unloading', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.addUnloadingRecord);
-
-/**
- * @swagger
- * /trips/current:
- *   get:
- *     summary: 現在の運行取得
- *     description: |
- *       ログインユーザーの現在進行中の運行を取得
- *
- *       **実装機能:**
- *       - ログインユーザーの進行中運行取得
- *       - 運転手用機能
- *
- *       **用途:** モバイルアプリの運行画面表示
- *
- *       **権限:** DRIVER, MANAGER, ADMIN
- *     tags:
- *       - 📊 統計・レポート (Statistics & Reports)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: driverId
- *         schema:
- *           type: string
- *         description: 運転手ID（省略時は認証ユーザー）
- *     responses:
- *       200:
- *         description: 現在の運行取得成功
- *       401:
- *         description: 認証エラー
- *       404:
- *         description: 進行中の運行はありません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 現在の運行取得
- * GET /trips/current
- *
- * 実装機能:
- * - ログインユーザーの進行中運行取得
- * - 運転手用機能
- */
-router.get('/current', requireRole(['DRIVER', 'MANAGER', 'ADMIN']), tripController.getCurrentTrip);
-
-/**
- * @swagger
- * /trips/api/stats:
- *   get:
- *     summary: 運行統計取得
- *     description: |
- *       運行統計情報を取得
- *
- *       **実装機能:**
- *       - 総運行数
- *       - ステータス別集計
- *       - 期間別集計
- *       - 車両別集計
- *       - 運転手別集計
- *       - 距離・燃費統計
- *
- *       **権限:** MANAGER, ADMIN
- *     tags:
- *       - 📊 統計・レポート (Statistics & Reports)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: startDate
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 統計開始日
- *       - in: query
- *         name: endDate
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 統計終了日
- *       - in: query
- *         name: vehicleId
- *         schema:
- *           type: string
- *         description: 車両IDでフィルタ
- *       - in: query
- *         name: driverId
- *         schema:
- *           type: string
- *         description: 運転手IDでフィルタ
- *     responses:
- *       200:
- *         description: 統計取得成功
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 運行統計取得
- * GET /trips/api/stats
- *
- * 実装機能:
- * - 総運行数
- * - ステータス別集計
- * - 期間別集計
- * - 車両別集計
- * - 運転手別集計
- * - 距離・燃費統計
- */
-router.get('/api/stats', requireManagerOrAdmin, tripController.getTripStatistics);
-
-/**
- * @swagger
- * /trips/{id}:
- *   delete:
- *     summary: 運行削除
- *     description: |
- *       運行記録を削除（論理削除）
- *
- *       **実装機能:**
- *       - 論理削除
- *       - 関連データ処理
- *       - 管理者権限必須
- *
- *       **注意:** この操作は取り消せません
- *
- *       **権限:** ADMIN のみ
- *     tags:
- *       - 🗑️ 削除操作 (Delete Operations)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     responses:
- *       200:
- *         description: 削除成功
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー（管理者のみ）
- *       404:
- *         description: 運行記録が見つかりません
- *       500:
- *         description: サーバーエラー
- */
-/**
- * 運行削除
- * DELETE /trips/:id
- *
- * 実装機能:
- * - 論理削除
- * - 関連データ処理
- * - 管理者権限必須
- */
-router.delete('/:id', requireAdmin, tripController.deleteTrip);
+  return sendSuccess(res, healthInfo, 'ヘルスチェック完了', statusCode);
+}));
 
 // =====================================
-// エクスポート
+// 管理者向けシステム統計エンドポイント（新機能）
 // =====================================
+
+/**
+ * システム統計情報（管理者限定）
+ * GET /api/v1/system/stats
+ */
+router.get('/system/stats',
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const errorStats = getErrorStatistics();
+    const healthStatus = getErrorHealthStatus();
+
+    const systemStats = {
+      // エラー統計詳細
+      errors: {
+        ...errorStats,
+        healthStatus
+      },
+
+      // ルート統計詳細
+      routes: {
+        ...routeStats,
+        successRate: routeStats.totalRoutes > 0
+          ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100)
+          : 0
+      },
+
+      // システムリソース
+      system: {
+        memory: process.memoryUsage(),
+        uptime: process.uptime(),
+        cpuUsage: process.cpuUsage(),
+        platform: {
+          arch: process.arch,
+          platform: process.platform,
+          version: process.version
+        }
+      },
+
+      // 環境情報
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        port: process.env.PORT,
+        jwtConfigured: !!process.env.JWT_SECRET,
+        databaseUrl: !!process.env.DATABASE_URL
+      },
+
+      timestamp: new Date().toISOString(),
+      requestedBy: req.user?.username || 'unknown'
+    };
+
+    logger.info('システム統計情報アクセス', {
+      userId: req.user?.userId,
+      username: req.user?.username,
+      ip: req.ip
+    });
+
+    return sendSuccess(res, systemStats, 'システム統計情報を取得しました');
+  })
+);
+
+// =====================================
+// 重複ルート解消・統合ルート登録（統合版）
+// =====================================
+
+logger.info('🚀 ルート登録開始 - 重複解消・統合版');
+
+// 【重複解消1】認証ルート統合
+// routes/authRoutes.ts を優先、routes/auth.ts は非推奨
+if (safeImportAndRegisterRoute('authRoutes', '/auth', router, {
+  priority: 'high',
+  requireAuth: false, // 認証ルート自体は認証不要
+  description: '認証・JWT管理（統合版）'
+})) {
+  recordDuplicateResolution(
+    'routes/authRoutes.ts',
+    'routes/auth.ts',
+    'より包括的な認証機能を持つauthRoutes.tsを採用'
+  );
+} else {
+  // フォールバック: auth.ts を試行
+  logger.warn('authRoutes.ts登録失敗、auth.tsにフォールバック');
+  safeImportAndRegisterRoute('auth', '/auth', router, {
+    priority: 'high',
+    description: '認証（フォールバック版）'
+  });
+}
+
+// 【重複解消2】ユーザールート統合
+// routes/userRoutes.ts を優先、routes/users.ts は非推奨
+if (safeImportAndRegisterRoute('userRoutes', '/users', router, {
+  priority: 'high',
+  requireAuth: true,
+  description: 'ユーザー管理（統合版）'
+})) {
+  recordDuplicateResolution(
+    'routes/userRoutes.ts',
+    'routes/users.ts',
+    'RESTful設計に準拠したuserRoutes.tsを採用'
+  );
+} else {
+  // フォールバック: users.ts を試行
+  logger.warn('userRoutes.ts登録失敗、users.tsにフォールバック');
+  safeImportAndRegisterRoute('users', '/users', router, {
+    priority: 'high',
+    requireAuth: true,
+    description: 'ユーザー管理（フォールバック版）'
+  });
+}
+
+// =====================================
+// 主要業務ルート登録（統合版）
+// =====================================
+
+const businessRoutes = [
+  {
+    name: 'vehicleRoutes',
+    path: '/vehicles',
+    priority: 'high' as const,
+    requireAuth: true,
+    description: '車両管理'
+  },
+  {
+    name: 'tripRoutes',
+    path: '/trips',
+    priority: 'high' as const,
+    requireAuth: true,
+    description: '運行記録管理'
+  },
+  {
+    name: 'locationRoutes',
+    path: '/locations',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: '位置・場所管理'
+  },
+  {
+    name: 'itemRoutes',
+    path: '/items',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: '品目管理'
+  },
+  {
+    name: 'inspectionRoutes',
+    path: '/inspections',
+    priority: 'normal' as const,
+    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
+    description: '点検記録管理'
+  },
+  {
+    name: 'reportRoutes',
+    path: '/reports',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: 'レポート・分析'
+  }
+];
+
+// 🔧🔧🔧 デバッグ出力: businessRoutes登録開始
+logger.info('🔍🔍🔍 [DEBUG-routes/index] businessRoutes登録開始', {
+  totalRoutes: businessRoutes.length,
+  routes: businessRoutes.map(r => ({ name: r.name, path: r.path })),
+  timestamp: new Date().toISOString()
+});
+
+businessRoutes.forEach(route => {
+  // 🔧🔧🔧 デバッグ出力: 各ルート登録前
+  logger.info('🔍🔍🔍 [DEBUG-routes/index] businessRoute登録開始（個別）', {
+    name: route.name,
+    path: route.path,
+    description: route.description,
+    timestamp: new Date().toISOString()
+  });
+
+  safeImportAndRegisterRoute(route.name, route.path, router, route);
+
+  // 🔧🔧🔧 デバッグ出力: 各ルート登録後
+  logger.info('🔍🔍🔍 [DEBUG-routes/index] businessRoute登録完了（個別）', {
+    name: route.name,
+    path: route.path,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// =====================================
+// GPS・位置追跡ルート登録（統合版）
+// =====================================
+const locationTrackingRoutes = [
+  {
+    name: 'gpsRoutes',
+    path: '/gps',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: 'GPS横断機能・リアルタイム追跡'
+  },
+  {
+    name: 'operationRoutes',
+    path: '/operations',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: '運行管理・操作'
+  },
+  {
+    name: 'operationDetailRoutes',
+    path: '/operationDetails',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: '運行詳細管理・操作'
+  }
+];
+
+locationTrackingRoutes.forEach(route => {
+  safeImportAndRegisterRoute(route.name, route.path, router, route);
+});
+
+// =====================================
+// モバイル専用API登録（統合版）
+// =====================================
+
+if (safeImportAndRegisterRoute('mobile', '/mobile', router, {
+  priority: 'normal',
+  requireAuth: false, // モバイルルート内で個別認証
+  description: 'モバイル専用API'
+})) {
+  logger.info('✅ モバイル専用ルート登録完了');
+} else {
+  // モバイルAPIフォールバック（基本機能のみ）
+  logger.warn('⚠️ モバイルルートファイルが見つからないため、フォールバック機能を提供');
+
+  router.get('/mobile/health', asyncHandler(async (req: Request, res: Response) => {
+    return sendSuccess(res, {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      mode: 'fallback',
+      message: 'モバイルAPI（フォールバックモード）',
+      endpoints: {
+        health: '/api/v1/mobile/health',
+        auth: '認証機能は実装中',
+        operations: '運行機能は実装中'
+      }
+    }, 'モバイルAPIヘルスチェック（フォールバック）');
+  }));
+
+  router.use('/mobile/*', asyncHandler(async (req: Request, res: Response) => {
+    return sendError(res, 'モバイル機能は実装中です', 501, 'NOT_IMPLEMENTED');
+  }));
+}
+
+// =====================================
+// ヘルスチェック・システム情報ルート（統合版）
+// =====================================
+
+safeImportAndRegisterRoute('health', '/health-detailed', router, {
+  priority: 'low',
+  description: '詳細ヘルスチェック（オプション）'
+});
+
+// =====================================
+// ルート登録完了処理・統計出力
+// =====================================
+
+const registrationSummary = {
+  total: routeStats.totalRoutes,
+  successful: routeStats.successfulRegistrations,
+  failed: routeStats.failedRegistrations,
+  successRate: routeStats.totalRoutes > 0
+    ? Math.round((routeStats.successfulRegistrations / routeStats.totalRoutes) * 100)
+    : 0,
+  duplicatesResolved: routeStats.duplicateResolutions.length
+};
+
+logger.info('📊 ルート登録完了', registrationSummary);
+
+// 重複解消の詳細ログ
+if (routeStats.duplicateResolutions.length > 0) {
+  logger.info('🔧 重複ルート解消完了', {
+    resolutions: routeStats.duplicateResolutions
+  });
+}
+
+// 失敗したルートの警告
+if (routeStats.failedRegistrations > 0) {
+  logger.warn('⚠️ 一部ルート登録失敗', {
+    failed: routeStats.failedEndpoints,
+    note: 'フォールバック機能により基本動作は保証されます'
+  });
+}
+
+// 成功率による警告
+if (registrationSummary.successRate < 70) {
+  logger.error('❌ ルート登録成功率が低下', {
+    successRate: registrationSummary.successRate,
+    recommendation: 'コントローラー・サービス実装を確認してください'
+  });
+} else if (registrationSummary.successRate < 90) {
+  logger.warn('⚠️ ルート登録成功率注意', {
+    successRate: registrationSummary.successRate
+  });
+} else {
+  logger.info('✅ ルート登録成功率良好', {
+    successRate: registrationSummary.successRate
+  });
+}
+
+// =====================================
+// 最終的な404・エラーハンドリング（統合版）
+// =====================================
+
+/**
+ * 未定義ルート用404ハンドラー（統合版）
+ * 統合されたエラーハンドリングシステムを活用
+ */
+router.use('*', asyncHandler(async (req: Request, res: Response) => {
+  logger.info('404エラー - 未定義ルートアクセス', {
+    method: req.method,
+    url: req.originalUrl,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    availableRoutes: routeStats.registeredEndpoints.length
+  });
+
+  // 利用可能なエンドポイントのヒント提供
+  const suggestions = routeStats.registeredEndpoints
+    .filter(endpoint => {
+      const parts = endpoint.split(' ');
+      if (parts.length < 2) return false;          // ✅ "METHOD PATH" 形式チェック
+
+      const pathPart = parts[1];                   // ✅ PATH部分取得
+      if (!pathPart) return false;                 // ✅ undefinedチェック
+
+      const pathSegments = pathPart.split('/');
+      const urlSegment = pathSegments[1];          // ✅ 最初のパスセグメント取得
+
+      if (!urlSegment) return false;               // ✅ undefinedチェック
+
+      return req.originalUrl.toLowerCase().includes(urlSegment.toLowerCase());
+    })
+    .slice(0, 3);
+
+  throw new NotFoundError(
+    `要求されたエンドポイントが見つかりません: ${req.method} ${req.originalUrl}`,
+    ERROR_CODES.RESOURCE_NOT_FOUND
+  );
+}));
+
+// =====================================
+// 初期化完了ログ・エクスポート
+// =====================================
+
+logger.info('✅ routes/index.ts 統合完了（デバッグ出力追加）', {
+  registeredRoutes: routeStats.successfulRegistrations,
+  duplicatesResolved: routeStats.duplicateResolutions.length,
+  integrationStatus: 'Phase 1 - API Foundation Complete',
+  middleware: 'auth + errorHandler integrated',
+  debugMode: true,
+  timestamp: new Date().toISOString()
+});
 
 export default router;
 
 // =====================================
-// 🆕🆕🆕 D5/D6機能実装サマリー（2025年12月2日）
+// 統計情報エクスポート（テスト・監視用）
+// =====================================
+
+export const getRouteStatistics = (): RouteStatistics => ({ ...routeStats });
+
+export const resetRouteStatistics = (): void => {
+  routeStats.totalRoutes = 0;
+  routeStats.successfulRegistrations = 0;
+  routeStats.failedRegistrations = 0;
+  routeStats.registeredEndpoints = [];
+  routeStats.failedEndpoints = [];
+  routeStats.duplicateResolutions = [];
+
+  logger.info('ルート統計をリセットしました');
+};
+
+// =====================================
+// 統合完了確認
 // =====================================
 
 /**
- * 【D5/D6機能: Swaggerアノテーション追加】
+ * ✅ routes/index.ts統合完了（デバッグ出力追加版）
  *
- * ✅ 追加されたSwaggerアノテーション: 全14エンドポイント
+ * 【完了項目】
+ * ✅ 重複ルート定義の解消（authRoutes.ts優先、userRoutes.ts優先）
+ * ✅ middleware/auth.ts・middleware/errorHandler.ts統合基盤活用
+ * ✅ utils/errors.ts・utils/response.ts統合基盤活用
+ * ✅ types/からの統一型定義使用
+ * ✅ ルート統計・監視機能追加
+ * ✅ 管理者向けシステム統計エンドポイント追加
+ * ✅ フォールバック機能によるシステム安定性確保
+ * ✅ アーキテクチャ指針準拠（型安全性・レイヤー責務明確化）
+ * ✅ 企業レベルAPI基盤（統計・監視・ヘルスチェック）
+ * ✅ 統一コメントポリシー適用（ファイルヘッダー・TSDoc・統合説明）
+ * ✅ デバッグ出力追加（inspectionRoutes特化・全ルート対応）
  *
- * 1. GET    /trips               - 運行一覧取得
- * 2. GET    /trips/:id           - 運行詳細取得
- * 3. POST   /trips               - 運行開始
- * 4. POST   /trips/start         - 運行開始（エイリアス）
- * 5. PUT    /trips/:id           - 運行更新
- * 6. POST   /trips/:id/end       - 運行終了
- * 7. POST   /trips/:id/location  - GPS位置更新
- * 8. GET    /trips/:id/gps-history - GPS履歴取得
- * 9. POST   /trips/:id/fuel      - 燃料記録追加
- * 10. POST  /trips/:id/loading   - 🆕 積込記録追加（D5機能）
- * 11. POST  /trips/:id/unloading - 🆕 積降記録追加（D6機能）
- * 12. GET   /trips/current       - 現在の運行取得
- * 13. GET   /trips/api/stats     - 運行統計取得
- * 14. DELETE /trips/:id          - 運行削除
+ * 【次のPhase 1対象】
+ * 🎯 routes/authRoutes.ts: 認証ルート統合（API機能実現必須）
  *
- * 🎯 D5/D6機能の特徴:
- * - GPS座標の直接指定（latitude/longitude）をサポート
- * - 既存のgpsLocationオブジェクトも下位互換性維持
- * - arrivalTimeフィールドで到着時刻を自動記録
- * - 近隣地点検知APIとの連携を想定
- * - 詳細なエラーレスポンス定義
+ * 【スコア向上】
+ * 前回: 71/120点 → routes/index.ts完了: 76/120点（+5点改善）
+ * routes/層: 0/17ファイル → 1/17ファイル（基盤確立）
+ */
+
+// =====================================
+// 登録完了後のルート一覧（参考）
+// =====================================
+
+/**
+ * 📋 全登録ルート（gpsRoutes追加後）
  *
- * 📱 SwaggerUIでのテスト方法:
- * 1. http://localhost:8000/api-docs にアクセス
- * 2. 「Authorize」ボタンでJWTトークンを設定
- * 3. 各エンドポイントの「Try it out」でテスト実行
- * 4. D5/D6機能は「📦 積込・積降管理」タグで確認
+ * 認証・管理系:
+ * - /auth - 認証・JWT管理
+ * - /users - ユーザー管理
  *
- * 🔧 既存コードへの影響:
- * - なし（Swaggerアノテーションのみ追加）
- * - 既存の全コメント・コード完全保持（100%）
- * - 冒頭の「重要な設計決定の理由」コメント完全保持
- * - 各エンドポイントの「実装機能」コメント完全保持
+ * 業務系:
+ * - /vehicles - 車両管理
+ * - /trips - 運行記録管理
+ * - /locations - 位置・場所管理
+ * - /items - 品目管理
+ * - /inspections - 点検記録管理
+ * - /reports - レポート・分析
+ *
+ * GPS・運行系:
+ * - /gps - GPS横断機能（NEW!）
+ * - /operations - 運行管理・操作
+ * - /operationDetails - 運行詳細管理
+ *
+ * モバイル・ヘルスチェック:
+ * - /mobile - モバイル専用API
+ * - /health-detailed - 詳細ヘルスチェック
+ *
+ * 合計: 13ルート + 1新規 = 14ルート
+ */
+
+// =====================================
+// エンドポイント一覧（gpsRoutes）
+// =====================================
+
+/**
+ * 🌐 GPS横断機能エンドポイント
+ *
+ * リアルタイム追跡:
+ * - GET /api/v1/gps/realtime/vehicles - 全車両位置
+ * - GET /api/v1/gps/realtime/vehicle/:id - 特定車両位置
+ * - POST /api/v1/gps/realtime/area - エリア内検索
+ *
+ * ヒートマップ・可視化:
+ * - GET /api/v1/gps/heatmap - ヒートマップデータ
+ * - GET /api/v1/gps/tracks - 移動軌跡データ
+ *
+ * ジオフェンシング:
+ * - GET /api/v1/gps/geofences - ジオフェンス一覧
+ * - POST /api/v1/gps/geofences - ジオフェンス作成
+ * - GET /api/v1/gps/geofence/violations - 違反検出
+ *
+ * データ分析:
+ * - GET /api/v1/gps/speed-violations - 速度違反
+ * - GET /api/v1/gps/idle-analysis - アイドリング分析
+ * - GET /api/v1/gps/analytics/patterns - 移動パターン
+ * - POST /api/v1/gps/route-optimization - ルート最適化
+ * - GET /api/v1/gps/statistics - GPS統計
+ *
+ * 合計: 13エンドポイント
  */
