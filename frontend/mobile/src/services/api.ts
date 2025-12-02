@@ -1,6 +1,7 @@
 // frontend/mobile/src/services/api.ts
 // 運行記録API完全統合版 - バックエンドmobileController完全対応
 // ✅ HTTPS対応修正版 + 点検項目API追加
+// 🆕 D5/D6機能対応: recordLoadingArrival, recordUnloadingArrivalメソッド追加（2025年12月2日）
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
@@ -90,6 +91,42 @@ export interface OperationInfo {
     plateNumber: string;
     model: string;
   };
+}
+
+// 🆕 D5/D6機能: 積込記録リクエスト
+export interface RecordLoadingArrivalRequest {
+  locationId: string;        // 積込場所ID（近隣地点検知で取得）
+  latitude: number;          // GPS緯度
+  longitude: number;         // GPS経度
+  accuracy?: number;         // GPS測位精度（メートル）
+  arrivalTime?: Date | string; // 到着時刻（省略時は現在時刻）
+  itemId?: string;           // 品目ID（オプション）
+  quantity?: number;         // 積載量（オプション）
+  notes?: string;            // メモ（オプション）
+}
+
+// 🆕 D5/D6機能: 積降記録リクエスト
+export interface RecordUnloadingArrivalRequest {
+  locationId: string;        // 積降場所ID（近隣地点検知で取得）
+  latitude: number;          // GPS緯度
+  longitude: number;         // GPS経度
+  accuracy?: number;         // GPS測位精度（メートル）
+  arrivalTime?: Date | string; // 到着時刻（省略時は現在時刻）
+  itemId?: string;           // 品目ID（オプション）
+  quantity?: number;         // 積降量（オプション）
+  notes?: string;            // メモ（オプション）
+}
+
+// 🆕 D5/D6機能: 積込・積降記録レスポンス
+export interface ActivityRecordResponse {
+  id: string;                // 記録ID
+  locationId: string;        // 場所ID
+  latitude: number;          // 記録されたGPS緯度
+  longitude: number;         // 記録されたGPS経度
+  accuracy?: number;         // GPS精度
+  arrivalTime: string;       // 到着時刻
+  activityType: 'LOADING' | 'UNLOADING'; // 活動種別
+  createdAt: string;         // 作成日時
 }
 
 // GPS関連
@@ -379,6 +416,88 @@ class APIServiceClass {
   }
 
   // =============================================================================
+  // 🆕🆕🆕 D5/D6機能: 積込・積降記録API
+  // =============================================================================
+
+  /**
+   * 🆕 D5機能: 積込場所到着記録
+   * POST /api/v1/trips/:tripId/loading
+   * 
+   * 【使用例】
+   * ```typescript
+   * const result = await apiService.recordLoadingArrival('trip-123', {
+   *   locationId: 'loc-456',
+   *   latitude: 35.6812,
+   *   longitude: 139.7671,
+   *   accuracy: 10.5,
+   *   arrivalTime: new Date()
+   * });
+   * ```
+   * 
+   * @param tripId - 運行記録ID
+   * @param data - 積込記録データ
+   * @returns 積込記録レスポンス
+   */
+  async recordLoadingArrival(
+    tripId: string,
+    data: RecordLoadingArrivalRequest
+  ): Promise<APIResponse<ActivityRecordResponse>> {
+    try {
+      console.log('🚛 積込場所到着記録:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
+        `/trips/${tripId}/loading`,
+        data
+      );
+      
+      console.log('✅ 積込記録成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 積込記録エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 D6機能: 積降場所到着記録
+   * POST /api/v1/trips/:tripId/unloading
+   * 
+   * 【使用例】
+   * ```typescript
+   * const result = await apiService.recordUnloadingArrival('trip-123', {
+   *   locationId: 'loc-789',
+   *   latitude: 35.6895,
+   *   longitude: 139.6917,
+   *   accuracy: 8.2,
+   *   arrivalTime: new Date()
+   * });
+   * ```
+   * 
+   * @param tripId - 運行記録ID
+   * @param data - 積降記録データ
+   * @returns 積降記録レスポンス
+   */
+  async recordUnloadingArrival(
+    tripId: string,
+    data: RecordUnloadingArrivalRequest
+  ): Promise<APIResponse<ActivityRecordResponse>> {
+    try {
+      console.log('🚛 積降場所到着記録:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
+        `/trips/${tripId}/unloading`,
+        data
+      );
+      
+      console.log('✅ 積降記録成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 積降記録エラー:', error);
+      throw error;
+    }
+  }
+
+  // =============================================================================
   // GPS位置情報API
   // =============================================================================
 
@@ -441,51 +560,51 @@ class APIServiceClass {
     }
   }
 
-    /**
-     * 近隣地点検索（運行中専用）
-     * POST /api/v1/mobile/operations/nearby-locations
-     */
-    async getNearbyLocations(data: {
-      operationId?: string;
+  /**
+   * 近隣地点検索（運行中専用）
+   * POST /api/v1/mobile/operations/nearby-locations
+   */
+  async getNearbyLocations(data: {
+    operationId?: string;
+    latitude: number;
+    longitude: number;
+    radiusMeters: number;
+    phase: 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
+  }): Promise<APIResponse<{
+    locations: Array<{
+      location: {
+        id: string;
+        name: string;
+        address: string;
+        locationType: string;
+        latitude: number;
+        longitude: number;
+        contactPerson?: string;
+        contactPhone?: string;
+      };
+      distance: number;
+      bearing: number;
+    }>;
+    searchCriteria: {
       latitude: number;
       longitude: number;
       radiusMeters: number;
-      phase: 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
-    }): Promise<APIResponse<{
-      locations: Array<{
-        location: {
-          id: string;
-          name: string;
-          address: string;
-          locationType: string;
-          latitude: number;
-          longitude: number;
-          contactPerson?: string;
-          contactPhone?: string;
-        };
-        distance: number;
-        bearing: number;
-      }>;
-      searchCriteria: {
-        latitude: number;
-        longitude: number;
-        radiusMeters: number;
-        phase: string;
-        locationType?: string[];
-      };
-      timestamp: string;
-    }>> {
-      try {
-        const response = await this.axiosInstance.post<APIResponse<any>>(
-          '/mobile/operations/nearby-locations',
-          data
-        );
-        return response.data;
-      } catch (error) {
-        console.error('Get nearby locations error:', error);
-        throw error;
-      }
+      phase: string;
+      locationType?: string[];
+    };
+    timestamp: string;
+  }>> {
+    try {
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        '/mobile/operations/nearby-locations',
+        data
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get nearby locations error:', error);
+      throw error;
     }
+  }
 
   /**
    * クイック位置登録
@@ -769,3 +888,43 @@ const apiService = new APIServiceClass();
 // ✅ デフォルトエクスポートと名前付きエクスポートの両方を提供
 export { apiService };           // 名前付きエクスポート
 export default apiService;       // デフォルトエクスポート
+
+// =============================================================================
+// 🆕🆕🆕 D5/D6機能追加サマリー（2025年12月2日）
+// =============================================================================
+
+/**
+ * 【D5/D6機能: API実装追加】
+ *
+ * ✅ 追加メソッド:
+ * 1. recordLoadingArrival(tripId, data)
+ *    - POST /api/v1/trips/:tripId/loading
+ *    - 積込場所到着記録
+ *    - GPS座標と到着時刻を記録
+ *
+ * 2. recordUnloadingArrival(tripId, data)
+ *    - POST /api/v1/trips/:tripId/unloading
+ *    - 積降場所到着記録
+ *    - GPS座標と到着時刻を記録
+ *
+ * ✅ 追加型定義:
+ * - RecordLoadingArrivalRequest: 積込記録リクエスト型
+ * - RecordUnloadingArrivalRequest: 積降記録リクエスト型
+ * - ActivityRecordResponse: 積込・積降記録レスポンス型
+ *
+ * 🔄 既存機能との関係:
+ * - recordAction()メソッドは既存のまま保持
+ * - getNearbyLocations()メソッドと連携して使用
+ * - 既存のすべてのメソッドとコメントを完全保持（100%）
+ *
+ * 📱 使用フロー:
+ * 1. getNearbyLocations() で近隣地点を検索
+ * 2. 最も近い場所を自動選択
+ * 3. recordLoadingArrival() または recordUnloadingArrival() を呼び出し
+ * 4. GPS座標と到着時刻が自動記録される
+ *
+ * 🎯 実装計画書準拠:
+ * - D5-D6-API-Implementation-Plan.md に完全準拠
+ * - 既存コードとコメントを100%保持
+ * - 新機能のみを追加
+ */

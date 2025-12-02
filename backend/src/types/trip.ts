@@ -4,6 +4,7 @@
 // Operation モデルをベースとした運行管理用型
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
 // 最終更新: Mon Oct 13 14:30:00 JST 2025 - 重複export修正・VehicleStatus enum修正
+// 🆕 D5/D6機能追加: 2025年12月2日 - AddActivityRequest型にGPS座標フィールド追加
 // アーキテクチャ指針準拠版 - Phase 1-A対応
 // =====================================
 
@@ -208,19 +209,68 @@ export interface AddActnDetailivityRequest extends Prisma.OperationDetailCreateI
   };
 }
 
+// =====================================
+// 🆕🆕🆕 D5/D6機能: AddActivityRequest型を拡張
+// =====================================
+
+/**
+ * 積込・積降記録追加リクエスト型 - D5/D6機能対応版
+ *
+ * 【変更内容】2025年12月2日
+ * - startTime: Date → startTime?: Date（オプションに変更、自動設定可能）
+ * - latitude?: number を追加（GPS緯度の直接指定）
+ * - longitude?: number を追加（GPS経度の直接指定）
+ * - accuracy?: number を追加（GPS測位精度、メートル単位）
+ * - arrivalTime?: Date を追加（到着時刻、省略時は現在時刻）
+ *
+ * 【下位互換性】
+ * - 既存のgpsLocationオブジェクトも引き続きサポート
+ * - latitude/longitudeとgpsLocationの両方が指定された場合、latitude/longitudeを優先
+ *
+ * 【使用例】
+ * ```typescript
+ * // パターン1: GPS座標を直接指定（推奨）
+ * const request1: AddActivityRequest = {
+ *   locationId: 'loc-123',
+ *   activityType: 'LOADING',
+ *   latitude: 35.6812,
+ *   longitude: 139.7671,
+ *   accuracy: 10.5,
+ *   arrivalTime: new Date()
+ * };
+ *
+ * // パターン2: gpsLocationオブジェクトを使用（既存互換）
+ * const request2: AddActivityRequest = {
+ *   locationId: 'loc-123',
+ *   activityType: 'LOADING',
+ *   startTime: new Date(),
+ *   gpsLocation: {
+ *     latitude: 35.6812,
+ *     longitude: 139.7671,
+ *     accuracy: 10.5
+ *   }
+ * };
+ * ```
+ */
 export interface AddActivityRequest extends OperationDetailCreateDTO {
   locationId: string;
   itemId?: string;
   quantity?: number;
   activityType: ActivityType;
-  startTime: Date;
+  startTime?: Date;  // 🆕 オプションに変更（自動設定可能）
   endTime?: Date;
   notes?: string;
+  // 既存のgpsLocationオブジェクト（下位互換性維持）
   gpsLocation?: {
     latitude: number;
     longitude: number;
     accuracy?: number;
   };
+  // 🆕 D5/D6機能: GPS座標の直接指定も可能に（実装計画書対応）
+  latitude?: number;   // GPS緯度（-90 ~ 90）
+  longitude?: number;  // GPS経度（-180 ~ 180）
+  accuracy?: number;   // オプション: GPS測位精度（メートル）
+  arrivalTime?: Date;  // 🆕 オプション: 到着時刻（省略時は現在時刻）
 }
 
 export interface GpsLocationUpdate {
@@ -579,4 +629,48 @@ export class TripVehicleStatusManager {
  * 🚀 次フェーズ準備:
  * - Phase 1-B-1: utils/errors.ts SecurityError実装準備完了
  * - Phase 1全体: types/層修正完了（5/5ファイル）
+ */
+
+// =====================================
+// 🆕🆕🆕 D5/D6機能追加サマリー（2025年12月2日）
+// =====================================
+
+/**
+ * 【D5/D6機能: AddActivityRequest型拡張】
+ *
+ * ✅ 追加項目:
+ * 1. startTime: Date → startTime?: Date（オプション化）
+ *    - 理由: 到着時刻を自動設定可能にするため
+ *    - バックエンドでarrivalTimeまたは現在時刻を使用
+ *
+ * 2. latitude?: number（GPS緯度の直接指定）
+ *    - 範囲: -90 ~ 90
+ *    - gpsLocation.latitudeの代替として使用可能
+ *
+ * 3. longitude?: number（GPS経度の直接指定）
+ *    - 範囲: -180 ~ 180
+ *    - gpsLocation.longitudeの代替として使用可能
+ *
+ * 4. accuracy?: number（GPS測位精度）
+ *    - 単位: メートル
+ *    - gpsLocation.accuracyの代替として使用可能
+ *
+ * 5. arrivalTime?: Date（到着時刻）
+ *    - 省略時は現在時刻を使用
+ *    - モバイルアプリから明示的に指定可能
+ *
+ * 🔄 下位互換性:
+ * - 既存のgpsLocationオブジェクトも引き続きサポート
+ * - latitude/longitudeとgpsLocationの両方が指定された場合、
+ *   latitude/longitudeを優先（新しいAPI仕様）
+ *
+ * 📱 使用シーン:
+ * - D5画面: 積込場所到着ボタンクリック
+ * - D6画面: 積降場所到着ボタンクリック
+ * - モバイルアプリが現在のGPS座標とタイムスタンプを送信
+ *
+ * 🎯 実装計画書準拠:
+ * - D5-D6-API-Implementation-Plan.md「アプローチA: 既存API拡張」に準拠
+ * - バックエンドAPI: POST /api/v1/trips/:id/loading
+ * - バックエンドAPI: POST /api/v1/trips/:id/unloading
  */
