@@ -564,7 +564,7 @@ export class TripController {
         itemId: activityData.itemId || '',
         quantity: activityData.quantity || 0,
         activityType: 'LOADING' as const,
-        startTime: activityData.startTime,
+        startTime: activityData.startTime || new Date(),
         endTime: activityData.endTime || new Date(),
         notes: activityData.notes || ''
       };
@@ -633,7 +633,7 @@ export class TripController {
         itemId: activityData.itemId || '',
         quantity: activityData.quantity || 0,
         activityType: 'UNLOADING' as const,
-        startTime: activityData.startTime,
+        startTime: activityData.startTime || new Date(),
         endTime: activityData.endTime || new Date(),
         notes: activityData.notes || ''
       };

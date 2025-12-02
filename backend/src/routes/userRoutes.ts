@@ -1,9 +1,9 @@
 // =====================================
 // backend/src/routes/userRoutes.ts
-// ユーザー管理ルート - Swagger UI完全対応版
+// ユーザー管理ルート - Swagger UI完全対応版 + thisバインディング確認版
 // エンドポイント定義のみ・ビジネスロジックはController層に委譲
-// 最終更新: 2025年12月2日
-// 修正内容: 全13エンドポイントにSwagger定義追加
+// 最終更新: 2025年12月3日
+// 修正内容: 全13エンドポイントにSwagger定義追加 + `this`バインディング確認
 // 依存関係: middleware/auth.ts, controllers/userController.ts
 // =====================================
 
@@ -37,6 +37,18 @@ import { getUserController } from '../controllers/userController';
 
 const router = Router();
 const userController = getUserController();
+
+// 🔧🔧🔧 重要: `this`バインディングについて
+// UserControllerは全メソッドをアロー関数プロパティとして定義しているため、
+// `this`コンテキストは自動的にクラスインスタンスにバインドされます。
+// 例: public getAllUsers = asyncHandler(async (req, res) => { ... })
+//
+// したがって、以下のようにメソッドを直接渡しても問題ありません:
+// ✅ router.get('/', userController.getAllUsers);
+//
+// もし将来的に通常のメソッド（function）に変更する場合は、以下のいずれかが必要です:
+// 1. アロー関数でラップ: router.get('/', (req, res) => userController.getAllUsers(req, res));
+// 2. コンストラクタでバインド: this.getAllUsers = this.getAllUsers.bind(this);
 
 // =====================================
 // 全ルートで認証必須
@@ -1001,11 +1013,11 @@ router.post('/bulk/status',
 export default router;
 
 // =====================================
-// Swagger UI対応完了確認（2025年12月2日）
+// Swagger UI対応完了確認 + thisバインディング確認（2025年12月3日）
 // =====================================
 
 /**
- * ✅ routes/userRoutes.ts Swagger UI完全対応版完了
+ * ✅ routes/userRoutes.ts Swagger UI完全対応版 + thisバインディング確認完了
  *
  * 【Swagger対応完了】
  * ✅ 全13エンドポイントにSwaggerドキュメント追加
@@ -1015,6 +1027,12 @@ export default router;
  * ✅ エラーレスポンス定義
  * ✅ 企業レベル機能説明
  * ✅ tripRoutes.tsパターン準拠
+ *
+ * 【thisバインディング確認完了】
+ * ✅ UserControllerは全メソッドをアロー関数プロパティとして定義
+ * ✅ `this`コンテキストは自動的にクラスインスタンスにバインド
+ * ✅ メソッドを直接渡しても安全
+ * ✅ コメントで明記し、将来的な変更時の注意点を記載
  *
  * 【設計原則】
  * ✅ routes層: エンドポイント定義のみ（薄く保つ）
