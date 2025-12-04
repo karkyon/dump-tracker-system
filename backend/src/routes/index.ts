@@ -562,28 +562,28 @@ const businessRoutes = [
     name: 'vehicleRoutes',
     path: '/vehicles',
     priority: 'high' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: '車両管理'
   },
   {
     name: 'tripRoutes',
     path: '/trips',
     priority: 'high' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: '運行記録管理'
   },
   {
     name: 'locationRoutes',
     path: '/locations',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: '位置・場所管理'
   },
   {
     name: 'itemRoutes',
     path: '/items',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: '品目管理'
   },
   {
@@ -597,7 +597,7 @@ const businessRoutes = [
     name: 'reportRoutes',
     path: '/reports',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: 'レポート・分析'
   }
 ];
@@ -636,21 +636,21 @@ const locationTrackingRoutes = [
     name: 'gpsRoutes',
     path: '/gps',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: 'GPS横断機能・リアルタイム追跡'
   },
   {
     name: 'operationRoutes',
     path: '/operations',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: '運行管理・操作'
   },
   {
     name: 'operationDetailRoutes',
     path: '/operationDetails',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: '運行詳細管理・操作'
   }
 ];

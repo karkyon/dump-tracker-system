@@ -263,14 +263,14 @@ router.get('/:id', vehicleController.getVehicleById);
  *             properties:
  *               registrationNumber:
  *                 type: string
- *                 description: 登録番号（例: 大阪 300 あ 1234）
+ *                 description: '登録番号（例: 大阪 300 あ 1234）'
  *               vehicleType:
  *                 type: string
  *                 enum: [DUMP_LARGE, DUMP_MEDIUM, DUMP_SMALL, TRAILER, MIXER, OTHER]
  *                 description: 車種
  *               model:
  *                 type: string
- *                 description: 型式（例: いすゞ GIGA）
+ *                 description: '型式（例: いすゞ GIGA）'
  *               year:
  *                 type: integer
  *                 description: 年式
