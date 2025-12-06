@@ -704,11 +704,11 @@ router.get('/api/stats',
  * - 整備履歴一覧
  * - ページネーション
  * - 権限: 管理者・マネージャー
- */
-router.get('/:id/maintenance-history',
-  authorize(['ADMIN', 'MANAGER']),
-  vehicleController.getVehicleMaintenanceHistory
-);
+//  */
+// router.get('/:id/maintenance-history',
+//   authorize(['ADMIN', 'MANAGER']),
+//   vehicleController.getVehicleMaintenanceHistory
+// );
 
 /**
  * @swagger
@@ -784,11 +784,11 @@ router.get('/:id/maintenance-history',
  * - ページネーション
  * - 統計情報
  * - 権限: 管理者・マネージャー
- */
-router.get('/:id/trips',
-  authorize(['ADMIN', 'MANAGER']),
-  vehicleController.getVehicleTrips
-);
+//  */
+// router.get('/:id/trips',
+//   authorize(['ADMIN', 'MANAGER']),
+//   vehicleController.getVehicleTrips
+// );
 
 /**
  * @swagger
@@ -910,11 +910,11 @@ router.get('/search', vehicleController.searchVehicles);
  * - 車検期限切れ車両一覧
  * - 警告期間設定
  * - 権限: 管理者・マネージャー
- */
-router.get('/api/inspection-due',
-  authorize(['ADMIN', 'MANAGER']),
-  vehicleController.getVehiclesInspectionDue
-);
+//  */
+// router.get('/api/inspection-due',
+//   authorize(['ADMIN', 'MANAGER']),
+//   vehicleController.getVehiclesInspectionDue
+// );
 
 // =====================================
 // エクスポート
