@@ -163,8 +163,13 @@ const PreDepartureInspection: React.FC = () => {
     );
   };
 
-  /**
+/**
    * 運行開始処理
+   * 
+   * 🔧 修正 (2025年12月7日):
+   * - バックエンドレスポンスのフィールド名を修正
+   * - operationResponse.data.id → operationResponse.data.operationId || operationResponse.data.id
+   * - デバッグログ追加
    */
   const handleStartOperation = async () => {
     const allChecked = inspectionItems.every(item => item.checked);
@@ -222,8 +227,23 @@ const PreDepartureInspection: React.FC = () => {
         throw new Error('運行開始に失敗しました');
       }
 
-      const operationId = operationResponse.data.id;
+      // 🔧 修正: バックエンドは operationId または tripId で返す
+      const operationId = operationResponse.data.operationId 
+                      || operationResponse.data.tripId 
+                      || operationResponse.data.id;
+      
+      console.log('[D3] 🔍 APIレスポンス確認:', {
+        fullResponse: operationResponse.data,
+        extractedOperationId: operationId
+      });
+      
       console.log('[D3] 運行開始成功:', operationId);
+      
+      // 🔧 追加: operationIdがundefinedの場合の警告
+      if (!operationId) {
+        console.error('[D3] ❌ operationIdが取得できませんでした:', operationResponse.data);
+        throw new Error('運行IDの取得に失敗しました。APIレスポンスを確認してください。');
+      }
 
       // 3. Store更新
       setInspectionCompleted(inspectionRecordId);

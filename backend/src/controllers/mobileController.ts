@@ -526,25 +526,39 @@ export class MobileController {
 
       this.collectStats('operation', req.user.userId);
 
-      // 最小限の情報で位置を作成
+      // ✅ 修正: notes → specialInstructions に変更
       const locationData = {
         name: req.body.name || `位置 ${new Date().toLocaleString('ja-JP')}`,
         locationType: req.body.locationType || req.body.type || 'DESTINATION',
         latitude: new Decimal(req.body.latitude),
         longitude: new Decimal(req.body.longitude),
-        address: req.body.address,
-        notes: req.body.notes || 'モバイルからクイック登録'
+        address: req.body.address || '',  // ✅ 修正: デフォルト値を追加
+        specialInstructions: 'モバイルからクイック登録'
       };
 
-      const location = await this.locationService.create(locationData);
+      logger.info('位置作成データ', { data: locationData });
 
-      sendSuccess(res, location, 'クイック位置登録が完了しました', 201);
+      const result = await this.locationService.create(locationData);
+
+      // ✅ OperationResult型のため、result.success と result.data をチェック
+      if (!result.success || !result.data) {
+        logger.error('位置作成失敗', { result });
+        sendError(res, result.message || '位置情報の作成に失敗しました', 500, 'LOCATION_CREATE_ERROR');
+        return;
+      }
+
+      logger.info('位置作成成功', { locationId: result.data.id });
+      sendSuccess(res, result.data, 'クイック位置登録が完了しました', 201);
 
     } catch (error) {
-      logger.error('クイック位置登録エラー', {
-        error: error instanceof Error ? error.message : String(error)
+      logger.error('Failed to create location', {
+        category: 'error',
+        data: {
+          error: error instanceof Error ? error.message : String(error),
+          data: req.body
+        }
       });
-      sendError(res, 'クイック位置登録に失敗しました', 500, 'QUICK_LOCATION_ERROR');
+      sendError(res, '位置情報の作成に失敗しました', 500, 'LOCATION_CREATE_ERROR');
     }
   });
 

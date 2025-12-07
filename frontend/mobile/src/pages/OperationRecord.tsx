@@ -1,17 +1,18 @@
 // frontend/mobile/src/pages/OperationRecord.tsx
-// 🚛 運行記録画面 - 完全版（既存機能100%保持 + D5/D6新仕様対応）
+// 🚛 運行記録画面 - 完全版（既存機能100%保持 + D5/D6新仕様対応 + 新規地点登録機能）
 // ✅ 既存機能を完全保持
 // ✅ GPS近隣地点自動検知を停止（常時）
 // ✅ D5/D6ボタンクリック時に手動で地点検索
 // ✅ 複数候補の選択ダイアログ表示
 // ✅ 新APIエンドポイント使用 (recordLoadingArrival/recordUnloadingArrival)
+// 🆕 近隣地点0件時の新規地点登録ダイアログ表示（2025年12月7日）
+// 🔧 修正: operation-temp-id → operationStore.operationId を使用（2025年12月7日）
 
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useGPS } from '../hooks/useGPS';
 import apiService from '../services/api';
 import GoogleMapWrapper, {
-  updateMarkerIcon,
   updateMarkerPosition,
   panMapToPosition,
   setMapHeading,
@@ -20,6 +21,8 @@ import GoogleMapWrapper, {
 import HeadingIndicator from '../components/HeadingIndicator';
 import { LocationSelectionDialog } from '../components/LocationSelectionDialog';
 import type { NearbyLocationResult } from '../hooks/useNearbyLocationDetection';
+import { LocationRegistrationDialog, type NewLocationData } from '../components/LocationRegistrationDialog';
+import { useOperationStore } from '../stores/operationStore';
 
 // 運行状態の型定義
 type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
@@ -54,9 +57,16 @@ const OperationRecord: React.FC = () => {
   const lastMapUpdateRef = useRef<number>(0);
   const lastMarkerUpdateRef = useRef<number>(0);
   
+  // 🔧 修正: operationStoreから運行IDを取得
+  const operationStore = useOperationStore();
+  
+  // 🆕 新規地点登録ダイアログ用の状態
+  const [showRegistrationDialog, setShowRegistrationDialog] = useState(false);
+  const [registrationLocationType, setRegistrationLocationType] = useState<'LOADING' | 'UNLOADING' | null>(null);
+  
   // ✅ 既存の運行状態（完全保持）
   const [operation, setOperation] = useState<OperationState>({
-    id: 'operation-temp-id', // TODO: 実際の運行IDを設定
+    id: null, // 🔧 修正: operationStoreから取得するためnullに変更
     status: 'running',
     phase: 'TO_LOADING',
     startTime: new Date(),
@@ -82,7 +92,7 @@ const OperationRecord: React.FC = () => {
 
   // ✅ 既存の詳細情報表示状態
   const [showDetails, setShowDetails] = useState(false);
-  const [showMap, setShowMap] = useState(true);
+  const [showMap] = useState(true);
 
   // 🆕 地点選択ダイアログの状態（D5/D6新仕様）
   const [locationDialogVisible, setLocationDialogVisible] = useState(false);
@@ -95,9 +105,27 @@ const OperationRecord: React.FC = () => {
     startTracking,
     heading,
     speed: gpsSpeed,
-    totalDistance,
-    averageSpeed: gpsAverageSpeed
+    totalDistance
   } = useGPS();
+
+  // 🔧 修正: operationStoreから運行IDを取得して状態に反映
+  // 🆕 運行ID未設定時の初期化チェック
+  useEffect(() => {
+    if (operationStore.operationId) {
+      setOperation(prev => ({
+        ...prev,
+        id: operationStore.operationId
+      }));
+      console.log('✅ 運行ID設定完了:', operationStore.operationId);
+    } else {
+      // 🆕 運行IDが未設定の場合、警告を表示
+      console.warn('⚠️ 運行IDが未設定です。乗車前点検から運行を開始してください。');
+      toast.error('運行が開始されていません。乗車前点検から開始してください。', {
+        duration: 5000,
+        icon: '⚠️'
+      });
+    }
+  }, [operationStore.operationId]);
 
   // ✅ GPS追跡開始（既存）
   useEffect(() => {
@@ -186,7 +214,13 @@ const OperationRecord: React.FC = () => {
       });
       
       if (locations.length === 0) {
-        toast.error('近くに登録されている積込場所が見つかりません');
+        // 🆕 近隣地点が見つからない場合 → 新規登録ダイアログを表示
+        toast('近くに登録されている積込場所が見つかりません', {
+          icon: 'ℹ️',
+          duration: 3000
+        });
+        setRegistrationLocationType('LOADING');
+        setShowRegistrationDialog(true);
         setIsSubmitting(false);
         return;
       }
@@ -241,7 +275,13 @@ const OperationRecord: React.FC = () => {
       });
       
       if (locations.length === 0) {
-        toast.error('近くに登録されている積降場所が見つかりません');
+        // 🆕 近隣地点が見つからない場合 → 新規登録ダイアログを表示
+        toast('近くに登録されている積降場所が見つかりません', {
+          icon: 'ℹ️',
+          duration: 3000
+        });
+        setRegistrationLocationType('UNLOADING');
+        setShowRegistrationDialog(true);
         setIsSubmitting(false);
         return;
       }
@@ -268,8 +308,27 @@ const OperationRecord: React.FC = () => {
       return;
     }
 
-    if (!operation.id) {
-      toast.error('運行IDが見つかりません');
+    // 🔧 修正: operationStoreから運行IDを取得
+    const currentOperationId = operationStore.operationId;
+    
+    console.log('🔍 運行ID確認:', {
+      operationStoreId: currentOperationId,
+      operationStateId: operation.id,
+      vehicleId: operationStore.vehicleId,
+      status: operationStore.status
+    });
+    
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません。乗車前点検から運行を開始してください。', {
+        duration: 5000
+      });
+      console.error('❌ 運行ID未設定:', {
+        operationStoreId: operationStore.operationId,
+        operationStateId: operation.id,
+        operationStore: {
+          ...operationStore
+        }
+      });
       return;
     }
 
@@ -280,14 +339,15 @@ const OperationRecord: React.FC = () => {
       console.log('📍 地点選択完了:', {
         type: dialogType,
         locationId: selectedLocation.location.id,
-        locationName: selectedLocation.location.name
+        locationName: selectedLocation.location.name,
+        operationId: currentOperationId // 🔧 修正: 実際の運行IDを使用
       });
 
       if (dialogType === 'LOADING') {
         // 🆕 新API使用: 積込場所到着記録
         console.log('🚛 積込場所到着記録API呼び出し開始');
         
-        await apiService.recordLoadingArrival(operation.id, {
+        await apiService.recordLoadingArrival(currentOperationId, { // 🔧 修正
           locationId: selectedLocation.location.id,
           latitude: currentPosition.coords.latitude,
           longitude: currentPosition.coords.longitude,
@@ -313,7 +373,7 @@ const OperationRecord: React.FC = () => {
         // 🆕 新API使用: 積降場所到着記録
         console.log('🚛 積降場所到着記録API呼び出し開始');
         
-        await apiService.recordUnloadingArrival(operation.id, {
+        await apiService.recordUnloadingArrival(currentOperationId, { // 🔧 修正
           locationId: selectedLocation.location.id,
           latitude: currentPosition.coords.latitude,
           longitude: currentPosition.coords.longitude,
@@ -351,6 +411,138 @@ const OperationRecord: React.FC = () => {
   const handleLocationDialogCancel = () => {
     setLocationDialogVisible(false);
     setLocationCandidates([]);
+  };
+
+  /**
+   * 🆕 新規地点登録ハンドラー
+   * 
+   * 【機能概要】
+   * - LocationRegistrationDialogから呼び出される
+   * - 新規地点をAPIに登録
+   * - 登録成功後、その地点を使用して到着記録
+   * - 積込場所/積降場所に応じて適切なAPIを呼び出し
+   * 
+   * 【処理フロー】
+   * 1. バリデーション（GPS位置・運行IDの確認）
+   * 2. createQuickLocation API呼び出し
+   * 3. 登録成功 → locationId取得
+   * 4. recordLoadingArrival または recordUnloadingArrival 呼び出し
+   * 5. 状態更新（phase, loadingLocation/unloadingLocation）
+   * 6. トースト通知
+   * 7. ダイアログを閉じる
+   * 
+   * 【エラーハンドリング】
+   * - GPS位置未取得: エラー表示してダイアログを閉じる
+   * - 運行ID未設定: エラー表示してダイアログを閉じる
+   * - API エラー: エラーログ出力、トースト表示、例外をスロー
+   * - LocationRegistrationDialog側でisSubmittingをfalseに戻す
+   */
+  const handleLocationRegister = async (newLocationData: NewLocationData) => {
+    if (!currentPosition) {
+      toast.error('GPS位置情報が取得できません');
+      setShowRegistrationDialog(false);
+      return;
+    }
+
+    // 🔧 修正: operationStoreから運行IDを取得
+    const currentOperationId = operationStore.operationId;
+    
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません。運行を開始してください。');
+      console.error('❌ 運行ID未設定:', {
+        operationStoreId: operationStore.operationId,
+        operationStateId: operation.id
+      });
+      setShowRegistrationDialog(false);
+      return;
+    }
+
+    try {
+      console.log('🆕 新規地点登録開始:', newLocationData);
+
+      // APIサービスを使用して新規地点を登録
+      const response = await apiService.createQuickLocation(newLocationData);
+
+      if (!response.success || !response.data) {
+        throw new Error('地点登録に失敗しました');
+      }
+
+      const registeredLocation = response.data;
+      console.log('✅ 地点登録成功:', registeredLocation);
+
+      // 登録完了後、登録した地点を使用して到着記録
+      if (registrationLocationType === 'LOADING') {
+        console.log('🚛 積込場所到着記録API呼び出し開始');
+        
+        await apiService.recordLoadingArrival(currentOperationId, { // 🔧 修正
+          locationId: registeredLocation.id,
+          latitude: currentPosition.coords.latitude,
+          longitude: currentPosition.coords.longitude,
+          accuracy: currentPosition.coords.accuracy,
+          arrivalTime: new Date()
+        });
+        
+        console.log('✅ 積込場所到着記録完了');
+        
+        // 状態更新
+        setOperation(prev => ({
+          ...prev,
+          phase: 'AT_LOADING',
+          loadingLocation: registeredLocation.name
+        }));
+
+        toast.success(`新規地点「${registeredLocation.name}」を登録し、積込場所に到着しました`);
+        
+        // TODO: 積込場所到着画面へ遷移
+        console.log('📍 次: 積込場所到着画面へ遷移');
+
+      } else if (registrationLocationType === 'UNLOADING') {
+        console.log('🚛 積降場所到着記録API呼び出し開始');
+        
+        await apiService.recordUnloadingArrival(currentOperationId, { // 🔧 修正
+          locationId: registeredLocation.id,
+          latitude: currentPosition.coords.latitude,
+          longitude: currentPosition.coords.longitude,
+          accuracy: currentPosition.coords.accuracy,
+          arrivalTime: new Date()
+        });
+        
+        console.log('✅ 積降場所到着記録完了');
+        
+        // 状態更新
+        setOperation(prev => ({
+          ...prev,
+          phase: 'AT_UNLOADING',
+          unloadingLocation: registeredLocation.name
+        }));
+
+        toast.success(`新規地点「${registeredLocation.name}」を登録し、積降場所に到着しました`);
+        
+        // TODO: 積降場所到着画面へ遷移
+        console.log('📍 次: 積降場所到着画面へ遷移');
+      }
+
+      // ダイアログを閉じる
+      setShowRegistrationDialog(false);
+      setRegistrationLocationType(null);
+
+    } catch (error) {
+      console.error('❌ 地点登録エラー:', error);
+      toast.error('地点の登録に失敗しました');
+      throw error; // LocationRegistrationDialogでキャッチしてisSubmittingをfalseにする
+    }
+  };
+
+  /**
+   * 🆕 新規地点登録キャンセルハンドラー
+   * 
+   * 【機能概要】
+   * - LocationRegistrationDialogのキャンセルボタンから呼び出される
+   * - ダイアログを閉じて状態をリセット
+   */
+  const handleLocationRegisterCancel = () => {
+    setShowRegistrationDialog(false);
+    setRegistrationLocationType(null);
   };
 
   // =====================================
@@ -449,7 +641,6 @@ const OperationRecord: React.FC = () => {
       // TODO: API呼び出し
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      const previousPhase = operation.phase;
       setOperation(prev => ({ 
         ...prev, 
         phase: 'BREAK',
@@ -898,6 +1089,21 @@ const OperationRecord: React.FC = () => {
         onCancel={handleLocationDialogCancel}
         title={dialogType === 'LOADING' ? '積込場所を選択' : '積降場所を選択'}
       />
+
+      {/* 🆕 新規地点登録ダイアログ */}
+      {currentPosition && registrationLocationType && (
+        <LocationRegistrationDialog
+          visible={showRegistrationDialog}
+          locationType={registrationLocationType}
+          currentPosition={{
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy
+          }}
+          onRegister={handleLocationRegister}
+          onCancel={handleLocationRegisterCancel}
+        />
+      )}
     </div>
   );
 };
@@ -918,7 +1124,7 @@ function getPhaseLabel(phase: OperationPhase): string {
 export default OperationRecord;
 
 // =====================================
-// ✅ 既存機能100%保持 + D5/D6新仕様対応完了
+// ✅ 既存機能100%保持 + D5/D6新仕様対応 + 新規地点登録機能完了
 // =====================================
 
 /**
@@ -947,8 +1153,19 @@ export default OperationRecord;
  * - locationId取得フロー実装
  * - 詳細なコンソールログ出力（デバッグ用）
  * 
- * 🔧 修正内容（2025年12月7日）
- * - レスポンス構造の修正: nearbyResult.data?.locations の取得方法を修正
- * - 運行IDのnullチェック追加
- * - コンソールログの追加（デバッグ強化）
+ * 🆕 新規地点登録機能（2025年12月7日）
+ * - 近隣地点0件時に新規登録ダイアログ表示
+ * - LocationRegistrationDialogコンポーネント統合
+ * - createQuickLocation API呼び出し
+ * - 登録後の自動到着記録
+ * - 状態管理とエラーハンドリング
+ * 
+ * 🔧 修正内容（2025年12月7日 - 最新版）
+ * - ❌ 削除: operation-temp-id ハードコード
+ * - ✅ 追加: operationStore.operationId を使用
+ * - ✅ 追加: 運行ID未設定時のエラーハンドリング
+ * - ✅ 追加: 運行IDのnullチェック（handleLocationSelected, handleLocationRegister）
+ * - ✅ 追加: useEffect で operationStore.operationId を監視し operation.id に反映
+ * - ✅ 追加: コンソールログで operationStoreId と operationStateId を出力（デバッグ用）
+ * - ✅ 追加: import { useOperationStore } from '../stores/operationStore'
  */

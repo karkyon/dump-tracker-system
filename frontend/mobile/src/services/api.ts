@@ -2,6 +2,7 @@
 // 運行記録API完全統合版 - バックエンドmobileController完全対応
 // ✅ HTTPS対応修正版 + 点検項目API追加
 // 🆕 D5/D6/D7機能対応: recordLoadingArrival, recordUnloadingArrival, getNearbyLocationsメソッド追加（2025年12月7日）
+// 🆕 新規地点登録機能追加: createQuickLocationメソッド追加（2025年12月7日）
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
@@ -647,6 +648,72 @@ class APIServiceClass {
   }
 
   /**
+   * 🆕 新規地点登録（クイック登録）
+   * POST /api/v1/mobile/locations/quick
+   * 
+   * 【機能概要】
+   * - 近隣地点が見つからない場合に新規地点を登録
+   * - GPS座標と地点名を指定して登録
+   * - 住所は自動取得（Geocoding API）またはクライアント側で取得
+   * 
+   * 【パラメータ】
+   * @param data.name - 地点名（必須、2文字以上）
+   * @param data.latitude - GPS緯度（必須）
+   * @param data.longitude - GPS経度（必須）
+   * @param data.locationType - 地点種別（必須: 'DEPOT'=積込場所, 'DESTINATION'=積降場所）
+   * @param data.address - 住所（オプション）
+   * 
+   * 【戻り値】
+   * LocationInfo型のレスポンス（登録された地点情報）
+   * 
+   * 【エラーハンドリング】
+   * - ネットワークエラー時は再試行を促す
+   * - バリデーションエラーはtoast表示
+   * - 登録成功時は登録済みlocationIdを返却
+   * 
+   * 【使用例】
+   * ```typescript
+   * const response = await apiService.createQuickLocation({
+   *   name: '○○建材センター',
+   *   latitude: 34.7993,
+   *   longitude: 135.6388,
+   *   locationType: 'DEPOT',
+   *   address: '大阪府○○市...'
+   * });
+   * ```
+   * 
+   * 【作成日】2025年12月7日
+   */
+  async createQuickLocation(data: {
+    name: string;
+    latitude: number;
+    longitude: number;
+    locationType: 'DEPOT' | 'DESTINATION';
+    address?: string;
+  }): Promise<APIResponse<LocationInfo>> {
+    try {
+      console.log('🆕 新規地点登録API呼び出し:', data);
+
+      const response = await this.axiosInstance.post<APIResponse<LocationInfo>>(
+        '/mobile/locations/quick',
+        {
+          name: data.name,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          locationType: data.locationType,
+          address: data.address || ''
+        }
+      );
+
+      console.log('✅ 新規地点登録成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 新規地点登録エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
    * GPS位置更新ログ
    * POST /api/v1/mobile/gps/log
    */
@@ -928,6 +995,11 @@ export default apiService;       // デフォルトエクスポート
  *    - 近隣地点検索（積込/積降場所）
  *    - 距離順ソート済みリスト取得
  *
+ * 4. createQuickLocation(data)
+ *    - POST /api/v1/mobile/locations/quick
+ *    - 新規地点登録（クイック登録）
+ *    - 近隣地点が見つからない場合の新規登録
+ *
  * ✅ 追加型定義:
  * - RecordLoadingArrivalRequest: 積込記録リクエスト型
  * - RecordUnloadingArrivalRequest: 積降記録リクエスト型
@@ -940,9 +1012,11 @@ export default apiService;       // デフォルトエクスポート
  *
  * 📱 使用フロー:
  * 1. getNearbyLocations() で近隣地点を検索
- * 2. LocationSelectionDialog で地点を選択
- * 3. recordLoadingArrival() または recordUnloadingArrival() を呼び出し
- * 4. GPS座標と到着時刻が自動記録される
+ * 2. 検索結果0件の場合 → LocationRegistrationDialog表示
+ * 3. createQuickLocation() で新規地点登録
+ * 4. 登録成功 → locationId取得
+ * 5. recordLoadingArrival() または recordUnloadingArrival() を呼び出し
+ * 6. GPS座標と到着時刻が自動記録される
  *
  * 🎯 実装計画書準拠:
  * - 既存コードとコメントを100%保持
