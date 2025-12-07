@@ -161,6 +161,12 @@ const OperationRecord: React.FC = () => {
     try {
       setIsSubmitting(true);
 
+      console.log('🔍 積込場所検索開始:', {
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+        phase: 'TO_LOADING'
+      });
+
       // 🆕 近隣地点を手動検索
       const nearbyResult = await apiService.getNearbyLocations({
         latitude: currentPosition.coords.latitude,
@@ -169,7 +175,15 @@ const OperationRecord: React.FC = () => {
         phase: 'TO_LOADING'
       });
 
+      console.log('📡 近隣地点検索レスポンス:', nearbyResult);
+
+      // 🔧 修正: レスポンス構造に合わせてデータ取得
       const locations = nearbyResult.data?.locations || [];
+      
+      console.log('📍 検索結果:', {
+        count: locations.length,
+        locations: locations
+      });
       
       if (locations.length === 0) {
         toast.error('近くに登録されている積込場所が見つかりません');
@@ -184,7 +198,7 @@ const OperationRecord: React.FC = () => {
       setIsSubmitting(false);
 
     } catch (error) {
-      console.error('積込場所検索エラー:', error);
+      console.error('❌ 積込場所検索エラー:', error);
       toast.error('積込場所の検索に失敗しました');
       setIsSubmitting(false);
     }
@@ -202,6 +216,12 @@ const OperationRecord: React.FC = () => {
     try {
       setIsSubmitting(true);
 
+      console.log('🔍 積降場所検索開始:', {
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+        phase: 'TO_UNLOADING'
+      });
+
       // 🆕 近隣地点を手動検索
       const nearbyResult = await apiService.getNearbyLocations({
         latitude: currentPosition.coords.latitude,
@@ -210,7 +230,15 @@ const OperationRecord: React.FC = () => {
         phase: 'TO_UNLOADING'
       });
 
+      console.log('📡 近隣地点検索レスポンス:', nearbyResult);
+
+      // 🔧 修正: レスポンス構造に合わせてデータ取得
       const locations = nearbyResult.data?.locations || [];
+      
+      console.log('📍 検索結果:', {
+        count: locations.length,
+        locations: locations
+      });
       
       if (locations.length === 0) {
         toast.error('近くに登録されている積降場所が見つかりません');
@@ -225,7 +253,7 @@ const OperationRecord: React.FC = () => {
       setIsSubmitting(false);
 
     } catch (error) {
-      console.error('積降場所検索エラー:', error);
+      console.error('❌ 積降場所検索エラー:', error);
       toast.error('積降場所の検索に失敗しました');
       setIsSubmitting(false);
     }
@@ -240,19 +268,34 @@ const OperationRecord: React.FC = () => {
       return;
     }
 
+    if (!operation.id) {
+      toast.error('運行IDが見つかりません');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setLocationDialogVisible(false);
 
+      console.log('📍 地点選択完了:', {
+        type: dialogType,
+        locationId: selectedLocation.location.id,
+        locationName: selectedLocation.location.name
+      });
+
       if (dialogType === 'LOADING') {
         // 🆕 新API使用: 積込場所到着記録
-        await apiService.recordLoadingArrival(operation.id!, {
+        console.log('🚛 積込場所到着記録API呼び出し開始');
+        
+        await apiService.recordLoadingArrival(operation.id, {
           locationId: selectedLocation.location.id,
           latitude: currentPosition.coords.latitude,
           longitude: currentPosition.coords.longitude,
           accuracy: currentPosition.coords.accuracy,
           arrivalTime: new Date()
         });
+        
+        console.log('✅ 積込場所到着記録完了');
         
         // 状態更新
         setOperation(prev => ({
@@ -268,13 +311,17 @@ const OperationRecord: React.FC = () => {
 
       } else {
         // 🆕 新API使用: 積降場所到着記録
-        await apiService.recordUnloadingArrival(operation.id!, {
+        console.log('🚛 積降場所到着記録API呼び出し開始');
+        
+        await apiService.recordUnloadingArrival(operation.id, {
           locationId: selectedLocation.location.id,
           latitude: currentPosition.coords.latitude,
           longitude: currentPosition.coords.longitude,
           accuracy: currentPosition.coords.accuracy,
           arrivalTime: new Date()
         });
+        
+        console.log('✅ 積降場所到着記録完了');
         
         // 状態更新
         setOperation(prev => ({
@@ -292,7 +339,7 @@ const OperationRecord: React.FC = () => {
       setIsSubmitting(false);
 
     } catch (error) {
-      console.error('到着記録エラー:', error);
+      console.error('❌ 到着記録エラー:', error);
       toast.error('到着記録に失敗しました');
       setIsSubmitting(false);
     }
@@ -452,15 +499,13 @@ const OperationRecord: React.FC = () => {
     try {
       setIsSubmitting(true);
       
-      // TODO: API呼び出し
+      // TODO: 給油記録API呼び出し
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      setOperation(prev => ({ 
-        ...prev, 
-        fuelLevel: 100
-      }));
-      
       toast.success('給油を記録しました');
+      
+      // 🆕 給油記録画面へ遷移
+      window.location.href = '/refuel-record';  // または navigate('/refuel-record')
       
       setIsSubmitting(false);
     } catch (error) {
@@ -705,12 +750,6 @@ const OperationRecord: React.FC = () => {
             {(gpsSpeed || 0).toFixed(0)} km/h
           </span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '14px', color: '#666' }}>燃料残量</span>
-          <span style={{ fontSize: '16px', fontWeight: 'bold', color: operation.fuelLevel < 30 ? '#F44336' : '#4CAF50' }}>
-            {operation.fuelLevel}%
-          </span>
-        </div>
       </div>
 
       {/* ✅ 既存: マップ表示 */}
@@ -906,4 +945,10 @@ export default OperationRecord;
  * - 複数候補地点の選択ダイアログ
  * - 新API使用（recordLoadingArrival/recordUnloadingArrival）
  * - locationId取得フロー実装
+ * - 詳細なコンソールログ出力（デバッグ用）
+ * 
+ * 🔧 修正内容（2025年12月7日）
+ * - レスポンス構造の修正: nearbyResult.data?.locations の取得方法を修正
+ * - 運行IDのnullチェック追加
+ * - コンソールログの追加（デバッグ強化）
  */

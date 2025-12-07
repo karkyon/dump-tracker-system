@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import VehicleInfo from './pages/VehicleInfo';
 import PreDepartureInspection from './pages/PreDepartureInspection';
 import OperationRecord from './pages/OperationRecord'; // ✅ 修正: Google Maps対応版
+import RefuelRecord from './pages/RefuelRecord'; // 🆕 追加: 給油記録画面
 
 // Protected Route Component
 interface ProtectedRouteProps {
@@ -87,6 +88,7 @@ const App: React.FC = () => {
           }
         />
 
+        { /* 🆕 出発前点検画面 */}
         <Route
           path="/pre-departure-inspection"
           element={
@@ -96,11 +98,22 @@ const App: React.FC = () => {
           }
         />
 
+        { /* 🆕 運行記録画面 */}
         <Route
           path="/operation-record"
           element={
             <ProtectedRoute>
               <OperationRecord />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 🆕 給油記録画面 */}
+        <Route
+          path="/refuel-record"
+          element={
+            <ProtectedRoute>
+              <RefuelRecord />
             </ProtectedRoute>
           }
         />

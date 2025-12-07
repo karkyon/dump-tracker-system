@@ -663,7 +663,7 @@ locationTrackingRoutes.forEach(route => {
 // モバイル専用API登録（統合版）
 // =====================================
 
-if (safeImportAndRegisterRoute('mobile', '/mobile', router, {
+if (safeImportAndRegisterRoute('mobileRoutes', '/mobile', router, {
   priority: 'normal',
   requireAuth: false, // モバイルルート内で個別認証
   description: 'モバイル専用API'

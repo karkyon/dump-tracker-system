@@ -1,7 +1,7 @@
 // frontend/mobile/src/services/api.ts
 // 運行記録API完全統合版 - バックエンドmobileController完全対応
 // ✅ HTTPS対応修正版 + 点検項目API追加
-// 🆕 D5/D6機能対応: recordLoadingArrival, recordUnloadingArrivalメソッド追加（2025年12月2日）
+// 🆕 D5/D6/D7機能対応: recordLoadingArrival, recordUnloadingArrival, getNearbyLocationsメソッド追加（2025年12月7日）
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
@@ -561,8 +561,20 @@ class APIServiceClass {
   }
 
   /**
-   * 近隣地点検索（運行中専用）
+   * 🆕 D5/D6機能: 近隣地点検索（運行中専用）
    * POST /api/v1/mobile/operations/nearby-locations
+   * 
+   * 【使用シーン】
+   * - 積込場所到着ボタンクリック時
+   * - 積降場所到着ボタンクリック時
+   * 
+   * 【レスポンス】
+   * - locations: 近隣地点の配列（距離順ソート済み）
+   * - searchCriteria: 検索条件
+   * - timestamp: 検索実行時刻
+   * 
+   * @param data - 検索条件
+   * @returns 近隣地点リスト
    */
   async getNearbyLocations(data: {
     operationId?: string;
@@ -595,13 +607,17 @@ class APIServiceClass {
     timestamp: string;
   }>> {
     try {
+      console.log('🔍 近隣地点検索API呼び出し:', data);
+      
       const response = await this.axiosInstance.post<APIResponse<any>>(
         '/mobile/operations/nearby-locations',
         data
       );
+      
+      console.log('✅ 近隣地点検索成功:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Get nearby locations error:', error);
+      console.error('❌ 近隣地点検索エラー:', error);
       throw error;
     }
   }
@@ -890,11 +906,11 @@ export { apiService };           // 名前付きエクスポート
 export default apiService;       // デフォルトエクスポート
 
 // =============================================================================
-// 🆕🆕🆕 D5/D6機能追加サマリー（2025年12月2日）
+// 🆕🆕🆕 D5/D6/D7機能追加サマリー（2025年12月7日）
 // =============================================================================
 
 /**
- * 【D5/D6機能: API実装追加】
+ * 【D5/D6/D7機能: API実装追加】
  *
  * ✅ 追加メソッド:
  * 1. recordLoadingArrival(tripId, data)
@@ -906,6 +922,11 @@ export default apiService;       // デフォルトエクスポート
  *    - POST /api/v1/trips/:tripId/unloading
  *    - 積降場所到着記録
  *    - GPS座標と到着時刻を記録
+ *
+ * 3. getNearbyLocations(data)
+ *    - POST /api/v1/mobile/operations/nearby-locations
+ *    - 近隣地点検索（積込/積降場所）
+ *    - 距離順ソート済みリスト取得
  *
  * ✅ 追加型定義:
  * - RecordLoadingArrivalRequest: 積込記録リクエスト型
@@ -919,12 +940,12 @@ export default apiService;       // デフォルトエクスポート
  *
  * 📱 使用フロー:
  * 1. getNearbyLocations() で近隣地点を検索
- * 2. 最も近い場所を自動選択
+ * 2. LocationSelectionDialog で地点を選択
  * 3. recordLoadingArrival() または recordUnloadingArrival() を呼び出し
  * 4. GPS座標と到着時刻が自動記録される
  *
  * 🎯 実装計画書準拠:
- * - D5-D6-API-Implementation-Plan.md に完全準拠
  * - 既存コードとコメントを100%保持
  * - 新機能のみを追加
+ * - デバッグログを強化
  */
