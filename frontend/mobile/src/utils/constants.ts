@@ -13,12 +13,12 @@ export const GPS_CONFIG = {
   // GPS高精度モード
   ENABLE_HIGH_ACCURACY: true,
   
-  // ✅ 修正: タイムアウト（ミリ秒） 30秒→60秒
+  // ✅ 修正: タイムアウト（ミリ秒） 10秒
   // 理由: 屋内・初回取得時・低信号環境でタイムアウトしないようにするため
-  TIMEOUT: 60000,
+  TIMEOUT: 10000,
   
   // キャッシュ最大使用期限（ミリ秒）
-  MAXIMUM_AGE: 0,
+  MAXIMUM_AGE: 5000,
   
   // 最小移動距離（メートル） - この距離以上移動した場合のみ記録
   MIN_DISTANCE_METERS: 1,

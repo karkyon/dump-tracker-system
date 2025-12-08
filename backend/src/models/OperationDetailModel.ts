@@ -232,13 +232,13 @@ export class OperationDetailService {
   }
 
   /**
-   * 🔧 既存完全実装保持 - 新規作成
-   *
-   * 🔧 修正 (2025年12月7日):
-   * - Prismaリレーション構文に完全対応
-   * - operationId, locationId, itemId を connect 形式で設定
-   * - itemId が null/undefined の場合は items リレーションを設定しない
-   */
+     * 🔧 既存完全実装保持 - 新規作成
+     *
+     * 🔧 修正 (2025年12月7日):
+     * - Prismaリレーション構文に完全対応
+     * - operationId, locationId, itemId を connect 形式で設定
+     * - itemId が null/undefined の場合は items リレーションを設定しない
+     */
   async create(data: OperationDetailCreateDTO): Promise<OperationDetailModel> {
     try {
       logger.info('運行詳細作成開始', {

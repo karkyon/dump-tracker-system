@@ -987,7 +987,9 @@ const OperationRecord: React.FC = () => {
         background: 'white',
         padding: '16px',
         borderTop: '2px solid #e0e0e0',
-        boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
+        boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
+        position: 'relative',    // ✅ 追加
+        zIndex: 1000            // ✅ 追加（Google Mapsより上に表示）
       }}>
         {/* ✅ 既存: フェーズ表示 */}
         <div style={{
