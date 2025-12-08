@@ -63,7 +63,7 @@ export interface OperationDetailCreateDTO {
   sequenceNumber: number;
   activityType: string;
   locationId: string;
-  itemId: string;
+  itemId?: string;
   plannedTime?: Date;
   actualStartTime?: Date;
   actualEndTime?: Date;
@@ -117,6 +117,10 @@ export enum WorkStatus {
 
 /**
  * 運行詳細の拡張情報（計算フィールド含む）
+ *
+ * 🔧 修正 (2025年12月7日):
+ * - itemId を string? (オプショナル) に変更
+ * - Prismaスキーマの itemId?: string に対応
  */
 export interface OperationDetailInfo {
   // 基本情報
@@ -133,7 +137,7 @@ export interface OperationDetailInfo {
 
   // 位置・積載情報
   locationId: string;
-  itemId: string;
+  itemId?: string;               // ✅ オプショナルに変更（string? に変更）
   quantityTons: number;
 
   // メタ情報
@@ -229,6 +233,11 @@ export class OperationDetailService {
 
   /**
    * 🔧 既存完全実装保持 - 新規作成
+   *
+   * 🔧 修正 (2025年12月7日):
+   * - Prismaリレーション構文に完全対応
+   * - operationId, locationId, itemId を connect 形式で設定
+   * - itemId が null/undefined の場合は items リレーションを設定しない
    */
   async create(data: OperationDetailCreateDTO): Promise<OperationDetailModel> {
     try {
@@ -237,21 +246,34 @@ export class OperationDetailService {
         activityType: data.activityType
       });
 
+      // 🔧 Prismaリレーション構築
+      const createData: any = {
+        operations: {
+          connect: { id: data.operationId }
+        },
+        locations: {
+          connect: { id: data.locationId }
+        },
+        sequenceNumber: data.sequenceNumber,
+        activityType: data.activityType,
+        plannedTime: data.plannedTime,
+        actualStartTime: data.actualStartTime,
+        actualEndTime: data.actualEndTime,
+        quantityTons: data.quantityTons,
+        notes: data.notes,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // 🔧 itemId が存在する場合のみ items リレーションを設定
+      if (data.itemId && data.itemId.trim() !== '') {
+        createData.items = {
+          connect: { id: data.itemId }
+        };
+      }
+
       const operationDetail = await this.prisma.operationDetail.create({
-        data: {
-          operationId: data.operationId,
-          sequenceNumber: data.sequenceNumber,
-          activityType: data.activityType,
-          locationId: data.locationId,
-          itemId: data.itemId,
-          plannedTime: data.plannedTime,
-          actualStartTime: data.actualStartTime,
-          actualEndTime: data.actualEndTime,
-          quantityTons: data.quantityTons,
-          notes: data.notes,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
+        data: createData
       });
 
       logger.info('運行詳細作成完了', {
@@ -521,6 +543,9 @@ export class OperationDetailService {
 
   /**
    * 拡張情報付き取得
+   *
+   * 🔧 修正 (2025年12月7日):
+   * - itemId が null の場合は undefined を返すように修正
    */
   async findByKeyWithExtendedInfo(id: string): Promise<OperationDetailInfo | null> {
     try {
@@ -537,7 +562,7 @@ export class OperationDetailService {
         actualEndTime: detail.actualEndTime || undefined,
         workDuration: this.calculateWorkDuration(detail) || undefined,
         locationId: detail.locationId,
-        itemId: detail.itemId,
+        itemId: detail.itemId || undefined,  // ✅ null の場合は undefined を返す
         quantityTons: Number(detail.quantityTons),
         notes: detail.notes || undefined,
         createdAt: detail.createdAt || undefined,
