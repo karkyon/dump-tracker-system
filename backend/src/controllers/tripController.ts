@@ -29,6 +29,7 @@ import { VehicleService, getVehicleService } from '../services/vehicleService';
 import type {
   AddActivityRequest,
   CreateFuelRecordRequest,
+  CreateTripDetailRequest,
   CreateTripRequest,
   EndTripRequest,
   GPSHistoryOptions,
@@ -531,8 +532,10 @@ export class TripController {
   // =====================================
 
   /**
-     * 積込記録追加（Phase 3統合版）
-     */
+   * 積込記録追加（Phase 3統合版）
+   *
+   * 🔧 2025-12-08修正: CreateTripDetailRequest型に完全対応
+   */
   addLoadingRecord = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -558,14 +561,14 @@ export class TripController {
         throw new AuthorizationError('他の運転手の積込記録は追加できません');
       }
 
-      // ✅ FIX: addActivityの引数と戻り値の型を修正（すべての必須フィールドにデフォルト値を設定）
-      const activityInput = {
+      // ✅ 修正: CreateTripDetailRequest型に完全対応したデータ構築
+      const activityInput: CreateTripDetailRequest = {
         locationId: activityData.locationId,
         itemId: activityData.itemId || '',
-        quantity: activityData.quantity || 0,
-        activityType: 'LOADING' as const,
+        quantity: activityData.quantity !== undefined ? activityData.quantity : 0,
+        activityType: 'LOADING',
         startTime: activityData.startTime || new Date(),
-        endTime: activityData.endTime || new Date(),
+        endTime: activityData.endTime,
         notes: activityData.notes || ''
       };
 
@@ -600,8 +603,10 @@ export class TripController {
   });
 
   /**
-     * 積下記録追加（Phase 3統合版）
-     */
+   * 積下記録追加（Phase 3統合版）
+   *
+   * 🔧 2025-12-08修正: CreateTripDetailRequest型に完全対応
+   */
   addUnloadingRecord = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -627,25 +632,23 @@ export class TripController {
         throw new AuthorizationError('他の運転手の積下記録は追加できません');
       }
 
-      // ✅ FIX: addActivityの引数と戻り値の型を修正（すべての必須フィールドにデフォルト値を設定）
-      const activityInput = {
+      // ✅ 修正: CreateTripDetailRequest型に完全対応したデータ構築
+      const activityInput: CreateTripDetailRequest = {
         locationId: activityData.locationId,
         itemId: activityData.itemId || '',
-        quantity: activityData.quantity || 0,
-        activityType: 'UNLOADING' as const,
+        quantity: activityData.quantity !== undefined ? activityData.quantity : 0,
+        activityType: 'UNLOADING',
         startTime: activityData.startTime || new Date(),
-        endTime: activityData.endTime || new Date(),
+        endTime: activityData.endTime,
         notes: activityData.notes || ''
       };
 
       const unloadingRecordResponse = await this.tripService.addActivity(id, activityInput);
 
-      // ✅ FIX: dataの存在チェック
       if (!unloadingRecordResponse.data) {
         throw new Error('積下記録の追加に失敗しました');
       }
 
-      // Phase 1完成基盤活用：統一レスポンス形式
       const response: ApiResponse<OperationDetailResponseDTO> = successResponse(
         unloadingRecordResponse.data,
         '積下記録を追加しました'

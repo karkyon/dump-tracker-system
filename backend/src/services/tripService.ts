@@ -30,6 +30,7 @@ import {
 } from '../models/OperationModel';
 
 import {
+  OperationDetailCreateDTO,
   OperationDetailService,
   getOperationDetailService,
   type OperationDetailResponseDTO
@@ -577,17 +578,9 @@ class TripService {
   /**
    * 作業追加（Phase 2完全統合版）
    *
-   * 🔧 修正 (2025年12月7日):
-   * - sequenceNumber自動計算機能を追加
-   * - quantityTonsにデフォルト値を設定（0 or activityData.quantity）
-   * - itemId空文字列/null/undefined対応（オプショナルリレーション）
-   * - 既存の運行詳細レコード数+1をsequenceNumberとして設定
-   * - Prisma ValidationError完全解消
-   * - TypeScript厳密型チェック対応
-   *
-   * 【前提条件】
-   * Prismaスキーマで itemId を String? (オプショナル) に変更済みであること
-   * マイグレーション実行済みであること
+   * 🔧 修正 (2025年12月8日):
+   * - OperationDetailCreateDTO型に完全対応
+   * - operationId, locationId, itemId をDTOフィールドとして設定
    */
   async addActivity(
     tripId: string,
@@ -606,15 +599,12 @@ class TripService {
       }
 
       // 🔧 追加: sequenceNumber自動計算
-      // 既存の運行詳細レコード数を取得
       const existingDetails = await this.operationDetailService.findMany({
         where: { operationId: tripId },
         orderBy: { sequenceNumber: 'desc' },
         take: 1
       });
 
-      // 🔧 TypeScript厳密型チェック対応: Optional Chaining使用
-      // sequenceNumber = 既存の最大値 + 1 (なければ1)
       const maxSequenceNumber = existingDetails?.[0]?.sequenceNumber ?? 0;
       const nextSequenceNumber = maxSequenceNumber + 1;
 
@@ -625,29 +615,18 @@ class TripService {
         nextSequenceNumber
       });
 
-      // 🔧 Prismaリレーション構築（itemIdが有効な場合のみ）
-      const detailData: any = {
-        operations: {
-          connect: { id: tripId }
-        },
-        locations: {
-          connect: { id: activityData.locationId }
-        },
-        sequenceNumber: nextSequenceNumber,  // ✅ 自動計算したsequenceNumberを設定
+      // ✅ 修正: OperationDetailCreateDTO型に完全対応
+      const detailData: OperationDetailCreateDTO = {
+        operationId: tripId,  // ✅ 追加: operationIdフィールドを明示的に設定
+        locationId: activityData.locationId,
+        itemId: activityData.itemId && activityData.itemId.trim() !== '' ? activityData.itemId : undefined,  // ✅ 空文字列の場合はundefined
+        sequenceNumber: nextSequenceNumber,
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
-        quantityTons: activityData.quantity !== undefined ? new Decimal(activityData.quantity) : new Decimal(0),  // ✅ デフォルト値
-        notes: activityData.notes
+        quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
+        notes: activityData.notes || ''
       };
-
-      // 🔧 修正: itemIdが有効な値（null/undefined/空文字列以外）の場合のみitemsをconnect
-      if (activityData.itemId && activityData.itemId.trim() !== '') {
-        detailData.items = {
-          connect: { id: activityData.itemId }
-        };
-      }
-      // itemIdが空の場合は、items リレーションを設定しない（PrismaスキーマでitemIdがオプショナルなため許容される）
 
       const detail = await this.operationDetailService.create(detailData);
 
