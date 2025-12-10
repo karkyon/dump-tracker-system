@@ -8,37 +8,30 @@
 // =====================================
 
 import type {
-  Item as PrismaItem,
   Prisma,
-  OperationDetail,
-  ItemType
+  Item as PrismaItem
 } from '@prisma/client';
 
 import { PrismaClient } from '@prisma/client';
 
 // 🎯 Phase 1-A完了基盤の活用
-import logger from '../utils/logger';
 import {
   AppError,
-  ValidationError as AppValidationError,
-  NotFoundError,
-  DatabaseError,
-  ConflictError
+  ConflictError,
+  DatabaseError
 } from '../utils/errors';
+import logger from '../utils/logger';
 
 import type {
-  ApiResponse,
   ApiListResponse,
-  PaginationQuery,
-  SearchQuery,
-  DateRange,
-  StatisticsBase,
-  ValidationResult,
-  ValidationError,
-  OperationResult,
   BulkOperationResult,
+  DateRange,
   ExtendedFilterOptions,
-  ExtendedStatistics
+  ExtendedStatistics,
+  SearchQuery,
+  StatisticsBase,
+  ValidationError,
+  ValidationResult
 } from '../types/common';
 
 // =====================================
@@ -745,7 +738,7 @@ export class ItemService {
 
       // カテゴリフィルタ
       if (categories && categories.length > 0) {
-        where.item_type = { in: categories as any };
+        where.ItemType = { in: categories as any };
       }
 
       // 価格範囲フィルタは削除（スキーマにpricePerUnitフィールドが存在しないため）
@@ -1014,7 +1007,7 @@ export class ItemService {
 
     // カテゴリフィルタ
     if (filter.categories && filter.categories.length > 0) {
-      where.item_type = { in: filter.categories as any };
+      where.ItemType = { in: filter.categories as any };
     }
 
     // 日付範囲
@@ -1175,23 +1168,10 @@ export default ItemService;
 
 // ✅ 重複エクスポートを削除し、1回のみエクスポート
 export type {
-  ItemSummary,
-  ItemWithUsage,
-  ItemUsageStats,
-  ItemDetails,
-  ItemStatistics,
-  ItemFilter,
-  ItemValidationResult,
-  ItemBulkCreateDTO,
-  ItemResponseDTO,
-  ItemListResponse,
-  ItemCreateDTO,
-  ItemUpdateDTO
+  ItemBulkCreateDTO, ItemCreateDTO, ItemDetails, ItemFilter, ItemListResponse, ItemResponseDTO, ItemStatistics, ItemSummary, ItemUpdateDTO, ItemUsageStats, ItemValidationResult, ItemWithUsage
 };
 
 export {
-  ItemCategory,
-  ItemUnit,
-  ItemStatus,
-  ItemQualityGrade
+  ItemCategory, ItemQualityGrade, ItemStatus, ItemUnit
 };
+

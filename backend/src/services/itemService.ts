@@ -4,35 +4,31 @@
 // コンパイルエラー完全修正・循環参照解消版
 // models/ItemModel.ts基盤・Phase 1完成基盤統合版
 // 作成日時: 2025年9月27日19:15
-// 最終更新: 2025年10月15日 - コンパイルエラー完全修正
+// 最終更新: 2025年12月10日 - schema.camel.prisma完全対応（ItemType使用）
 // =====================================
 
-import { UserRole, PrismaClient, ItemType } from '@prisma/client';
+import { ItemType, PrismaClient, UserRole } from '@prisma/client';
 
 // 🎯 Phase 1完成基盤の活用
-import { DatabaseService } from '../utils/database';
 import {
-  ValidationError,
   AuthorizationError,
-  NotFoundError,
   ConflictError,
+  NotFoundError,
+  ValidationError,
 } from '../utils/errors';
 import logger from '../utils/logger';
 
 // 🎯 types/からの統一型定義インポート（修正: import type を削除）
 import type {
-  ItemModel,
-  ItemResponseDTO,
-  ItemSummary,
+  ItemResponseDTO
 } from '../types';
 
 // 🎯 models/ItemModel.ts から getItemService を通常インポート
-import { getItemService as getItemModelService } from '../types';
 
 // 🎯 共通型定義の活用（types/common.ts）
 import type {
-  PaginationQuery,
   OperationResult,
+  PaginationQuery,
 } from '../types/common';
 
 // =====================================
@@ -153,7 +149,7 @@ export class ItemService {
       const itemData = {
         name: request.name.trim(),
         description: request.description?.trim(),
-        item_type: request.itemType,
+        ItemType: request.itemType,  // ✅ PascalCase
         unit: request.unit?.trim() || 'トン',
         standardWeight: request.standardWeight,
         standardVolume: request.standardVolume,
@@ -179,7 +175,7 @@ export class ItemService {
       logger.info('品目作成完了', {
         itemId: item.id,
         name: item.name,
-        itemType: item.item_type,
+        itemType: item.ItemType,  // ✅ PascalCase
         requesterId
       });
 
@@ -252,11 +248,11 @@ export class ItemService {
       }
 
       if (filterConditions.itemType) {
-        whereCondition.item_type = filterConditions.itemType as ItemType;
+        whereCondition.ItemType = filterConditions.itemType as ItemType;  // ✅ PascalCase
       }
 
       if (filterConditions.isActive !== undefined) {
-        whereCondition.isActive = filterConditions.isActive;
+        whereCondition.isActive = filterConditions.isActive;  // ✅ camelCase（@mapあり）
       }
 
       if (filterConditions.hazardous !== undefined) {
@@ -266,7 +262,11 @@ export class ItemService {
       // ソート条件
       const orderBy: any = {};
       if (sortBy === 'itemType') {
-        orderBy.item_type = sortOrder;
+        orderBy.ItemType = sortOrder;  // ✅ PascalCase
+      } else if (sortBy === 'createdAt') {
+        orderBy.createdAt = sortOrder;  // ✅ camelCase（@mapあり）
+      } else if (sortBy === 'updatedAt') {
+        orderBy.updatedAt = sortOrder;  // ✅ camelCase（@mapあり）
       } else {
         orderBy[sortBy] = sortOrder;
       }
@@ -340,7 +340,7 @@ export class ItemService {
       const updateData: any = {};
       if (request.name !== undefined) updateData.name = request.name.trim();
       if (request.description !== undefined) updateData.description = request.description?.trim();
-      if (request.itemType !== undefined) updateData.item_type = request.itemType;
+      if (request.itemType !== undefined) updateData.ItemType = request.itemType;  // ✅ PascalCase
       if (request.unit !== undefined) updateData.unit = request.unit?.trim();
       if (request.standardWeight !== undefined) updateData.standardWeight = request.standardWeight;
       if (request.standardVolume !== undefined) updateData.standardVolume = request.standardVolume;
@@ -470,7 +470,7 @@ export class ItemService {
 
       // カテゴリ別集計（ItemTypeで集計）
       const itemsByType = await this.db.item.groupBy({
-        by: ['item_type'],
+        by: ['ItemType'],  // ✅ PascalCase
         where: { isActive: true },
         _count: true
       });
@@ -504,14 +504,14 @@ export class ItemService {
       const items = await this.db.item.findMany({
         where: {
           isActive: true,
-          item_type: { not: null }
+          ItemType: { not: null }  // ✅ PascalCase
         },
-        select: { item_type: true },
-        distinct: ['item_type'],
-        orderBy: { item_type: 'asc' }
+        select: { ItemType: true },  // ✅ PascalCase
+        distinct: ['ItemType'],  // ✅ PascalCase
+        orderBy: { ItemType: 'asc' }  // ✅ PascalCase
       });
 
-      return items.map((item) => item.item_type as string);
+      return items.map((item) => item.ItemType as string);  // ✅ PascalCase
 
     } catch (error) {
       logger.error('カテゴリ一覧取得エラー', { error, requesterId });
@@ -527,7 +527,7 @@ export class ItemService {
     return {
       id: item.id,
       name: item.name,
-      itemType: item.item_type,
+      itemType: item.ItemType,  // ✅ PascalCase
       unit: item.unit,
       standardWeight: item.standardWeight,
       hazardous: item.hazardous,

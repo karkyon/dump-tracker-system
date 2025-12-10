@@ -10,8 +10,10 @@ import { useAuthStore } from './stores/authStore';
 import Login from './pages/Login';
 import VehicleInfo from './pages/VehicleInfo';
 import PreDepartureInspection from './pages/PreDepartureInspection';
-import OperationRecord from './pages/OperationRecord'; // ✅ 修正: Google Maps対応版
-import RefuelRecord from './pages/RefuelRecord'; // 🆕 追加: 給油記録画面
+import OperationRecord from './pages/OperationRecord'; // Google Maps対応版
+import RefuelRecord from './pages/RefuelRecord'; // 給油記録画面
+import LoadingInput from './pages/LoadingInput';  // 積載入力画面
+import LoadingConfirmation from './pages/LoadingConfirmation';  // 積載確認画面
 
 // Protected Route Component
 interface ProtectedRouteProps {
@@ -88,7 +90,7 @@ const App: React.FC = () => {
           }
         />
 
-        { /* 🆕 出発前点検画面 */}
+        {/* 🆕 出発前点検画面 */}
         <Route
           path="/pre-departure-inspection"
           element={
@@ -98,7 +100,7 @@ const App: React.FC = () => {
           }
         />
 
-        { /* 🆕 運行記録画面 */}
+        {/* 🆕 運行記録画面 */}
         <Route
           path="/operation-record"
           element={
@@ -114,6 +116,26 @@ const App: React.FC = () => {
           element={
             <ProtectedRoute>
               <RefuelRecord />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 🆕 積載入力画面 */}
+        <Route 
+          path="/loading-input" 
+          element={
+            <ProtectedRoute>
+              <LoadingInput />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 🆕 積載確認画面 */}
+        <Route 
+          path="/loading-confirmation" 
+          element={
+            <ProtectedRoute>
+              <LoadingConfirmation />
             </ProtectedRoute>
           }
         />

@@ -140,7 +140,7 @@ model InspectionRecord {
 model Item {
   id                       String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   name                     String            @unique @db.VarChar(255)
-  item_type                ItemType?
+  ItemType                 ItemType?         @map("item_type")
   unit                     String?           @default("トン") @db.VarChar(20)
   standardWeight           Decimal?          @map("standard_weight") @db.Decimal(5, 2)
   hazardous                Boolean?          @default(false)
@@ -565,6 +565,7 @@ enum NotificationPriority {
 enum ItemType {
   MATERIAL
   EQUIPMENT
+  SCRAP
   TOOL
   CONSUMABLE
   SPARE_PART

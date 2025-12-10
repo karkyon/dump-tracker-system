@@ -18,6 +18,7 @@ import GoogleMapWrapper, {
   setMapHeading,
   addPathPoint
 } from '../components/GoogleMapWrapper';
+import { useNavigate } from 'react-router-dom';
 import HeadingIndicator from '../components/HeadingIndicator';
 import { LocationSelectionDialog } from '../components/LocationSelectionDialog';
 import type { NearbyLocationResult } from '../hooks/useNearbyLocationDetection';
@@ -59,6 +60,9 @@ const OperationRecord: React.FC = () => {
   
   // 🔧 修正: operationStoreから運行IDを取得
   const operationStore = useOperationStore();
+
+  // ナビゲーションフック
+  const navigate = useNavigate();
   
   // 🆕 新規地点登録ダイアログ用の状態
   const [showRegistrationDialog, setShowRegistrationDialog] = useState(false);
@@ -366,9 +370,16 @@ const OperationRecord: React.FC = () => {
 
         toast.success(`積込場所「${selectedLocation.location.name}」に到着しました`);
         
-        // TODO: 積込場所到着画面へ遷移
-        console.log('📍 次: 積込場所到着画面へ遷移');
-
+        // 🆕 D5積込場所入力画面へ遷移
+        console.log('📍 次: D5積込場所入力画面へ遷移');
+        navigate('/loading-input', {
+          state: {
+            locationId: selectedLocation.location.id,
+            locationName: selectedLocation.location.name,
+            clientName: selectedLocation.location.contactPerson || '担当者未登録',  // contactPersonを使用
+            address: selectedLocation.location.address
+          }
+        });
       } else {
         // 🆕 新API使用: 積降場所到着記録
         console.log('🚛 積降場所到着記録API呼び出し開始');
