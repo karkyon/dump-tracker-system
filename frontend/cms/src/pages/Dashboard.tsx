@@ -8,9 +8,9 @@ import {
   TrendingUp,
   Clock,
   MapPin,
-  Fuel
+  // Fuel
 } from 'lucide-react';
-import { formatDate, getRelativeTime } from '../utils/helpers';
+import { formatDate } from '../utils/helpers';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { StatusBadge } from '../components/common/Table';
 

@@ -4,9 +4,6 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-// Initialize auth store on app start
-import { useAuthStore } from './store/authStore';
-
 // HTTPS証明書エラーハンドリング
 const handleCertificateError = () => {
   console.warn('⚠️ HTTPS証明書の警告が表示される場合があります');
@@ -24,7 +21,7 @@ const initAuth = async () => {
     if (token) {
       console.log('📍 既存の認証トークンが見つかりました。検証中...');
       // Validate token and set user state
-      await useAuthStore.getState().checkAuth();
+      // await useAuthStore.getState().checkAuth();
     }
   } catch (error) {
     console.error('❌ 認証初期化エラー:', error);

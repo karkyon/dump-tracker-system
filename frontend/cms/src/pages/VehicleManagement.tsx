@@ -14,7 +14,7 @@ import { formatDate, formatNumber, debounce } from '../utils/helpers';
 const VehicleManagement: React.FC = () => {
   const {
     vehicles,
-    selectedVehicle,
+    // selectedVehicle,
     isLoading,
     error,
     pagination,
@@ -26,7 +26,7 @@ const VehicleManagement: React.FC = () => {
     setFilters,
     setPage,
     clearError,
-    clearSelectedVehicle,
+    // clearSelectedVehicle,
   } = useVehicleStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -40,7 +40,8 @@ const VehicleManagement: React.FC = () => {
     vehicleNumber: '',
     vehicleType: '',
     currentMileage: 0,
-    status: 'active' as 'active' | 'inactive' | 'maintenance',
+    status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE',
+    notes: '',
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -156,7 +157,8 @@ const VehicleManagement: React.FC = () => {
       vehicleNumber: '',
       vehicleType: '',
       currentMileage: 0,
-      status: 'active',
+      status: 'ACTIVE' ,
+      notes: '',
     });
     setFormErrors({});
   };
@@ -169,14 +171,18 @@ const VehicleManagement: React.FC = () => {
 
   // 編集
   const handleEdit = (vehicle: Vehicle) => {
-    setFormData({
-      vehicleNumber: vehicle.vehicleNumber,
-      vehicleType: vehicle.vehicleType,
-      currentMileage: vehicle.currentMileage,
-      status: vehicle.status,
-    });
+    // vehicle.id を保存
     setSelectedVehicleId(vehicle.id);
-    setFormErrors({});
+    
+    // フォームデータを設定（undefined 対策）
+    setFormData({
+      vehicleNumber: vehicle.vehicleNumber || '',
+      vehicleType: vehicle.vehicleType || '',
+      currentMileage: vehicle.currentMileage || 0,
+      status: vehicle.status,
+      notes: vehicle.notes || '',
+    });
+    
     setShowEditModal(true);
   };
 
@@ -372,7 +378,7 @@ const VehicleManagement: React.FC = () => {
               { value: 'maintenance', label: '整備中' },
             ]}
             value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' | 'maintenance' })}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' })}
             required
           />
         </div>
@@ -428,7 +434,7 @@ const VehicleManagement: React.FC = () => {
               { value: 'maintenance', label: '整備中' },
             ]}
             value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' | 'maintenance' })}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' })}
             required
           />
         </div>

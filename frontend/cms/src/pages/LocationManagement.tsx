@@ -6,10 +6,9 @@ import { Location } from '../types';
 import Button from '../components/common/Button';
 import Input, { Select } from '../components/common/Input';
 import Table, { ActionButtons } from '../components/common/Table';
-import Pagination from '../components/common/Pagination';
 import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
-import { formatDate, debounce } from '../utils/helpers';
+import { formatDate } from '../utils/helpers';
 
 const LocationManagement: React.FC = () => {
   const {
@@ -58,8 +57,8 @@ const LocationManagement: React.FC = () => {
   // フィルタリング処理
   const filteredLocations = locations.filter(location => {
     const matchesSearch = !searchTerm || 
-      location.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      location.locationName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (location.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
+      (location.locationName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
       location.address.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesType = !typeFilter || location.type === typeFilter;
@@ -194,10 +193,10 @@ const LocationManagement: React.FC = () => {
   // 編集
   const handleEdit = (location: Location) => {
     setFormData({
-      clientName: location.clientName,
-      locationName: location.locationName,
+      clientName: location.clientName || '',  // ✅ デフォルト値追加
+      locationName: location.locationName || '',  // ✅ デフォルト値追加
       address: location.address,
-      type: location.type,
+      type: location.type || 'pickup',
       gpsLatitude: location.gpsLatitude || 0,
       gpsLongitude: location.gpsLongitude || 0,
     });

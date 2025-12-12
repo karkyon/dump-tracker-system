@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+// frontend/cms/src/pages/UserManagement.tsx - 修正版
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '../store/userStore';
@@ -14,7 +15,7 @@ import { formatDate, debounce } from '../utils/helpers';
 const UserManagement: React.FC = () => {
   const {
     users,
-    selectedUser,
+    // selectedUser,
     isLoading,
     error,
     pagination,
@@ -26,7 +27,7 @@ const UserManagement: React.FC = () => {
     setFilters,
     setPage,
     clearError,
-    clearSelectedUser,
+    // clearSelectedUser,
   } = useUserStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -40,7 +41,7 @@ const UserManagement: React.FC = () => {
     username: '',
     email: '',
     name: '',
-    role: 'driver' as 'admin' | 'driver',
+    role: 'DRIVER' as 'ADMIN' | 'MANAGER' | 'DRIVER',
     status: 'active' as 'active' | 'inactive',
     password: '',
     confirmPassword: '',
@@ -48,10 +49,33 @@ const UserManagement: React.FC = () => {
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // ページ初期化時にデータを取得
+  // ✅ 修正: 初回ロード時のみfetchUsersを実行
+  const isInitialMount = useRef(true);
+  
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers, pagination.page, filters]);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      fetchUsers();
+    }
+  }, []); // ✅ 空の依存配列 - マウント時のみ実行
+
+  // ✅ 修正: ページ変更時にfetchUsersを実行
+  const prevPageRef = useRef(pagination.page);
+  useEffect(() => {
+    if (prevPageRef.current !== pagination.page && !isInitialMount.current) {
+      prevPageRef.current = pagination.page;
+      fetchUsers();
+    }
+  }, [pagination.page, fetchUsers]);
+
+  // ✅ 修正: フィルター変更時にfetchUsersを実行（初回を除く）
+  const prevFiltersRef = useRef(filters);
+  useEffect(() => {
+    if (!isInitialMount.current && prevFiltersRef.current !== filters) {
+      prevFiltersRef.current = filters;
+      fetchUsers();
+    }
+  }, [filters, fetchUsers]);
 
   // エラー処理
   useEffect(() => {
@@ -61,14 +85,22 @@ const UserManagement: React.FC = () => {
     }
   }, [error, clearError]);
 
-  // 検索処理（デバウンス）
-  const debouncedSearch = debounce((term: string) => {
-    setFilters({ searchTerm: term });
-  }, 500);
+  // ✅ 修正: debounce処理をuseCallbackでメモ化
+  const debouncedSearch = useCallback(
+    debounce((term: string) => {
+      setFilters({ searchTerm: term });
+      // ページを1にリセット
+      setPage(1);
+    }, 500),
+    [setFilters, setPage]
+  );
 
+  // ✅ 修正: searchTerm変更時のみdebounceを実行
   useEffect(() => {
-    debouncedSearch(searchTerm);
-  }, [searchTerm, debouncedSearch]);
+    if (!isInitialMount.current) {
+      debouncedSearch(searchTerm);
+    }
+  }, [searchTerm]); // ✅ debouncedSearchを依存配列から削除
 
   // テーブルの列定義
   const columns = [
@@ -120,17 +152,31 @@ const UserManagement: React.FC = () => {
     {
       key: 'actions',
       header: '操作',
-      render: (_: any, user: User) => (
+      render: (_: any, row: User) => (
         <ActionButtons
-          onEdit={() => handleEdit(user)}
-          onDelete={() => handleDelete(user.id)}
+          onEdit={() => handleEdit(row)}
+          onDelete={() => handleDelete(row)}
         />
       ),
     },
   ];
 
-  // フォームバリデーション
-  const validateForm = (isEdit = false): boolean => {
+  // フォームリセット
+  const resetForm = () => {
+    setFormData({
+      username: '',
+      email: '',
+      name: '',
+      role: 'DRIVER',
+      status: 'active',
+      password: '',
+      confirmPassword: '',
+    });
+    setFormErrors({});
+  };
+
+  // バリデーション
+  const validateForm = (isUpdate = false): boolean => {
     const errors: Record<string, string> = {};
 
     if (!formData.username.trim()) {
@@ -143,15 +189,19 @@ const UserManagement: React.FC = () => {
 
     if (!formData.email.trim()) {
       errors.email = 'メールアドレスは必須です';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = '正しいメールアドレスを入力してください';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      errors.email = '有効なメールアドレスを入力してください';
     }
 
-    if (!isEdit && !formData.password) {
+    if (!isUpdate && !formData.password) {
       errors.password = 'パスワードは必須です';
     }
 
-    if (!isEdit && formData.password !== formData.confirmPassword) {
+    if (formData.password && formData.password.length < 8) {
+      errors.password = 'パスワードは8文字以上で入力してください';
+    }
+
+    if (formData.password && formData.password !== formData.confirmPassword) {
       errors.confirmPassword = 'パスワードが一致しません';
     }
 
@@ -159,49 +209,34 @@ const UserManagement: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  // フォームをリセット
-  const resetForm = () => {
-    setFormData({
-      username: '',
-      email: '',
-      name: '',
-      role: 'driver',
-      status: 'active',
-      password: '',
-      confirmPassword: '',
-    });
-    setFormErrors({});
-  };
-
-  // 新規作成
+  // 新規作成ハンドラー
   const handleCreate = () => {
     resetForm();
     setShowCreateModal(true);
   };
 
-  // 編集
+  // 編集ハンドラー
   const handleEdit = (user: User) => {
+    setSelectedUserId(user.id);
     setFormData({
       username: user.username,
       email: user.email,
       name: user.name,
       role: user.role,
-      status: user.status,
+      status: user.status || 'active',
       password: '',
       confirmPassword: '',
     });
-    setSelectedUserId(user.id);
-    setFormErrors({});
     setShowEditModal(true);
   };
 
-  // 削除
-  const handleDelete = (userId: string) => {
-    setSelectedUserId(userId);
+  // 削除ハンドラー
+  const handleDelete = (user: User) => {
+    setSelectedUserId(user.id);
     setShowDeleteDialog(true);
   };
 
-  // 作成処理
+  // 新規作成送信
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
 
@@ -221,11 +256,11 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  // 更新処理
-  const handleSubmitEdit = async () => {
-    if (!validateForm(true) || !selectedUserId) return;
+  // 更新送信
+  const handleSubmitUpdate = async () => {
+    if (!selectedUserId || !validateForm(true)) return;
 
-    const updateData: any = {
+    const updateData: Partial<User> = {
       username: formData.username,
       email: formData.email,
       name: formData.name,
@@ -305,11 +340,14 @@ const UserManagement: React.FC = () => {
           <Select
             options={[
               { value: '', label: 'すべての権限' },
-              { value: 'admin', label: '管理者' },
-              { value: 'driver', label: '運転手' },
+              { value: 'ADMIN', label: '管理者' },
+              { value: 'DRIVER', label: '運転手' },
             ]}
             value={filters.role || ''}
-            onChange={(e) => setFilters({ role: e.target.value })}
+            onChange={(e) => {
+              setFilters({ role: e.target.value });
+              setPage(1);
+            }}
           />
 
           <Select
@@ -319,7 +357,10 @@ const UserManagement: React.FC = () => {
               { value: 'inactive', label: '非アクティブ' },
             ]}
             value={filters.status || ''}
-            onChange={(e) => setFilters({ status: e.target.value })}
+            onChange={(e) => {
+              setFilters({ status: e.target.value });
+              setPage(1);
+            }}
           />
         </div>
       </div>
@@ -386,11 +427,11 @@ const UserManagement: React.FC = () => {
           <Select
             label="権限"
             options={[
-              { value: 'driver', label: '運転手' },
-              { value: 'admin', label: '管理者' },
+              { value: 'DRIVER', label: '運転手' },
+              { value: 'ADMIN', label: '管理者' },
             ]}
             value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'driver' })}
+            onChange={(e) => setFormData({ ...formData, role: e.target.value as 'ADMIN' | 'MANAGER' | 'DRIVER' })}
             required
           />
           
@@ -434,7 +475,7 @@ const UserManagement: React.FC = () => {
           setSelectedUserId(null);
         }}
         title="ユーザー編集"
-        onSubmit={handleSubmitEdit}
+        onSubmit={handleSubmitUpdate}
         loading={isLoading}
         size="md"
       >
@@ -469,11 +510,11 @@ const UserManagement: React.FC = () => {
           <Select
             label="権限"
             options={[
-              { value: 'driver', label: '運転手' },
-              { value: 'admin', label: '管理者' },
+              { value: 'DRIVER', label: '運転手' },
+              { value: 'ADMIN', label: '管理者' },
             ]}
             value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'driver' })}
+            onChange={(e) => setFormData({ ...formData, role: e.target.value as 'ADMIN' | 'MANAGER' | 'DRIVER' })}
             required
           />
           

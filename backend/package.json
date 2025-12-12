@@ -23,7 +23,11 @@
     "validate:critical": "npm run check:critical && npm run lint:critical && npm run check:circular",
     "validate:all": "npm run validate:priority && npm run check:critical && npm run lint:critical",
     "fix:critical": "eslint 'src/**/*.ts' --fix",
-    "watch:check": "tsc --noEmit --watch"
+    "watch:check": "tsc --noEmit --watch",
+    "admin:list-users": "ts-node scripts/admin/reset-password.ts list",
+    "admin:reset-password": "ts-node scripts/admin/reset-password.ts reset",
+    "admin:create-admin": "ts-node scripts/admin/reset-password.ts create",
+    "admin:hash": "ts-node scripts/admin/reset-password.ts hash"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",

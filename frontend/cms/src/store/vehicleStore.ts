@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Vehicle, FilterOptions, PaginatedResponse } from '../types';
+import { Vehicle, FilterOptions } from '../types';
 import { vehicleAPI } from '../utils/api';
 
 interface VehicleState {
@@ -57,14 +57,14 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       const response = await vehicleAPI.getVehicles(params);
 
       if (response.success && response.data) {
-        const data = response.data as PaginatedResponse<Vehicle>;
+        const apiData = response.data as any;
         set({
-          vehicles: data.items,
+          vehicles: apiData.vehicles || apiData.data || [],
           pagination: {
-            page: data.page,
-            pageSize: data.pageSize,
-            total: data.total,
-            totalPages: data.totalPages,
+            page: apiData.page || 1,
+            pageSize: apiData.limit || apiData.pageSize || 10,
+            total: apiData.total || 0,
+            totalPages: Math.ceil((apiData.total || 0) / (apiData.limit || apiData.pageSize || 10)),
           },
           filters: currentFilters,
           isLoading: false,
@@ -88,18 +88,13 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const response = await vehicleAPI.getVehicle(id);
-
-      if (response.success && response.data) {
-        set({
-          selectedVehicle: response.data,
-          isLoading: false,
-        });
+      const vehicle = get().vehicles.find(v => v.id === id);
+      if (vehicle) {
+        set({ selectedVehicle: vehicle, isLoading: false });
       } else {
-        set({
-          error: response.error || '車両情報の取得に失敗しました',
-          isLoading: false,
-        });
+        await get().fetchVehicles();
+        const updatedVehicle = get().vehicles.find(v => v.id === id);
+        set({ selectedVehicle: updatedVehicle || null, isLoading: false });
       }
     } catch (error) {
       set({

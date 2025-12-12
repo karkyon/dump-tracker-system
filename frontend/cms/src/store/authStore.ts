@@ -37,10 +37,10 @@ export const useAuthStore = create<AuthState>()(
           const response = await authAPI.login(credentials);
 
           if (response.success && response.data) {
-            const { token, user } = response.data;
+            const { accessToken, user } = response.data;
 
             // トークンを保存
-            localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+            localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, accessToken );
 
             // 「ログイン状態を保持する」がチェックされている場合
             if (credentials.rememberMe) {
@@ -94,8 +94,8 @@ export const useAuthStore = create<AuthState>()(
           const response = await authAPI.refreshToken();
 
           if (response.success && response.data) {
-            const { token } = response.data;
-            localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+            const { accessToken  } = response.data;
+            localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, accessToken );
             return true;
           } else {
             get().logout();

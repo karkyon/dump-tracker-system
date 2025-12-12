@@ -27,7 +27,6 @@ const Pagination: React.FC<PaginationProps> = ({
   const getVisiblePages = () => {
     const delta = 2; // 現在のページの前後に表示するページ数
     const range = [];
-    const rangeWithDots = [];
 
     // 最初のページ
     if (currentPage - delta > 1) {

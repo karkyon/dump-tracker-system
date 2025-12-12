@@ -16,6 +16,11 @@ build/
 .env.production.local
 .env.production
 
+# Scripts admin and database backups
+scripts/admin/*.log
+scripts/admin/*.json
+scripts/db/backup/*.sql
+
 # Logs
 logs/
 *.log

@@ -85,14 +85,15 @@ export const useOperationStore = create<OperationState>((set, get) => ({
       const response = await operationAPI.getOperations(params);
 
       if (response.success && response.data) {
-        const data = response.data as PaginatedResponse<OperationRecord>;
+        // ✅ 修正: PaginatedResponse の正しい構造に対応
+        const paginatedData = response.data as PaginatedResponse<OperationRecord>;
         set({
-          operations: data.items,
+          operations: paginatedData.data,  // items → data
           operationPagination: {
-            page: data.page,
-            pageSize: data.pageSize,
-            total: data.total,
-            totalPages: data.totalPages,
+            page: paginatedData.pagination.page,
+            pageSize: paginatedData.pagination.pageSize,
+            total: paginatedData.pagination.total,
+            totalPages: paginatedData.pagination.totalPages,
           },
           operationFilters: currentFilters,
           operationLoading: false,
@@ -206,11 +207,32 @@ export const useOperationStore = create<OperationState>((set, get) => ({
     set({ operationLoading: true, operationError: null });
 
     try {
-      const response = await operationAPI.exportCSV(filters);
+      // ✅ 修正: exportCSV メソッドがないため、getOperations で取得してCSV化
+      const response = await operationAPI.getOperations({ ...filters, limit: 10000 });
 
       if (response.success && response.data) {
-        // ファイルダウンロード処理
-        const blob = new Blob([response.data], { type: 'text/csv' });
+        const paginatedData = response.data as PaginatedResponse<OperationRecord>;
+        const operations = paginatedData.data;
+
+        // CSV生成
+        const headers = ['運行日', '運転手ID', '車両ID', '開始時刻', '終了時刻', '開始場所', '終了場所', 'ステータス'];
+        const csvContent = [
+          headers.join(','),
+          ...operations.map(op => [
+            op.date || new Date(op.startTime).toLocaleDateString('ja-JP'),
+            op.driverId,
+            op.vehicleId,
+            op.startTime,
+            op.endTime || '',
+            op.startLocation,
+            op.endLocation || '',
+            op.status
+          ].join(','))
+        ].join('\n');
+
+        // BOM付きUTF-8でエンコード（Excelで文字化け防止）
+        const bom = '\uFEFF';
+        const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -240,11 +262,12 @@ export const useOperationStore = create<OperationState>((set, get) => ({
     set({ gpsLoading: true, gpsError: null });
 
     try {
-      const response = await gpsAPI.getCurrentLocations();
+      // ✅ 修正: getCurrentLocations がないため、getGpsLocations を使用
+      const response = await gpsAPI.getGpsLocations();
 
       if (response.success && response.data) {
         set({
-          gpsLocations: response.data,
+          gpsLocations: Array.isArray(response.data) ? response.data : [],
           lastGpsUpdate: new Date().toISOString(),
           gpsLoading: false,
         });
@@ -265,10 +288,11 @@ export const useOperationStore = create<OperationState>((set, get) => ({
   // GPS履歴取得
   fetchLocationHistory: async (vehicleId: string, filters = {}) => {
     try {
-      const response = await gpsAPI.getLocationHistory(vehicleId, filters);
+      // ✅ 修正: getLocationHistory がないため、getGpsHistory を使用
+      const response = await gpsAPI.getGpsHistory(vehicleId, filters);
 
       if (response.success && response.data) {
-        return response.data;
+        return Array.isArray(response.data) ? response.data : [];
       } else {
         throw new Error(response.error || 'GPS履歴の取得に失敗しました');
       }
@@ -282,7 +306,8 @@ export const useOperationStore = create<OperationState>((set, get) => ({
     set({ reportLoading: true, reportError: null });
 
     try {
-      const response = await reportAPI.generateDailyReport(filter);
+      // ✅ 修正: generateDailyReport → getDailyReport
+      const response = await reportAPI.getDailyReport(filter.startDate, filter);
 
       if (response.success && response.data) {
         // ファイルダウンロード処理
@@ -322,7 +347,9 @@ export const useOperationStore = create<OperationState>((set, get) => ({
     set({ reportLoading: true, reportError: null });
 
     try {
-      const response = await reportAPI.generateAnnualReport(filter);
+      // ✅ 修正: generateAnnualReport → getAnnualReport
+      const year = new Date(filter.startDate).getFullYear();
+      const response = await reportAPI.getAnnualReport(year, filter);
 
       if (response.success && response.data) {
         // ファイルダウンロード処理
@@ -334,7 +361,6 @@ export const useOperationStore = create<OperationState>((set, get) => ({
         link.href = url;
         
         const extension = filter.format === 'pdf' ? 'pdf' : 'xlsx';
-        const year = new Date().getFullYear();
         link.download = `輸送実績報告書_${year}.${extension}`;
         
         document.body.appendChild(link);

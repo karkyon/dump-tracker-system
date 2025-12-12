@@ -111,28 +111,20 @@ export interface CargoType {
 export interface OperationRecord {
   id: string;
   vehicleId: string;
+  vehicleNumber?: string;
   driverId: string;
+  driverName?: string;
   startTime: string;
   endTime?: string;
   startLocation: string;
   endLocation?: string;
-  cargoTypeId: string;
+  cargoTypeId?: string;
+  cargoType?: string;
   loadWeight?: number;
   status: 'ongoing' | 'completed' | 'cancelled';
   notes?: string;
   createdAt: string;
   updatedAt: string;
-  
-  // ✅ 追加: 表示用プロパティ（APIレスポンスまたはフロントエンドで計算）
-  date?: string;                    // 運行日
-  driverName?: string;              // 運転手名
-  vehicleNumber?: string;           // 車両番号
-  clientName?: string;              // 客先名
-  loadingLocation?: string;         // 積込場所名
-  unloadingLocation?: string;       // 積下場所名
-  cargoType?: string;               // 荷物種別名
-  distance?: number;                // 走行距離
-  operationTime?: string;           // 運行時間
 }
 
 // =====================================

@@ -1,8 +1,11 @@
-// frontend/src/App.tsx - 修正版: HTTPS認証強化版
+// frontend/src/App.tsx - 完全修正版: 既存機能保持 + Layout統合
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
+
+// Layout Components
+import Layout from './components/Layout/Layout';
 
 // Pages
 import Login from './pages/Login';
@@ -138,9 +141,9 @@ const NetworkError: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
 
 // Private Route Component
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, loading, error } = useAuthStore();
+  const { isAuthenticated, isLoading, error } = useAuthStore();
 
-  if (loading) {
+  if (isLoading) {
     return <LoadingSpinner />;
   }
 
@@ -153,9 +156,9 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 // Public Route Component (redirect if already authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, loading, error } = useAuthStore();
+  const { isAuthenticated, isLoading, error } = useAuthStore();
 
-  if (loading) {
+  if (isLoading) {
     return <LoadingSpinner />;
   }
 
@@ -167,32 +170,35 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const App: React.FC = () => {
-  const { checkServerConnection, clearError } = useAuthStore();
+  const { clearError } = useAuthStore();
 
-  // アプリケーション起動時のサーバー接続確認
+  // アプリケーション起動時の初期化
   useEffect(() => {
-    const initializeConnection = async () => {
+    const initializeApp = async () => {
       try {
-        await checkServerConnection();
+        console.log('🚀 アプリケーション初期化開始...');
+        // 既存のエラーをクリア
+        clearError();
       } catch (error) {
-        console.error('❌ サーバー接続初期化エラー:', error);
+        console.error('❌ アプリケーション初期化エラー:', error);
       }
     };
 
-    initializeConnection();
-  }, [checkServerConnection]);
+    initializeApp();
+  }, [clearError]);
 
-  // ページ可視性の変更時にサーバー接続を再確認
+  // ページ可視性の変更時の処理
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        checkServerConnection();
+        console.log('📍 ページが再び表示されました');
+        // 必要に応じて状態をリフレッシュ
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [checkServerConnection]);
+  }, []);
 
   return (
     <ErrorBoundary>
@@ -209,118 +215,67 @@ const App: React.FC = () => {
               } 
             />
 
-            {/* Private Routes */}
+            {/* Private Routes - Layout統合 */}
             <Route 
-              path="/dashboard" 
+              path="/*"
               element={
                 <PrivateRoute>
-                  <Dashboard />
+                  <Layout />
                 </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/users" 
-              element={
-                <PrivateRoute>
-                  <UserManagement />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/vehicles" 
-              element={
-                <PrivateRoute>
-                  <VehicleManagement />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/inspection-items" 
-              element={
-                <PrivateRoute>
-                  <InspectionItemManagement />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/locations" 
-              element={
-                <PrivateRoute>
-                  <LocationManagement />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/cargo-types" 
-              element={
-                <PrivateRoute>
-                  <CargoTypeManagement />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/operations" 
-              element={
-                <PrivateRoute>
-                  <OperationRecords />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/gps-monitoring" 
-              element={
-                <PrivateRoute>
-                  <GPSMonitoring />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/reports" 
-              element={
-                <PrivateRoute>
-                  <ReportOutput />
-                </PrivateRoute>
-              } 
-            />
-            
-            <Route 
-              path="/settings" 
-              element={
-                <PrivateRoute>
-                  <SystemSettings />
-                </PrivateRoute>
-              } 
-            />
+              }
+            >
+              {/* ダッシュボード */}
+              <Route path="dashboard" element={<Dashboard />} />
+              
+              {/* ユーザー管理 */}
+              <Route path="users" element={<UserManagement />} />
+              
+              {/* 車両マスタ */}
+              <Route path="vehicles" element={<VehicleManagement />} />
+              
+              {/* 点検項目マスタ */}
+              <Route path="inspection-items" element={<InspectionItemManagement />} />
+              
+              {/* 積込・積下場所マスタ */}
+              <Route path="locations" element={<LocationManagement />} />
+              
+              {/* 品目マスタ管理 */}
+              <Route path="cargo-types" element={<CargoTypeManagement />} />
+              
+              {/* 運行記録 */}
+              <Route path="operations" element={<OperationRecords />} />
+              
+              {/* GPSモニタリング */}
+              <Route path="gps-monitoring" element={<GPSMonitoring />} />
+              
+              {/* 帳票出力 */}
+              <Route path="reports" element={<ReportOutput />} />
+              
+              {/* システム設定 */}
+              <Route path="settings" element={<SystemSettings />} />
 
-            {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            
-            {/* 404 Page */}
-            <Route 
-              path="*" 
-              element={
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                  <div className="text-center">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                    <p className="text-lg text-gray-600 mb-8">ページが見つかりません</p>
-                    <a 
-                      href="/dashboard" 
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      ダッシュボードに戻る
-                    </a>
+              {/* デフォルトリダイレクト */}
+              <Route index element={<Navigate to="/dashboard" replace />} />
+
+              {/* 404 Page */}
+              <Route 
+                path="*" 
+                element={
+                  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                    <div className="text-center">
+                      <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+                      <p className="text-lg text-gray-600 mb-8">ページが見つかりません</p>
+                      <a 
+                        href="/dashboard" 
+                        className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                      >
+                        ダッシュボードに戻る
+                      </a>
+                    </div>
                   </div>
-                </div>
-              } 
-            />
+                } 
+              />
+            </Route>
           </Routes>
 
           {/* Global Toast Notifications */}

@@ -73,7 +73,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarOpen }) => {
                     {user?.name || 'ユーザー'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {user?.role === 'admin' ? '管理者' : '運転手'}
+                    {user?.role === 'ADMIN' ? '管理者' : '運転手'}
                   </p>
                 </div>
               </div>

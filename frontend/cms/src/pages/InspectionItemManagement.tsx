@@ -145,17 +145,21 @@ const InspectionItemManagement: React.FC = () => {
   };
 
   // 順序の変更
-  const handleMoveUp = async (item: InspectionItem, index: number) => {
+  const handleMoveUp = async (_item: InspectionItem, index: number) => {
     if (index === 0) return;
     
     const items = [...filteredItems];
     const currentItem = items[index];
     const previousItem = items[index - 1];
     
+    // ✅ 修正: order のデフォルト値を設定
+    const currentOrder = currentItem.order ?? index + 1;
+    const previousOrder = previousItem.order ?? index;
+    
     // 順序を交換
     const updates = [
-      { id: currentItem.id, order: previousItem.order },
-      { id: previousItem.id, order: currentItem.order },
+      { id: currentItem.id, order: previousOrder },
+      { id: previousItem.id, order: currentOrder },
     ];
     
     const success = await updateInspectionOrder(updates);
@@ -164,17 +168,21 @@ const InspectionItemManagement: React.FC = () => {
     }
   };
 
-  const handleMoveDown = async (item: InspectionItem, index: number) => {
+  const handleMoveDown = async (_item: InspectionItem, index: number) => {
     if (index === filteredItems.length - 1) return;
     
     const items = [...filteredItems];
     const currentItem = items[index];
     const nextItem = items[index + 1];
     
+    // ✅ 修正: order のデフォルト値を設定
+    const currentOrder = currentItem.order ?? index + 1;
+    const nextOrder = nextItem.order ?? index + 2;
+    
     // 順序を交換
     const updates = [
-      { id: currentItem.id, order: nextItem.order },
-      { id: nextItem.id, order: currentItem.order },
+      { id: currentItem.id, order: nextOrder },
+      { id: nextItem.id, order: currentOrder },
     ];
     
     const success = await updateInspectionOrder(updates);
@@ -192,11 +200,12 @@ const InspectionItemManagement: React.FC = () => {
 
   // 編集
   const handleEdit = (item: InspectionItem) => {
+    // ✅ 修正: undefined のデフォルト値を設定
     setFormData({
       name: item.name,
-      type: item.type,
-      category: item.category,
-      isRequired: item.isRequired,
+      type: (item.type as 'checkbox' | 'input') || 'checkbox',
+      category: item.category || 'pre',
+      isRequired: item.isRequired ?? true,
     });
     setSelectedItemId(item.id);
     setFormErrors({});
@@ -213,8 +222,11 @@ const InspectionItemManagement: React.FC = () => {
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
 
-    // 新しい項目の順序を計算
-    const maxOrder = Math.max(...filteredItems.map(item => item.order), 0);
+    // ✅ 修正: undefined を除外して最大値を計算
+    const orderValues = filteredItems
+      .map(item => item.order)
+      .filter((order): order is number => order !== undefined);
+    const maxOrder = orderValues.length > 0 ? Math.max(...orderValues) : 0;
 
     const success = await createInspectionItem({
       name: formData.name,
