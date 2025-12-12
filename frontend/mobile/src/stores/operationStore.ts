@@ -1,11 +1,18 @@
 // frontend/mobile/src/stores/operationStore.ts
-// 運行状態管理Store - デバッグログ強化版
+// 運行状態管理Store - フェーズ管理機能追加版
+// 🔧 修正: phase, loadingLocation, unloadingLocation フィールドとアクション追加 (2025-12-12)
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 /**
+ * 🆕 運行フェーズ型定義
+ */
+export type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
+
+/**
  * 運行状態インターフェース
+ * 🔧 修正: phase, loadingLocation, unloadingLocation フィールド追加
  */
 export interface OperationState {
   // 運行情報
@@ -16,6 +23,11 @@ export interface OperationState {
   driverId: string | null;
   driverName: string | null;
   startMileage: number | null;
+  
+  // 🆕 運行フェーズ管理
+  phase: OperationPhase;
+  loadingLocation: string | null;
+  unloadingLocation: string | null;
   
   // 運行ステータス
   status: 'IDLE' | 'INSPECTING' | 'IN_PROGRESS' | 'COMPLETED';
@@ -41,6 +53,11 @@ export interface OperationState {
   
   startOperation: (operationId: string) => void;
   
+  // 🆕 フェーズ管理アクション
+  setPhase: (phase: OperationPhase) => void;
+  setLoadingLocation: (location: string) => void;
+  setUnloadingLocation: (location: string) => void;
+  
   completeOperation: () => void;
   
   resetOperation: () => void;
@@ -63,6 +80,11 @@ export const useOperationStore = create<OperationState>()(
       status: 'IDLE',
       inspectionCompleted: false,
       inspectionRecordId: null,
+      
+      // 🆕 フェーズ管理初期値
+      phase: 'TO_LOADING',
+      loadingLocation: null,
+      unloadingLocation: null,
 
       // Actions
       setVehicleInfo: (info) => {
@@ -120,12 +142,14 @@ export const useOperationStore = create<OperationState>()(
         
         set({
           operationId,
-          status: 'IN_PROGRESS'
+          status: 'IN_PROGRESS',
+          phase: 'TO_LOADING' // 🔧 運行開始時は積込場所へ移動中から始まる
         });
         
         // デバッグ: 設定後の状態確認
         const currentState = get();
         console.log('[Operation Store] ✅ After update - operationId set to:', currentState.operationId);
+        console.log('[Operation Store] ✅ After update - phase set to:', currentState.phase);
         console.log('[Operation Store] 📊 Full state after startOperation:', currentState);
         
         // localStorage確認
@@ -133,6 +157,42 @@ export const useOperationStore = create<OperationState>()(
           const stored = localStorage.getItem('operation-storage');
           console.log('[Operation Store] 💾 localStorage after startOperation:', stored);
         }, 100);
+      },
+
+      // 🆕 フェーズ設定
+      setPhase: (phase) => {
+        console.log('[Operation Store] 🔄 SET PHASE CALLED:', phase);
+        console.log('[Operation Store] 📋 Before update - current phase:', get().phase);
+        
+        set({ phase });
+        
+        const currentState = get();
+        console.log('[Operation Store] ✅ After update - phase set to:', currentState.phase);
+        console.log('[Operation Store] 📊 Full state after setPhase:', currentState);
+        
+        // localStorage確認
+        setTimeout(() => {
+          const stored = localStorage.getItem('operation-storage');
+          console.log('[Operation Store] 💾 localStorage after setPhase:', stored);
+        }, 100);
+      },
+
+      // 🆕 積込場所設定
+      setLoadingLocation: (location) => {
+        console.log('[Operation Store] 📍 SET LOADING LOCATION:', location);
+        set({ loadingLocation: location });
+        
+        const currentState = get();
+        console.log('[Operation Store] 📊 Full state after setLoadingLocation:', currentState);
+      },
+
+      // 🆕 積降場所設定
+      setUnloadingLocation: (location) => {
+        console.log('[Operation Store] 📍 SET UNLOADING LOCATION:', location);
+        set({ unloadingLocation: location });
+        
+        const currentState = get();
+        console.log('[Operation Store] 📊 Full state after setUnloadingLocation:', currentState);
       },
 
       completeOperation: () => {
@@ -154,7 +214,10 @@ export const useOperationStore = create<OperationState>()(
           startMileage: null,
           status: 'IDLE',
           inspectionCompleted: false,
-          inspectionRecordId: null
+          inspectionRecordId: null,
+          phase: 'TO_LOADING', // 🔧 リセット時も初期フェーズに戻す
+          loadingLocation: null,
+          unloadingLocation: null
         });
       }
     }),
@@ -164,11 +227,12 @@ export const useOperationStore = create<OperationState>()(
         console.log('[Operation Store] 💾 Partialize called - saving state:', {
           operationId: state.operationId,
           vehicleId: state.vehicleId,
-          status: state.status
+          status: state.status,
+          phase: state.phase // 🔧 フェーズも保存
         });
         
         return {
-          operationId: state.operationId,  // 🔧 重要: operationIdを必ず含める
+          operationId: state.operationId,
           vehicleId: state.vehicleId,
           vehicleNumber: state.vehicleNumber,
           vehicleType: state.vehicleType,
@@ -177,7 +241,11 @@ export const useOperationStore = create<OperationState>()(
           startMileage: state.startMileage,
           status: state.status,
           inspectionCompleted: state.inspectionCompleted,
-          inspectionRecordId: state.inspectionRecordId
+          inspectionRecordId: state.inspectionRecordId,
+          // 🆕 フェーズ管理フィールドも永続化
+          phase: state.phase,
+          loadingLocation: state.loadingLocation,
+          unloadingLocation: state.unloadingLocation
         };
       },
       // デバッグ: 復元時のログ
@@ -201,3 +269,31 @@ if (typeof window !== 'undefined') {
   console.log('[Operation Store] 🔍 Debug: window.operationStore available');
   console.log('[Operation Store] 🔍 Usage: window.operationStore.getState()');
 }
+
+/**
+ * 🔧 修正内容 (2025-12-12)
+ * 
+ * 1. OperationPhase 型定義を追加:
+ *    - 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL'
+ * 
+ * 2. OperationState インターフェースに追加:
+ *    - phase: OperationPhase - 現在の運行フェーズ
+ *    - loadingLocation: string | null - 積込場所名
+ *    - unloadingLocation: string | null - 積降場所名
+ * 
+ * 3. アクション追加:
+ *    - setPhase(phase: OperationPhase) - フェーズを更新
+ *    - setLoadingLocation(location: string) - 積込場所名を設定
+ *    - setUnloadingLocation(location: string) - 積降場所名を設定
+ * 
+ * 4. startOperation アクションを修正:
+ *    - phase: 'TO_LOADING' を初期値として設定
+ * 
+ * 5. resetOperation アクションを修正:
+ *    - phase, loadingLocation, unloadingLocation もリセット
+ * 
+ * 6. partialize 設定を修正:
+ *    - phase, loadingLocation, unloadingLocation も永続化対象に追加
+ * 
+ * これにより、フェーズ状態がブラウザ再読み込み後も保持されます。
+ */

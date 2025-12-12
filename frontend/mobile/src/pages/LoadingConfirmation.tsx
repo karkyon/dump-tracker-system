@@ -2,9 +2,10 @@
 // D5a: 積荷確認画面
 // ✅ D5で入力した積込場所、客先名、品目を表示
 // ✅ 積み荷確認のチェックボックス
-// ✅ 「運行開始」ボタンで運行中メイン画面（D4）に戻る
+// ✅ 「運行開始」ボタンで運行中メイン画面(D4)に戻る
 // ✅ API呼び出し: recordLoadingArrival
-// ✅ 「戻る」ボタンで積込場所入力画面（D5）に戻る
+// ✅ 「戻る」ボタンで積込場所入力画面(D5)に戻る
+// 🔧 修正: 運行開始時にフェーズをTO_UNLOADINGに更新（2025-12-12）
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -28,10 +29,10 @@ interface LoadingInputData {
   locationId: string;
   locationName: string;
   clientName: string;
-  selectedItemIds?: string[]; // 🆕 複数選択品目ID配列（optional: 既存データ互換性）
-  selectedItemNames?: string[]; // 🆕 複数選択品目名配列（optional: 既存データ互換性）
-  itemId: string; // ✅ 既存互換性保持（単一選択時）
-  itemName: string; // ✅ 既存互換性保持（単一選択時）
+  selectedItemIds?: string[]; // 🆕 複数選択品目ID配列(optional: 既存データ互換性)
+  selectedItemNames?: string[]; // 🆕 複数選択品目名配列(optional: 既存データ互換性)
+  itemId: string; // ✅ 既存互換性保持(単一選択時)
+  itemName: string; // ✅ 既存互換性保持(単一選択時)
   customItemName: string;
   cargoConfirmed: boolean;
   quantity?: number;
@@ -70,7 +71,8 @@ const LoadingConfirmation: React.FC = () => {
   /**
    * 「運行開始」ボタンハンドラー
    * - API呼び出し: recordLoadingArrival
-   * - 成功後、D4（運行中画面）に戻る
+   * - 🔧 修正: フェーズをTO_UNLOADINGに更新
+   * - 成功後、D4(運行中画面)に戻る
    */
   const handleStartOperation = async () => {
     if (!loadingData) {
@@ -146,15 +148,22 @@ const LoadingConfirmation: React.FC = () => {
       console.log('✅ 積込場所到着記録完了');
       console.log('📦 API応答:', response);
 
-      // 🆕 運行ステータス更新を待つ（少し待機）
+      // 🔧 修正: operationStoreのフェーズを TO_UNLOADING に更新
+      console.log('🔄 フェーズ更新: AT_LOADING → TO_UNLOADING');
+      operationStore.setPhase('TO_UNLOADING');
+      
+      // 🔧 修正: 積込場所情報も更新
+      operationStore.setLoadingLocation(loadingData.locationName);
+
+      // 運行ステータス更新を待つ(少し待機)
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      toast.success(`積込を開始しました`, {
+      toast.success(`積込を完了しました。積降場所へ移動してください。`, {
         duration: 3000,
         icon: '🚛'
       });
 
-      // D4（運行中画面）に戻る
+      // D4(運行中画面)に戻る
       navigate('/operation-record', { replace: true });
 
     } catch (error: any) {
@@ -175,7 +184,7 @@ const LoadingConfirmation: React.FC = () => {
   };
 
   /**
-   * 「戻る」ボタンハンドラー（D5積込場所入力画面に戻る）
+   * 「戻る」ボタンハンドラー(D5積込場所入力画面に戻る)
    */
   const handleBack = () => {
     navigate('/loading-input', {
@@ -188,11 +197,11 @@ const LoadingConfirmation: React.FC = () => {
     return null;
   }
 
-  // 表示用の品目名（複数選択対応 + 既存互換性保持）
+  // 表示用の品目名(複数選択対応 + 既存互換性保持)
   const displayItemName = loadingData.customItemName || loadingData.itemName;
   const hasMultipleItems = loadingData.selectedItemNames && loadingData.selectedItemNames.length > 0;
   const displayItemNames: string[] = hasMultipleItems 
-    ? loadingData.selectedItemNames! // ✅ non-null assertion（hasMultipleItemsでチェック済み）
+    ? loadingData.selectedItemNames! // ✅ non-null assertion(hasMultipleItemsでチェック済み)
     : (displayItemName ? [displayItemName] : []);
 
   return (
@@ -343,7 +352,7 @@ const LoadingConfirmation: React.FC = () => {
                       color: '#667eea',
                       fontWeight: '500'
                     }}>
-                      （{displayItemNames.length}種類）
+                      ({displayItemNames.length}種類)
                     </span>
                   )}
                 </h3>
@@ -507,13 +516,13 @@ const LoadingConfirmation: React.FC = () => {
               color: '#92400e',
               lineHeight: '1.5'
             }}>
-              <strong>⚠️ 注意:</strong> 「運行開始」ボタンを押すと、GPS位置と共に積込記録が登録されます。
+              <strong>⚠️ 注意:</strong> 「運行開始」ボタンを押すと、GPS位置と共に積込記録が登録され、積降場所への移動フェーズに移行します。
             </p>
           </div>
         </div>
       </main>
 
-      {/* フッター（ボタン） */}
+      {/* フッター(ボタン) */}
       <footer style={{
         background: 'white',
         padding: '16px 20px',
@@ -590,3 +599,22 @@ const LoadingConfirmation: React.FC = () => {
 };
 
 export default LoadingConfirmation;
+
+/**
+ * 🔧 修正内容 (2025-12-12)
+ * 
+ * 1. handleStartOperation 内で recordLoadingArrival API 呼び出し成功後:
+ *    - operationStore.setPhase('TO_UNLOADING') を追加
+ *    - operationStore.setLoadingLocation(loadingData.locationName) を追加
+ * 
+ * 2. トーストメッセージを変更:
+ *    - 「積込を開始しました」→「積込を完了しました。積降場所へ移動してください。」
+ * 
+ * 3. 注意事項メッセージを更新:
+ *    - フェーズ移行についての説明を追加
+ * 
+ * これにより、D5a で「運行開始」ボタンをクリックすると:
+ * - フェーズが TO_UNLOADING に更新される
+ * - D4 運行中画面に戻った時、正しく「積降場所へ移動中」と表示される
+ * - ボタンが「積降場所到着」に変わる
+ */

@@ -24,6 +24,7 @@ import { LocationSelectionDialog } from '../components/LocationSelectionDialog';
 import type { NearbyLocationResult } from '../hooks/useNearbyLocationDetection';
 import { LocationRegistrationDialog, type NewLocationData } from '../components/LocationRegistrationDialog';
 import { useOperationStore } from '../stores/operationStore';
+import { useAuthStore } from '../stores/authStore';
 
 // 運行状態の型定義
 type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
@@ -58,8 +59,11 @@ const OperationRecord: React.FC = () => {
   const lastMapUpdateRef = useRef<number>(0);
   const lastMarkerUpdateRef = useRef<number>(0);
   
-  // 🔧 修正: operationStoreから運行IDを取得
+  // operationStoreから運行IDを取得
   const operationStore = useOperationStore();
+  
+  // authStoreから認証情報を取得
+  const authStore = useAuthStore();
 
   // ナビゲーションフック
   const navigate = useNavigate();
@@ -68,25 +72,24 @@ const OperationRecord: React.FC = () => {
   const [showRegistrationDialog, setShowRegistrationDialog] = useState(false);
   const [registrationLocationType, setRegistrationLocationType] = useState<'LOADING' | 'UNLOADING' | null>(null);
   
-  // ✅ 既存の運行状態（完全保持）
+  // ✅ 既存の運行状態（完全保持） 
   const [operation, setOperation] = useState<OperationState>({
     id: null, // 🔧 修正: operationStoreから取得するためnullに変更
     status: 'running',
-    phase: 'TO_LOADING',
+    phase: operationStore.phase || 'TO_LOADING',
     startTime: new Date(),
-    loadingLocation: '',
-    unloadingLocation: '',
+    loadingLocation: operationStore.loadingLocation || '',
+    unloadingLocation: operationStore.unloadingLocation || '',
     cargoInfo: '',
-    // ✅ 既存フィールド
-    vehicleId: 'vehicle-001',
-    vehicleName: '大型ダンプ A-1234',
-    driverName: '山田太郎',
-    operationNumber: 'OP-2025-001',
-    plannedRoute: '大阪→京都',
-    estimatedDistance: 50.5,
-    estimatedDuration: 90,
+    vehicleId: operationStore.vehicleId || '',
+    vehicleName: operationStore.vehicleNumber || '車両未選択',
+    driverName: authStore.user?.name || operationStore.driverName || 'ドライバー未設定',
+    operationNumber: operationStore.operationId || 'OP-未設定',
+    plannedRoute: '',  // 未使用フィールド
+    estimatedDistance: 0,  // 未使用フィールド
+    estimatedDuration: 0,  // 未使用 フィールド
     breakCount: 0,
-    fuelLevel: 80,
+    fuelLevel: 80,  // TODO: 車両情報から取得
     notes: ''
   });
   
@@ -112,7 +115,7 @@ const OperationRecord: React.FC = () => {
     totalDistance
   } = useGPS();
 
-  // 🔧 修正: operationStoreから運行IDを取得して状態に反映
+  // operationStoreから運行IDを取得して状態に反映
   // 🆕 運行ID未設定時の初期化チェック
   useEffect(() => {
     if (operationStore.operationId) {
@@ -130,6 +133,33 @@ const OperationRecord: React.FC = () => {
       });
     }
   }, [operationStore.operationId]);
+
+
+  // operationStoreのフェーズ変更を監視して同期
+  useEffect(() => {
+    setOperation(prev => ({
+      ...prev,
+      phase: operationStore.phase,
+      loadingLocation: operationStore.loadingLocation || prev.loadingLocation,
+      unloadingLocation: operationStore.unloadingLocation || prev.unloadingLocation
+    }));
+    console.log('🔄 フェーズ同期完了:', {
+      newPhase: operationStore.phase,
+      loadingLocation: operationStore.loadingLocation,
+      unloadingLocation: operationStore.unloadingLocation
+    });
+  }, [operationStore.phase, operationStore.loadingLocation, operationStore.unloadingLocation]);
+
+  // 車両情報とドライバー情報の同期
+  useEffect(() => {
+    setOperation(prev => ({
+      ...prev,
+      vehicleId: operationStore.vehicleId || prev.vehicleId,
+      vehicleName: operationStore.vehicleNumber || prev.vehicleName,
+      driverName: authStore.user?.name || operationStore.driverName || prev.driverName,
+      operationNumber: operationStore.operationId || prev.operationNumber
+    }));
+  }, [operationStore.vehicleId, operationStore.vehicleNumber, operationStore.driverName, authStore.user, operationStore.operationId]);
 
   // ✅ GPS追跡開始（既存）
   useEffect(() => {
@@ -982,13 +1012,9 @@ const OperationRecord: React.FC = () => {
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div><strong>運転手:</strong> {operation.driverName}</div>
-            <div><strong>予定ルート:</strong> {operation.plannedRoute}</div>
-            <div><strong>予定距離:</strong> {operation.estimatedDistance} km</div>
-            <div><strong>予定時間:</strong> {operation.estimatedDuration} 分</div>
             <div><strong>休憩回数:</strong> {operation.breakCount} 回</div>
             <div><strong>積込場所:</strong> {operation.loadingLocation || '未設定'}</div>
             <div><strong>積降場所:</strong> {operation.unloadingLocation || '未設定'}</div>
-            <div><strong>備考:</strong> {operation.notes || 'なし'}</div>
           </div>
         </div>
       )}
