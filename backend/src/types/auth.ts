@@ -88,7 +88,7 @@ export interface LoginRequest {
  */
 export interface LoginResponse {
   user: UserInfo;
-  token: string;
+  accessToken: string;
   refreshToken: string;
   expiresIn: number;
 }

@@ -64,7 +64,7 @@ export interface AuthStatistics {
 }
 
 export interface PasswordResetInfo {
-  token: string;
+  accessToken: string;
   userId: string;
   email: string;
   expiresAt: Date;
@@ -185,7 +185,7 @@ class AuthService {
 
       return {
         user: userInfo,
-        token: tokenPair.accessToken,
+        accessToken: tokenPair.accessToken,
         refreshToken: tokenPair.refreshToken,
         expiresIn: Math.floor(expiresInMs / 1000)
       };
