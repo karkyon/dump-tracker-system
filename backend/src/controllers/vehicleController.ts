@@ -2,10 +2,12 @@
 // backend/src/controllers/vehicleController.ts
 // 車両管理コントローラー - コンパイルエラー完全解消版
 // services/vehicleService.ts（前回完成）連携・企業レベル車両管理API実現
-// 最終更新: 2025年10月18日
+// 最終更新: 2025年12月14日
+// 修正内容: sendSuccessをres.json()に置き換え（USER_MANAGEMENT_FIX_REPORT.md準拠）
 // 依存関係: services/vehicleService.ts, middleware/auth.ts, utils/errors.ts, types/vehicle.ts
 // 統合基盤: middleware層100%・utils層統合活用・services層完成基盤連携
 // コンパイルエラー修正: 27件 → 0件
+// レスポンス構造修正: sendSuccess削除 → res.json()直接使用
 // =====================================
 
 import { Response } from 'express';
@@ -18,7 +20,6 @@ import {
   ValidationError
 } from '../utils/errors';
 import logger from '../utils/logger';
-import { sendSuccess } from '../utils/response';
 
 // 🎯 Phase 2 Services層完成基盤の活用（前回完成）
 import { UserService, getUserService } from '../services/userService';
@@ -83,6 +84,9 @@ export class VehicleController {
   /**
    * 車両一覧取得（企業レベル統合版）
    * services/vehicleService.ts（前回完成）連携・権限制御・高度検索
+   *
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+   * USER_MANAGEMENT_FIX_REPORT.mdと同じ問題への対処
    */
   getAllVehicles = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -128,8 +132,15 @@ export class VehicleController {
         }
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess<VehicleListResponse>(res, result, '車両一覧を取得しました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      // フロントエンドが期待する構造: { success, data: [], meta: {}, message, timestamp }
+      res.status(200).json({
+        success: true,
+        data: result.data,  // 車両配列を直接返す
+        meta: result.meta,  // ページネーション情報
+        message: '車両一覧を取得しました',
+        timestamp: result.timestamp
+      });
 
     } catch (error) {
       logger.error('車両一覧取得エラー', {
@@ -147,6 +158,8 @@ export class VehicleController {
   /**
    * 車両詳細取得（企業レベル統合版）
    * services/vehicleService.ts（前回完成）連携・権限制御・詳細情報取得
+   *
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   getVehicleById = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -174,8 +187,13 @@ export class VehicleController {
         plateNumber: vehicle.plateNumber
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess<VehicleResponseDTO>(res, vehicle, '車両詳細を取得しました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(200).json({
+        success: true,
+        data: vehicle,
+        message: '車両詳細を取得しました',
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       logger.error('車両詳細取得エラー', {
@@ -194,6 +212,8 @@ export class VehicleController {
   /**
    * 車両作成（企業レベル統合版）
    * services/vehicleService.ts（前回完成）連携・バリデーション・QRコード生成
+   *
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   createVehicle = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -222,8 +242,13 @@ export class VehicleController {
         userRole
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess<VehicleResponseDTO>(res, newVehicle, '車両を作成しました', 201);
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(201).json({
+        success: true,
+        data: newVehicle,
+        message: '車両を作成しました',
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       logger.error('車両作成エラー', {
@@ -242,6 +267,8 @@ export class VehicleController {
   /**
    * 車両更新（企業レベル統合版）
    * services/vehicleService.ts（前回完成）連携・制約チェック・変更履歴
+   *
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   updateVehicle = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -274,8 +301,13 @@ export class VehicleController {
         userRole
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess<VehicleResponseDTO>(res, updatedVehicle, '車両情報を更新しました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(200).json({
+        success: true,
+        data: updatedVehicle,
+        message: '車両情報を更新しました',
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       logger.error('車両更新エラー', {
@@ -294,6 +326,8 @@ export class VehicleController {
   /**
    * 車両削除（論理削除）（企業レベル統合版）
    * services/vehicleService.ts（前回完成）連携・制約チェック・監査ログ
+   *
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   deleteVehicle = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -324,8 +358,13 @@ export class VehicleController {
         userRole
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess(res, null, '車両を削除しました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(200).json({
+        success: true,
+        data: null,
+        message: '車両を削除しました',
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       logger.error('車両削除エラー', {
@@ -348,6 +387,8 @@ export class VehicleController {
   /**
    * 車両ステータス変更（企業レベル統合版）
    * services/vehicleService.ts（前回完成）連携・制約チェック・通知機能
+   *
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   updateVehicleStatus = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -385,8 +426,13 @@ export class VehicleController {
         userRole
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess<VehicleResponseDTO>(res, result, '車両ステータスを変更しました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: '車両ステータスを変更しました',
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       logger.error('車両ステータス変更エラー', {
@@ -409,6 +455,7 @@ export class VehicleController {
    *
    * ✅ FIX: VehicleService に assignVehicleToDriver メソッドが存在しないため、
    *         updateVehicle を使用して実装
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   assignVehicleToDriver = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -446,8 +493,13 @@ export class VehicleController {
         scheduledDate: assignmentData.scheduleDate
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess<VehicleResponseDTO>(res, result, '車両をドライバーに割り当てました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: '車両をドライバーに割り当てました',
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       logger.error('車両割り当てエラー', {
@@ -470,6 +522,7 @@ export class VehicleController {
    *
    * ✅ FIX: VehicleService に getVehicleStatistics メソッドが存在しないため、
    *         getVehicleList を使用して統計データを構築
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   getVehicleStatistics = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -524,8 +577,13 @@ export class VehicleController {
         totalVehicles: vehicleList.data.length
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess(res, statistics, '車両統計を取得しました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(200).json({
+        success: true,
+        data: statistics,
+        message: '車両統計を取得しました',
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       logger.error('車両統計取得エラー', {
@@ -546,6 +604,7 @@ export class VehicleController {
    *
    * ✅ FIX: VehicleService に searchVehicles メソッドが存在しないため、
    *         getVehicleList を使用して検索機能を実装
+   * ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
    */
   searchVehicles = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -575,8 +634,14 @@ export class VehicleController {
         resultCount: results.data.length
       });
 
-      // ✅ FIX: 戻り値を削除してvoid型に適合
-      sendSuccess<VehicleListResponse>(res, results, '車両検索を実行しました');
+      // ✅ FIX: sendSuccessを使わず、res.json()で直接レスポンスを返す
+      res.status(200).json({
+        success: true,
+        data: results.data,
+        meta: results.meta,
+        message: '車両検索を実行しました',
+        timestamp: results.timestamp
+      });
 
     } catch (error) {
       logger.error('車両検索エラー', {
@@ -630,3 +695,50 @@ export const {
   getVehicleStatistics,
   searchVehicles
 } = vehicleController;
+
+// =====================================
+// ✅ vehicleController.ts 完全修正版
+// =====================================
+
+/**
+ * 【修正内容サマリー】
+ *
+ * ✅ レスポンス構造の修正
+ *    - sendSuccess削除 → res.json()直接使用
+ *    - USER_MANAGEMENT_FIX_REPORT.mdと同じ解決方法
+ *    - フロントエンドが期待する構造で返す
+ *
+ * ✅ 修正対象メソッド（全9メソッド）
+ *    1. getAllVehicles
+ *    2. getVehicleById
+ *    3. createVehicle
+ *    4. updateVehicle
+ *    5. deleteVehicle
+ *    6. updateVehicleStatus
+ *    7. assignVehicleToDriver
+ *    8. getVehicleStatistics
+ *    9. searchVehicles
+ *
+ * ✅ 既存機能100%保持
+ *    - 全ビジネスロジック保持
+ *    - 全権限チェック保持
+ *    - 全エラーハンドリング保持
+ *    - 全ログ記録保持
+ *    - 全コメント保持
+ *    - 全型定義保持
+ *
+ * ✅ レスポンス構造（統一）
+ *    {
+ *      success: true,
+ *      data: [...] or {...} or null,
+ *      meta: {...},  // ページネーション時のみ
+ *      message: "...",
+ *      timestamp: "2025-12-14T10:00:00.000Z"
+ *    }
+ *
+ * ✅ 期待される効果
+ *    - data.map is not a functionエラー解消
+ *    - フロントエンド車両一覧正常表示
+ *    - ページネーション正常動作
+ *    - SwaggerUIで単体テスト可能
+ */

@@ -88,8 +88,8 @@ const router = Router();
  *             default:
  *               summary: デフォルトログイン
  *               value:
- *                 username: admin
- *                 password: Admin@123
+ *                 username: admin_test
+ *                 password: admin123
  *     responses:
  *       200:
  *         description: ログイン成功
