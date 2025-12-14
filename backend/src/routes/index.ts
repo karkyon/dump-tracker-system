@@ -3,7 +3,9 @@
 // ルートエントリポイント - 完全アーキテクチャ改修統合版
 // API基盤統合・重複ルート解消・統一ミドルウェア活用版
 // 🔧 デバッグ出力追加版（既存機能100%保持）
-// 最終更新: 2025年9月28日
+// 🔧🔧🔧 userRoutes修正版（requireAuth: false に変更）
+// 最終更新: 2025年12月14日
+// 修正内容: userRoutes の requireAuth を false に変更（inspectionRoutes パターン準拠）
 // 依存関係: middleware/auth.ts, middleware/errorHandler.ts, utils/errors.ts, utils/response.ts
 // =====================================
 
@@ -160,7 +162,7 @@ const safeImportAndRegisterRoute = (
       router.use(path, routeHandler);
     }
 
-    // 🔧🔧🔧 デバッグ出力6: router.use実行後
+    // 🔧🔧🔧 デバッグ出力6: router.use実行完了
     logger.info('🔍🔍🔍 [DEBUG-routes/index] router.use実行完了', {
       routeName,
       path,
@@ -533,9 +535,10 @@ if (safeImportAndRegisterRoute('authRoutes', '/auth', router, {
 
 // 【重複解消2】ユーザールート統合
 // routes/userRoutes.ts を優先、routes/users.ts は非推奨
+// 🔧🔧🔧 修正: requireAuth を false に変更（inspectionRoutes パターン準拠）
 if (safeImportAndRegisterRoute('userRoutes', '/users', router, {
   priority: 'high',
-  requireAuth: true,
+  requireAuth: false,  // ← 修正: inspectionRoutes パターンに統一（ルート内で個別認証）
   description: 'ユーザー管理（統合版）'
 })) {
   recordDuplicateResolution(
@@ -548,7 +551,7 @@ if (safeImportAndRegisterRoute('userRoutes', '/users', router, {
   logger.warn('userRoutes.ts登録失敗、users.tsにフォールバック');
   safeImportAndRegisterRoute('users', '/users', router, {
     priority: 'high',
-    requireAuth: true,
+    requireAuth: false,  // ← 修正: フォールバック版も false に統一
     description: 'ユーザー管理（フォールバック版）'
   });
 }
@@ -841,6 +844,11 @@ export const resetRouteStatistics = (): void => {
  * ✅ 企業レベルAPI基盤（統計・監視・ヘルスチェック）
  * ✅ 統一コメントポリシー適用（ファイルヘッダー・TSDoc・統合説明）
  * ✅ デバッグ出力追加（inspectionRoutes特化・全ルート対応）
+ * ✅ userRoutes修正（requireAuth: false - inspectionRoutesパターン準拠）
+ *
+ * 【修正内容】
+ * 🔧 userRoutes の requireAuth を true → false に変更
+ * 🔧 フォールバック版(users.ts)の requireAuth も false に統一
  *
  * 【次のPhase 1対象】
  * 🎯 routes/authRoutes.ts: 認証ルート統合（API機能実現必須）
