@@ -385,8 +385,26 @@ export const authAPI = {
 export const userAPI = {
   /**
    * ユーザー一覧取得
+   * 
+   * ✅✅✅ 修正: バックエンドのレスポンス構造に合わせて型定義を修正
+   * バックエンドレスポンス: { success: true, data: { users: [...], pagination: {...} } }
    */
-  async getUsers(params?: { page?: number; limit?: number; search?: string }): Promise<ApiResponse<{ users: User[]; total: number; page: number; limit: number }>> {
+  async getUsers(params?: { 
+    page?: number; 
+    limit?: number; 
+    pageSize?: number;
+    search?: string;
+    role?: string;
+    status?: string;
+  }): Promise<ApiResponse<{ 
+    users: User[]; 
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }
+  }>> {
     return apiClient.get('/users', { params });
   },
 

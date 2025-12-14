@@ -1,4 +1,5 @@
 // frontend/cms/src/store/userStore.ts - 修正版
+// バックエンドのレスポンス構造 { users, pagination } に対応
 import { create } from 'zustand';
 import { User, FilterOptions } from '../types';
 import { userAPI } from '../utils/api';
@@ -59,16 +60,28 @@ export const useUserStore = create<UserState>((set, get) => ({
 
       const response = await userAPI.getUsers(params);
 
+      console.log('[UserStore] Full API response:', response);
+
       if (response.success && response.data) {
-        // ✅ 修正: APIレスポンスは { users, total, page, limit } 形式
-        const apiData = response.data as { users: User[]; total: number; page: number; limit: number };
+        // ✅✅✅ 修正: apiClient.getはresponse.data全体を返す
+        // バックエンドレスポンス: { success: true, data: { users: [...], pagination: {...} } }
+        // apiClient.get戻り値: { success: true, data: <バックエンドレスポンス全体> }
+        // つまり response.data.data にアクセスする必要がある
+        const backendData = (response.data as any).data;  // 2重ネストを解決
+
+        console.log('[UserStore] Extracted backend data:', backendData);
+        console.log('[UserStore] fetchUsers success:', {
+          usersCount: backendData?.users?.length || 0,
+          pagination: backendData?.pagination
+        });
+
         set({
-          users: apiData.users,
+          users: backendData?.users || [],
           pagination: {
-            page: apiData.page,
-            pageSize: apiData.limit,
-            total: apiData.total,
-            totalPages: Math.ceil(apiData.total / apiData.limit),
+            page: backendData?.pagination?.page || 1,
+            pageSize: backendData?.pagination?.limit || 10,
+            total: backendData?.pagination?.total || 0,
+            totalPages: backendData?.pagination?.totalPages || 0,
           },
           filters: currentFilters,
           isLoading: false,

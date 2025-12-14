@@ -1,4 +1,4 @@
-// frontend/cms/src/pages/UserManagement.tsx - 修正版
+// frontend/cms/src/pages/UserManagement.tsx - 無限ループ修正版
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -10,12 +10,11 @@ import Table, { StatusBadge, ActionButtons } from '../components/common/Table';
 import Pagination from '../components/common/Pagination';
 import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
-import { formatDate, debounce } from '../utils/helpers';
+import { formatDate } from '../utils/helpers';
 
 const UserManagement: React.FC = () => {
   const {
     users,
-    // selectedUser,
     isLoading,
     error,
     pagination,
@@ -27,7 +26,6 @@ const UserManagement: React.FC = () => {
     setFilters,
     setPage,
     clearError,
-    // clearSelectedUser,
   } = useUserStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -49,33 +47,35 @@ const UserManagement: React.FC = () => {
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // ✅ 修正: 初回ロード時のみfetchUsersを実行
-  const isInitialMount = useRef(true);
-  
+  // ✅✅✅ 修正: 初回マウント時のみfetchUsersを実行
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      fetchUsers();
-    }
+    console.log('[UserManagement] Initial mount - fetching users');
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ 空の依存配列 - マウント時のみ実行
 
-  // ✅ 修正: ページ変更時にfetchUsersを実行
+  // ✅✅✅ 修正: ページ変更時にfetchUsersを実行（無限ループ防止）
   const prevPageRef = useRef(pagination.page);
   useEffect(() => {
-    if (prevPageRef.current !== pagination.page && !isInitialMount.current) {
+    if (prevPageRef.current !== pagination.page) {
+      console.log('[UserManagement] Page changed:', prevPageRef.current, '->', pagination.page);
       prevPageRef.current = pagination.page;
       fetchUsers();
     }
-  }, [pagination.page, fetchUsers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page]); // ✅ fetchUsersを依存配列から削除
 
-  // ✅ 修正: フィルター変更時にfetchUsersを実行（初回を除く）
-  const prevFiltersRef = useRef(filters);
+  // ✅✅✅ 修正: フィルター変更時にfetchUsersを実行（無限ループ防止）
+  const prevFiltersRef = useRef<string>('');
   useEffect(() => {
-    if (!isInitialMount.current && prevFiltersRef.current !== filters) {
-      prevFiltersRef.current = filters;
+    const filtersString = JSON.stringify(filters);
+    if (prevFiltersRef.current && prevFiltersRef.current !== filtersString) {
+      console.log('[UserManagement] Filters changed - fetching users');
       fetchUsers();
     }
-  }, [filters, fetchUsers]);
+    prevFiltersRef.current = filtersString;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]); // ✅ fetchUsersを依存配列から削除
 
   // エラー処理
   useEffect(() => {
@@ -85,22 +85,19 @@ const UserManagement: React.FC = () => {
     }
   }, [error, clearError]);
 
-  // ✅ 修正: debounce処理をuseCallbackでメモ化
-  const debouncedSearch = useCallback(
-    debounce((term: string) => {
+  // ✅✅✅ 修正: 検索処理（デバウンス）- useCallbackでメモ化
+  const handleSearchChange = useCallback((term: string) => {
+    setSearchTerm(term);
+    
+    // デバウンス処理
+    const timeoutId = setTimeout(() => {
+      console.log('[UserManagement] Search term debounced:', term);
       setFilters({ searchTerm: term });
-      // ページを1にリセット
-      setPage(1);
-    }, 500),
-    [setFilters, setPage]
-  );
+      setPage(1); // 検索時はページを1にリセット
+    }, 500);
 
-  // ✅ 修正: searchTerm変更時のみdebounceを実行
-  useEffect(() => {
-    if (!isInitialMount.current) {
-      debouncedSearch(searchTerm);
-    }
-  }, [searchTerm]); // ✅ debouncedSearchを依存配列から削除
+    return () => clearTimeout(timeoutId);
+  }, [setFilters, setPage]);
 
   // テーブルの列定義
   const columns = [
@@ -130,11 +127,11 @@ const UserManagement: React.FC = () => {
       ),
     },
     {
-      key: 'status',
+      key: 'isActive',
       header: 'ステータス',
-      render: (value: string) => (
+      render: (value: boolean) => (
         <StatusBadge 
-          status={value} 
+          status={value ? 'active' : 'inactive'} 
           type="user"
         />
       ),
@@ -145,23 +142,53 @@ const UserManagement: React.FC = () => {
       render: (value: string) => formatDate(value),
     },
     {
-      key: 'lastLogin',
+      key: 'lastLoginAt',
       header: '最終ログイン',
       render: (value: string) => value ? formatDate(value) : '-',
     },
     {
       key: 'actions',
       header: '操作',
-      render: (_: any, row: User) => (
+      render: (_: any, user: User) => (
         <ActionButtons
-          onEdit={() => handleEdit(row)}
-          onDelete={() => handleDelete(row)}
+          onEdit={() => handleEdit(user)}
+          onDelete={() => handleDelete(user)}
         />
       ),
     },
   ];
 
-  // フォームリセット
+  // フォームバリデーション
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.username.trim()) {
+      errors.username = 'ユーザーIDは必須です';
+    }
+
+    if (!formData.email.trim()) {
+      errors.email = 'メールアドレスは必須です';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = '有効なメールアドレスを入力してください';
+    }
+
+    if (!formData.name.trim()) {
+      errors.name = '氏名は必須です';
+    }
+
+    if (!selectedUserId && !formData.password) {
+      errors.password = 'パスワードは必須です';
+    }
+
+    if (!selectedUserId && formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'パスワードが一致しません';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // フォームをリセット
   const resetForm = () => {
     setFormData({
       username: '',
@@ -173,70 +200,37 @@ const UserManagement: React.FC = () => {
       confirmPassword: '',
     });
     setFormErrors({});
+    setSelectedUserId(null);
   };
 
-  // バリデーション
-  const validateForm = (isUpdate = false): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!formData.username.trim()) {
-      errors.username = 'ユーザーIDは必須です';
-    }
-
-    if (!formData.name.trim()) {
-      errors.name = '氏名は必須です';
-    }
-
-    if (!formData.email.trim()) {
-      errors.email = 'メールアドレスは必須です';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = '有効なメールアドレスを入力してください';
-    }
-
-    if (!isUpdate && !formData.password) {
-      errors.password = 'パスワードは必須です';
-    }
-
-    if (formData.password && formData.password.length < 8) {
-      errors.password = 'パスワードは8文字以上で入力してください';
-    }
-
-    if (formData.password && formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = 'パスワードが一致しません';
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // 新規作成ハンドラー
+  // 新規作成
   const handleCreate = () => {
     resetForm();
     setShowCreateModal(true);
   };
 
-  // 編集ハンドラー
+  // 編集
   const handleEdit = (user: User) => {
     setSelectedUserId(user.id);
     setFormData({
       username: user.username,
       email: user.email,
-      name: user.name,
+      name: user.name || '',
       role: user.role,
-      status: user.status || 'active',
+      status: user.isActive ? 'active' : 'inactive',
       password: '',
       confirmPassword: '',
     });
     setShowEditModal(true);
   };
 
-  // 削除ハンドラー
+  // 削除
   const handleDelete = (user: User) => {
     setSelectedUserId(user.id);
     setShowDeleteDialog(true);
   };
 
-  // 新規作成送信
+  // 作成実行
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
 
@@ -245,7 +239,6 @@ const UserManagement: React.FC = () => {
       email: formData.email,
       name: formData.name,
       role: formData.role,
-      status: formData.status,
       password: formData.password,
     });
 
@@ -256,21 +249,17 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  // 更新送信
-  const handleSubmitUpdate = async () => {
-    if (!selectedUserId || !validateForm(true)) return;
+  // 更新実行
+  const handleSubmitEdit = async () => {
+    if (!validateForm() || !selectedUserId) return;
 
     const updateData: Partial<User> = {
       username: formData.username,
       email: formData.email,
       name: formData.name,
       role: formData.role,
-      status: formData.status,
+      isActive: formData.status === 'active',
     };
-
-    if (formData.password) {
-      updateData.password = formData.password;
-    }
 
     const success = await updateUser(selectedUserId, updateData);
 
@@ -278,11 +267,10 @@ const UserManagement: React.FC = () => {
       toast.success('ユーザーを更新しました');
       setShowEditModal(false);
       resetForm();
-      setSelectedUserId(null);
     }
   };
 
-  // 削除処理
+  // 削除実行
   const handleConfirmDelete = async () => {
     if (!selectedUserId) return;
 
@@ -296,43 +284,35 @@ const UserManagement: React.FC = () => {
   };
 
   if (isLoading && users.length === 0) {
-    return <SectionLoading text="ユーザー一覧を読み込み中..." />;
+    return <SectionLoading />;
   }
 
   return (
     <div className="space-y-6">
-      {/* ページヘッダー */}
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
+      {/* ヘッダー */}
+      <div className="flex justify-between items-center">
+        <div>
           <h1 className="text-2xl font-bold text-gray-900">ユーザー管理</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            運転手・管理者のアカウント管理を行います
+          <p className="mt-1 text-sm text-gray-500">
+            システムユーザーの登録・管理を行います
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <Button
-            variant="primary"
-            onClick={handleCreate}
-            className="flex items-center"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            新規ユーザー追加
-          </Button>
-        </div>
+        <Button onClick={handleCreate}>
+          <Plus className="w-4 h-4 mr-2" />
+          新規ユーザー追加
+        </Button>
       </div>
 
       {/* 検索・フィルター */}
       <div className="bg-white shadow rounded-lg p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               type="text"
-              placeholder="ユーザー名、氏名、メールアドレスで検索..."
+              placeholder="ユーザーを検索..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10"
             />
           </div>
@@ -341,6 +321,7 @@ const UserManagement: React.FC = () => {
             options={[
               { value: '', label: 'すべての権限' },
               { value: 'ADMIN', label: '管理者' },
+              { value: 'MANAGER', label: 'マネージャー' },
               { value: 'DRIVER', label: '運転手' },
             ]}
             value={filters.role || ''}
@@ -428,21 +409,11 @@ const UserManagement: React.FC = () => {
             label="権限"
             options={[
               { value: 'DRIVER', label: '運転手' },
+              { value: 'MANAGER', label: 'マネージャー' },
               { value: 'ADMIN', label: '管理者' },
             ]}
             value={formData.role}
             onChange={(e) => setFormData({ ...formData, role: e.target.value as 'ADMIN' | 'MANAGER' | 'DRIVER' })}
-            required
-          />
-          
-          <Select
-            label="ステータス"
-            options={[
-              { value: 'active', label: 'アクティブ' },
-              { value: 'inactive', label: '非アクティブ' },
-            ]}
-            value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' })}
             required
           />
           
@@ -456,7 +427,7 @@ const UserManagement: React.FC = () => {
           />
           
           <Input
-            label="パスワード確認"
+            label="パスワード（確認）"
             type="password"
             value={formData.confirmPassword}
             onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
@@ -472,10 +443,9 @@ const UserManagement: React.FC = () => {
         onClose={() => {
           setShowEditModal(false);
           resetForm();
-          setSelectedUserId(null);
         }}
         title="ユーザー編集"
-        onSubmit={handleSubmitUpdate}
+        onSubmit={handleSubmitEdit}
         loading={isLoading}
         size="md"
       >
@@ -511,6 +481,7 @@ const UserManagement: React.FC = () => {
             label="権限"
             options={[
               { value: 'DRIVER', label: '運転手' },
+              { value: 'MANAGER', label: 'マネージャー' },
               { value: 'ADMIN', label: '管理者' },
             ]}
             value={formData.role}
@@ -528,25 +499,6 @@ const UserManagement: React.FC = () => {
             onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' })}
             required
           />
-          
-          <Input
-            label="新しいパスワード"
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            error={formErrors.password}
-            helperText="パスワードを変更しない場合は空欄にしてください"
-          />
-          
-          {formData.password && (
-            <Input
-              label="パスワード確認"
-              type="password"
-              value={formData.confirmPassword}
-              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              error={formErrors.confirmPassword}
-            />
-          )}
         </div>
       </FormModal>
 
@@ -558,11 +510,10 @@ const UserManagement: React.FC = () => {
           setSelectedUserId(null);
         }}
         onConfirm={handleConfirmDelete}
-        title="ユーザー削除"
+        title="ユーザー削除確認"
         message="このユーザーを削除してもよろしいですか？この操作は取り消せません。"
         confirmText="削除"
         variant="danger"
-        loading={isLoading}
       />
     </div>
   );
