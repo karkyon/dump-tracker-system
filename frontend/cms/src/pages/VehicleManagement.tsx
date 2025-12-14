@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -14,7 +14,6 @@ import { formatDate, formatNumber, debounce } from '../utils/helpers';
 const VehicleManagement: React.FC = () => {
   const {
     vehicles,
-    // selectedVehicle,
     isLoading,
     error,
     pagination,
@@ -26,7 +25,6 @@ const VehicleManagement: React.FC = () => {
     setFilters,
     setPage,
     clearError,
-    // clearSelectedVehicle,
   } = useVehicleStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -54,10 +52,33 @@ const VehicleManagement: React.FC = () => {
     { value: '4tダンプ', label: '4tダンプ' },
   ];
 
-  // ページ初期化時にデータを取得
+  // ✅ FIX: 初回マウント時のみデータ取得
   useEffect(() => {
     fetchVehicles();
-  }, [fetchVehicles, pagination.page, filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 空の依存配列
+
+  // ✅ FIX: pagination.pageの変更時のみデータ再取得
+  useEffect(() => {
+    // 初回レンダリング（page=1）はスキップ
+    if (pagination.page > 1) {
+      fetchVehicles();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page]); // pageのみ監視
+
+  // ✅ FIX: filtersの変更時は別のuseEffectで処理
+  useEffect(() => {
+    // searchTerm以外のフィルター変更時のみ実行
+    const hasNonSearchFilters = Object.keys(filters).some(
+      key => key !== 'searchTerm' && filters[key as keyof typeof filters]
+    );
+    
+    if (hasNonSearchFilters) {
+      fetchVehicles();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.vehicleType, filters.status]); // 特定のフィルターのみ監視
 
   // エラー処理
   useEffect(() => {
@@ -67,10 +88,17 @@ const VehicleManagement: React.FC = () => {
     }
   }, [error, clearError]);
 
-  // 検索処理（デバウンス）
-  const debouncedSearch = debounce((term: string) => {
-    setFilters({ searchTerm: term });
-  }, 500);
+  // ✅ FIX: デバウンス検索をuseCallbackでメモ化
+  const debouncedSearch = useCallback(
+    debounce((term: string) => {
+      if (term.length >= 2 || term.length === 0) {
+        setFilters({ searchTerm: term });
+        fetchVehicles();
+      }
+    }, 500),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   useEffect(() => {
     debouncedSearch(searchTerm);
@@ -157,7 +185,7 @@ const VehicleManagement: React.FC = () => {
       vehicleNumber: '',
       vehicleType: '',
       currentMileage: 0,
-      status: 'ACTIVE' ,
+      status: 'ACTIVE',
       notes: '',
     });
     setFormErrors({});
@@ -171,10 +199,7 @@ const VehicleManagement: React.FC = () => {
 
   // 編集
   const handleEdit = (vehicle: Vehicle) => {
-    // vehicle.id を保存
     setSelectedVehicleId(vehicle.id);
-    
-    // フォームデータを設定（undefined 対策）
     setFormData({
       vehicleNumber: vehicle.vehicleNumber || '',
       vehicleType: vehicle.vehicleType || '',
@@ -182,7 +207,6 @@ const VehicleManagement: React.FC = () => {
       status: vehicle.status,
       notes: vehicle.notes || '',
     });
-    
     setShowEditModal(true);
   };
 

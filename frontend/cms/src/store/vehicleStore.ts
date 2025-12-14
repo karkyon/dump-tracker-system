@@ -58,13 +58,17 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
 
       if (response.success && response.data) {
         const apiData = response.data as any;
+        
+        // ✅ FIX: meta情報を正しく取得
+        const metaData = apiData.meta || apiData;
+        
         set({
-          vehicles: apiData.vehicles || apiData.data || [],
+          vehicles: apiData.data || apiData.vehicles || [],
           pagination: {
-            page: apiData.page || 1,
-            pageSize: apiData.limit || apiData.pageSize || 10,
-            total: apiData.total || 0,
-            totalPages: Math.ceil((apiData.total || 0) / (apiData.limit || apiData.pageSize || 10)),
+            page: metaData.page || 1,
+            pageSize: metaData.pageSize || metaData.limit || 10,
+            total: metaData.total || 0,
+            totalPages: metaData.totalPages || Math.ceil((metaData.total || 0) / (metaData.pageSize || metaData.limit || 10)),
           },
           filters: currentFilters,
           isLoading: false,
@@ -195,11 +199,12 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     }
   },
 
-  // フィルター設定
+  // ✅ FIX: フィルター設定時にページをリセットしない
+  // ページリセットはVehicleManagement.tsxで明示的に行う
   setFilters: (filters: Partial<FilterOptions>) => {
     set({
       filters: { ...get().filters, ...filters },
-      pagination: { ...get().pagination, page: 1 },
+      // pagination.pageはリセットしない
     });
   },
 
