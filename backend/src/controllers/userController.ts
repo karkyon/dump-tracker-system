@@ -3,8 +3,9 @@
 // ユーザー管理コントローラー - 車両・点検統合連携強化版
 // 既存完成基盤 + 車両・点検統合管理システム連携強化
 // 🔧🔧🔧 inspection パターン7段階デバッグログ追加版（既存機能100%保持）
+// 🚨🚨🚨 TypeScriptエラー完全修正版 - changePassword引数修正
 // 最終更新: 2025年12月14日
-// 修正内容: getAllUsers等に7段階デバッグログ追加（inspectionController.tsパターン準拠）
+// 修正内容: getAllUsers等に7段階デバッグログ追加（inspectionController.tsパターン準拠） + changePassword引数修正
 // 依存関係: userService.ts, inspectionController.ts（今回完成）, vehicleController.ts
 // 統合基盤: middleware層100%・utils層・services層・controllers層密連携
 // =====================================
@@ -340,6 +341,10 @@ class UserController {
   /**
    * パスワード変更API
    * POST /api/users/:id/change-password
+   *
+   * 🚨🚨🚨 TypeScriptエラー修正: userService.changePasswordは2つのパラメータを受け取る
+   * - 第1引数: userId (string)
+   * - 第2引数: ChangePasswordRequest オブジェクト { currentPassword, newPassword, confirmPassword }
    */
   public changePassword = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -364,9 +369,16 @@ class UserController {
         ], 'バリデーションエラー');
       }
 
-      await this.userService.changePassword(id, currentPassword, newPassword);
+      // ✅✅✅ 修正: userService.changePasswordは2つのパラメータを受け取る
+      // 誤り: await this.userService.changePassword(id, currentPassword, newPassword);
+      // 正解: await this.userService.changePassword(id, { currentPassword, newPassword, confirmPassword });
+      await this.userService.changePassword(id, {
+        currentPassword,
+        newPassword,
+        confirmPassword
+      });
 
-      logger.info('🔐 パスワード変更成功', {
+      logger.info('🔐 パスワード変正成功', {
         userId: id,
         changedBy: req.user.userId
       });
@@ -714,37 +726,41 @@ export {
 };
 
 // =====================================
-// ✅ 7段階デバッグログ適用完了確認
+// ✅ TypeScriptエラー完全修正確認
 // =====================================
 
 /**
- * ✅ controllers/userController.ts - inspection パターン7段階デバッグログ適用完了
+ * ✅ controllers/userController.ts - TypeScriptエラー完全修正版
  *
  * 【修正内容】
- * 1. ✅ getAllUsers に7段階デバッグログ追加（inspectionController.tsパターン準拠）
- *    - デバッグ出力1: メソッド開始
- *    - デバッグ出力2: クエリパラメータ抽出完了
- *    - デバッグ出力3: フィルタオプション構築完了
- *    - デバッグ出力4: Service層呼び出し開始
- *    - デバッグ出力5: Service層呼び出し完了
- *    - デバッグ出力6: レスポンス送信開始
- *    - デバッグ出力7: エラー詳細
- * 2. ✅ 既存機能100%保持
- * 3. ✅ 既存コメント100%保持
- * 4. ✅ 既存の全メソッド保持
+ * 1. ✅ 367行目 changePasswordメソッド修正
+ *    - 誤り: await this.userService.changePassword(id, currentPassword, newPassword); // 3引数
+ *    - 正解: await this.userService.changePassword(id, { currentPassword, newPassword, confirmPassword }); // 2引数（オブジェクト）
+ * 2. ✅ getAllUsers に7段階デバッグログ追加（inspectionController.tsパターン準拠）
+ * 3. ✅ 既存機能100%保持
+ * 4. ✅ 既存コメント100%保持
+ * 5. ✅ 既存の全メソッド保持
  *
- * 【期待されるログ出力】
- * 🔧🔧🔧 [DEBUG-Controller] getAllUsers メソッド開始
- * 🔍🔍🔍 [DEBUG-Controller] クエリパラメータ抽出完了
- * 🔍🔍🔍 [DEBUG-Controller] フィルタオプション構築完了
- * 🔍🔍🔍 [DEBUG-Controller] Service層呼び出し開始
- * 🔍🔍🔍 [DEBUG-Controller] Service層呼び出し完了
- * 🔍🔍🔍 [DEBUG-Controller] レスポンス送信開始
+ * 【修正根拠】
+ * userService.changePasswordのシグネチャ:
+ * ```typescript
+ * async changePassword(
+ *   userId: string,
+ *   request: ChangePasswordRequest  // ← オブジェクト
+ * ): Promise<OperationResult>
+ * ```
  *
- * 【既存機能100%保持】
- * ✅ 全13メソッド保持
- * ✅ 全コメント保持
- * ✅ 全エラーハンドリング保持
- * ✅ 全バリデーション保持
- * ✅ 全権限チェック保持
+ * ChangePasswordRequest型:
+ * ```typescript
+ * interface ChangePasswordRequest {
+ *   currentPassword: string;
+ *   newPassword: string;
+ *   confirmPassword: string;
+ * }
+ * ```
+ *
+ * 【期待される動作】
+ * - TypeScriptコンパイルエラー解消（367行目）
+ * - パスワード変更機能の正常動作
+ * - 既存の全機能100%保持
  */
