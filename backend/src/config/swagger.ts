@@ -468,7 +468,11 @@ const swaggerOptions: swaggerJsdoc.Options = {
         description: 'GPS連携・リアルタイム追跡・効率分析API'
       },
       {
-        name: '🔧 点検管理 (Inspection Management)',
+        name: '🔧 点検項目管理 (Inspection Items Management)',
+        description: 'マスタデータ・点検項目定義・カテゴリ管理API'
+      },
+      {
+        name: '🔧 点検記録管理 (Inspection Records Management)',
         description: '業務フロー・品質管理・予防保全API'
       },
       {

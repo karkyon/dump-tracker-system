@@ -113,7 +113,7 @@ const logRequest = (path: string): RequestHandler => {
  *       - GPS権限事前確認
  *       - オフライン対応準備
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     requestBody:
  *       required: true
  *       content:
@@ -243,7 +243,7 @@ router.post('/auth/login',
  *       - トークン検証
  *       - 基本ユーザー情報返却
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -293,7 +293,7 @@ router.get('/auth/me',
  *       - 同期状態確認
  *       - /auth/me より詳細な情報
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -326,7 +326,7 @@ router.get('/auth/info',
  *       - リアルタイム追跡開始
  *       - オフライン同期準備
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -473,7 +473,7 @@ router.post('/operations/start',
  *       - オフライン同期
  *       - 運行サマリー生成
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -534,7 +534,7 @@ router.post('/operations/:id/end',
  *       - 運転手用機能
  *       - GPS追跡情報
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -591,7 +591,7 @@ router.get('/operations/current',
  *       - 運転手が積降場所に接近時に自動通知
  *       - 地点候補の自動表示
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -767,7 +767,7 @@ router.post('/operations/nearby-locations',
  *       - 精度検証・異常値検出
  *       - オフライン同期・データ圧縮
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -816,7 +816,7 @@ router.post('/gps/log',
  *       - よく使用する場所優先表示
  *       - オフライン対応・キャッシュ
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -856,7 +856,7 @@ router.get('/locations',
  *       - GPS自動取得
  *       - 即座の登録
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -909,7 +909,7 @@ router.post('/locations/quick',
  *       - メンテナンス情報
  *       - 車両詳細取得
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -959,7 +959,7 @@ router.get('/vehicle',
  *       - ステータスフィルター
  *       - ページネーション
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1004,7 +1004,7 @@ router.get('/vehicles',
  *       - リアルタイム反映
  *       - ステータス履歴記録
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -1048,7 +1048,7 @@ router.put('/vehicle/status',
  *       - サービス統合状況確認
  *       - 統計情報取得
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     responses:
  *       200:
  *         description: ヘルスチェック成功
@@ -1086,7 +1086,7 @@ router.get('/health',
  *     summary: 未定義エンドポイント
  *     description: 定義されていないモバイルAPIエンドポイントへのアクセス
  *     tags:
- *       - 📱 モバイルAPI (Mobile API)
+ *       - 📱 モバイル統合 (Mobile Integration)
  *     responses:
  *       404:
  *         description: エンドポイントが見つかりません

@@ -99,7 +99,7 @@ router.use((req, res, next) => {
  *       - ページネーション（大量データ対応）
  *       - 権限制御（全ユーザー閲覧可能）
  *     tags:
- *       - 🔧 点検項目管理（マスタ） (Inspection Items Management)
+ *       - 🔧 点検項目管理 (Inspection Items Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -171,7 +171,7 @@ router.get(
  *       - 関連履歴取得
  *       - 使用統計情報
  *     tags:
- *       - 🔧 点検項目管理（マスタ） (Inspection Items Management)
+ *       - 🔧 点検項目管理 (Inspection Items Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -214,7 +214,7 @@ router.get(
  *       - 表示順管理
  *       - 履歴記録
  *     tags:
- *       - 🔧 点検項目管理（マスタ） (Inspection Items Management)
+ *       - 🔧 点検項目管理 (Inspection Items Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -294,7 +294,7 @@ router.post(
  *       - 履歴管理
  *       - 変更追跡
  *     tags:
- *       - 🔧 点検項目管理（マスタ） (Inspection Items Management)
+ *       - 🔧 点検項目管理 (Inspection Items Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -358,7 +358,7 @@ router.put(
  *       - 関連データチェック
  *       - 履歴保持
  *     tags:
- *       - 🔧 点検項目管理（マスタ） (Inspection Items Management)
+ *       - 🔧 点検項目管理 (Inspection Items Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
