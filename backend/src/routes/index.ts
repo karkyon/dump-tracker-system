@@ -84,7 +84,7 @@ const safeImportAndRegisterRoute = (
   path: string,
   router: Router,
   options: {
-    priority?: 'high' | 'normal' | 'low';
+    priority?: 'critical' | 'high' | 'normal' | 'low';  // ← 'critical' を追加
     requireAuth?: boolean;
     description?: string;
   } = {}
@@ -562,6 +562,20 @@ if (safeImportAndRegisterRoute('userRoutes', '/users', router, {
 
 const businessRoutes = [
   {
+    name: 'authRoutes',
+    path: '/auth',
+    priority: 'critical' as const,
+    requireAuth: false,
+    description: '認証・JWT管理'
+  },
+  {
+    name: 'userRoutes',
+    path: '/users',
+    priority: 'critical' as const,
+    requireAuth: false,
+    description: 'ユーザー管理'
+  },
+  {
     name: 'vehicleRoutes',
     path: '/vehicles',
     priority: 'high' as const,
@@ -589,12 +603,25 @@ const businessRoutes = [
     requireAuth: false,
     description: '品目管理'
   },
+  // =====================================
+  // 🆕 点検項目管理ルート（マスタデータ）
+  // =====================================
+  {
+    name: 'inspectionItemRoutes',
+    path: '/inspection-items',
+    priority: 'normal' as const,
+    requireAuth: false,  // ルート内で認証（他のマスタルートと同様）
+    description: '点検項目管理（マスタ）'
+  },
+  // =====================================
+  // 点検記録管理ルート（トランザクションデータ）
+  // =====================================
   {
     name: 'inspectionRoutes',
     path: '/inspections',
     priority: 'normal' as const,
-    requireAuth: false,  // ← inspectionRoutes内で認証（mobile方式に統一）
-    description: '点検記録管理'
+    requireAuth: false,  // ルート内で認証（mobile方式に統一）
+    description: '点検記録管理（トランザクション）'
   },
   {
     name: 'reportRoutes',
