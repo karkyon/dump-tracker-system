@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -35,8 +35,12 @@ const VehicleManagement: React.FC = () => {
 
   // フォームデータ
   const [formData, setFormData] = useState({
-    vehicleNumber: '',
-    vehicleType: '',
+    plateNumber: '',
+    model: '',
+    manufacturer: '',
+    year: new Date().getFullYear(),
+    capacity: 0,
+    fuelType: 'DIESEL' as 'DIESEL' | 'GASOLINE' | 'HYBRID' | 'ELECTRIC',
     currentMileage: 0,
     status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE',
     notes: '',
@@ -45,40 +49,55 @@ const VehicleManagement: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // 車種のオプション
-  const vehicleTypeOptions = [
-    { value: '大型ダンプ', label: '大型ダンプ' },
-    { value: '中型ダンプ', label: '中型ダンプ' },
-    { value: '小型ダンプ', label: '小型ダンプ' },
-    { value: '4tダンプ', label: '4tダンプ' },
+  const vehicleModelOptions = [
+    { value: 'エルフ', label: 'エルフ (いすゞ)' },
+    { value: 'プロフィア', label: 'プロフィア (日野)' },
+    { value: 'ファイター', label: 'ファイター (三菱ふそう)' },
+    { value: 'デュトロ', label: 'デュトロ (日野)' },
+    { value: 'GIGA', label: 'GIGA (いすゞ)' },
   ];
+
+  // 製造元のオプション
+  const manufacturerOptions = [
+    { value: 'いすゞ', label: 'いすゞ' },
+    { value: '日野', label: '日野' },
+    { value: '三菱ふそう', label: '三菱ふそう' },
+    { value: 'UDトラックス', label: 'UDトラックス' },
+  ];
+
+  // ✅ FIX: 前回値を保存するrefを使用（無限ループ防止）
+  const prevPageRef = useRef(pagination.page);
+  const prevFiltersRef = useRef<string>('');
+  const isInitialMount = useRef(true);
 
   // ✅ FIX: 初回マウント時のみデータ取得
   useEffect(() => {
+    console.log('[VehicleManagement] Initial mount - fetching vehicles');
     fetchVehicles();
+    isInitialMount.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空の依存配列
+  }, []); // 空の依存配列 - マウント時のみ実行
 
-  // ✅ FIX: pagination.pageの変更時のみデータ再取得
+  // ✅ FIX: ページ変更検知（前回値と比較）
   useEffect(() => {
-    // 初回レンダリング（page=1）はスキップ
-    if (pagination.page > 1) {
+    if (!isInitialMount.current && prevPageRef.current !== pagination.page) {
+      console.log('[VehicleManagement] Page changed:', prevPageRef.current, '->', pagination.page);
+      prevPageRef.current = pagination.page;
       fetchVehicles();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.page]); // pageのみ監視
+  }, [pagination.page]);
 
-  // ✅ FIX: filtersの変更時は別のuseEffectで処理
+  // ✅ FIX: フィルター変更検知（JSON文字列で比較）
   useEffect(() => {
-    // searchTerm以外のフィルター変更時のみ実行
-    const hasNonSearchFilters = Object.keys(filters).some(
-      key => key !== 'searchTerm' && filters[key as keyof typeof filters]
-    );
-    
-    if (hasNonSearchFilters) {
+    const filtersString = JSON.stringify(filters);
+    if (!isInitialMount.current && prevFiltersRef.current && prevFiltersRef.current !== filtersString) {
+      console.log('[VehicleManagement] Filters changed');
       fetchVehicles();
     }
+    prevFiltersRef.current = filtersString;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.vehicleType, filters.status]); // 特定のフィルターのみ監視
+  }, [filters]);
 
   // エラー処理
   useEffect(() => {
@@ -88,36 +107,47 @@ const VehicleManagement: React.FC = () => {
     }
   }, [error, clearError]);
 
-  // ✅ FIX: デバウンス検索をuseCallbackでメモ化
-  const debouncedSearch = useCallback(
-    debounce((term: string) => {
-      if (term.length >= 2 || term.length === 0) {
-        setFilters({ searchTerm: term });
-        fetchVehicles();
-      }
-    }, 500),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
-
-  useEffect(() => {
-    debouncedSearch(searchTerm);
-  }, [searchTerm, debouncedSearch]);
+  // 検索処理（デバウンス）
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    if (value.length >= 2 || value.length === 0) {
+      const debouncedUpdate = debounce(() => {
+        setFilters({ searchTerm: value });
+      }, 500);
+      debouncedUpdate();
+    }
+  };
 
   // テーブルの列定義
   const columns = [
     {
-      key: 'vehicleNumber',
-      header: '車番',
+      key: 'plateNumber',
+      header: 'ナンバープレート',
       sortable: true,
       render: (value: string) => (
-        <span className="font-mono text-sm">{value}</span>
+        <span className="font-mono text-sm font-semibold">{value}</span>
       ),
     },
     {
-      key: 'vehicleType',
-      header: '車種',
+      key: 'model',
+      header: 'モデル',
       sortable: true,
+    },
+    {
+      key: 'manufacturer',
+      header: '製造元',
+      sortable: true,
+    },
+    {
+      key: 'year',
+      header: '年式',
+      sortable: true,
+    },
+    {
+      key: 'capacity',
+      header: '積載量',
+      sortable: true,
+      render: (value: number) => `${value}t`,
     },
     {
       key: 'currentMileage',
@@ -126,11 +156,6 @@ const VehicleManagement: React.FC = () => {
       render: (value: number) => (
         <span>{formatNumber(value)} km</span>
       ),
-    },
-    {
-      key: 'lastDriver',
-      header: '最新運転手',
-      render: (value: string) => value || '-',
     },
     {
       key: 'status',
@@ -163,12 +188,24 @@ const VehicleManagement: React.FC = () => {
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
-    if (!formData.vehicleNumber.trim()) {
-      errors.vehicleNumber = '車番は必須です';
+    if (!formData.plateNumber.trim()) {
+      errors.plateNumber = 'ナンバープレートは必須です';
     }
 
-    if (!formData.vehicleType.trim()) {
-      errors.vehicleType = '車種は必須です';
+    if (!formData.model.trim()) {
+      errors.model = 'モデルは必須です';
+    }
+
+    if (!formData.manufacturer.trim()) {
+      errors.manufacturer = '製造元は必須です';
+    }
+
+    if (formData.year < 1900 || formData.year > new Date().getFullYear() + 1) {
+      errors.year = '有効な年式を入力してください';
+    }
+
+    if (formData.capacity <= 0) {
+      errors.capacity = '積載量は0より大きい値を入力してください';
     }
 
     if (formData.currentMileage < 0) {
@@ -182,8 +219,12 @@ const VehicleManagement: React.FC = () => {
   // フォームをリセット
   const resetForm = () => {
     setFormData({
-      vehicleNumber: '',
-      vehicleType: '',
+      plateNumber: '',
+      model: '',
+      manufacturer: '',
+      year: new Date().getFullYear(),
+      capacity: 0,
+      fuelType: 'DIESEL',
       currentMileage: 0,
       status: 'ACTIVE',
       notes: '',
@@ -201,8 +242,12 @@ const VehicleManagement: React.FC = () => {
   const handleEdit = (vehicle: Vehicle) => {
     setSelectedVehicleId(vehicle.id);
     setFormData({
-      vehicleNumber: vehicle.vehicleNumber || '',
-      vehicleType: vehicle.vehicleType || '',
+      plateNumber: vehicle.plateNumber || '',
+      model: vehicle.model || '',
+      manufacturer: vehicle.manufacturer || '',
+      year: vehicle.year || new Date().getFullYear(),
+      capacity: vehicle.capacity || 0,
+      fuelType: vehicle.fuelType || 'DIESEL',
       currentMileage: vehicle.currentMileage || 0,
       status: vehicle.status,
       notes: vehicle.notes || '',
@@ -220,12 +265,7 @@ const VehicleManagement: React.FC = () => {
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
 
-    const success = await createVehicle({
-      vehicleNumber: formData.vehicleNumber,
-      vehicleType: formData.vehicleType,
-      currentMileage: formData.currentMileage,
-      status: formData.status,
-    });
+    const success = await createVehicle(formData);
 
     if (success) {
       toast.success('車両を登録しました');
@@ -238,12 +278,7 @@ const VehicleManagement: React.FC = () => {
   const handleSubmitEdit = async () => {
     if (!validateForm() || !selectedVehicleId) return;
 
-    const success = await updateVehicle(selectedVehicleId, {
-      vehicleNumber: formData.vehicleNumber,
-      vehicleType: formData.vehicleType,
-      currentMileage: formData.currentMileage,
-      status: formData.status,
-    });
+    const success = await updateVehicle(selectedVehicleId, formData);
 
     if (success) {
       toast.success('車両情報を更新しました');
@@ -301,28 +336,28 @@ const VehicleManagement: React.FC = () => {
             </div>
             <Input
               type="text"
-              placeholder="車番、車種で検索..."
+              placeholder="ナンバープレート、モデル、製造元で検索..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10"
             />
           </div>
           
           <Select
             options={[
-              { value: '', label: 'すべての車種' },
-              ...vehicleTypeOptions,
+              { value: '', label: 'すべての製造元' },
+              ...manufacturerOptions,
             ]}
-            value={filters.vehicleType || ''}
-            onChange={(e) => setFilters({ vehicleType: e.target.value })}
+            value={filters.manufacturer || ''}
+            onChange={(e) => setFilters({ manufacturer: e.target.value })}
           />
 
           <Select
             options={[
               { value: '', label: 'すべてのステータス' },
-              { value: 'active', label: '稼働中' },
-              { value: 'inactive', label: '非稼働' },
-              { value: 'maintenance', label: '整備中' },
+              { value: 'ACTIVE', label: '稼働中' },
+              { value: 'INACTIVE', label: '非稼働' },
+              { value: 'MAINTENANCE', label: '整備中' },
             ]}
             value={filters.status || ''}
             onChange={(e) => setFilters({ status: e.target.value })}
@@ -359,28 +394,75 @@ const VehicleManagement: React.FC = () => {
         title="新規車両追加"
         onSubmit={handleSubmitCreate}
         loading={isLoading}
-        size="md"
+        size="lg"
       >
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            label="車番"
+            label="ナンバープレート"
             type="text"
-            value={formData.vehicleNumber}
-            onChange={(e) => setFormData({ ...formData, vehicleNumber: e.target.value })}
-            error={formErrors.vehicleNumber}
-            placeholder="例: 倉敷100あ1234"
+            value={formData.plateNumber}
+            onChange={(e) => setFormData({ ...formData, plateNumber: e.target.value })}
+            error={formErrors.plateNumber}
+            placeholder="例: 大阪 500 あ 1001"
             required
           />
           
           <Select
-            label="車種"
+            label="モデル"
             options={[
-              { value: '', label: '車種を選択してください' },
-              ...vehicleTypeOptions,
+              { value: '', label: 'モデルを選択してください' },
+              ...vehicleModelOptions,
             ]}
-            value={formData.vehicleType}
-            onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}
-            error={formErrors.vehicleType}
+            value={formData.model}
+            onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+            error={formErrors.model}
+            required
+          />
+
+          <Select
+            label="製造元"
+            options={[
+              { value: '', label: '製造元を選択してください' },
+              ...manufacturerOptions,
+            ]}
+            value={formData.manufacturer}
+            onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+            error={formErrors.manufacturer}
+            required
+          />
+
+          <Input
+            label="年式"
+            type="number"
+            min="1900"
+            max={new Date().getFullYear() + 1}
+            value={formData.year}
+            onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) })}
+            error={formErrors.year}
+            required
+          />
+
+          <Input
+            label="積載量 (t)"
+            type="number"
+            min="0"
+            step="0.1"
+            value={formData.capacity}
+            onChange={(e) => setFormData({ ...formData, capacity: Number(e.target.value) })}
+            error={formErrors.capacity}
+            required
+          />
+
+          <Select
+            label="燃料タイプ"
+            options={[
+              { value: 'DIESEL', label: 'ディーゼル' },
+              { value: 'GASOLINE', label: 'ガソリン' },
+              { value: 'HYBRID', label: 'ハイブリッド' },
+              { value: 'ELECTRIC', label: '電気' },
+            ]}
+            value={formData.fuelType}
+            onChange={(e) => setFormData({ ...formData, fuelType: e.target.value as any })}
             required
           />
           
@@ -397,14 +479,24 @@ const VehicleManagement: React.FC = () => {
           <Select
             label="ステータス"
             options={[
-              { value: 'active', label: '稼働中' },
-              { value: 'inactive', label: '非稼働' },
-              { value: 'maintenance', label: '整備中' },
+              { value: 'ACTIVE', label: '稼働中' },
+              { value: 'INACTIVE', label: '非稼働' },
+              { value: 'MAINTENANCE', label: '整備中' },
             ]}
             value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' })}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
             required
           />
+
+          <div className="md:col-span-2">
+            <Input
+              label="備考"
+              type="text"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="備考を入力してください（任意）"
+            />
+          </div>
         </div>
       </FormModal>
 
@@ -419,24 +511,68 @@ const VehicleManagement: React.FC = () => {
         title="車両情報編集"
         onSubmit={handleSubmitEdit}
         loading={isLoading}
-        size="md"
+        size="lg"
       >
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            label="車番"
+            label="ナンバープレート"
             type="text"
-            value={formData.vehicleNumber}
-            onChange={(e) => setFormData({ ...formData, vehicleNumber: e.target.value })}
-            error={formErrors.vehicleNumber}
+            value={formData.plateNumber}
+            onChange={(e) => setFormData({ ...formData, plateNumber: e.target.value })}
+            error={formErrors.plateNumber}
             required
           />
           
           <Select
-            label="車種"
-            options={vehicleTypeOptions}
-            value={formData.vehicleType}
-            onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}
-            error={formErrors.vehicleType}
+            label="モデル"
+            options={vehicleModelOptions}
+            value={formData.model}
+            onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+            error={formErrors.model}
+            required
+          />
+
+          <Select
+            label="製造元"
+            options={manufacturerOptions}
+            value={formData.manufacturer}
+            onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+            error={formErrors.manufacturer}
+            required
+          />
+
+          <Input
+            label="年式"
+            type="number"
+            min="1900"
+            max={new Date().getFullYear() + 1}
+            value={formData.year}
+            onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) })}
+            error={formErrors.year}
+            required
+          />
+
+          <Input
+            label="積載量 (t)"
+            type="number"
+            min="0"
+            step="0.1"
+            value={formData.capacity}
+            onChange={(e) => setFormData({ ...formData, capacity: Number(e.target.value) })}
+            error={formErrors.capacity}
+            required
+          />
+
+          <Select
+            label="燃料タイプ"
+            options={[
+              { value: 'DIESEL', label: 'ディーゼル' },
+              { value: 'GASOLINE', label: 'ガソリン' },
+              { value: 'HYBRID', label: 'ハイブリッド' },
+              { value: 'ELECTRIC', label: '電気' },
+            ]}
+            value={formData.fuelType}
+            onChange={(e) => setFormData({ ...formData, fuelType: e.target.value as any })}
             required
           />
           
@@ -453,14 +589,23 @@ const VehicleManagement: React.FC = () => {
           <Select
             label="ステータス"
             options={[
-              { value: 'active', label: '稼働中' },
-              { value: 'inactive', label: '非稼働' },
-              { value: 'maintenance', label: '整備中' },
+              { value: 'ACTIVE', label: '稼働中' },
+              { value: 'INACTIVE', label: '非稼働' },
+              { value: 'MAINTENANCE', label: '整備中' },
             ]}
             value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' })}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
             required
           />
+
+          <div className="md:col-span-2">
+            <Input
+              label="備考"
+              type="text"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            />
+          </div>
         </div>
       </FormModal>
 

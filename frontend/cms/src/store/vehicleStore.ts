@@ -54,24 +54,39 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         pageSize: get().pagination.pageSize,
       };
 
+      console.log('[VehicleStore] fetchVehicles called with params:', params);
+
       const response = await vehicleAPI.getVehicles(params);
 
+      console.log('[VehicleStore] Full API response:', response);
+
       if (response.success && response.data) {
-        const apiData = response.data as any;
+        // ✅ FIX: バックエンドの直接レスポンス構造を処理
+        // { success: true, data: [...], meta: {...}, message, timestamp }
+        const vehicles = Array.isArray(response.data)
+          ? response.data
+          : [];
         
-        // ✅ FIX: meta情報を正しく取得
-        const metaData = apiData.meta || apiData;
-        
+        const meta = response.meta || {};
+
+        console.log('[VehicleStore] Extracted vehicles:', vehicles);
+        console.log('[VehicleStore] Extracted meta:', meta);
+
         set({
-          vehicles: apiData.data || apiData.vehicles || [],
+          vehicles: vehicles,
           pagination: {
-            page: metaData.page || 1,
-            pageSize: metaData.pageSize || metaData.limit || 10,
-            total: metaData.total || 0,
-            totalPages: metaData.totalPages || Math.ceil((metaData.total || 0) / (metaData.pageSize || metaData.limit || 10)),
+            page: meta.page || params.page || 1,
+            pageSize: meta.pageSize || params.pageSize || 10,
+            total: meta.total || 0,
+            totalPages: meta.totalPages || Math.ceil((meta.total || 0) / (meta.pageSize || params.pageSize || 10)),
           },
           filters: currentFilters,
           isLoading: false,
+        });
+
+        console.log('[VehicleStore] fetchVehicles success:', {
+          vehiclesCount: vehicles.length,
+          pagination: get().pagination
         });
       } else {
         set({
@@ -80,6 +95,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         });
       }
     } catch (error) {
+      console.error('[VehicleStore] fetchVehicles error:', error);
       set({
         error: 'ネットワークエラーが発生しました',
         isLoading: false,
@@ -113,7 +129,11 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      console.log('[VehicleStore] createVehicle called with:', vehicleData);
+      
       const response = await vehicleAPI.createVehicle(vehicleData);
+
+      console.log('[VehicleStore] createVehicle response:', response);
 
       if (response.success) {
         await get().fetchVehicles();
@@ -127,6 +147,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         return false;
       }
     } catch (error) {
+      console.error('[VehicleStore] createVehicle error:', error);
       set({
         error: 'ネットワークエラーが発生しました',
         isLoading: false,
@@ -140,7 +161,11 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      console.log('[VehicleStore] updateVehicle called:', { id, vehicleData });
+
       const response = await vehicleAPI.updateVehicle(id, vehicleData);
+
+      console.log('[VehicleStore] updateVehicle response:', response);
 
       if (response.success) {
         await get().fetchVehicles();
@@ -159,6 +184,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         return false;
       }
     } catch (error) {
+      console.error('[VehicleStore] updateVehicle error:', error);
       set({
         error: 'ネットワークエラーが発生しました',
         isLoading: false,
@@ -199,17 +225,17 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     }
   },
 
-  // ✅ FIX: フィルター設定時にページをリセットしない
-  // ページリセットはVehicleManagement.tsxで明示的に行う
+  // フィルター設定
   setFilters: (filters: Partial<FilterOptions>) => {
+    console.log('[VehicleStore] setFilters called:', filters);
     set({
       filters: { ...get().filters, ...filters },
-      // pagination.pageはリセットしない
     });
   },
 
   // ページ設定
   setPage: (page: number) => {
+    console.log('[VehicleStore] setPage called:', page);
     set({
       pagination: { ...get().pagination, page },
     });

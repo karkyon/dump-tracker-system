@@ -1,5 +1,3 @@
-// frontend/cms/src/store/userStore.ts - 修正版
-// バックエンドのレスポンス構造 { users, pagination } に対応
 import { create } from 'zustand';
 import { User, FilterOptions } from '../types';
 import { userAPI } from '../utils/api';
@@ -38,7 +36,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   error: null,
   pagination: {
     page: 1,
-    pageSize: 10,
+    pageSize: 20,
     total: 0,
     totalPages: 0,
   },
@@ -63,25 +61,29 @@ export const useUserStore = create<UserState>((set, get) => ({
       console.log('[UserStore] Full API response:', response);
 
       if (response.success && response.data) {
-        // ✅✅✅ 修正: apiClient.getはresponse.data全体を返す
-        // バックエンドレスポンス: { success: true, data: { users: [...], pagination: {...} } }
-        // apiClient.get戻り値: { success: true, data: <バックエンドレスポンス全体> }
-        // つまり response.data.data にアクセスする必要がある
-        const backendData = (response.data as any).data;  // 2重ネストを解決
-
+        // ✅ FIX: バックエンドのレスポンス構造を処理
+        // パターン1: { success: true, data: { users: [...], pagination: {...} } }
+        // パターン2: { success: true, data: [...], meta: {...} }
+        
+        const backendData = (response.data as any).data || response.data;
+        
         console.log('[UserStore] Extracted backend data:', backendData);
+
+        const users = backendData?.users || (Array.isArray(backendData) ? backendData : []);
+        const paginationData = backendData?.pagination || response.meta || {};
+
         console.log('[UserStore] fetchUsers success:', {
-          usersCount: backendData?.users?.length || 0,
-          pagination: backendData?.pagination
+          usersCount: users.length,
+          pagination: paginationData
         });
 
         set({
-          users: backendData?.users || [],
+          users: users,
           pagination: {
-            page: backendData?.pagination?.page || 1,
-            pageSize: backendData?.pagination?.limit || 10,
-            total: backendData?.pagination?.total || 0,
-            totalPages: backendData?.pagination?.totalPages || 0,
+            page: paginationData.page || params.page || 1,
+            pageSize: paginationData.limit || paginationData.pageSize || params.pageSize || 20,
+            total: paginationData.total || 0,
+            totalPages: paginationData.totalPages || Math.ceil((paginationData.total || 0) / (paginationData.limit || paginationData.pageSize || params.pageSize || 20)),
           },
           filters: currentFilters,
           isLoading: false,
@@ -91,15 +93,13 @@ export const useUserStore = create<UserState>((set, get) => ({
           error: response.error || 'ユーザー一覧の取得に失敗しました',
           isLoading: false,
         });
-        console.error('[UserStore] fetchUsers error:', response.error);
       }
     } catch (error) {
-      const errorMessage = 'ネットワークエラーが発生しました';
+      console.error('[UserStore] fetchUsers error:', error);
       set({
-        error: errorMessage,
+        error: 'ネットワークエラーが発生しました',
         isLoading: false,
       });
-      console.error('[UserStore] fetchUsers exception:', error);
     }
   },
 
@@ -109,18 +109,12 @@ export const useUserStore = create<UserState>((set, get) => ({
 
     try {
       const user = get().users.find(u => u.id === id);
-      
       if (user) {
         set({ selectedUser: user, isLoading: false });
       } else {
-        // ユーザーが見つからない場合は fetchUsers してから再度検索
         await get().fetchUsers();
         const updatedUser = get().users.find(u => u.id === id);
-        set({ 
-          selectedUser: updatedUser || null, 
-          isLoading: false,
-          error: updatedUser ? null : 'ユーザーが見つかりません'
-        });
+        set({ selectedUser: updatedUser || null, isLoading: false });
       }
     } catch (error) {
       set({
@@ -135,10 +129,13 @@ export const useUserStore = create<UserState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      console.log('[UserStore] createUser called with:', userData);
+
       const response = await userAPI.createUser(userData);
 
+      console.log('[UserStore] createUser response:', response);
+
       if (response.success) {
-        // ユーザー一覧を再取得
         await get().fetchUsers();
         set({ isLoading: false });
         return true;
@@ -150,6 +147,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         return false;
       }
     } catch (error) {
+      console.error('[UserStore] createUser error:', error);
       set({
         error: 'ネットワークエラーが発生しました',
         isLoading: false,
@@ -163,13 +161,15 @@ export const useUserStore = create<UserState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      console.log('[UserStore] updateUser called:', { id, userData });
+
       const response = await userAPI.updateUser(id, userData);
 
+      console.log('[UserStore] updateUser response:', response);
+
       if (response.success) {
-        // ユーザー一覧を再取得
         await get().fetchUsers();
         
-        // 選択中のユーザーが更新対象の場合、再取得
         if (get().selectedUser?.id === id) {
           await get().fetchUser(id);
         }
@@ -184,6 +184,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         return false;
       }
     } catch (error) {
+      console.error('[UserStore] updateUser error:', error);
       set({
         error: 'ネットワークエラーが発生しました',
         isLoading: false,
@@ -200,8 +201,12 @@ export const useUserStore = create<UserState>((set, get) => ({
       const response = await userAPI.deleteUser(id);
 
       if (response.success) {
-        // ユーザー一覧を再取得
         await get().fetchUsers();
+        
+        if (get().selectedUser?.id === id) {
+          set({ selectedUser: null });
+        }
+        
         set({ isLoading: false });
         return true;
       } else {
@@ -220,41 +225,25 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
-  // ✅ 修正: フィルター設定（状態のみ更新、fetchは呼ばない）
-  setFilters: (newFilters: Partial<FilterOptions>) => {
-    const currentFilters = get().filters;
-    const updatedFilters = { ...currentFilters, ...newFilters };
-    
-    console.log('[UserStore] setFilters:', {
-      current: currentFilters,
-      new: newFilters,
-      updated: updatedFilters
+  // フィルター設定
+  setFilters: (filters: Partial<FilterOptions>) => {
+    console.log('[UserStore] setFilters called:', filters);
+    set({
+      filters: { ...get().filters, ...filters },
     });
-    
-    set({ filters: updatedFilters });
-    // ✅ fetchUsersは呼ばない - UserManagement側のuseEffectが検知して呼ぶ
   },
 
-  // ✅ 修正: ページ設定（状態のみ更新、fetchは呼ばない）
+  // ページ設定
   setPage: (page: number) => {
-    console.log('[UserStore] setPage:', page);
-    
+    console.log('[UserStore] setPage called:', page);
     set({
-      pagination: {
-        ...get().pagination,
-        page,
-      },
+      pagination: { ...get().pagination, page },
     });
-    // ✅ fetchUsersは呼ばない - UserManagement側のuseEffectが検知して呼ぶ
   },
 
   // エラークリア
-  clearError: () => {
-    set({ error: null });
-  },
+  clearError: () => set({ error: null }),
 
   // 選択ユーザークリア
-  clearSelectedUser: () => {
-    set({ selectedUser: null });
-  },
+  clearSelectedUser: () => set({ selectedUser: null }),
 }));
