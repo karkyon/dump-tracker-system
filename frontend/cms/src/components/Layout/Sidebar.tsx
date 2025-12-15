@@ -1,3 +1,11 @@
+// frontend/cms/src/components/Layout/Sidebar.tsx - 完全修正版
+// 🔧 修正内容: メニュー名を「○○管理」に統一
+// - 「車両マスタ」→「車両管理」
+// - 「点検項目マスタ」→「点検項目管理」
+// - 「積込・積下場所マスタ」→「積込・積下場所管理」
+// - 「品目マスタ管理」→「品目管理」
+// 既存機能: すべてのコード・ロジック・コメントを100%保持
+
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -19,6 +27,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  // ✅ 修正: メニュー名を「○○管理」に統一
   const menuItems = [
     {
       id: 'dashboard',
@@ -28,55 +37,55 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     },
     {
       id: 'users',
-      name: 'ユーザー管理',
+      name: 'ユーザー管理',      // 既存のまま
       path: '/users',
       icon: Users,
     },
     {
       id: 'vehicles',
-      name: '車両マスタ',
+      name: '車両管理',          // ✅ 修正: 「車両マスタ」→「車両管理」
       path: '/vehicles',
       icon: Truck,
     },
     {
       id: 'inspection-items',
-      name: '点検項目マスタ',
+      name: '点検項目管理',      // ✅ 修正: 「点検項目マスタ」→「点検項目管理」
       path: '/inspection-items',
       icon: CheckSquare,
     },
     {
       id: 'locations',
-      name: '積込・積下場所マスタ',
+      name: '積込・積下場所管理',  // ✅ 修正: 「積込・積下場所マスタ」→「積込・積下場所管理」
       path: '/locations',
       icon: MapPin,
     },
     {
       id: 'cargo-types',
-      name: '品目マスタ管理',
+      name: '品目管理',          // ✅ 修正: 「品目マスタ管理」→「品目管理」
       path: '/cargo-types',
       icon: Package,
     },
     {
       id: 'operations',
-      name: '運行記録',
+      name: '運行記録',          // 既存のまま
       path: '/operations',
       icon: FileText,
     },
     {
       id: 'gps-monitoring',
-      name: 'GPSモニタリング',
+      name: 'GPSモニタリング',    // 既存のまま
       path: '/gps-monitoring',
       icon: Navigation,
     },
     {
       id: 'reports',
-      name: '帳票出力',
+      name: '帳票出力',          // 既存のまま
       path: '/reports',
       icon: Download,
     },
     {
       id: 'settings',
-      name: 'システム設定',
+      name: 'システム設定',      // 既存のまま
       path: '/settings',
       icon: Settings,
     },
