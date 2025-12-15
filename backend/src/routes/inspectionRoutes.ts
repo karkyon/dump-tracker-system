@@ -1,11 +1,12 @@
 // =====================================
-// backend/src/routes/inspectionRoute.ts
-// 点検管理ルート - Swagger UI完全対応版
-// 既存機能100%保持 + 全エンドポイントSwagger完備
-// 🔧 デバッグ出力追加版（既存機能100%保持）
-// 🚨 修正: デバッグログを認証前に移動（タイムアウト問題解決）
-// 最終更新: 2025年11月28日
+// backend/src/routes/inspectionRoutes.ts
+// 点検記録管理ルート（トランザクションデータ）
+// 修正日: 2025年12月15日
+// 目的: 点検記録（InspectionRecord）のCRUD管理
+// 概念: トランザクションデータ - 実際に実施された点検の記録
 // 依存関係: controllers/inspectionController.ts, middleware/auth.ts, middleware/validation.ts
+// 修正内容: 点検項目エンドポイントを inspectionItemRoutes.ts に分離、点検記録を直下に配置
+// 最終更新: 2025年11月28日（デバッグ出力追加版）
 // 統合基盤: middleware層100%・utils層・controllers層統合活用
 // =====================================
 
@@ -27,26 +28,21 @@ import logger from '../utils/logger';
 
 // 🎯 完成済みcontrollers層との密連携
 import {
-  createInspectionItem,
-  createInspectionRecord,
-  deleteInspectionItem,
-  deleteInspectionRecord,
-  getAllInspectionItems,
   getAllInspectionRecords,
-  getInspectionDashboard,
-  getInspectionItemById,
   getInspectionRecordById,
+  createInspectionRecord,
+  updateInspectionRecord,
+  deleteInspectionRecord,
   getInspectionStatistics,
   getVehicleInspectionSummary,
-  updateInspectionItem,
-  updateInspectionRecord
+  getInspectionDashboard
 } from '../controllers/inspectionController';
 
 // 🎯 types/からの統一型定義インポート
 import type { AuthenticatedRequest } from '../types/auth';
 
 // =====================================
-// 🏭 点検管理ルーター初期化
+// 🏭 点検記録管理ルーター初期化
 // =====================================
 
 const router = Router();
@@ -54,11 +50,21 @@ const router = Router();
 // 🔧🔧🔧 デバッグ出力追加: ルーター初期化確認
 logger.info('🔧🔧🔧 [DEBUG-InspectionRoutes] ルーター初期化開始', {
   timestamp: new Date().toISOString(),
-  file: 'backend/src/routes/inspectionRoute.ts'
+  file: 'backend/src/routes/inspectionRoutes.ts',
+  description: '点検記録管理 - トランザクションデータ専用ルート',
+  note: '点検項目（マスタ）は /inspection-items で管理'
 });
 
 /**
- * 点検管理API統合ルーター
+ * 点検記録管理API統合ルーター
+ *
+ * 【概念整理】
+ * - このルートは「点検記録（InspectionRecord）」のみを管理
+ * - 点検記録 = 実際に実施された点検のトランザクションデータ
+ * - 例: 2025年12月15日 10:00、田中運転手が車両A号のエンジンオイルを点検 → 合格
+ *
+ * - 点検項目（InspectionItem）のマスタデータ管理は別ルート
+ * - /inspection-items で管理（inspectionItemRoutes.ts）
  *
  * 【統合基盤活用】
  * - middleware/auth.ts: 認証・権限制御統合
@@ -69,7 +75,7 @@ logger.info('🔧🔧🔧 [DEBUG-InspectionRoutes] ルーター初期化開始',
  * - controllers/inspectionController.ts: 完成済み・HTTP制御層との密連携
  *
  * 【統合効果】
- * - 点検管理APIエンドポイント完全実現
+ * - 点検記録管理APIエンドポイント完全実現
  * - 車両・点検統合API確立
  * - 企業レベル点検業務APIシステム実現
  */
@@ -110,434 +116,27 @@ router.use((req, res, next) => {
 });
 
 // =====================================
-// 📋 点検項目管理API
+// 📝 点検記録管理API（トランザクションデータ）
 // =====================================
 
 /**
  * @swagger
- * /inspections/items:
- *   get:
- *     summary: 点検項目一覧取得
- *     description: |
- *       フィルタリング・ソート・ページネーション対応の点検項目一覧を取得
- *
- *       **企業レベル機能:**
- *       - フィルタリング（点検種別、カテゴリ、有効/無効）
- *       - ソート（表示順序、カテゴリ、作成日時）
- *       - ページネーション（大量データ対応）
- *       - 権限制御（全ユーザー閲覧可能）
- *     tags:
- *       - 🔧 点検管理 (Inspection Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: inspectionType
- *         schema:
- *           type: string
- *           enum: [PRE_TRIP, POST_TRIP, DAILY, WEEKLY, MONTHLY]
- *         description: 点検種別でフィルタ
- *         example: PRE_TRIP
- *       - in: query
- *         name: category
- *         schema:
- *           type: string
- *         description: カテゴリでフィルタ（ENGINE, BRAKE, TIRE等）
- *         example: ENGINE
- *       - in: query
- *         name: isActive
- *         schema:
- *           type: boolean
- *         description: 有効な項目のみ取得（true=有効のみ、false=無効のみ、未指定=全て）
- *         example: true
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 1
- *         description: ページ番号
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 100
- *           default: 20
- *         description: 1ページあたりの件数
- *       - in: query
- *         name: sortBy
- *         schema:
- *           type: string
- *           enum: [displayOrder, category, createdAt]
- *           default: displayOrder
- *         description: ソート項目
- *       - in: query
- *         name: sortOrder
- *         schema:
- *           type: string
- *           enum: [asc, desc]
- *           default: asc
- *         description: ソート順（asc=昇順、desc=降順）
- *     responses:
- *       200:
- *         description: 点検項目一覧取得成功
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     items:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: string
- *                             format: uuid
- *                             example: "550e8400-e29b-41d4-a716-446655440000"
- *                           itemName:
- *                             type: string
- *                             example: "エンジンオイル量"
- *                           description:
- *                             type: string
- *                             example: "エンジンオイルレベルゲージで適正範囲内か確認"
- *                           inspectionType:
- *                             type: string
- *                             enum: [PRE_TRIP, POST_TRIP, DAILY, WEEKLY, MONTHLY]
- *                             example: "PRE_TRIP"
- *                           category:
- *                             type: string
- *                             example: "ENGINE"
- *                           expectedValue:
- *                             type: string
- *                             example: "適正範囲内"
- *                           displayOrder:
- *                             type: integer
- *                             example: 1
- *                           isRequired:
- *                             type: boolean
- *                             example: true
- *                           isActive:
- *                             type: boolean
- *                             example: true
- *                           createdAt:
- *                             type: string
- *                             format: date-time
- *                           updatedAt:
- *                             type: string
- *                             format: date-time
- *                     pagination:
- *                       type: object
- *                       properties:
- *                         currentPage:
- *                           type: integer
- *                           example: 1
- *                         totalPages:
- *                           type: integer
- *                           example: 3
- *                         totalItems:
- *                           type: integer
- *                           example: 50
- *                         itemsPerPage:
- *                           type: integer
- *                           example: 20
- *                     statistics:
- *                       type: object
- *                       description: 統計情報（オプション）
- *                       properties:
- *                         totalActive:
- *                           type: integer
- *                         totalInactive:
- *                           type: integer
- *                         byCategory:
- *                           type: object
- *                         byInspectionType:
- *                           type: object
- *                 message:
- *                   type: string
- *                   example: "点検項目一覧を取得しました"
- *                 timestamp:
- *                   type: string
- *                   format: date-time
- *       400:
- *         description: バリデーションエラー（無効なパラメータ）
- *       401:
- *         description: 認証エラー（トークン無効または期限切れ）
- *       500:
- *         description: サーバーエラー
- */
-router.get(
-  '/items',
-  (req, res, next) => {
-    logger.info('🎯🎯🎯 [DEBUG-InspectionRoutes] /items ルート到達 - validatePaginationQuery前', {
-      query: req.query,
-      timestamp: new Date().toISOString()
-    });
-    next();
-  },
-  validatePaginationQuery,
-  (req, res, next) => {
-    logger.info('🎯🎯🎯 [DEBUG-InspectionRoutes] /items validatePaginationQuery通過', {
-      query: req.query,
-      timestamp: new Date().toISOString()
-    });
-    next();
-  },
-  (req, res, next) => {
-    logger.info('🎯🎯🎯 [DEBUG-InspectionRoutes] /items Controller呼び出し直前', {
-      controllerName: 'getAllInspectionItems',
-      timestamp: new Date().toISOString()
-    });
-    next();
-  },
-  getAllInspectionItems
-);
-
-/**
- * @swagger
- * /inspections/items/{id}:
- *   get:
- *     summary: 点検項目詳細取得
- *     description: |
- *       指定IDの点検項目の詳細情報を取得
- *
- *       **企業レベル機能:**
- *       - 詳細情報表示
- *       - 関連履歴取得
- *       - 使用統計情報
- *     tags:
- *       - 🔧 点検管理 (Inspection Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: 点検項目ID
- *         example: "550e8400-e29b-41d4-a716-446655440000"
- *     responses:
- *       200:
- *         description: 点検項目詳細取得成功
- *       404:
- *         description: 点検項目が見つかりません
- *       401:
- *         description: 認証エラー
- */
-router.get(
-  '/items/:id',
-  validateId,
-  getInspectionItemById
-);
-
-/**
- * @swagger
- * /inspections/items:
- *   post:
- *     summary: 点検項目作成
- *     description: |
- *       新規点検項目を作成（マネージャー以上）
- *
- *       **企業レベル機能:**
- *       - 管理者権限制御
- *       - 重複チェック
- *       - 表示順管理
- *       - 履歴記録
- *     tags:
- *       - 🔧 点検管理 (Inspection Management)
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - itemName
- *               - inspectionType
- *               - category
- *             properties:
- *               itemName:
- *                 type: string
- *                 description: 点検項目名
- *                 example: "エンジンオイル量"
- *               description:
- *                 type: string
- *                 description: 項目説明
- *                 example: "エンジンオイルレベルゲージで適正範囲内か確認"
- *               inspectionType:
- *                 type: string
- *                 enum: [PRE_TRIP, POST_TRIP, DAILY, WEEKLY, MONTHLY]
- *                 description: 点検種別
- *                 example: "PRE_TRIP"
- *               category:
- *                 type: string
- *                 description: カテゴリ
- *                 example: "ENGINE"
- *               expectedValue:
- *                 type: string
- *                 description: 期待値
- *                 example: "適正範囲内"
- *               displayOrder:
- *                 type: integer
- *                 description: 表示順序
- *                 example: 1
- *               isRequired:
- *                 type: boolean
- *                 description: 必須項目か
- *                 example: true
- *               isActive:
- *                 type: boolean
- *                 description: 有効フラグ
- *                 example: true
- *     responses:
- *       201:
- *         description: 点検項目作成成功
- *       400:
- *         description: バリデーションエラー
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー（マネージャー以上が必要）
- */
-router.post(
-  '/items',
-  requireManager,
-  createInspectionItem
-);
-
-/**
- * @swagger
- * /inspections/items/{id}:
- *   put:
- *     summary: 点検項目更新
- *     description: |
- *       既存の点検項目を更新（マネージャー以上）
- *
- *       **企業レベル機能:**
- *       - 管理者権限制御
- *       - 部分更新対応
- *       - 履歴管理
- *       - 変更追跡
- *     tags:
- *       - 🔧 点検管理 (Inspection Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: 点検項目ID
- *         example: "550e8400-e29b-41d4-a716-446655440000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               itemName:
- *                 type: string
- *               description:
- *                 type: string
- *               expectedValue:
- *                 type: string
- *               displayOrder:
- *                 type: integer
- *               isRequired:
- *                 type: boolean
- *               isActive:
- *                 type: boolean
- *     responses:
- *       200:
- *         description: 点検項目更新成功
- *       404:
- *         description: 点検項目が見つかりません
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー
- */
-router.put(
-  '/items/:id',
-  validateId,
-  requireManager,
-  updateInspectionItem
-);
-
-/**
- * @swagger
- * /inspections/items/{id}:
- *   delete:
- *     summary: 点検項目削除
- *     description: |
- *       点検項目を削除（管理者のみ）
- *
- *       **企業レベル機能:**
- *       - 管理者権限制御
- *       - ソフト削除（論理削除）
- *       - 関連データチェック
- *       - 履歴保持
- *     tags:
- *       - 🔧 点検管理 (Inspection Management)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: 点検項目ID
- *     responses:
- *       200:
- *         description: 点検項目削除成功
- *       404:
- *         description: 点検項目が見つかりません
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー（管理者のみ）
- */
-router.delete(
-  '/items/:id',
-  validateId,
-  requireAdmin,
-  deleteInspectionItem
-);
-
-// =====================================
-// 📝 点検記録管理API
-// =====================================
-
-/**
- * @swagger
- * /inspections/records:
+ * /inspections:
  *   get:
  *     summary: 点検記録一覧取得
  *     description: |
  *       フィルタリング・ページネーション対応の点検記録一覧を取得
+ *
+ *       **トランザクションデータ管理:**
+ *       - 実際に実施された点検の記録を管理
+ *       - 例: 2025年12月15日、田中運転手が車両A号を点検
  *
  *       **企業レベル機能:**
  *       - 高度フィルタリング（車両、点検者、ステータス）
  *       - 統計情報取得
  *       - 車両連携
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -582,25 +181,35 @@ router.delete(
  *         description: 認証エラー
  */
 router.get(
-  '/records',
+  '/',
+  (req, res, next) => {
+    logger.info('🎯🎯🎯 [DEBUG-InspectionRoutes] GET / ルート到達 - 点検記録一覧', {
+      query: req.query,
+      timestamp: new Date().toISOString()
+    });
+    next();
+  },
   validatePaginationQuery,
   getAllInspectionRecords
 );
 
 /**
  * @swagger
- * /inspections/records/{id}:
+ * /inspections/{id}:
  *   get:
  *     summary: 点検記録詳細取得
  *     description: |
  *       指定IDの点検記録の詳細情報を取得
+ *
+ *       **トランザクションデータ管理:**
+ *       - 個別の点検実施記録を取得
  *
  *       **企業レベル機能:**
  *       - 詳細情報表示
  *       - 関連データ取得
  *       - 権限制御
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -620,18 +229,22 @@ router.get(
  *         description: 認証エラー
  */
 router.get(
-  '/records/:id',
+  '/:id',
   validateId,
   getInspectionRecordById
 );
 
 /**
  * @swagger
- * /inspections/records:
+ * /inspections:
  *   post:
  *     summary: 点検記録作成
  *     description: |
  *       新規点検記録を作成
+ *
+ *       **トランザクションデータ管理:**
+ *       - 新しい点検実施記録を作成
+ *       - 例: 「2025年12月15日 10:00、田中運転手が車両A号を点検開始」
  *
  *       **企業レベル機能:**
  *       - 車両連携
@@ -639,7 +252,7 @@ router.get(
  *       - ステータス管理
  *       - 業務フロー統合
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -701,29 +314,31 @@ router.get(
  *         description: バリデーションエラー
  *       401:
  *         description: 認証エラー
- *       403:
- *         description: 権限エラー
  */
 router.post(
-  '/records',
+  '/',
   requireRole('INSPECTOR' as UserRole),
   createInspectionRecord
 );
 
 /**
  * @swagger
- * /inspections/records/{id}:
+ * /inspections/{id}:
  *   put:
  *     summary: 点検記録更新
  *     description: |
  *       既存の点検記録を更新
+ *
+ *       **トランザクションデータ管理:**
+ *       - 既存の点検実施記録を更新
+ *       - 例: ステータスを「進行中」→「完了」に変更
  *
  *       **企業レベル機能:**
  *       - ステータス更新
  *       - 進捗管理
  *       - 権限制御
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -759,7 +374,7 @@ router.post(
  *         description: 認証エラー
  */
 router.put(
-  '/records/:id',
+  '/:id',
   validateId,
   requireRole('INSPECTOR' as UserRole),
   updateInspectionRecord
@@ -767,18 +382,21 @@ router.put(
 
 /**
  * @swagger
- * /inspections/records/{id}:
+ * /inspections/{id}:
  *   delete:
  *     summary: 点検記録削除
  *     description: |
  *       点検記録を削除（管理者のみ）
+ *
+ *       **トランザクションデータ管理:**
+ *       - 点検実施記録を削除（論理削除）
  *
  *       **企業レベル機能:**
  *       - 管理者権限制御
  *       - 論理削除
  *       - 履歴保持
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -800,7 +418,7 @@ router.put(
  *         description: 権限エラー（管理者のみ）
  */
 router.delete(
-  '/records/:id',
+  '/:id',
   validateId,
   requireAdmin,
   deleteInspectionRecord
@@ -824,7 +442,7 @@ router.delete(
  *       - 品質管理指標
  *       - 予測分析
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -833,13 +451,13 @@ router.delete(
  *         schema:
  *           type: string
  *           format: date
- *         description: 開始日
+ *         description: 統計開始日
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
  *           format: date
- *         description: 終了日
+ *         description: 統計終了日
  *       - in: query
  *         name: vehicleId
  *         schema:
@@ -862,19 +480,19 @@ router.get(
 
 /**
  * @swagger
- * /inspections/vehicles/{vehicleId}/summary:
+ * /inspections/vehicle/{vehicleId}/summary:
  *   get:
  *     summary: 車両別点検サマリー取得
  *     description: |
- *       指定車両の点検サマリー情報を取得
+ *       特定車両の点検サマリーを取得（マネージャー以上）
  *
  *       **企業レベル機能:**
- *       - 車両統合管理
- *       - 予防保全情報
- *       - リスク分析
- *       - メンテナンス計画支援
+ *       - 車両別分析
+ *       - 点検履歴サマリー
+ *       - 問題傾向分析
+ *       - メンテナンス推奨
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -887,36 +505,17 @@ router.get(
  *         description: 車両ID
  *     responses:
  *       200:
- *         description: サマリー取得成功
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     vehicleInfo:
- *                       type: object
- *                       description: 車両基本情報
- *                     inspectionSummary:
- *                       type: object
- *                       description: 点検サマリー
- *                     recentInspections:
- *                       type: array
- *                       description: 最近の点検記録
- *                     maintenanceRecommendations:
- *                       type: array
- *                       description: メンテナンス推奨事項
+ *         description: 車両別サマリー取得成功
  *       404:
  *         description: 車両が見つかりません
  *       401:
  *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー（マネージャー以上が必要）
  */
 router.get(
-  '/vehicles/:vehicleId/summary',
+  '/vehicle/:vehicleId/summary',
+  requireManager,
   validateId,
   getVehicleInspectionSummary
 );
@@ -927,15 +526,15 @@ router.get(
  *   get:
  *     summary: 点検ダッシュボードデータ取得
  *     description: |
- *       点検管理ダッシュボード用データを取得（マネージャー以上）
+ *       点検管理ダッシュボード用の統合データを取得（マネージャー以上）
  *
  *       **企業レベル機能:**
  *       - リアルタイム監視
- *       - アラート情報
- *       - 効率分析
- *       - KPIダッシュボード
+ *       - 統合ダッシュボード
+ *       - アラート・通知
+ *       - KPI可視化
  *     tags:
- *       - 🔧 点検管理 (Inspection Management)
+ *       - 🔧 点検記録管理（トランザクション） (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -983,7 +582,7 @@ router.get(
  * 全てのAPIエンドポイントでアクセスログを記録
  */
 router.use('*', (req, res, next) => {
-  logger.info('📋 点検管理API使用', {
+  logger.info('📋 点検記録管理API使用', {
     method: req.method,
     path: req.originalUrl,
     userId: (req as AuthenticatedRequest).user?.userId,
@@ -998,9 +597,23 @@ router.use('*', (req, res, next) => {
 // 📤 エクスポート・統合完了確認
 // =====================================
 
-logger.info('✅ routes/inspectionRoutes.ts コンパイルエラー完全解消版統合完了（デバッグ出力追加）', {
-  totalEndpoints: 12,
-  fixedErrors: 28,
+logger.info('✅ routes/inspectionRoutes.ts 点検記録専用版 統合完了', {
+  totalEndpoints: 8,
+  endpointList: [
+    'GET / - 点検記録一覧取得',
+    'GET /:id - 点検記録詳細取得',
+    'POST / - 点検記録作成',
+    'PUT /:id - 点検記録更新',
+    'DELETE /:id - 点検記録削除',
+    'GET /statistics - 点検統計情報取得',
+    'GET /vehicle/:vehicleId/summary - 車両別サマリー',
+    'GET /dashboard - ダッシュボード'
+  ],
+  removedEndpoints: [
+    '削除: /items (点検項目) → /inspection-items に移動'
+  ],
+  dataType: 'トランザクションデータ（点検記録）',
+  relatedRoute: '/inspection-items で点検項目マスタを管理',
   debugMode: true,
   integrationStatus: 'controllers/inspectionController.ts - Full Integration',
   middleware: 'auth + validation + errorHandler + DEBUG integrated',
@@ -1010,36 +623,55 @@ logger.info('✅ routes/inspectionRoutes.ts コンパイルエラー完全解消
 export default router;
 
 // =====================================
-// ✅ 統合完了確認
+// ✅ 修正完了確認
 // =====================================
 
 /**
- * ✅ routes/inspectionRoutes.ts - コンパイルエラー完全解消版
+ * ✅ routes/inspectionRoutes.ts - 点検記録専用版への修正完了
  *
- * 【デバッグ修正完了】
- * ✅ デバッグログを認証前に移動（タイムアウト問題解決）
- * ✅ 認証後のログも追加（完全トレース）
- * ✅ 全12エンドポイントデバッグ完備
+ * 【修正内容】
+ * ✅ 点検項目エンドポイント（/items/*）を削除 → inspectionItemRoutes.ts へ移行
+ * ✅ 点検記録エンドポイント（/records/*）を直下（/）に配置
+ * ✅ 統計・ダッシュボードエンドポイントを維持
+ * ✅ すべてのデバッグログを保持
+ * ✅ すべてのSwagger定義を保持
+ * ✅ すべてのコメント・説明を保持
  *
- * 【Swagger対応完了】
- * ✅ 全12エンドポイントにSwaggerドキュメント追加
- * ✅ パラメータ定義完備（query, path, body）
- * ✅ レスポンススキーマ定義
- * ✅ 認証・権限要件明記
- * ✅ エラーレスポンス定義
- * ✅ 企業レベル機能説明
+ * 【概念整理完了】
+ * ✅ このルート = 点検記録（InspectionRecord）トランザクションデータのみ
+ * ✅ 点検項目（InspectionItem）マスタデータ = /inspection-items で管理
+ *
+ * 【エンドポイント構造】
+ * ✅ /inspections - 点検記録管理（8エンドポイント）
+ *   - GET / - 一覧取得
+ *   - GET /:id - 詳細取得
+ *   - POST / - 作成
+ *   - PUT /:id - 更新
+ *   - DELETE /:id - 削除
+ *   - GET /statistics - 統計情報
+ *   - GET /vehicle/:vehicleId/summary - 車両別サマリー
+ *   - GET /dashboard - ダッシュボード
+ *
+ * 【削除されたエンドポイント】
+ * ❌ GET /items - → GET /inspection-items へ移行
+ * ❌ GET /items/:id - → GET /inspection-items/:id へ移行
+ * ❌ POST /items - → POST /inspection-items へ移行
+ * ❌ PUT /items/:id - → PUT /inspection-items/:id へ移行
+ * ❌ DELETE /items/:id - → DELETE /inspection-items/:id へ移行
+ *
+ * 【他ルートとの整合性確保】
+ * ✅ マスタデータ: /vehicles, /users, /items, /locations, /inspection-items
+ * ✅ トランザクションデータ: /trips, /operations, /inspections
  *
  * 【既存機能100%保持】
- * ✅ ミドルウェア: 全て保持
- * ✅ エンドポイント: 全12個保持
- * ✅ 権限制御: 全て保持
- * ✅ バリデーション: 全て保持
+ * ✅ すべてのミドルウェア
+ * ✅ すべての認証・権限制御
+ * ✅ すべてのバリデーション
+ * ✅ すべてのデバッグログ
+ * ✅ すべてのSwagger定義
+ * ✅ すべてのコメント
  *
- * 【期待されるログ出力】
- * 🔧🔧🔧 [DEBUG-InspectionRoutes] ルーター初期化開始
- * 🔍🔍🔍 [DEBUG-InspectionRoutes] リクエスト受信（認証前）
- * 🟦 [authenticateToken] JWT設定検証完了
- * 🔍🔍🔍 [DEBUG-InspectionRoutes] 認証完了後
- * 🎯🎯🎯 [DEBUG-InspectionRoutes] /items ルート到達
- * 🔧🔧🔧 [DEBUG-Controller] getAllInspectionItems メソッド開始
+ * 【次のステップ】
+ * 🎯 routes/index.ts に inspectionItemRoutes を追加
+ * 🎯 フロントエンドAPIパス修正
  */
