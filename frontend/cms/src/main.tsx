@@ -123,15 +123,17 @@ const root = createRoot(container);
 
 // React Strict Modeでの開発時警告抑制設定
 const StrictModeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 開発環境での警告をコンソールで確認
   React.useEffect(() => {
+    // ログ出力のみ
     if (import.meta.env.DEV) {
       console.log('🔧 開発モードで実行中');
-      console.log('📋 環境変数:');
-      console.log('- VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
-      console.log('- NODE_ENV:', import.meta.env.NODE_ENV);
     }
   }, []);
+
+  // レンダー部分で条件分岐
+  if (import.meta.env.DEV) {
+    return <>{children}</>;
+  }
 
   return <React.StrictMode>{children}</React.StrictMode>;
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Plus, Search, Edit2, Trash2, Shield } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '../store/userStore';
 import type { User } from '../types';
@@ -239,10 +239,9 @@ const UserManagement: React.FC = () => {
   const handleSubmitEdit = async () => {
     if (!validateForm(true) || !selectedUserId) return;
 
-    const updateData = { ...formData };
-    if (!updateData.password) {
-      delete updateData.password;
-    }
+    // ✅ 修正: delete演算子を使わず、型安全にパスワードを除外
+    const { password, ...baseUpdateData } = formData;
+    const updateData = password ? { ...baseUpdateData, password } : baseUpdateData;
 
     const success = await updateUser(selectedUserId, updateData);
 

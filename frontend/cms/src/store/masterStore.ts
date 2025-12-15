@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { InspectionItem, Location, CargoType, FilterOptions } from '../types';
-import { inspectionAPI, locationAPI, cargoTypeAPI } from '../utils/api';
+import { inspectionItemAPI, locationAPI, cargoTypeAPI } from '../utils/api';
 
 interface MasterState {
   // 点検項目
@@ -61,7 +61,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     set({ inspectionLoading: true, inspectionError: null });
 
     try {
-      const response = await inspectionAPI.getInspectionItems(filters);
+      const response = await inspectionItemAPI.getInspectionItems(filters);
 
       if (response.success && response.data) {
         set({
@@ -87,7 +87,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     set({ inspectionLoading: true, inspectionError: null });
 
     try {
-      const response = await inspectionAPI.createInspectionItem(itemData);
+      const response = await inspectionItemAPI.createInspectionItem(itemData);
 
       if (response.success) {
         await get().fetchInspectionItems();
@@ -114,7 +114,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     set({ inspectionLoading: true, inspectionError: null });
 
     try {
-      const response = await inspectionAPI.updateInspectionItem(id, itemData);
+      const response = await inspectionItemAPI.updateInspectionItem(id, itemData);
 
       if (response.success) {
         await get().fetchInspectionItems();
@@ -141,7 +141,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     set({ inspectionLoading: true, inspectionError: null });
 
     try {
-      const response = await inspectionAPI.deleteInspectionItem(id);
+      const response = await inspectionItemAPI.deleteInspectionItem(id);
 
       if (response.success) {
         await get().fetchInspectionItems();
@@ -168,7 +168,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     set({ inspectionLoading: true, inspectionError: null });
 
     try {
-      const response = await inspectionAPI.updateOrder(items);
+      const response = await inspectionItemAPI.updateOrder(items);
 
       if (response.success) {
         await get().fetchInspectionItems();

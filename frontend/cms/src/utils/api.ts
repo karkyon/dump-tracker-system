@@ -388,6 +388,8 @@ export const userAPI = {
    * 
    * ✅✅✅ 修正: バックエンドのレスポンス構造に合わせて型定義を修正
    * バックエンドレスポンス: { success: true, data: { users: [...], pagination: {...} } }
+   * 
+   * ✅✅✅ 修正追加: pageSize → limit 変換処理を追加（バックエンド互換性）
    */
   async getUsers(params?: { 
     page?: number; 
@@ -405,7 +407,20 @@ export const userAPI = {
       totalPages: number;
     }
   }>> {
-    return apiClient.get('/users', { params });
+    console.log('[User API] Get users attempt', params);
+    
+    // ✅ 修正: pageSizeをlimitに変換（バックエンド互換性のため）
+    // バックエンドは limit パラメータを期待しているが、
+    // フロントエンドのuserStoreは pageSize を送信するため変換が必要
+    const apiParams = params ? { ...params } : {};
+    if (apiParams.pageSize && !apiParams.limit) {
+      apiParams.limit = apiParams.pageSize;
+      delete apiParams.pageSize;
+    }
+    
+    console.log('[User API] Converted params (pageSize→limit):', apiParams);
+    
+    return apiClient.get('/users', { params: apiParams });
   },
 
   /**
@@ -481,7 +496,7 @@ export const healthAPI = {
 // 点検項目関連API
 // ===================================
 
-export const inspectionAPI = {
+export const inspectionItemAPI = {
   /**
    * 点検項目一覧取得
    */
