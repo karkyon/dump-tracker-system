@@ -4,7 +4,7 @@
 // ✅ すべての標準機能を実装
 // ✅ 独自機能: 順序変更（上下移動ボタン）
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useInspectionItemStore } from '../store/inspectionItemStore';
@@ -25,6 +25,7 @@ const InspectionItemManagement: React.FC = () => {
     isLoading,          // ← 統一命名（inspectionLoading → isLoading）
     error,              // ← 統一命名（inspectionError → error）
     filters,            // ← 追加
+    pagination,         // ← ✅追加: ページ変更検知に必要
     fetchItems,         // ← 統一命名（fetchInspectionItems → fetchItems）
     createItem,         // ← 統一命名（createInspectionItem → createItem）
     updateItem,         // ← 統一命名（updateInspectionItem → updateItem）
@@ -55,35 +56,67 @@ const InspectionItemManagement: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // ==========================================
-  // 初期化とデータ取得（統一パターン）
+  // 初期化とデータ取得（✅ 無限ループ解消版）
   // ==========================================
   
   /**
-   * ページ初期化時にデータを取得
-   * Vehicle/UserManagementと同じパターン
+   * ✅ 修正1: ページ初期化時のみデータを取得
+   * 依存配列を空にすることで、初回マウント時のみ実行
+   * UserManagementパターン採用
    */
   useEffect(() => {
     console.log('[InspectionItemManagement] 初期データ取得');
     fetchItems();
-  }, [fetchItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ← 空の依存配列 = 初回マウント時のみ
 
   /**
-   * フィルター変更時にデータを再取得
-   * Vehicle/UserManagementと同じパターン
+   * ✅ 修正2: ページ変更時のみデータ再取得
+   * useRefで前回のページ番号を記憶し、変更時のみfetchItemsを実行
+   * UserManagementパターン採用
    */
+  const prevPageRef = useRef(pagination.page);
   useEffect(() => {
-    console.log('[InspectionItemManagement] フィルター変更検知、データ再取得');
-    fetchItems();
-  }, [filters, fetchItems]);
+    if (prevPageRef.current !== pagination.page) {
+      console.log('[InspectionItemManagement] ページ変更検知:', {
+        prev: prevPageRef.current,
+        current: pagination.page
+      });
+      prevPageRef.current = pagination.page;
+      fetchItems();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page]); // ← fetchItemsは依存配列に入れない
 
   /**
-   * タブ変更時にフィルターを更新
+   * ✅ 修正3: フィルター変更時のみデータ再取得
+   * useRefで前回のフィルターをJSON文字列として記憶し、変更時のみfetchItemsを実行
+   * UserManagementパターン採用
+   */
+  const prevFiltersRef = useRef<string>('');
+  useEffect(() => {
+    const filtersString = JSON.stringify(filters);
+    if (prevFiltersRef.current && prevFiltersRef.current !== filtersString) {
+      console.log('[InspectionItemManagement] フィルター変更検知:', {
+        prev: prevFiltersRef.current,
+        current: filtersString
+      });
+      fetchItems();
+    }
+    prevFiltersRef.current = filtersString;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]); // ← fetchItemsは依存配列に入れない
+
+  /**
+   * ✅ 修正4: タブ変更時にフィルターを更新
    * カテゴリフィルターをStoreに反映
+   * これによりuseEffect(修正3)が発火してデータが再取得される
    */
   useEffect(() => {
     console.log('[InspectionItemManagement] タブ変更:', activeTab);
     setFilters({ category: activeTab });
-  }, [activeTab, setFilters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]); // ← setFiltersは依存配列に入れない
 
   /**
    * エラー処理（統一パターン）
