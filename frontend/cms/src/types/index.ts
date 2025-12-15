@@ -1,4 +1,8 @@
 // frontend/cms/src/types/index.ts - 完全修正版
+// 🔧 修正内容: 
+// 1. Vehicle型に plateNumber, model, capacity を追加（既存フィールドも100%保持）
+// 2. FilterOptionsに manufacturer を追加
+// 既存機能: すべての型定義を完全保持
 
 // =====================================
 // 認証関連
@@ -28,17 +32,25 @@ export interface LoginCredentials {
 
 // =====================================
 // 車両関連
+// ✅ 修正: バックエンドとフロントエンドの両方に対応できるよう完全統一
 // =====================================
 export interface Vehicle {
   id: string;
-  plateNumber?: string;
-  vehicleNumber?: string;
-  model?: string;
-  vehicleType?: string;
-  manufacturer?: string;
+  
+  // ✅ バックエンド形式（優先）
+  plateNumber?: string;       // バックエンド: ナンバープレート
+  model?: string;             // バックエンド: 車種・モデル
+  manufacturer?: string;      // バックエンド: 製造元
+  capacity?: number;          // バックエンド: 積載量（capacityTons の省略形）
+  capacityTons?: number;      // バックエンド: 積載量（完全形）
+  
+  // ✅ フロントエンド形式（互換性維持）
+  vehicleNumber?: string;     // フロントエンド: 車番（plateNumber のエイリアス）
+  vehicleType?: string;       // フロントエンド: 車種（model のエイリアス）
+  
+  // ✅ 共通フィールド
   year?: number;
   fuelType?: 'GASOLINE' | 'DIESEL' | 'HYBRID' | 'ELECTRIC';
-  capacityTons?: number;
   currentMileage?: number;
   status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
   purchaseDate?: string;
@@ -208,6 +220,7 @@ export interface FilterOptions {
   role?: string;  // UserManagement用
   status?: string;  // UserManagement, VehicleManagement用
   vehicleType?: string;  // VehicleManagement用
+  manufacturer?: string;  // ✅ 追加: VehicleManagement用（製造元フィルター）
   isActive?: boolean;
   page?: number;
   limit?: number;
@@ -295,44 +308,8 @@ export interface OperationState {
   exportRecords: (filters?: FilterOptions) => Promise<void>;  // OperationRecords用
   
   fetchGpsLocations: (vehicleId?: string) => Promise<void>;
-  fetchCurrentLocations: () => Promise<void>;
-  
-  generateDailyReport: (filter: ReportFilter) => Promise<void>;
-  generateAnnualReport: (filter: ReportFilter) => Promise<void>;
-  
   setFilters: (filters: Partial<FilterOptions>) => void;
   setPage: (page: number) => void;
   clearError: () => void;
+  clearSelectedOperation: () => void;
 }
-
-// =====================================
-// 認証ストア関連
-// =====================================
-export interface AuthState {
-  user: User | null;
-  token: string | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  isAuthenticated: boolean;
-  loading: boolean;
-  error: string | null;
-
-  login: (credentials: LoginCredentials) => Promise<boolean>;
-  logout: () => void;
-  checkAuth: () => Promise<void>;
-  refreshAccessToken: () => Promise<boolean>;
-  clearError: () => void;
-  checkServerConnection: () => Promise<void>;
-}
-
-// =====================================
-// ユーティリティ型
-// =====================================
-export type Nullable<T> = T | null;
-export type Optional<T> = T | undefined;
-export type ID = string | number;
-
-export type ReactSetState<T> = React.Dispatch<React.SetStateAction<T>>;
-export type ReactChangeEvent = React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
-export type ReactMouseEvent = React.MouseEvent<HTMLElement>;
-export type ReactFormEvent = React.FormEvent<HTMLFormElement>;

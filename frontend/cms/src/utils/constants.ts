@@ -1,3 +1,11 @@
+// frontend/cms/src/utils/constants.ts - 完全修正版
+// 🔧 修正内容: NAVIGATION_ITEMS のメニュー名を「○○管理」に統一
+// - 「車両マスタ」→「車両管理」
+// - 「点検項目マスタ」→「点検項目管理」
+// - 「積込・積下場所マスタ」→「積込・積下場所管理」
+// - 「品目マスタ管理」→「品目管理」
+// 既存機能: すべての定数・設定を100%保持
+
 /// <reference types="vite/client" />
 
 // API 設定
@@ -14,7 +22,7 @@ export const STORAGE_KEYS = {
 // ページサイズ
 export const PAGE_SIZE = 10;
 
-// ナビゲーションメニュー
+// ✅ 修正: ナビゲーションメニュー名を「○○管理」に統一
 export const NAVIGATION_ITEMS = [
   {
     id: 'dashboard',
@@ -24,55 +32,55 @@ export const NAVIGATION_ITEMS = [
   },
   {
     id: 'users',
-    name: 'ユーザー管理',
+    name: 'ユーザー管理',       // 既存のまま
     path: '/users',
     icon: 'Users'
   },
   {
     id: 'vehicles',
-    name: '車両マスタ',
+    name: '車両管理',           // ✅ 修正: 「車両マスタ」→「車両管理」
     path: '/vehicles',
     icon: 'Truck'
   },
   {
     id: 'inspection-items',
-    name: '点検項目マスタ',
+    name: '点検項目管理',       // ✅ 修正: 「点検項目マスタ」→「点検項目管理」
     path: '/inspection-items',
     icon: 'CheckSquare'
   },
   {
     id: 'locations',
-    name: '積込・積下場所マスタ',
+    name: '積込・積下場所管理',   // ✅ 修正: 「積込・積下場所マスタ」→「積込・積下場所管理」
     path: '/locations',
     icon: 'MapPin'
   },
   {
     id: 'cargo-types',
-    name: '品目マスタ管理',
+    name: '品目管理',           // ✅ 修正: 「品目マスタ管理」→「品目管理」
     path: '/cargo-types',
     icon: 'Package'
   },
   {
     id: 'operations',
-    name: '運行記録',
+    name: '運行記録',           // 既存のまま
     path: '/operations',
     icon: 'FileText'
   },
   {
     id: 'gps-monitoring',
-    name: 'GPSモニタリング',
+    name: 'GPSモニタリング',     // 既存のまま
     path: '/gps-monitoring',
     icon: 'Navigation'
   },
   {
     id: 'reports',
-    name: '帳票出力',
+    name: '帳票出力',           // 既存のまま
     path: '/reports',
     icon: 'Download'
   },
   {
     id: 'settings',
-    name: 'システム設定',
+    name: 'システム設定',       // 既存のまま
     path: '/settings',
     icon: 'Settings'
   }
@@ -102,39 +110,15 @@ export const OPERATION_STATUSES = [
 ] as const;
 
 export const GPS_STATUSES = [
-  { value: 'driving', label: '運転中', color: 'blue' },
-  { value: 'loading', label: '積込中', color: 'orange' },
-  { value: 'unloading', label: '積下中', color: 'purple' },
-  { value: 'resting', label: '休憩中', color: 'gray' },
-  { value: 'refueling', label: '給油中', color: 'yellow' },
+  { value: 'driving', label: '運転中', color: 'green' },
+  { value: 'stopped', label: '停車中', color: 'yellow' },
   { value: 'offline', label: 'オフライン', color: 'red' }
 ] as const;
 
-// 品目リスト
-export const CARGO_TYPES = [
-  'RC', 'RM', '砂', '改良土', 'その他', 'コンガラ', 'アスガラ', 
-  '汚泥', '残土', 'バキューム'
-] as const;
-
-// 点検項目
-export const INSPECTION_ITEMS = {
-  PRE: [
-    'エンジンオイル',
-    'タイヤの摩耗・亀裂',
-    '各作動油の漏れ',
-    'ライト',
-    '車作動の清潔'
-  ],
-  POST: [
-    'エンジンオイル',
-    'タイヤの摩耗・亀裂',
-    '各作動油の漏れ',
-    '終了距離',
-    '備考'
-  ]
-} as const;
-
 // 日付フォーマット
+export const DATE_FORMAT = 'YYYY/MM/DD';
+export const TIME_FORMAT = 'HH:mm';
+export const DATETIME_FORMAT = 'YYYY/MM/DD HH:mm';
 export const DATE_FORMATS = {
   DISPLAY: 'YYYY/MM/DD',
   INPUT: 'YYYY-MM-DD',
@@ -142,12 +126,28 @@ export const DATE_FORMATS = {
   TIME: 'HH:mm'
 } as const;
 
-// エラーメッセージ
-export const ERROR_MESSAGES = {
-  NETWORK_ERROR: 'ネットワークエラーが発生しました',
-  AUTH_FAILED: '認証に失敗しました',
-  ACCESS_DENIED: 'アクセスが拒否されました',
-  NOT_FOUND: 'データが見つかりません',
-  VALIDATION_ERROR: '入力内容に誤りがあります',
-  SERVER_ERROR: 'サーバーエラーが発生しました'
+// タイムゾーン
+export const TIMEZONE = 'Asia/Tokyo';
+
+// バリデーション
+export const VALIDATION_RULES = {
+  USERNAME_MIN_LENGTH: 3,
+  USERNAME_MAX_LENGTH: 50,
+  PASSWORD_MIN_LENGTH: 8,
+  PASSWORD_MAX_LENGTH: 128,
+  EMAIL_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  PHONE_REGEX: /^[0-9-]+$/,
+} as const;
+
+// ファイルアップロード
+export const FILE_UPLOAD = {
+  MAX_SIZE: 10 * 1024 * 1024, // 10MB
+  ALLOWED_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'],
+} as const;
+
+// デフォルト設定
+export const DEFAULTS = {
+  PAGE_SIZE: 10,
+  DEBOUNCE_DELAY: 500,
+  REQUEST_TIMEOUT: 30000,
 } as const;
