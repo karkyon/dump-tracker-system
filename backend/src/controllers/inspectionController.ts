@@ -254,8 +254,7 @@ class InspectionController {
 
       const itemData: InspectionItemCreateInput = {
         ...req.body,
-        createdBy: req.user.userId,
-        updatedBy: req.user.userId
+        createdBy: req.user.userId
       };
 
       const newItem = await this.inspectionService.createInspectionItem(
@@ -321,8 +320,7 @@ class InspectionController {
       }
 
       const updateData: InspectionItemUpdateInput = {
-        ...req.body,
-        updatedBy: req.user.userId
+        ...req.body
       };
 
       const updatedItem = await this.inspectionService.updateInspectionItem(
@@ -543,9 +541,7 @@ class InspectionController {
 
       const recordData: InspectionRecordCreateInput = {
         ...req.body,
-        inspectorId: req.user.userId,
-        createdBy: req.user.userId,
-        updatedBy: req.user.userId
+        inspectorId: req.user.userId
       };
 
       const newRecord = await this.inspectionService.createInspectionRecord(
@@ -601,8 +597,7 @@ class InspectionController {
 
       const recordId = Number(id);
       const updateData: InspectionRecordUpdateInput = {
-        ...req.body,
-        updatedBy: req.user.userId
+        ...req.body
       };
 
       const updatedRecord = await this.inspectionService.updateInspectionRecord(
