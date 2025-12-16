@@ -236,25 +236,25 @@ router.get(
  *             required:
  *               - name
  *               - inspectionType
- *               - category
  *             properties:
  *               name:
  *                 type: string
  *                 description: 点検項目名
- *                 example: "エンジンオイル量"
+ *                 example: "ウォッシャー液残量"
  *               description:
  *                 type: string
  *                 description: 項目説明
- *                 example: "エンジンオイルレベルゲージで適正範囲内か確認"
+ *                 example: "ウォッシャー液残量が十分か確認"
  *               inspectionType:
  *                 type: string
  *                 enum: [PRE_TRIP, POST_TRIP, DAILY, WEEKLY, MONTHLY]
  *                 description: 点検種別
  *                 example: "PRE_TRIP"
- *               inputType:                # ✅ 追加
+ *               inputType:
  *                 type: string
  *                 enum: [CHECKBOX, TEXT, NUMBER, SELECT, DATE, PHOTO, SIGNATURE]
  *                 description: 入力タイプ
+ *                 default: "CHECKBOX"
  *                 example: "CHECKBOX"
  *               category:
  *                 type: string
@@ -263,26 +263,57 @@ router.get(
  *               displayOrder:
  *                 type: integer
  *                 description: 表示順序
+ *                 default: 0
  *                 example: 1
  *               isRequired:
  *                 type: boolean
  *                 description: 必須項目か
+ *                 default: true
  *                 example: true
  *               isActive:
  *                 type: boolean
  *                 description: 有効フラグ
+ *                 default: true
  *                 example: true
- *               helpText:                 # ✅ 追加
+ *               helpText:
  *                 type: string
  *                 description: ヘルプテキスト
- *                 example: "オイルゲージで適正範囲を確認"
- *               defaultValue:              # ✅ expectedValue の代わり
+ *                 example: "ウォッシャー液残量が十分か確認"
+ *               defaultValue:
  *                 type: string
  *                 description: デフォルト値
  *                 example: "適正範囲内"
- *               validationRules:           # ✅ 追加（JSONフィールド）
+ *               validationRules:
  *                 type: object
  *                 description: バリデーションルール（JSON）
+ *                 example: { "min": 0, "max": 100 }
+ *           examples:
+ *             basic:
+ *               summary: 基本的な点検項目
+ *               value:
+ *                 name: "ウォッシャー液残量"
+ *                 description: "ウォッシャー液残量が十分か確認"
+ *                 inspectionType: "PRE_TRIP"
+ *                 inputType: "CHECKBOX"
+ *                 category: "ENGINE"
+ *                 displayOrder: 1
+ *                 isRequired: true
+ *                 isActive: true
+ *                 helpText: "ウォッシャー液残量が十分か確認"
+ *             withValidation:
+ *               summary: バリデーション付き
+ *               value:
+ *                 name: "タイヤ空気圧"
+ *                 description: "タイヤ空気圧を測定"
+ *                 inspectionType: "PRE_TRIP"
+ *                 inputType: "NUMBER"
+ *                 category: "TIRE"
+ *                 displayOrder: 2
+ *                 isRequired: true
+ *                 isActive: true
+ *                 helpText: "規定空気圧: 2.0-2.5 kPa"
+ *                 defaultValue: "2.2"
+ *                 validationRules: { "min": 2.0, "max": 2.5, "unit": "kPa" }
  *     responses:
  *       201:
  *         description: 点検項目作成成功
@@ -292,6 +323,8 @@ router.get(
  *         description: 認証エラー
  *       403:
  *         description: 権限エラー（マネージャー以上が必要）
+ *       409:
+ *         description: 重複エラー（同名項目が既に存在）
  */
 router.post(
   '/',
@@ -336,32 +369,62 @@ router.post(
  *             properties:
  *               name:
  *                 type: string
+ *                 description: 点検項目名
  *               description:
  *                 type: string
- *               inputType:                # ✅ 追加
+ *                 description: 項目説明
+ *               inputType:
  *                 type: string
  *                 enum: [CHECKBOX, TEXT, NUMBER, SELECT, DATE, PHOTO, SIGNATURE]
+ *                 description: 入力タイプ
  *               displayOrder:
  *                 type: integer
+ *                 description: 表示順序
  *               isRequired:
  *                 type: boolean
+ *                 description: 必須項目か
  *               isActive:
  *                 type: boolean
- *               helpText:                 # ✅ 追加
+ *                 description: 有効フラグ
+ *               helpText:
  *                 type: string
- *               defaultValue:              # ✅ expectedValue の代わり
+ *                 description: ヘルプテキスト
+ *               defaultValue:
  *                 type: string
- *               validationRules:           # ✅ 追加
+ *                 description: デフォルト値
+ *               validationRules:
  *                 type: object
+ *                 description: バリデーションルール（JSON）
+ *           examples:
+ *             minimal:
+ *               summary: 最小限の更新
+ *               value:
+ *                 name: "エンジンオイル量（更新）"
+ *             full:
+ *               summary: 完全な更新
+ *               value:
+ *                 name: "エンジンオイル量"
+ *                 description: "エンジンオイルの量を確認"
+ *                 inputType: "CHECKBOX"
+ *                 displayOrder: 1
+ *                 isRequired: true
+ *                 isActive: true
+ *                 helpText: "オイルゲージで確認"
+ *                 defaultValue: "適正範囲内"
+ *                 validationRules: {}
  *     responses:
  *       200:
  *         description: 点検項目更新成功
+ *       400:
+ *         description: バリデーションエラー
  *       404:
  *         description: 点検項目が見つかりません
  *       401:
  *         description: 認証エラー
  *       403:
  *         description: 権限エラー
+ *       409:
+ *         description: 重複エラー
  */
 router.put(
   '/:id',
