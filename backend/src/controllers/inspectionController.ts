@@ -193,7 +193,15 @@ class InspectionController {
         userId: req.user?.userId
       });
 
-      if (!id || isNaN(Number(id))) {
+      // ✅ UUID形式のバリデーション（修正）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
+        logger.warn('❌ [Controller] 無効なUUID形式', {
+          id,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
         return sendValidationError(res, [
           { field: 'id', message: '有効な点検項目IDを指定してください', value: id }
         ], 'バリデーションエラー');
@@ -475,7 +483,15 @@ class InspectionController {
     try {
       const { id } = req.params;
 
-      if (!id || isNaN(Number(id))) {
+      // ✅ UUID形式のバリデーション（修正）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
+        logger.warn('❌ [Controller] 無効なUUID形式', {
+          id,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
         return sendValidationError(res, [
           { field: 'id', message: '有効な点検記録IDを指定してください', value: id }
         ], 'バリデーションエラー');
@@ -565,7 +581,15 @@ class InspectionController {
     try {
       const { id } = req.params;
 
-      if (!id || isNaN(Number(id))) {
+      // ✅ UUID形式のバリデーション（修正）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
+        logger.warn('❌ [Controller] 無効なUUID形式', {
+          id,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
         return sendValidationError(res, [
           { field: 'id', message: '有効な点検記録IDを指定してください', value: id }
         ], 'バリデーションエラー');
@@ -618,7 +642,15 @@ class InspectionController {
     try {
       const { id } = req.params;
 
-      if (!id || isNaN(Number(id))) {
+      // ✅ UUID形式のバリデーション（修正）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
+        logger.warn('❌ [Controller] 無効なUUID形式', {
+          id,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
         return sendValidationError(res, [
           { field: 'id', message: '有効な点検記録IDを指定してください', value: id }
         ], 'バリデーションエラー');
@@ -660,6 +692,33 @@ class InspectionController {
     try {
       const { startDate, endDate, vehicleId, inspectorId } = req.query;
 
+      // ✅ UUID形式のバリデーション（追加）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      // vehicleId のバリデーション
+      if (vehicleId && (typeof vehicleId !== 'string' || !UUID_V4_REGEX.test(vehicleId.trim()))) {
+        logger.warn('❌ [Controller] 無効なvehicleId UUID形式', {
+          vehicleId,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
+        return sendValidationError(res, [
+          { field: 'vehicleId', message: '有効な車両IDを指定してください', value: vehicleId }
+        ], 'バリデーションエラー');
+      }
+
+      // inspectorId のバリデーション
+      if (inspectorId && (typeof inspectorId !== 'string' || !UUID_V4_REGEX.test(inspectorId.trim()))) {
+        logger.warn('❌ [Controller] 無効なinspectorId UUID形式', {
+          inspectorId,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
+        return sendValidationError(res, [
+          { field: 'inspectorId', message: '有効な点検者IDを指定してください', value: inspectorId }
+        ], 'バリデーションエラー');
+      }
+
       const statistics = {
         totalInspections: 0,
         completedInspections: 0,
@@ -689,9 +748,17 @@ class InspectionController {
     try {
       const { vehicleId } = req.params;
 
-      if (!vehicleId) {
+      // ✅ UUID形式のバリデーション（追加）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      if (!vehicleId || typeof vehicleId !== 'string' || !UUID_V4_REGEX.test(vehicleId.trim())) {
+        logger.warn('❌ [Controller] 無効なUUID形式', {
+          vehicleId,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
         return sendValidationError(res, [
-          { field: 'vehicleId', message: '車両IDを指定してください', value: vehicleId }
+          { field: 'vehicleId', message: '有効な車両IDを指定してください', value: vehicleId }
         ], 'バリデーションエラー');
       }
 
