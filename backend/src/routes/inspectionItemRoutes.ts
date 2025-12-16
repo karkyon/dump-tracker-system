@@ -234,11 +234,11 @@ router.get(
  *           schema:
  *             type: object
  *             required:
- *               - itemName
+ *               - name
  *               - inspectionType
  *               - category
  *             properties:
- *               itemName:
+ *               name:
  *                 type: string
  *                 description: 点検項目名
  *                 example: "エンジンオイル量"
@@ -251,14 +251,15 @@ router.get(
  *                 enum: [PRE_TRIP, POST_TRIP, DAILY, WEEKLY, MONTHLY]
  *                 description: 点検種別
  *                 example: "PRE_TRIP"
+ *               inputType:                # ✅ 追加
+ *                 type: string
+ *                 enum: [CHECKBOX, TEXT, NUMBER, SELECT, DATE, PHOTO, SIGNATURE]
+ *                 description: 入力タイプ
+ *                 example: "CHECKBOX"
  *               category:
  *                 type: string
  *                 description: カテゴリ
  *                 example: "ENGINE"
- *               expectedValue:
- *                 type: string
- *                 description: 期待値
- *                 example: "適正範囲内"
  *               displayOrder:
  *                 type: integer
  *                 description: 表示順序
@@ -271,6 +272,17 @@ router.get(
  *                 type: boolean
  *                 description: 有効フラグ
  *                 example: true
+ *               helpText:                 # ✅ 追加
+ *                 type: string
+ *                 description: ヘルプテキスト
+ *                 example: "オイルゲージで適正範囲を確認"
+ *               defaultValue:              # ✅ expectedValue の代わり
+ *                 type: string
+ *                 description: デフォルト値
+ *                 example: "適正範囲内"
+ *               validationRules:           # ✅ 追加（JSONフィールド）
+ *                 type: object
+ *                 description: バリデーションルール（JSON）
  *     responses:
  *       201:
  *         description: 点検項目作成成功
@@ -322,18 +334,25 @@ router.post(
  *           schema:
  *             type: object
  *             properties:
- *               itemName:
+ *               name:
  *                 type: string
  *               description:
  *                 type: string
- *               expectedValue:
+ *               inputType:                # ✅ 追加
  *                 type: string
+ *                 enum: [CHECKBOX, TEXT, NUMBER, SELECT, DATE, PHOTO, SIGNATURE]
  *               displayOrder:
  *                 type: integer
  *               isRequired:
  *                 type: boolean
  *               isActive:
  *                 type: boolean
+ *               helpText:                 # ✅ 追加
+ *                 type: string
+ *               defaultValue:              # ✅ expectedValue の代わり
+ *                 type: string
+ *               validationRules:           # ✅ 追加
+ *                 type: object
  *     responses:
  *       200:
  *         description: 点検項目更新成功
