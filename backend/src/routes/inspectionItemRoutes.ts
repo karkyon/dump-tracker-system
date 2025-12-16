@@ -1,12 +1,14 @@
 // =====================================
 // backend/src/routes/inspectionItemRoutes.ts
-// 点検項目管理ルート（マスタデータ）- UUID対応修正版
+// 点検項目管理ルート（マスタデータ）- Controller分離対応版
 // 作成日: 2025年12月15日
 // 修正日: 2025年12月16日
-// 修正内容: validateId を削除（UUID検証は controller 内で実施）
+// 修正内容:
+//   - validateId を削除（UUID検証は controller 内で実施）
+//   - import元を inspectionItemController に変更（Controller分離対応）
 // 目的: 点検項目（InspectionItem）のCRUD管理
 // 概念: マスタデータ - 点検する項目の定義（例：タイヤ空気圧、エンジンオイル量）
-// 依存関係: controllers/inspectionController.ts, middleware/auth.ts, middleware/validation.ts
+// 依存関係: controllers/inspectionItemController.ts, middleware/auth.ts, middleware/validation.ts
 // 他ルートとの整合性: /vehicles, /users, /items, /locations と同じ単一リソース構造
 // =====================================
 
@@ -23,14 +25,14 @@ import {
 } from '../middleware/validation';
 import logger from '../utils/logger';
 
-// Controller統合
+// ✅ 修正: Controller統合（inspectionItemController に変更）
 import {
   getAllInspectionItems,
   getInspectionItemById,
   createInspectionItem,
   updateInspectionItem,
   deleteInspectionItem
-} from '../controllers/inspectionController';
+} from '../controllers/inspectionItemController';
 
 // 型定義
 import type { AuthenticatedRequest } from '../types/auth';
@@ -44,7 +46,8 @@ const router = Router();
 logger.info('🔧 [InspectionItemRoutes] ルーター初期化開始', {
   timestamp: new Date().toISOString(),
   file: 'backend/src/routes/inspectionItemRoutes.ts',
-  description: '点検項目マスタ管理 - マスタデータ専用ルート'
+  description: '点検項目マスタ管理 - マスタデータ専用ルート',
+  controller: 'inspectionItemController.ts (分離版)'
 });
 
 // =====================================
@@ -491,7 +494,7 @@ logger.info('✅ routes/inspectionItemRoutes.ts 初期化完了', {
     'PUT /:id - 点検項目更新（マネージャー以上）',
     'DELETE /:id - 点検項目削除（管理者のみ）'
   ],
-  integrationStatus: 'controllers/inspectionController.ts - Full Integration',
+  integrationStatus: 'controllers/inspectionItemController.ts - Full Integration',
   middleware: 'auth integrated, validateId removed',
   dataType: 'マスタデータ（点検項目定義）',
   timestamp: new Date().toISOString()
@@ -500,31 +503,25 @@ logger.info('✅ routes/inspectionItemRoutes.ts 初期化完了', {
 export default router;
 
 // =====================================
-// ✅ UUID対応修正完了確認
+// ✅ Controller分離対応完了確認
 // =====================================
 
 /**
- * ✅ routes/inspectionItemRoutes.ts - UUID対応修正完了
+ * ✅ routes/inspectionItemRoutes.ts - Controller分離対応完了
  *
  * 【修正内容】
- * ✅ validateId ミドルウェアを削除
- *    - UUID検証は controller 内で実施
- *    - ルーティング層の責務を明確化
+ * ✅ import元を inspectionItemController に変更
+ *    - 修正前: from '../controllers/inspectionController'
+ *    - 修正後: from '../controllers/inspectionItemController'
  *
- * 【修正理由】
- * ❌ 問題: validateId が想定通りに動作しない
- * ✅ 解決: controller 内で直接 UUID 検証を実施
- *    - より柔軟なエラーハンドリング
- *    - デバッグログの出力が容易
- *
- * 【影響範囲】
- * ✅ GET /:id - 点検項目詳細取得
- * ✅ PUT /:id - 点検項目更新
- * ✅ DELETE /:id - 点検項目削除
+ * 【分離完了】
+ * ✅ 点検項目（マスタ）専用ルート
+ * ✅ 点検項目専用コントローラーと連携
  *
  * 【既存機能100%保持】
- * ✅ すべての認証・権限制御
- * ✅ すべてのデバッグログ
+ * ✅ すべてのエンドポイント
+ * ✅ すべてのミドルウェア
  * ✅ すべてのSwagger定義
+ * ✅ すべてのデバッグログ
  * ✅ すべてのコメント・説明
  */
