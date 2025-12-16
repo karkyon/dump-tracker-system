@@ -3,6 +3,9 @@
 // ✅ 専用Store（useInspectionItemStore）を使用
 // ✅ すべての標準機能を実装
 // ✅ 独自機能: 順序変更（上下移動ボタン）
+// 🐛 修正1: ソート機能実装
+// 🐛 修正2: 編集モーダルに順番項目追加
+// 🐛 修正3: バックエンドフィールド名修正 (type→inputType, 大文字変換)
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Plus, ChevronUp, ChevronDown } from 'lucide-react';
@@ -45,12 +48,17 @@ const InspectionItemManagement: React.FC = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
+  // 🐛 修正1: ソート状態の追加
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
   // フォームデータ
   const [formData, setFormData] = useState({
     name: '',
-    type: 'checkbox' as 'checkbox' | 'input',
+    inputType: 'CHECKBOX' as 'CHECKBOX' | 'INPUT',  // 🐛 修正3: type → inputType, 大文字
     category: 'pre' as 'pre' | 'post',
     isRequired: true,
+    order: 0,  // 🐛 修正2: 順番フィールド追加
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -92,18 +100,19 @@ const InspectionItemManagement: React.FC = () => {
    * ✅ 修正3: フィルター変更時のみデータ再取得
    * useRefで前回のフィルターをJSON文字列として記憶し、変更時のみfetchItemsを実行
    * UserManagementパターン採用
+   * 🐛 修正: 初期値を設定して初回の不要な実行を防ぐ
    */
-  const prevFiltersRef = useRef<string>('');
+  const prevFiltersRef = useRef<string>(JSON.stringify(filters));  // 🐛 修正: 初期値を設定
   useEffect(() => {
     const filtersString = JSON.stringify(filters);
-    if (prevFiltersRef.current && prevFiltersRef.current !== filtersString) {
+    if (prevFiltersRef.current !== filtersString) {
+      prevFiltersRef.current = filtersString;  // 🐛 修正: fetchItems前に更新
       console.log('[InspectionItemManagement] フィルター変更検知:', {
         prev: prevFiltersRef.current,
         current: filtersString
       });
       fetchItems();
     }
-    prevFiltersRef.current = filtersString;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]); // ← fetchItemsは依存配列に入れない
 
@@ -129,14 +138,49 @@ const InspectionItemManagement: React.FC = () => {
   }, [error, clearError]);
 
   // ==========================================
-  // データフィルタリング
+  // データフィルタリング & ソート
   // ==========================================
   
   /**
    * カテゴリ別にアイテムをフィルタリング
    * Store内のitemsから現在のタブに該当するものだけを抽出
    */
-  const filteredItems = items.filter(item => item.category === activeTab);
+  let filteredItems = items.filter(item => item.category === activeTab);
+
+  /**
+   * 🐛 修正1: ソート機能の実装
+   * sortKeyが設定されている場合、指定されたキーでソートを実行
+   */
+  if (sortKey) {
+    filteredItems = [...filteredItems].sort((a, b) => {
+      let aValue: any = a[sortKey as keyof InspectionItem];
+      let bValue: any = b[sortKey as keyof InspectionItem];
+
+      // 文字列の場合は小文字に変換して比較
+      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  /**
+   * 🐛 修正1: ソートハンドラー
+   * 列ヘッダーをクリックした時にソート順を切り替える
+   */
+  const handleSort = (key: string) => {
+    console.log('[InspectionItemManagement] ソート:', key);
+    if (sortKey === key) {
+      // 同じキーをクリックした場合は昇順/降順を切り替え
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // 新しいキーの場合は昇順に設定
+      setSortKey(key);
+      setSortOrder('asc');
+    }
+  };
 
   // ==========================================
   // テーブル定義
@@ -179,15 +223,16 @@ const InspectionItemManagement: React.FC = () => {
       key: 'name',
       header: '項目名',
       sortable: true,
+      onSort: () => handleSort('name'),  // 🐛 修正1: ソートハンドラー追加
     },
     {
-      key: 'type',
+      key: 'inputType',  // 🐛 修正3: type → inputType
       header: '入力タイプ',
       render: (value: string) => (
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          value === 'checkbox' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+          value === 'CHECKBOX' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
         }`}>
-          {value === 'checkbox' ? 'チェックボックス' : '入力フィールド'}
+          {value === 'CHECKBOX' ? 'チェックボックス' : '入力フィールド'}
         </span>
       ),
     },
@@ -228,6 +273,11 @@ const InspectionItemManagement: React.FC = () => {
       errors.name = '項目名は必須です';
     }
 
+    // 🐛 修正2: order のバリデーション追加
+    if (formData.order < 0) {
+      errors.order = '順番は0以上である必要があります';
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -238,9 +288,10 @@ const InspectionItemManagement: React.FC = () => {
   const resetForm = () => {
     setFormData({
       name: '',
-      type: 'checkbox',
+      inputType: 'CHECKBOX',  // 🐛 修正3: type → inputType, 大文字
       category: activeTab,
       isRequired: true,
+      order: 0,  // 🐛 修正2: order追加
     });
     setFormErrors({});
   };
@@ -329,7 +380,18 @@ const InspectionItemManagement: React.FC = () => {
   const handleCreate = () => {
     console.log('[InspectionItemManagement] 新規作成モーダルを開く');
     resetForm();
-    setFormData(prev => ({ ...prev, category: activeTab }));
+    
+    // 🐛 修正2: 新規作成時は最大order+1を設定
+    const orderValues = filteredItems
+      .map(item => item.order)
+      .filter((order): order is number => order !== undefined);
+    const maxOrder = orderValues.length > 0 ? Math.max(...orderValues) : 0;
+    
+    setFormData(prev => ({ 
+      ...prev, 
+      category: activeTab,
+      order: maxOrder + 1  // 🐛 修正2: 自動的に最後尾に設定
+    }));
     setShowCreateModal(true);
   };
 
@@ -342,9 +404,10 @@ const InspectionItemManagement: React.FC = () => {
     // フォームデータを設定（undefined のデフォルト値を設定）
     setFormData({
       name: item.name,
-      type: (item.type as 'checkbox' | 'input') || 'checkbox',
+      inputType: (item.inputType || item.type || 'CHECKBOX') as 'CHECKBOX' | 'INPUT',  // 🐛 修正3
       category: item.category || 'pre',
       isRequired: item.isRequired ?? true,
+      order: item.order ?? 0,  // 🐛 修正2: order追加
     });
     setSelectedItemId(item.id);
     setFormErrors({});
@@ -371,22 +434,13 @@ const InspectionItemManagement: React.FC = () => {
       return;
     }
 
-    // undefined を除外して最大値を計算
-    const orderValues = filteredItems
-      .map(item => item.order)
-      .filter((order): order is number => order !== undefined);
-    const maxOrder = orderValues.length > 0 ? Math.max(...orderValues) : 0;
-
-    console.log('[InspectionItemManagement] 新規作成データ:', {
-      ...formData,
-      order: maxOrder + 1,
-    });
+    console.log('[InspectionItemManagement] 新規作成データ:', formData);
 
     const success = await createItem({
       name: formData.name,
-      type: formData.type,
+      inputType: formData.inputType,  // 🐛 修正3: type → inputType
       category: formData.category,
-      order: maxOrder + 1,
+      order: formData.order,
       isRequired: formData.isRequired,
     });
 
@@ -415,8 +469,9 @@ const InspectionItemManagement: React.FC = () => {
 
     const success = await updateItem(selectedItemId, {
       name: formData.name,
-      type: formData.type,
+      inputType: formData.inputType,  // 🐛 修正3: type → inputType
       category: formData.category,
+      order: formData.order,  // 🐛 修正2: order追加
       isRequired: formData.isRequired,
     });
 
@@ -550,14 +605,15 @@ const InspectionItemManagement: React.FC = () => {
             required
           />
           
+          {/* 🐛 修正3: inputType に変更、大文字の値 */}
           <Select
             label="入力タイプ"
             options={[
-              { value: 'checkbox', label: 'チェックボックス' },
-              { value: 'input', label: '入力フィールド' },
+              { value: 'CHECKBOX', label: 'チェックボックス' },
+              { value: 'INPUT', label: '入力フィールド' },
             ]}
-            value={formData.type}
-            onChange={(e) => setFormData({ ...formData, type: e.target.value as 'checkbox' | 'input' })}
+            value={formData.inputType}
+            onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'CHECKBOX' | 'INPUT' })}
             required
           />
           
@@ -571,6 +627,19 @@ const InspectionItemManagement: React.FC = () => {
             onChange={(e) => setFormData({ ...formData, category: e.target.value as 'pre' | 'post' })}
             required
           />
+          
+          {/* 🐛 修正2: 順番入力フィールド追加 */}
+          <Input
+            label="順番"
+            type="number"
+            value={formData.order.toString()}
+            onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })}
+            error={formErrors.order}
+            min="0"
+            required
+            
+          />
+          <p className="mt-1 text-sm text-gray-500">表示順序を指定します（0以上の整数）</p>
           
           <div className="flex items-center">
             <input
@@ -590,6 +659,8 @@ const InspectionItemManagement: React.FC = () => {
 
       {/* ==========================================
           編集モーダル
+          🐛 修正2: 順番入力フィールド追加
+          🐛 修正3: inputType に変更
           ========================================== */}
       <FormModal
         isOpen={showEditModal}
@@ -613,14 +684,15 @@ const InspectionItemManagement: React.FC = () => {
             required
           />
           
+          {/* 🐛 修正3: inputType に変更、大文字の値 */}
           <Select
             label="入力タイプ"
             options={[
-              { value: 'checkbox', label: 'チェックボックス' },
-              { value: 'input', label: '入力フィールド' },
+              { value: 'CHECKBOX', label: 'チェックボックス' },
+              { value: 'INPUT', label: '入力フィールド' },
             ]}
-            value={formData.type}
-            onChange={(e) => setFormData({ ...formData, type: e.target.value as 'checkbox' | 'input' })}
+            value={formData.inputType}
+            onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'CHECKBOX' | 'INPUT' })}
             required
           />
           
@@ -634,6 +706,19 @@ const InspectionItemManagement: React.FC = () => {
             onChange={(e) => setFormData({ ...formData, category: e.target.value as 'pre' | 'post' })}
             required
           />
+          
+          {/* 🐛 修正2: 順番入力フィールド追加 */}
+          <Input
+            label="順番"
+            type="number"
+            value={formData.order.toString()}
+            onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })}
+            error={formErrors.order}
+            min="0"
+            required
+            
+          />
+          <p className="mt-1 text-sm text-gray-500">表示順序を指定します（0以上の整数）</p>
           
           <div className="flex items-center">
             <input

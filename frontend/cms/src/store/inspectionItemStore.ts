@@ -2,6 +2,7 @@
 // 🎯 Vehicle/UserStoreと完全に統一されたパターン
 // ✅ 独自機能: 順序変更（updateOrder）
 // ✅ すべての標準機能を実装
+// 🐛 修正: type → inputType, 大文字変換
 
 import { create } from 'zustand';
 import { InspectionItem, FilterOptions } from '../types';
@@ -71,7 +72,7 @@ const normalizeInspectionItem = (item: any): InspectionItem => {
     // order のデフォルト値を設定
     order: item.order ?? 0,
     isRequired: item.isRequired ?? true,
-    type: item.type || 'checkbox',
+    inputType: item.inputType || item.type || 'CHECKBOX',  // 🐛 修正: type対応
     category: item.category || 'pre',
   };
 };
@@ -82,11 +83,62 @@ const normalizeInspectionItem = (item: any): InspectionItem => {
  * 
  * @param item - フロントエンドの点検項目データ
  * @returns バックエンドAPI用のデータ
+ * 
+ * 🐛 修正内容:
+ * - type → inputType への変換
+ * - 値を大文字に変換: 'checkbox' → 'CHECKBOX', 'input' → 'INPUT'
+ * - order → displayOrder への変換（バックエンドのフィールド名に合わせる）
  */
 const denormalizeInspectionItem = (item: Partial<InspectionItem>): any => {
-  const backendData: any = { ...item };
+  const backendData: any = {};
   
-  // 現時点では変換不要だが、拡張性のために関数を用意
+  // name
+  if (item.name !== undefined) {
+    backendData.name = item.name;
+  }
+  
+  // description
+  if (item.description !== undefined) {
+    backendData.description = item.description;
+  }
+  
+  // 🐛 修正: inputType (大文字変換)
+  if (item.inputType !== undefined) {
+    backendData.inputType = typeof item.inputType === 'string' 
+      ? item.inputType.toUpperCase() 
+      : item.inputType;
+  } else if (item.type !== undefined) {
+    // 🐛 修正: type → inputType への変換（互換性のため）
+    backendData.inputType = typeof item.type === 'string' 
+      ? item.type.toUpperCase() 
+      : item.type;
+  }
+  
+  // category
+  if (item.category !== undefined) {
+    backendData.category = item.category;
+  }
+  
+  // 🐛 修正: order → displayOrder への変換
+  if (item.order !== undefined) {
+    backendData.displayOrder = item.order;
+  }
+  
+  // isRequired
+  if (item.isRequired !== undefined) {
+    backendData.isRequired = item.isRequired;
+  }
+  
+  // isActive
+  if (item.isActive !== undefined) {
+    backendData.isActive = item.isActive;
+  }
+  
+  console.log('[denormalizeInspectionItem] 変換結果:', {
+    input: item,
+    output: backendData
+  });
+  
   return backendData;
 };
 

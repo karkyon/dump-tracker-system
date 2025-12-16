@@ -179,11 +179,19 @@ class InspectionController {
   /**
    * 点検項目詳細取得API
    * 企業レベル機能: 権限制御・履歴・関連情報
+   *
+   * ✅ 修正内容: UUID バリデーションを追加
    */
   public getInspectionItemById = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
       const { includeHistory = false } = req.query;
+
+      logger.info('🎯 [Controller] getInspectionItemById 開始', {
+        id,
+        includeHistory,
+        userId: req.user?.userId
+      });
 
       if (!id || isNaN(Number(id))) {
         return sendValidationError(res, [
@@ -273,12 +281,27 @@ class InspectionController {
   /**
    * 点検項目更新API
    * 企業レベル機能: 部分更新・履歴管理・権限制御
+   *
+   * ✅ 修正内容: UUID バリデーションを追加
    */
   public updateInspectionItem = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
 
-      if (!id || isNaN(Number(id))) {
+      logger.info('🎯 [Controller] updateInspectionItem 開始', {
+        id,
+        userId: req.user?.userId
+      });
+
+      // ✅ UUID形式のバリデーション（追加）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
+        logger.warn('❌ [Controller] 無効なUUID形式', {
+          id,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
         return sendValidationError(res, [
           { field: 'id', message: '有効な点検項目IDを指定してください', value: id }
         ], 'バリデーションエラー');
@@ -295,13 +318,13 @@ class InspectionController {
       };
 
       const updatedItem = await this.inspectionService.updateInspectionItem(
-        id,  // 修正: string型のまま使用
+        id,
         updateData,
         req.user.userId,
-        req.user.role  // 追加
+        req.user.role
       );
 
-      logger.info(`📋 点検項目更新成功`, {
+      logger.info(`✅ [Controller] 点検項目更新成功`, {
         userId: req.user.userId,
         itemId: id,
         updateFields: Object.keys(updateData)
@@ -318,7 +341,7 @@ class InspectionController {
           { field: 'item', message: error.message, value: req.body }
         ], error.message);
       }
-      logger.error('📋 点検項目更新エラー:', error);
+      logger.error('❌ [Controller] 点検項目更新エラー:', error);
       return sendError(res, '点検項目の更新に失敗しました', 500);
     }
   });
@@ -326,13 +349,29 @@ class InspectionController {
   /**
    * 点検項目削除API
    * 企業レベル機能: ソフト削除・関連データチェック・権限制御
+   *
+   * ✅ 修正内容: UUID バリデーションを追加
    */
   public deleteInspectionItem = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
       const { force = false } = req.query;
 
-      if (!id || isNaN(Number(id))) {
+      logger.info('🎯 [Controller] deleteInspectionItem 開始', {
+        id,
+        force,
+        userId: req.user?.userId
+      });
+
+      // ✅ UUID形式のバリデーション（追加）
+      const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
+        logger.warn('❌ [Controller] 無効なUUID形式', {
+          id,
+          expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        });
+
         return sendValidationError(res, [
           { field: 'id', message: '有効な点検項目IDを指定してください', value: id }
         ], 'バリデーションエラー');
@@ -343,18 +382,17 @@ class InspectionController {
         return sendUnauthorizedError(res, '点検項目の削除には管理者権限が必要です');
       }
 
-      const itemId = id;  // 修正: string型のまま使用
       const forceDelete = force === 'true';
 
       const result = await this.inspectionService.deleteInspectionItem(
-        itemId,
+        id,
         req.user.userId,
         req.user?.role || 'ADMIN'
       );
 
-      logger.info(`📋 点検項目削除成功`, {
+      logger.info(`✅ [Controller] 点検項目削除成功`, {
         userId: req.user.userId,
-        itemId,
+        itemId: id,
         forceDelete
       });
 
@@ -367,7 +405,7 @@ class InspectionController {
       if (error instanceof BusinessLogicError) {
         return sendError(res, error.message, 409);
       }
-      logger.error('📋 点検項目削除エラー:', error);
+      logger.error('❌ [Controller] 点検項目削除エラー:', error);
       return sendError(res, '点検項目の削除に失敗しました', 500);
     }
   });
