@@ -1,11 +1,13 @@
-// frontend/cms/src/pages/InspectionItemManagement.tsx - 完全書き換え版
+// frontend/cms/src/pages/InspectionItemManagement.tsx - 完全修正版
 // 🎯 Vehicle/UserManagementと完全に統一されたパターン
 // ✅ 専用Store（useInspectionItemStore）を使用
 // ✅ すべての標準機能を実装
 // ✅ 独自機能: 順序変更（上下移動ボタン）
 // 🐛 修正1: ソート機能実装
 // 🐛 修正2: 編集モーダルに順番項目追加
-// 🐛 修正3: バックエンドフィールド名修正 (type→inputType, 大文字変換)
+// 🐛 修正3: バックエンドフィールド名修正 (type→inputType, INPUT→TEXT)
+// 🐛 修正4: 無限ループ修正 (useRefパターン使用)
+// 🐛 修正5: 順序更新を個別update APIで実装
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Plus, ChevronUp, ChevronDown } from 'lucide-react';
@@ -24,7 +26,6 @@ const InspectionItemManagement: React.FC = () => {
   // ==========================================
   const {
     items,              // ← 統一命名（inspectionItems → items）
-    // selectedItem,       // ← Storeで管理
     isLoading,          // ← 統一命名（inspectionLoading → isLoading）
     error,              // ← 統一命名（inspectionError → error）
     filters,            // ← 追加
@@ -33,103 +34,52 @@ const InspectionItemManagement: React.FC = () => {
     createItem,         // ← 統一命名（createInspectionItem → createItem）
     updateItem,         // ← 統一命名（updateInspectionItem → updateItem）
     deleteItem,         // ← 統一命名（deleteInspectionItem → deleteItem）
-    updateOrder,        // ← 統一命名（updateInspectionOrder → updateOrder）
     setFilters,         // ← 追加（Vehicle/UserStoreと統一）
+    setPage,            // ← 追加（ページネーション）
     clearError,         // ← 統一命名（clearErrors → clearError）
-    // clearSelectedItem,  // ← 追加（Storeで管理）
   } = useInspectionItemStore();
 
   // ==========================================
-  // ローカルステート
+  // ローカル状態（UIのみ）
   // ==========================================
-  const [activeTab, setActiveTab] = useState<'pre' | 'post'>('pre');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-
-  // 🐛 修正1: ソート状態の追加
-  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'pre' | 'post'>('pre');
+  
+  // 🐛 修正1: ソート状態
+  const [sortKey, setSortKey] = useState<string>('order');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // フォームデータ
-  const [formData, setFormData] = useState({
+  // フォーム状態
+  const [formData, setFormData] = useState<{
+    name: string;
+    inputType: 'CHECKBOX' | 'TEXT';  // 🐛 修正3: INPUT → TEXT
+    category: 'pre' | 'post';
+    order: number;  // 🐛 修正2: 追加
+    isRequired: boolean;
+  }>({
     name: '',
-    inputType: 'CHECKBOX' as 'CHECKBOX' | 'INPUT',  // 🐛 修正3: type → inputType, 大文字
-    category: 'pre' as 'pre' | 'post',
+    inputType: 'CHECKBOX',
+    category: 'pre',
+    order: 0,  // 🐛 修正2: デフォルト値
     isRequired: true,
-    order: 0,  // 🐛 修正2: 順番フィールド追加
   });
 
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [formErrors, setFormErrors] = useState<{
+    name?: string;
+    order?: string;  // 🐛 修正2: 追加
+  }>({});
+
+  // 🐛 修正4: useRefで前回の値を追跡（無限ループ防止）
+  const prevFiltersRef = useRef<string>('');
+  const prevPageRef = useRef<number>(1);
+  const isFirstMountRef = useRef(true);
 
   // ==========================================
-  // 初期化とデータ取得（✅ 無限ループ解消版）
+  // エラー処理（統一パターン）
   // ==========================================
-  
-  /**
-   * ✅ 修正1: ページ初期化時のみデータを取得
-   * 依存配列を空にすることで、初回マウント時のみ実行
-   * UserManagementパターン採用
-   */
-  useEffect(() => {
-    console.log('[InspectionItemManagement] 初期データ取得');
-    fetchItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ← 空の依存配列 = 初回マウント時のみ
-
-  /**
-   * ✅ 修正2: ページ変更時のみデータ再取得
-   * useRefで前回のページ番号を記憶し、変更時のみfetchItemsを実行
-   * UserManagementパターン採用
-   */
-  const prevPageRef = useRef(pagination.page);
-  useEffect(() => {
-    if (prevPageRef.current !== pagination.page) {
-      console.log('[InspectionItemManagement] ページ変更検知:', {
-        prev: prevPageRef.current,
-        current: pagination.page
-      });
-      prevPageRef.current = pagination.page;
-      fetchItems();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.page]); // ← fetchItemsは依存配列に入れない
-
-  /**
-   * ✅ 修正3: フィルター変更時のみデータ再取得
-   * useRefで前回のフィルターをJSON文字列として記憶し、変更時のみfetchItemsを実行
-   * UserManagementパターン採用
-   * 🐛 修正: 初期値を設定して初回の不要な実行を防ぐ
-   */
-  const prevFiltersRef = useRef<string>(JSON.stringify(filters));  // 🐛 修正: 初期値を設定
-  useEffect(() => {
-    const filtersString = JSON.stringify(filters);
-    if (prevFiltersRef.current !== filtersString) {
-      prevFiltersRef.current = filtersString;  // 🐛 修正: fetchItems前に更新
-      console.log('[InspectionItemManagement] フィルター変更検知:', {
-        prev: prevFiltersRef.current,
-        current: filtersString
-      });
-      fetchItems();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]); // ← fetchItemsは依存配列に入れない
-
-  /**
-   * ✅ 修正4: タブ変更時にフィルターを更新
-   * カテゴリフィルターをStoreに反映
-   * これによりuseEffect(修正3)が発火してデータが再取得される
-   */
-  useEffect(() => {
-    console.log('[InspectionItemManagement] タブ変更:', activeTab);
-    setFilters({ category: activeTab });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]); // ← setFiltersは依存配列に入れない
-
-  /**
-   * エラー処理（統一パターン）
-   */
   useEffect(() => {
     if (error) {
       toast.error(error);
@@ -138,33 +88,295 @@ const InspectionItemManagement: React.FC = () => {
   }, [error, clearError]);
 
   // ==========================================
-  // データフィルタリング & ソート
+  // データ取得（統一パターン + 無限ループ修正）
   // ==========================================
   
   /**
-   * カテゴリ別にアイテムをフィルタリング
-   * Store内のitemsから現在のタブに該当するものだけを抽出
+   * 初回マウント時のデータ取得
    */
-  let filteredItems = items.filter(item => item.category === activeTab);
+  useEffect(() => {
+    console.log('[InspectionItemManagement] 初期データ取得');
+    fetchItems();
+    isFirstMountRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // 空配列 = 初回マウント時のみ
 
   /**
-   * 🐛 修正1: ソート機能の実装
-   * sortKeyが設定されている場合、指定されたキーでソートを実行
+   * 🐛 修正4: タブ変更時のデータ取得（useRefパターン）
    */
-  if (sortKey) {
-    filteredItems = [...filteredItems].sort((a, b) => {
-      let aValue: any = a[sortKey as keyof InspectionItem];
-      let bValue: any = b[sortKey as keyof InspectionItem];
+  useEffect(() => {
+    // 初回マウントはスキップ
+    if (isFirstMountRef.current) return;
 
-      // 文字列の場合は小文字に変換して比較
-      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
-      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+    const filtersString = JSON.stringify(filters);
+    const hasChanged = prevFiltersRef.current !== filtersString;
 
+    if (hasChanged) {
+      console.log('[InspectionItemManagement] フィルター変更検知:', filters);
+      prevFiltersRef.current = filtersString;
+      fetchItems();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);  // fetchItemsは依存配列に入れない（無限ループ防止）
+
+  /**
+   * 🐛 修正4: ページ変更時のデータ取得（useRefパターン）
+   */
+  useEffect(() => {
+    // 初回マウントはスキップ
+    if (isFirstMountRef.current) return;
+
+    const hasChanged = prevPageRef.current !== pagination.page;
+
+    if (hasChanged) {
+      console.log('[InspectionItemManagement] ページ変更検知:', pagination.page);
+      prevPageRef.current = pagination.page;
+      fetchItems();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page]);  // fetchItemsは依存配列に入れない（無限ループ防止）
+
+  // ==========================================
+  // UI操作ハンドラー
+  // ==========================================
+  
+  /**
+   * タブ切り替え
+   */
+  const handleTabChange = (tab: 'pre' | 'post') => {
+    console.log('[InspectionItemManagement] タブ変更:', tab);
+    setActiveTab(tab);
+    setFilters({ category: tab });
+  };
+
+  /**
+   * フォームリセット
+   */
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      inputType: 'CHECKBOX',
+      category: activeTab,
+      order: 0,  // 🐛 修正2: リセット
+      isRequired: true,
+    });
+    setFormErrors({});
+  };
+
+  /**
+   * バリデーション
+   */
+  const validateForm = (): boolean => {
+    const errors: { name?: string; order?: string } = {};
+
+    if (!formData.name.trim()) {
+      errors.name = '項目名は必須です';
+    }
+
+    // 🐛 修正2: 順番のバリデーション
+    if (formData.order < 0) {
+      errors.order = '順番は0以上の数値を指定してください';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  /**
+   * 作成モーダルを開く
+   */
+  const handleCreate = () => {
+    console.log('[InspectionItemManagement] 作成モーダルを開く');
+    resetForm();
+    setShowCreateModal(true);
+  };
+
+  /**
+   * 編集モーダルを開く
+   */
+  const handleEdit = (item: InspectionItem) => {
+    console.log('[InspectionItemManagement] 編集モーダルを開く:', item);
+    setFormData({
+      name: item.name,
+      inputType: item.inputType as 'CHECKBOX' | 'TEXT',  // 🐛 修正3: type → inputType
+      category: item.category || 'pre',
+      isRequired: item.isRequired ?? true,
+      order: item.order ?? 0,  // 🐛 修正2: order追加
+    });
+    setSelectedItemId(item.id);
+    setFormErrors({});
+    setShowEditModal(true);
+  };
+
+  /**
+   * 削除確認ダイアログを開く
+   */
+  const handleDelete = (itemId: string) => {
+    console.log('[InspectionItemManagement] 削除確認ダイアログを開く:', itemId);
+    setSelectedItemId(itemId);
+    setShowDeleteDialog(true);
+  };
+
+  /**
+   * 作成処理を実行
+   */
+  const handleSubmitCreate = async () => {
+    console.log('[InspectionItemManagement] 作成処理開始');
+    
+    if (!validateForm()) {
+      console.warn('[InspectionItemManagement] バリデーションエラー');
+      return;
+    }
+
+    console.log('[InspectionItemManagement] 新規作成データ:', formData);
+
+    const success = await createItem({
+      name: formData.name,
+      inputType: formData.inputType,  // 🐛 修正3: type → inputType, TEXT値使用
+      category: formData.category,
+      order: formData.order,
+      isRequired: formData.isRequired,
+    });
+
+    if (success) {
+      toast.success('点検項目を追加しました');
+      setShowCreateModal(false);
+      resetForm();
+    }
+  };
+
+  /**
+   * 更新処理を実行
+   */
+  const handleSubmitEdit = async () => {
+    console.log('[InspectionItemManagement] 更新処理開始');
+    
+    if (!validateForm() || !selectedItemId) {
+      console.warn('[InspectionItemManagement] バリデーションエラーまたはIDなし');
+      return;
+    }
+
+    console.log('[InspectionItemManagement] 更新データ:', {
+      id: selectedItemId,
+      data: formData,
+    });
+
+    const success = await updateItem(selectedItemId, {
+      name: formData.name,
+      inputType: formData.inputType,  // 🐛 修正3: type → inputType, TEXT値使用
+      category: formData.category,
+      order: formData.order,  // 🐛 修正2: order追加
+      isRequired: formData.isRequired,
+    });
+
+    if (success) {
+      toast.success('点検項目を更新しました');
+      setShowEditModal(false);
+      resetForm();
+      setSelectedItemId(null);
+    }
+  };
+
+  /**
+   * 削除処理を実行
+   */
+  const handleConfirmDelete = async () => {
+    console.log('[InspectionItemManagement] 削除処理開始:', selectedItemId);
+    
+    if (!selectedItemId) {
+      console.warn('[InspectionItemManagement] 削除対象IDがありません');
+      return;
+    }
+
+    const success = await deleteItem(selectedItemId);
+
+    if (success) {
+      toast.success('点検項目を削除しました');
+      setShowDeleteDialog(false);
+      setSelectedItemId(null);
+    }
+  };
+
+  // ==========================================
+  // 🐛 修正5: 順序変更（個別update APIで実装）
+  // ==========================================
+  
+  /**
+   * 上に移動
+   */
+  const handleMoveUp = async (index: number) => {
+    if (index === 0) return;
+    
+    console.log('[InspectionItemManagement] 上に移動:', filteredItems[index].name);
+    
+    const currentItem = filteredItems[index];
+    const aboveItem = filteredItems[index - 1];
+    
+    // 2つのアイテムの順序を入れ替え
+    const success = await Promise.all([
+      updateItem(currentItem.id, { order: aboveItem.order }),
+      updateItem(aboveItem.id, { order: currentItem.order }),
+    ]);
+    
+    if (success.every(s => s)) {
+      toast.success('順序を変更しました');
+    }
+  };
+
+  /**
+   * 下に移動
+   */
+  const handleMoveDown = async (index: number) => {
+    if (index === filteredItems.length - 1) return;
+    
+    console.log('[InspectionItemManagement] 下に移動:', filteredItems[index].name);
+    
+    const currentItem = filteredItems[index];
+    const belowItem = filteredItems[index + 1];
+    
+    // 2つのアイテムの順序を入れ替え
+    const success = await Promise.all([
+      updateItem(currentItem.id, { order: belowItem.order }),
+      updateItem(belowItem.id, { order: currentItem.order }),
+    ]);
+    
+    if (success.every(s => s)) {
+      toast.success('順序を変更しました');
+    }
+  };
+
+  // ==========================================
+  // データ整形
+  // ==========================================
+  
+  /**
+   * 現在のタブに応じたフィルター済みアイテム
+   */
+  const filteredItems = items.filter((item) => {
+    if (activeTab === 'pre') {
+      return item.category === 'pre' || !item.category;
+    }
+    return item.category === 'post';
+  });
+
+  /**
+   * 🐛 修正1: ソート済みアイテム
+   */
+  const sortedItems = React.useMemo(() => {
+    if (!sortKey) return filteredItems;
+    
+    return [...filteredItems].sort((a, b) => {
+      const aValue = a[sortKey as keyof InspectionItem];
+      const bValue = b[sortKey as keyof InspectionItem];
+      
+      if (aValue === undefined || aValue === null) return 1;
+      if (bValue === undefined || bValue === null) return -1;
+      
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }
+  }, [filteredItems, sortKey, sortOrder]);
 
   /**
    * 🐛 修正1: ソートハンドラー
@@ -209,7 +421,7 @@ const InspectionItemManagement: React.FC = () => {
             </button>
             <button
               onClick={() => handleMoveDown(index)}
-              disabled={index === filteredItems.length - 1}
+              disabled={index === sortedItems.length - 1}
               className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
               title="下に移動"
             >
@@ -250,6 +462,7 @@ const InspectionItemManagement: React.FC = () => {
     {
       key: 'actions',
       header: '操作',
+      width: '150px',
       render: (_: any, item: InspectionItem) => (
         <ActionButtons
           onEdit={() => handleEdit(item)}
@@ -258,250 +471,6 @@ const InspectionItemManagement: React.FC = () => {
       ),
     },
   ];
-
-  // ==========================================
-  // フォーム処理
-  // ==========================================
-  
-  /**
-   * フォームバリデーション
-   */
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      errors.name = '項目名は必須です';
-    }
-
-    // 🐛 修正2: order のバリデーション追加
-    if (formData.order < 0) {
-      errors.order = '順番は0以上である必要があります';
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  /**
-   * フォームをリセット
-   */
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      inputType: 'CHECKBOX',  // 🐛 修正3: type → inputType, 大文字
-      category: activeTab,
-      isRequired: true,
-      order: 0,  // 🐛 修正2: order追加
-    });
-    setFormErrors({});
-  };
-
-  // ==========================================
-  // 順序変更処理（独自機能）
-  // ==========================================
-  
-  /**
-   * 項目を上に移動
-   * 前の項目とorder値を交換
-   */
-  const handleMoveUp = async (index: number) => {
-    if (index === 0) {
-      console.warn('[InspectionItemManagement] 既に最上位です');
-      return;
-    }
-    
-    const items = [...filteredItems];
-    const currentItem = items[index];
-    const previousItem = items[index - 1];
-    
-    console.log('[InspectionItemManagement] 上に移動:', {
-      current: currentItem.name,
-      previous: previousItem.name,
-    });
-    
-    // order のデフォルト値を設定
-    const currentOrder = currentItem.order ?? index + 1;
-    const previousOrder = previousItem.order ?? index;
-    
-    // 順序を交換
-    const updates = [
-      { id: currentItem.id, order: previousOrder },
-      { id: previousItem.id, order: currentOrder },
-    ];
-    
-    const success = await updateOrder(updates);
-    if (success) {
-      toast.success('順序を更新しました');
-    }
-  };
-
-  /**
-   * 項目を下に移動
-   * 次の項目とorder値を交換
-   */
-  const handleMoveDown = async (index: number) => {
-    if (index === filteredItems.length - 1) {
-      console.warn('[InspectionItemManagement] 既に最下位です');
-      return;
-    }
-    
-    const items = [...filteredItems];
-    const currentItem = items[index];
-    const nextItem = items[index + 1];
-    
-    console.log('[InspectionItemManagement] 下に移動:', {
-      current: currentItem.name,
-      next: nextItem.name,
-    });
-    
-    // order のデフォルト値を設定
-    const currentOrder = currentItem.order ?? index + 1;
-    const nextOrder = nextItem.order ?? index + 2;
-    
-    // 順序を交換
-    const updates = [
-      { id: currentItem.id, order: nextOrder },
-      { id: nextItem.id, order: currentOrder },
-    ];
-    
-    const success = await updateOrder(updates);
-    if (success) {
-      toast.success('順序を更新しました');
-    }
-  };
-
-  // ==========================================
-  // CRUD操作ハンドラー（統一パターン）
-  // ==========================================
-  
-  /**
-   * 新規作成モーダルを開く
-   */
-  const handleCreate = () => {
-    console.log('[InspectionItemManagement] 新規作成モーダルを開く');
-    resetForm();
-    
-    // 🐛 修正2: 新規作成時は最大order+1を設定
-    const orderValues = filteredItems
-      .map(item => item.order)
-      .filter((order): order is number => order !== undefined);
-    const maxOrder = orderValues.length > 0 ? Math.max(...orderValues) : 0;
-    
-    setFormData(prev => ({ 
-      ...prev, 
-      category: activeTab,
-      order: maxOrder + 1  // 🐛 修正2: 自動的に最後尾に設定
-    }));
-    setShowCreateModal(true);
-  };
-
-  /**
-   * 編集モーダルを開く
-   */
-  const handleEdit = (item: InspectionItem) => {
-    console.log('[InspectionItemManagement] 編集モーダルを開く:', item);
-    
-    // フォームデータを設定（undefined のデフォルト値を設定）
-    setFormData({
-      name: item.name,
-      inputType: (item.inputType || item.type || 'CHECKBOX') as 'CHECKBOX' | 'INPUT',  // 🐛 修正3
-      category: item.category || 'pre',
-      isRequired: item.isRequired ?? true,
-      order: item.order ?? 0,  // 🐛 修正2: order追加
-    });
-    setSelectedItemId(item.id);
-    setFormErrors({});
-    setShowEditModal(true);
-  };
-
-  /**
-   * 削除確認ダイアログを開く
-   */
-  const handleDelete = (itemId: string) => {
-    console.log('[InspectionItemManagement] 削除確認ダイアログを開く:', itemId);
-    setSelectedItemId(itemId);
-    setShowDeleteDialog(true);
-  };
-
-  /**
-   * 作成処理を実行
-   */
-  const handleSubmitCreate = async () => {
-    console.log('[InspectionItemManagement] 作成処理開始');
-    
-    if (!validateForm()) {
-      console.warn('[InspectionItemManagement] バリデーションエラー');
-      return;
-    }
-
-    console.log('[InspectionItemManagement] 新規作成データ:', formData);
-
-    const success = await createItem({
-      name: formData.name,
-      inputType: formData.inputType,  // 🐛 修正3: type → inputType
-      category: formData.category,
-      order: formData.order,
-      isRequired: formData.isRequired,
-    });
-
-    if (success) {
-      toast.success('点検項目を追加しました');
-      setShowCreateModal(false);
-      resetForm();
-    }
-  };
-
-  /**
-   * 更新処理を実行
-   */
-  const handleSubmitEdit = async () => {
-    console.log('[InspectionItemManagement] 更新処理開始');
-    
-    if (!validateForm() || !selectedItemId) {
-      console.warn('[InspectionItemManagement] バリデーションエラーまたはIDなし');
-      return;
-    }
-
-    console.log('[InspectionItemManagement] 更新データ:', {
-      id: selectedItemId,
-      data: formData,
-    });
-
-    const success = await updateItem(selectedItemId, {
-      name: formData.name,
-      inputType: formData.inputType,  // 🐛 修正3: type → inputType
-      category: formData.category,
-      order: formData.order,  // 🐛 修正2: order追加
-      isRequired: formData.isRequired,
-    });
-
-    if (success) {
-      toast.success('点検項目を更新しました');
-      setShowEditModal(false);
-      resetForm();
-      setSelectedItemId(null);
-    }
-  };
-
-  /**
-   * 削除処理を実行
-   */
-  const handleConfirmDelete = async () => {
-    console.log('[InspectionItemManagement] 削除処理開始:', selectedItemId);
-    
-    if (!selectedItemId) {
-      console.warn('[InspectionItemManagement] 削除対象IDがありません');
-      return;
-    }
-
-    const success = await deleteItem(selectedItemId);
-
-    if (success) {
-      toast.success('点検項目を削除しました');
-      setShowDeleteDialog(false);
-      setSelectedItemId(null);
-    }
-  };
 
   // ==========================================
   // レンダリング
@@ -516,72 +485,72 @@ const InspectionItemManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* ==========================================
-          ページヘッダー
-          ========================================== */}
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-bold text-gray-900">点検項目マスタ管理</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            乗車前・乗車後の点検項目の追加・編集・削除・順序変更を行います
+      {/* ヘッダー */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">点検項目管理</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            点検項目の追加・編集・削除ができます
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <Button
-            variant="primary"
-            onClick={handleCreate}
-            className="flex items-center"
+        <Button
+          variant="primary"
+          icon={Plus}
+          onClick={handleCreate}
+        >
+          点検項目追加
+        </Button>
+      </div>
+
+      {/* タブ */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => handleTabChange('pre')}
+            className={`
+              py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap
+              ${activeTab === 'pre'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }
+            `}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            項目追加
-          </Button>
-        </div>
+            乗車前点検
+          </button>
+          <button
+            onClick={() => handleTabChange('post')}
+            className={`
+              py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap
+              ${activeTab === 'post'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }
+            `}
+          >
+            乗車後点検
+          </button>
+        </nav>
+      </div>
+
+      {/* テーブル */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <Table
+          columns={columns}
+          data={sortedItems}
+          loading={isLoading}
+          emptyMessage={`${activeTab === 'pre' ? '乗車前' : '乗車後'}点検項目がありません`}
+          pagination={{
+            currentPage: pagination.page,
+            totalPages: pagination.totalPages,
+            onPageChange: setPage,
+          }}
+        />
       </div>
 
       {/* ==========================================
-          タブメニュー
-          ========================================== */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex">
-            <button
-              onClick={() => setActiveTab('pre')}
-              className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'pre'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              乗車前点検項目 ({items.filter(item => item.category === 'pre').length}件)
-            </button>
-            <button
-              onClick={() => setActiveTab('post')}
-              className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'post'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              乗車後点検項目 ({items.filter(item => item.category === 'post').length}件)
-            </button>
-          </nav>
-        </div>
-
-        {/* ==========================================
-            点検項目一覧テーブル
-            ========================================== */}
-        <div className="p-6">
-          <Table
-            data={filteredItems}
-            columns={columns}
-            loading={isLoading}
-            emptyMessage="点検項目が登録されていません"
-          />
-        </div>
-      </div>
-
-      {/* ==========================================
-          新規作成モーダル
+          作成モーダル
+          🐛 修正2: 順番入力フィールド追加
+          🐛 修正3: inputType に変更、TEXT値使用
           ========================================== */}
       <FormModal
         isOpen={showCreateModal}
@@ -605,15 +574,15 @@ const InspectionItemManagement: React.FC = () => {
             required
           />
           
-          {/* 🐛 修正3: inputType に変更、大文字の値 */}
+          {/* 🐛 修正3: inputType に変更、TEXT値使用 */}
           <Select
             label="入力タイプ"
             options={[
               { value: 'CHECKBOX', label: 'チェックボックス' },
-              { value: 'INPUT', label: '入力フィールド' },
+              { value: 'TEXT', label: '入力フィールド' },  // INPUT → TEXT
             ]}
             value={formData.inputType}
-            onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'CHECKBOX' | 'INPUT' })}
+            onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'CHECKBOX' | 'TEXT' })}
             required
           />
           
@@ -637,9 +606,8 @@ const InspectionItemManagement: React.FC = () => {
             error={formErrors.order}
             min="0"
             required
-            
+            helpText="表示順序を指定します（0以上の整数）"
           />
-          <p className="mt-1 text-sm text-gray-500">表示順序を指定します（0以上の整数）</p>
           
           <div className="flex items-center">
             <input
@@ -660,7 +628,7 @@ const InspectionItemManagement: React.FC = () => {
       {/* ==========================================
           編集モーダル
           🐛 修正2: 順番入力フィールド追加
-          🐛 修正3: inputType に変更
+          🐛 修正3: inputType に変更、TEXT値使用
           ========================================== */}
       <FormModal
         isOpen={showEditModal}
@@ -684,15 +652,15 @@ const InspectionItemManagement: React.FC = () => {
             required
           />
           
-          {/* 🐛 修正3: inputType に変更、大文字の値 */}
+          {/* 🐛 修正3: inputType に変更、TEXT値使用 */}
           <Select
             label="入力タイプ"
             options={[
               { value: 'CHECKBOX', label: 'チェックボックス' },
-              { value: 'INPUT', label: '入力フィールド' },
+              { value: 'TEXT', label: '入力フィールド' },  // INPUT → TEXT
             ]}
             value={formData.inputType}
-            onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'CHECKBOX' | 'INPUT' })}
+            onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'CHECKBOX' | 'TEXT' })}
             required
           />
           
@@ -716,29 +684,26 @@ const InspectionItemManagement: React.FC = () => {
             error={formErrors.order}
             min="0"
             required
-            
+            helpText="表示順序を指定します（0以上の整数）"
           />
-          <p className="mt-1 text-sm text-gray-500">表示順序を指定します（0以上の整数）</p>
           
           <div className="flex items-center">
             <input
-              id="isRequiredEdit"
-              name="isRequiredEdit"
+              id="isRequired-edit"
+              name="isRequired"
               type="checkbox"
               checked={formData.isRequired}
               onChange={(e) => setFormData({ ...formData, isRequired: e.target.checked })}
               className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
             />
-            <label htmlFor="isRequiredEdit" className="ml-2 block text-sm text-gray-900">
+            <label htmlFor="isRequired-edit" className="ml-2 block text-sm text-gray-900">
               必須項目にする
             </label>
           </div>
         </div>
       </FormModal>
 
-      {/* ==========================================
-          削除確認ダイアログ
-          ========================================== */}
+      {/* 削除確認ダイアログ */}
       <ConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => {
@@ -746,11 +711,11 @@ const InspectionItemManagement: React.FC = () => {
           setSelectedItemId(null);
         }}
         onConfirm={handleConfirmDelete}
-        title="点検項目削除"
+        title="点検項目の削除"
         message="この点検項目を削除してもよろしいですか？この操作は取り消せません。"
         confirmText="削除"
+        cancelText="キャンセル"
         variant="danger"
-        loading={isLoading}
       />
     </div>
   );
