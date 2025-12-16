@@ -2,6 +2,7 @@
 // 🔧 修正内容: 
 // 1. Vehicle型に plateNumber, model, capacity を追加（既存フィールドも100%保持）
 // 2. FilterOptionsに manufacturer を追加
+// 3. InspectionItem型に inputType を追加 ← ✅ 新規修正
 // 既存機能: すべての型定義を完全保持
 
 // =====================================
@@ -63,6 +64,7 @@ export interface Vehicle {
 
 // =====================================
 // 点検項目関連
+// ✅ 修正: inputType フィールドを追加（バックエンドとの統一）
 // =====================================
 export interface InspectionItem {
   id: string;
@@ -70,6 +72,7 @@ export interface InspectionItem {
   description?: string;
   category?: 'pre' | 'post';
   type?: string;
+  inputType?: 'CHECKBOX' | 'TEXT' | 'NUMBER' | 'SELECT' | 'TEXTAREA';  // ✅ 追加: バックエンドと統一
   order?: number;
   isRequired?: boolean;
   isActive?: boolean;

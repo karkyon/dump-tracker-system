@@ -1,8 +1,8 @@
-// frontend/cms/src/store/inspectionItemStore.ts - 完全版（599行相当）
+// frontend/cms/src/store/inspectionItemStore.ts - 完全新規作成
 // 🎯 Vehicle/UserStoreと完全に統一されたパターン
 // ✅ 独自機能: 順序変更（updateOrder）
 // ✅ すべての標準機能を実装
-// 🐛 修正: type → inputType, INPUT → TEXT, order → displayOrder
+// 🐛 修正: type → inputType, 大文字変換
 
 import { create } from 'zustand';
 import { InspectionItem, FilterOptions } from '../types';
@@ -68,10 +68,11 @@ interface InspectionItemState {
 const normalizeInspectionItem = (item: any): InspectionItem => {
   return {
     ...item,
-    // order のデフォルト値を設定（バックエンドではdisplayOrder）
-    order: item.displayOrder ?? item.order ?? 0,
+    // 現時点では変換不要だが、拡張性のために関数を用意
+    // order のデフォルト値を設定
+    order: item.order ?? 0,
     isRequired: item.isRequired ?? true,
-    inputType: item.inputType || item.type || 'CHECKBOX',
+    inputType: item.inputType || item.type || 'CHECKBOX',  // 🐛 修正: type対応
     category: item.category || 'pre',
   };
 };
@@ -101,7 +102,7 @@ const denormalizeInspectionItem = (item: Partial<InspectionItem>): any => {
     backendData.description = item.description;
   }
   
-  // 🐛 修正: inputType (大文字変換、TEXT値使用)
+  // 🐛 修正: inputType (大文字変換)
   if (item.inputType !== undefined) {
     backendData.inputType = typeof item.inputType === 'string' 
       ? item.inputType.toUpperCase() 
@@ -133,13 +134,16 @@ const denormalizeInspectionItem = (item: Partial<InspectionItem>): any => {
     backendData.isActive = item.isActive;
   }
   
-  console.log('[denormalizeInspectionItem] 変換結果:', backendData);
+  console.log('[denormalizeInspectionItem] 変換結果:', {
+    input: item,
+    output: backendData
+  });
   
   return backendData;
 };
 
 // ==========================================
-// Zustand Store
+// Zustand Store定義
 // ==========================================
 export const useInspectionItemStore = create<InspectionItemState>((set, get) => ({
   // ==========================================
@@ -151,35 +155,26 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
   error: null,
   pagination: {
     page: 1,
-    pageSize: 100,
+    pageSize: 100, // 点検項目は通常数が少ないため大きめに設定
     total: 0,
     totalPages: 0,
   },
-  filters: {
-    search: '',
-    isActive: true,
-    category: 'pre',
-  },
+  filters: {},
 
   // ==========================================
   // 点検項目一覧取得
   // ==========================================
-  fetchItems: async (filters?: FilterOptions) => {
+  fetchItems: async (filters = {}) => {
     set({ isLoading: true, error: null });
 
     console.log('[InspectionItemStore] fetchItems 開始', { filters });
 
     try {
-      const currentFilters = filters || get().filters;
-      const currentPagination = get().pagination;
-
-      // APIパラメータ構築
+      const currentFilters = { ...get().filters, ...filters };
       const params = {
-        page: currentPagination.page,
-        pageSize: currentPagination.pageSize,
-        search: currentFilters.search,
-        isActive: currentFilters.isActive,
-        category: currentFilters.category,
+        ...currentFilters,
+        page: get().pagination.page,
+        pageSize: get().pagination.pageSize,
       };
 
       console.log('[InspectionItemStore] API呼び出しパラメータ:', params);
@@ -187,90 +182,82 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
       const response = await inspectionItemAPI.getInspectionItems(params);
 
       console.log('[InspectionItemStore] APIレスポンス全体:', response);
-      console.log('[InspectionItemStore] response.data の内容:', response.data);
-      console.log('[InspectionItemStore] response.data の型:', typeof response.data);
 
       if (response.success && response.data) {
-        // 🔧 2重ネスト構造を解決
-        let apiData = response.data;
+        let apiData = response.data as any;
         
-        // response.data が { data: [...] } の構造の場合、内側のdataを取得
-        if (typeof apiData === 'object' && 'data' in apiData && apiData.data !== undefined) {
+        console.log('[InspectionItemStore] response.data の内容:', apiData);
+        console.log('[InspectionItemStore] response.data の型:', typeof apiData);
+
+        // 二重ネスト構造を解決
+        if (apiData.success && apiData.data) {
           console.log('[InspectionItemStore] 二重ネスト構造を検出、内側のdataを取得');
           apiData = apiData.data;
+          console.log('[InspectionItemStore] 解決後のapiData:', apiData);
         }
-        
-        console.log('[InspectionItemStore] 解決後のapiData:', apiData);
-        console.log('[InspectionItemStore] apiDataは配列か?', Array.isArray(apiData));
 
-        // データと pagination の抽出
+        // APIレスポンスから点検項目配列を抽出（複数パターンに対応）
         let rawItems: any[] = [];
         let paginationInfo: any = {};
-
+        
+        console.log('[InspectionItemStore] apiDataは配列か?', Array.isArray(apiData));
+        
         if (Array.isArray(apiData)) {
-          // パターン1: 直接配列
-          console.log('[InspectionItemStore] パターン1: 直接配列を検出');
+          // パターン1: apiDataが直接配列の場合
           rawItems = apiData;
-          paginationInfo = response.data?.pagination || response.data?.meta || {};
+          paginationInfo = {
+            page: get().pagination.page,
+            pageSize: get().pagination.pageSize,
+            total: apiData.length,
+            totalPages: Math.ceil(apiData.length / get().pagination.pageSize),
+          };
+          console.log('[InspectionItemStore] パターン1: 直接配列');
         } else if (apiData.items && Array.isArray(apiData.items)) {
-          // パターン2: { items: [...], pagination: {...} }
-          console.log('[InspectionItemStore] パターン2: apiData.items を検出');
+          // パターン2: apiData.items が配列の場合
           rawItems = apiData.items;
-          paginationInfo = apiData.pagination || apiData.meta || {};
-        } else if (apiData.inspectionItems && Array.isArray(apiData.inspectionItems)) {
-          // パターン3: { inspectionItems: [...], pagination: {...} }
-          console.log('[InspectionItemStore] パターン3: apiData.inspectionItems を検出');
-          rawItems = apiData.inspectionItems;
-          paginationInfo = apiData.pagination || apiData.meta || {};
+          paginationInfo = apiData.pagination || {
+            page: apiData.page || get().pagination.page,
+            pageSize: apiData.pageSize || get().pagination.pageSize,
+            total: apiData.total || rawItems.length,
+            totalPages: apiData.totalPages || Math.ceil(rawItems.length / get().pagination.pageSize),
+          };
+          console.log('[InspectionItemStore] パターン2: items配列');
         } else if (apiData.data && Array.isArray(apiData.data)) {
-          // パターン4: { data: [...], pagination: {...} }
-          console.log('[InspectionItemStore] パターン4: apiData.data を検出');
+          // パターン3: apiData.data が配列の場合
           rawItems = apiData.data;
-          paginationInfo = apiData.pagination || apiData.meta || {};
+          paginationInfo = apiData.pagination || {
+            page: apiData.page || get().pagination.page,
+            pageSize: apiData.pageSize || get().pagination.pageSize,
+            total: apiData.total || rawItems.length,
+            totalPages: apiData.totalPages || Math.ceil(rawItems.length / get().pagination.pageSize),
+          };
+          console.log('[InspectionItemStore] パターン3: data配列');
+        } else {
+          console.error('[InspectionItemStore] 未知のレスポンス構造:', apiData);
+          throw new Error('レスポンス構造が不正です');
         }
 
-        console.log('[InspectionItemStore] 抽出した生の点検項目データ:', rawItems);
-        console.log('[InspectionItemStore] 抽出したpagination情報:', paginationInfo);
+        console.log('[InspectionItemStore] 抽出したrawItems:', rawItems);
+        console.log('[InspectionItemStore] rawItems長さ:', rawItems.length);
 
-        // 正規化
+        // データを正規化
         const normalizedItems = rawItems.map(normalizeInspectionItem);
-
-        console.log('[InspectionItemStore] 正規化後の点検項目データ:', normalizedItems);
-
-        // ページネーション情報の設定
-        const totalItems = paginationInfo.total ?? 
-                          paginationInfo.totalCount ?? 
-                          normalizedItems.length;
-        const currentPageSize = paginationInfo.pageSize ?? 
-                               paginationInfo.limit ?? 
-                               params.pageSize;
-        const totalPages = paginationInfo.totalPages ?? 
-                          Math.ceil(totalItems / currentPageSize);
-
-        console.log('[InspectionItemStore] 最終的なpagination値:', {
-          page: paginationInfo.page ?? params.page,
-          pageSize: currentPageSize,
-          total: totalItems,
-          totalPages: totalPages,
-        });
+        
+        console.log('[InspectionItemStore] 正規化後のitems:', normalizedItems);
 
         set({
           items: normalizedItems,
-          pagination: {
-            page: paginationInfo.page ?? params.page,
-            pageSize: currentPageSize,
-            total: totalItems,
-            totalPages: totalPages,
-          },
+          pagination: paginationInfo,
           isLoading: false,
+          error: null,
         });
 
-        console.log('[InspectionItemStore] fetchItems 成功:', {
-          itemCount: normalizedItems.length,
-          pagination: get().pagination,
+        console.log('[InspectionItemStore] fetchItems 成功', {
+          itemsCount: normalizedItems.length,
+          pagination: paginationInfo,
         });
       } else {
-        console.error('[InspectionItemStore] fetchItems APIエラー:', response.error);
+        console.error('[InspectionItemStore] APIレスポンス失敗:', response);
         set({
           error: response.error || ERROR_MESSAGES.FETCH_LIST,
           isLoading: false,
@@ -287,6 +274,7 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
 
   // ==========================================
   // 点検項目詳細取得
+  // 🐛 修正: getInspectionItem → getInspectionItems に変更
   // ==========================================
   fetchItem: async (id: string) => {
     set({ isLoading: true, error: null });
@@ -294,32 +282,59 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
     console.log('[InspectionItemStore] fetchItem 開始', { id });
 
     try {
-      const response = await inspectionItemAPI.getInspectionItem(id);
+      // 🐛 修正: getInspectionItems を使用し、IDでフィルタリング
+      const response = await inspectionItemAPI.getInspectionItems({ id });
 
       console.log('[InspectionItemStore] fetchItem APIレスポンス:', response);
 
       if (response.success && response.data) {
-        // 正規化
-        const normalizedItem = normalizeInspectionItem(response.data);
+        let apiData = response.data as any;
+        
+        // 二重ネスト構造を解決
+        if (apiData.success && apiData.data) {
+          apiData = apiData.data;
+        }
 
-        set({
-          selectedItem: normalizedItem,
-          isLoading: false,
-        });
+        // 配列から最初の要素を取得
+        let item: any = null;
+        if (Array.isArray(apiData)) {
+          item = apiData.find((i: any) => i.id === id) || apiData[0];
+        } else if (apiData.items && Array.isArray(apiData.items)) {
+          item = apiData.items.find((i: any) => i.id === id) || apiData.items[0];
+        } else if (apiData.data && Array.isArray(apiData.data)) {
+          item = apiData.data.find((i: any) => i.id === id) || apiData.data[0];
+        } else if (apiData.id) {
+          // 単一オブジェクトの場合
+          item = apiData;
+        }
 
-        console.log('[InspectionItemStore] fetchItem 成功');
+        if (item) {
+          const normalizedItem = normalizeInspectionItem(item);
+          
+          set({
+            selectedItem: normalizedItem,
+            isLoading: false,
+          });
+
+          console.log('[InspectionItemStore] fetchItem 成功:', normalizedItem);
+        } else {
+          console.error('[InspectionItemStore] 点検項目が見つかりません:', id);
+          set({
+            error: ERROR_MESSAGES.NOT_FOUND,
+            isLoading: false,
+          });
+        }
       } else {
-        console.error('[InspectionItemStore] fetchItem APIエラー:', response.error);
+        console.error('[InspectionItemStore] fetchItem 失敗:', response.error);
         set({
-          error: response.error || ERROR_MESSAGES.NOT_FOUND,
-          selectedItem: null,
+          error: response.error || ERROR_MESSAGES.FETCH_DETAIL,
           isLoading: false,
         });
       }
     } catch (error) {
-      console.error('[InspectionItemStore] fetchItem エラー:', error);
+      console.error('[InspectionItemStore] fetchItem ネットワークエラー:', error);
       set({
-        error: ERROR_MESSAGES.FETCH_DETAIL,
+        error: ERROR_MESSAGES.NETWORK,
         isLoading: false,
       });
     }
@@ -344,7 +359,7 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
       console.log('[InspectionItemStore] createItem APIレスポンス:', response);
 
       if (response.success) {
-        // 作成成功後、一覧を再取得して最新状態を反映
+        // 作成成功後、一覧を再取得
         await get().fetchItems();
         set({ isLoading: false });
         console.log('[InspectionItemStore] createItem 成功');
@@ -459,22 +474,8 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
   },
 
   // ==========================================
-  // 点検項目の順序更新（独自機能）
+  // 点検項目順序更新（独自機能）
   // ==========================================
-  /**
-   * 複数の点検項目の順序を一括更新
-   * 
-   * @param updates - 更新する項目のID配列とorder値
-   * @returns 成功時true、失敗時false
-   * 
-   * 使用例:
-   * ```typescript
-   * updateOrder([
-   *   { id: 'item1', order: 1 },
-   *   { id: 'item2', order: 2 },
-   * ]);
-   * ```
-   */
   updateOrder: async (updates: Array<{ id: string; order: number }>) => {
     set({ isLoading: true, error: null });
 
@@ -486,7 +487,7 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
       console.log('[InspectionItemStore] updateOrder APIレスポンス:', response);
 
       if (response.success) {
-        // 順序更新成功後、一覧を再取得してソート順を反映
+        // 順序更新成功後、一覧を再取得
         await get().fetchItems();
         set({ isLoading: false });
         console.log('[InspectionItemStore] updateOrder 成功');
@@ -512,80 +513,34 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
   // ==========================================
   // フィルター設定
   // ==========================================
-  /**
-   * ⚠️ 重要: このメソッドは状態のみを更新し、fetchItems()を呼び出しません
-   * 
-   * 理由:
-   * - コンポーネント側のuseEffectがfiltersの変更を監視している
-   * - useEffectが自動的にfetchItems()を実行する
-   * - ここで呼ぶと二重実行になる
-   * 
-   * 使用例:
-   * ```typescript
-   * // InspectionItemManagementコンポーネント
-   * useEffect(() => {
-   *   fetchItems(); // filtersが変更されたら自動実行
-   * }, [filters, fetchItems]);
-   * ```
-   */
-  setFilters: (newFilters: Partial<FilterOptions & { category?: 'pre' | 'post' }>) => {
-    const currentFilters = get().filters;
-    const updatedFilters = { ...currentFilters, ...newFilters };
+  setFilters: (filters: Partial<FilterOptions & { category?: 'pre' | 'post' }>) => {
+    console.log('[InspectionItemStore] setFilters', { filters });
     
-    console.log('[InspectionItemStore] setFilters:', {
-      current: currentFilters,
-      new: newFilters,
-      updated: updatedFilters
-    });
+    set((state) => ({
+      filters: { ...state.filters, ...filters },
+    }));
     
-    set({
-      filters: updatedFilters,
-      // フィルター変更時はページを1にリセット
-      pagination: { ...get().pagination, page: 1 }
-    });
-    
-    console.log('[InspectionItemStore] setFilters完了 (fetchItemsはuseEffectが実行)');
+    // フィルター変更時は自動的に一覧を再取得
+    get().fetchItems();
   },
 
   // ==========================================
-  // ページ設定
+  // ページ変更
   // ==========================================
-  /**
-   * ⚠️ 重要: このメソッドは状態のみを更新し、fetchItems()を呼び出しません
-   * 
-   * 理由:
-   * - コンポーネント側のuseEffectがpaginationの変更を監視している
-   * - useEffectが自動的にfetchItems()を実行する
-   * - ここで呼ぶと二重実行になる
-   * 
-   * 使用例:
-   * ```typescript
-   * // InspectionItemManagementコンポーネント
-   * useEffect(() => {
-   *   fetchItems(); // paginationが変更されたら自動実行
-   * }, [pagination.page, fetchItems]);
-   * ```
-   */
   setPage: (page: number) => {
-    console.log('[InspectionItemStore] setPage:', page);
+    console.log('[InspectionItemStore] setPage', { page });
     
-    set({
-      pagination: {
-        ...get().pagination,
-        page,
-      },
-    });
+    set((state) => ({
+      pagination: { ...state.pagination, page },
+    }));
     
-    console.log('[InspectionItemStore] setPage完了 (fetchItemsはuseEffectが実行)');
+    // ページ変更時は自動的に一覧を再取得
+    get().fetchItems();
   },
 
   // ==========================================
   // エラークリア
   // ==========================================
-  /**
-   * エラーメッセージをクリアする
-   * エラー通知を閉じる際に使用
-   */
   clearError: () => {
     console.log('[InspectionItemStore] clearError');
     set({ error: null });
@@ -594,10 +549,6 @@ export const useInspectionItemStore = create<InspectionItemState>((set, get) => 
   // ==========================================
   // 選択項目クリア
   // ==========================================
-  /**
-   * 選択中の点検項目をクリアする
-   * 詳細画面を閉じる際や一覧に戻る際に使用
-   */
   clearSelectedItem: () => {
     console.log('[InspectionItemStore] clearSelectedItem');
     set({ selectedItem: null });
