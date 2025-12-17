@@ -863,8 +863,8 @@ class APIServiceClass {
         timestamp: new Date().toISOString()
       });
 
-      // 🔧🔧🔧 デバッグ3: リクエストURL構築
-      const fullURL = `${this.axiosInstance.defaults.baseURL}/inspections/items`;
+      // ✅ 修正: 正しいエンドポイントに変更
+      const fullURL = `${this.axiosInstance.defaults.baseURL}/inspection-items`;
       console.log('🔍🔍🔍 [DEBUG-api.ts] リクエストURL', {
         fullURL,
         params,
@@ -882,13 +882,14 @@ class APIServiceClass {
 
       // 🔧🔧🔧 デバッグ5: axios.get実行前
       console.log('🔍🔍🔍 [DEBUG-api.ts] axios.get実行開始', {
-        endpoint: '/inspections/items',
+        endpoint: '/inspection-items',  // ✅ 修正
         params,
         timestamp: new Date().toISOString()
       });
 
+      // ✅✅✅ 修正: エンドポイントパスを変更
       const response = await this.axiosInstance.get<APIResponse<any>>(
-        '/inspections/items',
+        '/inspection-items',  // ✅ 正しい: ハイフン付き
         { params }
       );
 
@@ -954,7 +955,7 @@ class APIServiceClass {
   }): Promise<APIResponse<any>> {
     try {
       const response = await this.axiosInstance.post<APIResponse<any>>(
-        '/inspections/records',
+        '/inspections',  // ✅ 修正: 正しいエンドポイント
         data
       );
       return response.data;
