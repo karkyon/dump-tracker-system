@@ -1,5 +1,5 @@
 // frontend/mobile/src/stores/authStore.ts
-// 完全修正版: token プロパティ追加 + すべての機能保持
+// 完全修正版: accessToken対応 + token プロパティ追加 + すべての機能保持
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -54,18 +54,18 @@ export const useAuthStore = create<AuthState>()(
           const response = await apiService.login(credentials);
           
           if (response.success && response.data) {
-            // バックエンドの正しいレスポンス構造
-            const { user, token } = response.data;
+            // 🔧 修正: バックエンドは accessToken を返す
+            const { user, accessToken } = response.data;
             
             // Store token in localStorage
-            localStorage.setItem('auth_token', token);
+            localStorage.setItem('auth_token', accessToken);
             localStorage.setItem('user_data', JSON.stringify(user));
             
-            // ✅ 修正: token を state に保存
+            // ✅ 修正: accessToken を token として state に保存
             set({
               isAuthenticated: true,
               user,
-              token,  // ✅ 追加
+              token: accessToken,  // 🔧 修正: accessToken を使用
               loading: false,
               error: null
             });
