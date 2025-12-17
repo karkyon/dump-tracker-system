@@ -55,17 +55,17 @@ export const useAuthStore = create<AuthState>()(
           
           if (response.success && response.data) {
             // 🔧 修正: バックエンドは accessToken を返す
-            const { user, token } = response.data;
+            const { user, accessToken } = response.data;
             
             // Store token in localStorage
-            localStorage.setItem('auth_token', token);
+            localStorage.setItem('auth_token', accessToken);
             localStorage.setItem('user_data', JSON.stringify(user));
             
             // ✅ 修正: accessToken を token として state に保存
             set({
               isAuthenticated: true,
               user,
-              token: token,
+              token: accessToken,
               loading: false,
               error: null
             });

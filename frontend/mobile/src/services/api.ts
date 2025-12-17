@@ -32,7 +32,7 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  token: string;
+  accessToken: string;
   refreshToken: string;
   user: {
     id: string;
@@ -280,8 +280,8 @@ class APIServiceClass {
         credentials
       );
       
-      if (response.data.success && response.data.data?.token) {
-        this.setToken(response.data.data.token);
+      if (response.data.success && response.data.data?.accessToken) {
+        this.setToken(response.data.data.accessToken);
       }
       
       return response.data;
