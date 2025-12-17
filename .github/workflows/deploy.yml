@@ -6,93 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  # =====================================
-  # バックエンドデプロイ
-  # =====================================
-  deploy-backend:
-    name: 🖥️ Deploy Backend API
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-      
-      - name: 📦 Install backend dependencies
-        working-directory: ./backend
-        run: npm ci
-      
-      - name: 🏗️ Build backend (TypeScript compilation)
-        working-directory: ./backend
-        run: npm run build
-      
-      - name: 🚀 Deploy backend files to server
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "backend/dist/*,backend/package*.json,backend/prisma/*"
-          target: "/tmp/backend-deploy/"
-          strip_components: 1
-      
-      - name: 📂 Update backend and restart service
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            # バックアップ作成（念のため）
-            BACKUP_DIR="/home/karkyon_dump/projects/dump-tracker/backend.backup.$(date +%Y%m%d_%H%M%S)"
-            cp -r /home/karkyon_dump/projects/dump-tracker/backend/dist "$BACKUP_DIR" || true
-            
-            # 新しいビルドをデプロイ
-            rm -rf /home/karkyon_dump/projects/dump-tracker/backend/dist
-            cp -r /tmp/backend-deploy/dist /home/karkyon_dump/projects/dump-tracker/backend/
-            
-            # package.jsonを更新（依存関係が変更された場合）
-            cp /tmp/backend-deploy/package*.json /home/karkyon_dump/projects/dump-tracker/backend/
-            
-            # Prismaスキーマ更新
-            cp -r /tmp/backend-deploy/prisma /home/karkyon_dump/projects/dump-tracker/backend/
-            
-            # 依存関係インストール（本番環境のみ）
-            cd /home/karkyon_dump/projects/dump-tracker/backend
-            npm ci --production
-            
-            # Prisma Client再生成
-            npx prisma generate
-            
-            # データベースマイグレーション（必要に応じてコメント解除）
-            # npx prisma migrate deploy
-            
-            # systemdサービス再起動
-            sudo systemctl restart dump-tracker-backend.service
-            
-            # サービス状態確認
-            sudo systemctl is-active dump-tracker-backend.service
-            
-            # 一時ファイル削除
-            rm -rf /tmp/backend-deploy
-            
-            # ログ確認（最新10行）
-            echo "=== Backend Service Status ==="
-            sudo systemctl status dump-tracker-backend.service --no-pager -l || true
-            echo "=== Recent Logs ==="
-            tail -n 10 /home/karkyon_dump/projects/dump-tracker/backend/logs/app.log || true
-
-  # =====================================
-  # フロントエンド（Mobile）デプロイ
-  # =====================================
   deploy-mobile:
     name: 📱 Deploy Mobile App
     runs-on: ubuntu-latest
-    needs: deploy-backend  # バックエンド完了後に実行
     
     steps:
       - name: 📥 Checkout code
@@ -139,31 +55,3 @@ jobs:
             sudo chmod -R 755 /var/www/dump-tracker/mobile
             rm -rf /tmp/mobile-deploy
             sudo systemctl reload nginx
-            echo "=== Mobile Deploy Complete ==="
-            ls -la /var/www/dump-tracker/mobile/ || true
-
-  # =====================================
-  # デプロイ結果通知
-  # =====================================
-  notify:
-    name: 📢 Deployment Summary
-    runs-on: ubuntu-latest
-    needs: [deploy-backend, deploy-mobile]
-    if: always()
-    
-    steps:
-      - name: 📊 Show deployment results
-        run: |
-          echo "================================"
-          echo "🎉 Deployment Completed"
-          echo "================================"
-          echo "Backend: ${{ needs.deploy-backend.result }}"
-          echo "Mobile: ${{ needs.deploy-mobile.result }}"
-          echo "================================"
-          if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.deploy-mobile.result }}" == "success" ]; then
-            echo "✅ All deployments successful!"
-            exit 0
-          else
-            echo "❌ Some deployments failed"
-            exit 1
-          fi
