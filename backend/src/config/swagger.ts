@@ -43,9 +43,9 @@ import swaggerUi from 'swagger-ui-express';
 // 環境変数から動的設定取得
 const getEnvironmentConfig = () => {
   const NODE_ENV = process.env.NODE_ENV || 'development';
-  const HOST = process.env.HOST || '10.1.119.244';
-  const PORT = process.env.PORT || '8443';
-  const PROTOCOL = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
+  const HOST = process.env.SWAGGER_HOST || process.env.HOST || 'localhost';
+  const PORT = process.env.SWAGGER_PORT || process.env.PORT || '3001';
+  const PROTOCOL = process.env.SWAGGER_PROTOCOL || (process.env.USE_HTTPS === 'true' ? 'https' : 'http');
 
   return {
     NODE_ENV,
@@ -176,12 +176,8 @@ const swaggerOptions: swaggerJsdoc.Options = {
     },
     servers: [
       {
-        url: `https://10.1.119.244:8443/api/v1`,
-        description: 'Production API Server (HTTPS)'
-      },
-      {
-        url: `http://10.1.119.244:8000/api/v1`,
-        description: 'Development API Server (HTTP - Auto redirect to HTTPS)'
+        url: `${envConfig.BASE_URL}/api/${envConfig.API_VERSION}`,
+        description: `${envConfig.NODE_ENV} API Server (${envConfig.PROTOCOL.toUpperCase()})`
       }
     ],
     components: {
