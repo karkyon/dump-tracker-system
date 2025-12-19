@@ -52,7 +52,6 @@ function Table<T extends Record<string, any>>({
 
   const getValue = (item: T, key: keyof T | string): any => {
     if (typeof key === 'string' && key.includes('.')) {
-      // ネストされたプロパティの場合（例: 'user.name'）
       return key.split('.').reduce((obj, prop) => obj?.[prop], item);
     }
     return item[key as keyof T];
@@ -80,7 +79,7 @@ function Table<T extends Record<string, any>>({
   }
 
   return (
-    <div className={`bg-white shadow overflow-hidden sm:rounded-md ${className}`}>
+    <div className={`bg-white shadow overflow-x-auto sm:rounded-md ${className}`}>
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
@@ -135,62 +134,81 @@ function Table<T extends Record<string, any>>({
   );
 }
 
-// ステータスバッジコンポーネント
 interface StatusBadgeProps {
   status: string;
   type?: 'user' | 'vehicle' | 'operation' | 'gps';
   className?: string;
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ 
-  status, 
-  type = 'user', 
-  className = '' 
+export const StatusBadge: React.FC<StatusBadgeProps> = ({
+  status,
+  type = 'user',
+  className = '',
 }) => {
   const getStatusConfig = () => {
-    const configs: Record<string, Record<string, { label: string; className: string }>> = {
-      user: {
-        active: { label: 'アクティブ', className: 'bg-green-100 text-green-800' },
-        inactive: { label: '非アクティブ', className: 'bg-red-100 text-red-800' },
-      },
-      vehicle: {
-        active: { label: '稼働中', className: 'bg-green-100 text-green-800' },
-        inactive: { label: '非稼働', className: 'bg-red-100 text-red-800' },
-        maintenance: { label: '整備中', className: 'bg-yellow-100 text-yellow-800' },
-      },
-      operation: {
-        ongoing: { label: '運行中', className: 'bg-blue-100 text-blue-800' },
-        completed: { label: '完了', className: 'bg-green-100 text-green-800' },
-        cancelled: { label: 'キャンセル', className: 'bg-red-100 text-red-800' },
-      },
-      gps: {
-        driving: { label: '運転中', className: 'bg-blue-100 text-blue-800' },
-        loading: { label: '積込中', className: 'bg-orange-100 text-orange-800' },
-        unloading: { label: '積下中', className: 'bg-purple-100 text-purple-800' },
-        resting: { label: '休憩中', className: 'bg-gray-100 text-gray-800' },
-        refueling: { label: '給油中', className: 'bg-yellow-100 text-yellow-800' },
-        offline: { label: 'オフライン', className: 'bg-red-100 text-red-800' },
-      },
-    };
-
-    return configs[type]?.[status] || { 
-      label: status, 
-      className: 'bg-gray-100 text-gray-800' 
-    };
+    switch (type) {
+      case 'user':
+        switch (status) {
+          case 'ACTIVE':
+          case 'active':
+          case true:
+            return { color: 'bg-green-100 text-green-800', label: '有効' };
+          case 'INACTIVE':
+          case 'inactive':
+          case false:
+            return { color: 'bg-gray-100 text-gray-800', label: '無効' };
+          default:
+            return { color: 'bg-gray-100 text-gray-800', label: status };
+        }
+      case 'vehicle':
+        switch (status) {
+          case 'ACTIVE':
+            return { color: 'bg-green-100 text-green-800', label: '稼働中' };
+          case 'INACTIVE':
+            return { color: 'bg-gray-100 text-gray-800', label: '停止中' };
+          case 'MAINTENANCE':
+            return { color: 'bg-yellow-100 text-yellow-800', label: '整備中' };
+          default:
+            return { color: 'bg-gray-100 text-gray-800', label: status };
+        }
+      case 'operation':
+        switch (status) {
+          case 'ongoing':
+            return { color: 'bg-blue-100 text-blue-800', label: '運行中' };
+          case 'completed':
+            return { color: 'bg-green-100 text-green-800', label: '完了' };
+          case 'cancelled':
+            return { color: 'bg-red-100 text-red-800', label: 'キャンセル' };
+          default:
+            return { color: 'bg-gray-100 text-gray-800', label: status };
+        }
+      case 'gps':
+        switch (status) {
+          case 'moving':
+            return { color: 'bg-green-100 text-green-800', label: '移動中' };
+          case 'stopped':
+            return { color: 'bg-red-100 text-red-800', label: '停止' };
+          case 'idle':
+            return { color: 'bg-yellow-100 text-yellow-800', label: 'アイドル' };
+          default:
+            return { color: 'bg-gray-100 text-gray-800', label: status };
+        }
+      default:
+        return { color: 'bg-gray-100 text-gray-800', label: status };
+    }
   };
 
   const config = getStatusConfig();
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className} ${className}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color} ${className}`}
     >
       {config.label}
     </span>
   );
 };
 
-// アクションボタングループコンポーネント
 interface ActionButtonsProps {
   onEdit?: () => void;
   onDelete?: () => void;

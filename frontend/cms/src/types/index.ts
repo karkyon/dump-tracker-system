@@ -1,8 +1,7 @@
-// frontend/cms/src/types/index.ts - 完全修正版
+// frontend/cms/src/types/index.ts - Location型修正版
 // 🔧 修正内容: 
-// 1. Vehicle型に plateNumber, model, capacity を追加（既存フィールドも100%保持）
-// 2. FilterOptionsに manufacturer を追加
-// 3. InspectionItem型に inputType を追加 ← ✅ 新規修正
+// 1. Location型をバックエンドAPIレスポンスに完全対応
+// 2. フィールド名を統一: name, locationType, latitude, longitude
 // 既存機能: すべての型定義を完全保持
 
 // =====================================
@@ -64,7 +63,6 @@ export interface Vehicle {
 
 // =====================================
 // 点検項目関連
-// ✅ 修正: inputType フィールドを追加（バックエンドとの統一）
 // =====================================
 export interface InspectionItem {
   id: string;
@@ -72,7 +70,6 @@ export interface InspectionItem {
   description?: string;
   category?: 'pre' | 'post';
   type?: string;
-  inputType?: 'CHECKBOX' | 'TEXT' | 'NUMBER' | 'SELECT' | 'TEXTAREA';  // ✅ 追加: バックエンドと統一
   order?: number;
   isRequired?: boolean;
   isActive?: boolean;
@@ -81,26 +78,37 @@ export interface InspectionItem {
 }
 
 // =====================================
-// 場所関連
+// 場所関連（完全修正版）
+// ✅ バックエンドAPIレスポンスと完全一致
 // =====================================
 export interface Location {
   id: string;
-  name: string;
-  locationName?: string;
-  address: string;
-  latitude?: number;
-  longitude?: number;
-  gpsLatitude?: number;
-  gpsLongitude?: number;
-  locationType?: 'loading' | 'unloading' | 'both';
-  type?: 'pickup' | 'delivery';
-  clientName?: string;
-  contactPerson?: string;
-  contactPhone?: string;
-  notes?: string;
-  isActive?: boolean;
-  createdAt: string;
-  updatedAt: string;
+  
+  // ✅ バックエンドの標準フィールド
+  name: string;                    // 場所名（バックエンド標準）
+  address: string;                 // 住所
+  latitude?: number;               // 緯度（バックエンド標準）
+  longitude?: number;              // 経度（バックエンド標準）
+  locationType: 'PICKUP' | 'DELIVERY' | 'DEPOT' | 'MAINTENANCE' | 'FUEL_STATION' | 'REST_AREA' | 'CHECKPOINT' | 'OTHER';  // 場所種別（バックエンド標準）
+  clientName?: string;             // 客先名
+  contactPerson?: string;          // 担当者名
+  contactPhone?: string;           // 電話番号
+  contactEmail?: string;           // メールアドレス
+  operatingHours?: string;         // 営業時間
+  accessInstructions?: string;     // アクセス方法
+  specialInstructions?: string;    // 特記事項
+  notes?: string;                  // 備考
+  isActive?: boolean;              // 有効フラグ
+  registrationMethod?: 'admin' | 'app';  // 登録方法
+  operationCount?: number;         // 運行回数
+  createdAt: string;               // 作成日時
+  updatedAt: string;               // 更新日時
+  
+  // ✅ 互換性のための古いフィールド名（非推奨だが互換性維持）
+  locationName?: string;           // @deprecated name を使用
+  gpsLatitude?: number;            // @deprecated latitude を使用
+  gpsLongitude?: number;           // @deprecated longitude を使用
+  type?: 'pickup' | 'delivery';    // @deprecated locationType を使用
 }
 
 // =====================================
@@ -121,7 +129,7 @@ export interface CargoType {
 }
 
 // =====================================
-// 運行記録関連
+// 運行記録関連（完全版）
 // =====================================
 export interface OperationRecord {
   id: string;
@@ -151,7 +159,7 @@ export interface OperationRecord {
 }
 
 // =====================================
-// GPS関連
+// GPS位置情報関連（完全版）
 // =====================================
 export interface GPSLocation {
   id: string;
@@ -184,7 +192,7 @@ export interface ReportFilter {
 // =====================================
 // API レスポンス
 // =====================================
-export interface ApiResponse<T> {
+export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   message?: string;
@@ -280,7 +288,7 @@ export interface MasterState {
 }
 
 // =====================================
-// オペレーションストア関連
+// オペレーションストア関連（完全版）
 // =====================================
 export interface OperationState {
   operations: OperationRecord[];
@@ -308,9 +316,13 @@ export interface OperationState {
   createOperation: (data: Partial<OperationRecord>) => Promise<boolean>;
   updateOperation: (id: string, data: Partial<OperationRecord>) => Promise<boolean>;
   deleteOperation: (id: string) => Promise<boolean>;
+  selectOperation: (operation: OperationRecord | null) => void;
   exportRecords: (filters?: FilterOptions) => Promise<void>;  // OperationRecords用
   
-  fetchGpsLocations: (vehicleId?: string) => Promise<void>;
+  fetchGPSLocations: (vehicleId: string, startDate?: string, endDate?: string) => Promise<void>;
+  fetchCurrentLocations: () => Promise<void>;
+  fetchGpsLocations: (vehicleId?: string) => Promise<void>;  // 互換性維持
+  
   setFilters: (filters: Partial<FilterOptions>) => void;
   setPage: (page: number) => void;
   clearError: () => void;

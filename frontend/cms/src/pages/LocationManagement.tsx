@@ -32,17 +32,18 @@ const LocationManagement: React.FC = () => {
   // フォームデータ
   const [formData, setFormData] = useState({
     clientName: '',
-    locationName: '',
+    name: '',
     address: '',
-    type: 'pickup' as 'pickup' | 'delivery',
-    gpsLatitude: 0,
-    gpsLongitude: 0,
+    locationType: 'DELIVERY' as 'PICKUP' | 'DELIVERY',
+    latitude: 0,
+    longitude: 0,
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // ページ初期化時にデータを取得
   useEffect(() => {
+    console.log('[LocationManagement] Initial mount - fetching locations');
     fetchLocations();
   }, [fetchLocations]);
 
@@ -54,19 +55,21 @@ const LocationManagement: React.FC = () => {
     }
   }, [locationError, clearErrors]);
 
-  // フィルタリング処理
-  const filteredLocations = locations.filter(location => {
+
+  const filteredLocations = Array.isArray(locations) ? locations.filter(location => {
     const matchesSearch = !searchTerm || 
       (location.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-      (location.locationName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-      location.address.toLowerCase().includes(searchTerm.toLowerCase());
+      (location.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
+      location.address?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
     
-    const matchesType = !typeFilter || location.type === typeFilter;
+    const matchesType = !typeFilter || location.locationType === typeFilter;
     
     return matchesSearch && matchesType;
-  });
+  }) : [];
 
-  // テーブルの列定義
+  console.log('[LocationManagement] Filtered locations:', filteredLocations.length);
+
+
   const columns = [
     {
       key: 'clientName',
@@ -74,7 +77,7 @@ const LocationManagement: React.FC = () => {
       sortable: true,
     },
     {
-      key: 'locationName',
+      key: 'name',
       header: '場所名',
       sortable: true,
     },
@@ -83,17 +86,17 @@ const LocationManagement: React.FC = () => {
       header: '住所',
       sortable: true,
       render: (value: string) => (
-        <span className="text-sm">{value}</span>
+        <span className="text-sm">{value || '-'}</span>
       ),
     },
     {
-      key: 'type',
+      key: 'locationType',
       header: '場所種別',
       render: (value: string) => (
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          value === 'pickup' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+          value === 'PICKUP' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
         }`}>
-          {value === 'pickup' ? '積込' : '積下'}
+          {value === 'PICKUP' ? '積込' : '積降'}
         </span>
       ),
     },
@@ -101,12 +104,12 @@ const LocationManagement: React.FC = () => {
       key: 'gpsCoordinates',
       header: 'GPS座標情報',
       render: (_: any, location: Location) => {
-        if (location.gpsLatitude && location.gpsLongitude) {
+        if (location.latitude && location.longitude) {
           return (
             <div className="flex items-center space-x-1">
               <MapPin className="h-4 w-4 text-green-500" />
               <span className="text-xs text-gray-600">
-                {location.gpsLatitude.toFixed(6)}, {location.gpsLongitude.toFixed(6)}
+                {Number(location.latitude).toFixed(6)}, {Number(location.longitude).toFixed(6)}
               </span>
             </div>
           );
@@ -150,21 +153,22 @@ const LocationManagement: React.FC = () => {
       errors.clientName = '客先名は必須です';
     }
 
-    if (!formData.locationName.trim()) {
-      errors.locationName = '場所名は必須です';
+
+    if (!formData.name.trim()) {
+      errors.name = '場所名は必須です';
     }
 
     if (!formData.address.trim()) {
       errors.address = '住所は必須です';
     }
 
-    // GPS座標のバリデーション（任意項目）
-    if (formData.gpsLatitude && (formData.gpsLatitude < -90 || formData.gpsLatitude > 90)) {
-      errors.gpsLatitude = '緯度は-90から90の間で入力してください';
+
+    if (formData.latitude && (formData.latitude < -90 || formData.latitude > 90)) {
+      errors.latitude = '緯度は-90から90の間で入力してください';
     }
 
-    if (formData.gpsLongitude && (formData.gpsLongitude < -180 || formData.gpsLongitude > 180)) {
-      errors.gpsLongitude = '経度は-180から180の間で入力してください';
+    if (formData.longitude && (formData.longitude < -180 || formData.longitude > 180)) {
+      errors.longitude = '経度は-180から180の間で入力してください';
     }
 
     setFormErrors(errors);
@@ -175,11 +179,11 @@ const LocationManagement: React.FC = () => {
   const resetForm = () => {
     setFormData({
       clientName: '',
-      locationName: '',
+      name: '',
       address: '',
-      type: 'pickup',
-      gpsLatitude: 0,
-      gpsLongitude: 0,
+      locationType: 'DELIVERY',
+      latitude: 0,
+      longitude: 0,
     });
     setFormErrors({});
   };
@@ -190,15 +194,16 @@ const LocationManagement: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  // 編集
+
   const handleEdit = (location: Location) => {
+    console.log('[LocationManagement] Editing location:', location);
     setFormData({
-      clientName: location.clientName || '',  // ✅ デフォルト値追加
-      locationName: location.locationName || '',  // ✅ デフォルト値追加
-      address: location.address,
-      type: location.type || 'pickup',
-      gpsLatitude: location.gpsLatitude || 0,
-      gpsLongitude: location.gpsLongitude || 0,
+      clientName: location.clientName || '',
+      name: location.name || '',
+      address: location.address || '',
+      locationType: location.locationType || 'DELIVERY',
+      latitude: location.latitude || 0,
+      longitude: location.longitude || 0,
     });
     setSelectedLocationId(location.id);
     setFormErrors({});
@@ -217,15 +222,18 @@ const LocationManagement: React.FC = () => {
 
     const locationData = {
       clientName: formData.clientName,
-      locationName: formData.locationName,
+      name: formData.name,
       address: formData.address,
-      type: formData.type,
+      locationType: formData.locationType,
       registrationMethod: 'admin' as const,
-      ...(formData.gpsLatitude && formData.gpsLongitude && {
-        gpsLatitude: formData.gpsLatitude,
-        gpsLongitude: formData.gpsLongitude,
+
+      ...(formData.latitude && formData.longitude && {
+        latitude: formData.latitude,
+        longitude: formData.longitude,
       }),
     };
+
+    console.log('[LocationManagement] Creating location:', locationData);
 
     const success = await createLocation(locationData);
 
@@ -242,14 +250,17 @@ const LocationManagement: React.FC = () => {
 
     const locationData = {
       clientName: formData.clientName,
-      locationName: formData.locationName,
+      name: formData.name,
       address: formData.address,
-      type: formData.type,
-      ...(formData.gpsLatitude && formData.gpsLongitude && {
-        gpsLatitude: formData.gpsLatitude,
-        gpsLongitude: formData.gpsLongitude,
+      locationType: formData.locationType,
+
+      ...(formData.latitude && formData.longitude && {
+        latitude: formData.latitude,
+        longitude: formData.longitude,
       }),
     };
+
+    console.log('[LocationManagement] Updating location:', selectedLocationId, locationData);
 
     const success = await updateLocation(selectedLocationId, locationData);
 
@@ -274,7 +285,7 @@ const LocationManagement: React.FC = () => {
     }
   };
 
-  if (locationLoading && locations.length === 0) {
+  if (locationLoading && (!locations || locations.length === 0)) {
     return <SectionLoading text="場所一覧を読み込み中..." />;
   }
 
@@ -283,9 +294,9 @@ const LocationManagement: React.FC = () => {
       {/* ページヘッダー */}
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-bold text-gray-900">積込・積下場所マスタ</h1>
+          <h1 className="text-2xl font-bold text-gray-900">積込・積降場所マスタ</h1>
           <p className="mt-2 text-sm text-gray-700">
-            積込場所・積下場所の登録・編集・削除を行います
+            積込場所・積降場所の登録・編集・削除を行います
           </p>
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
@@ -319,8 +330,8 @@ const LocationManagement: React.FC = () => {
           <Select
             options={[
               { value: '', label: 'すべての種別' },
-              { value: 'pickup', label: '積込' },
-              { value: 'delivery', label: '積下' },
+              { value: 'PICKUP', label: '積込' },
+              { value: 'DELIVERY', label: '積降' },
             ]}
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
@@ -360,12 +371,13 @@ const LocationManagement: React.FC = () => {
               required
             />
             
+            {/* ✅ locationName → name */}
             <Input
               label="場所名"
               type="text"
-              value={formData.locationName}
-              onChange={(e) => setFormData({ ...formData, locationName: e.target.value })}
-              error={formErrors.locationName}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              error={formErrors.name}
               placeholder="例: 岡山工場、○○現場"
               required
             />
@@ -381,41 +393,44 @@ const LocationManagement: React.FC = () => {
             required
           />
           
+          {/* ✅ 場所種別のオプション値を修正 */}
           <Select
             label="場所種別"
             options={[
-              { value: 'pickup', label: '積込' },
-              { value: 'delivery', label: '積下' },
+              { value: 'PICKUP', label: '積込' },
+              { value: 'DELIVERY', label: '積降' },
             ]}
-            value={formData.type}
-            onChange={(e) => setFormData({ ...formData, type: e.target.value as 'pickup' | 'delivery' })}
+            value={formData.locationType}
+            onChange={(e) => setFormData({ ...formData, locationType: e.target.value as 'PICKUP' | 'DELIVERY' })}
             required
           />
           
           <div className="border-t pt-4">
             <h4 className="text-sm font-medium text-gray-900 mb-3">GPS座標情報（任意）</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* ✅ gpsLatitude → latitude */}
               <Input
                 label="緯度"
                 type="number"
                 step="0.000001"
                 min="-90"
                 max="90"
-                value={formData.gpsLatitude}
-                onChange={(e) => setFormData({ ...formData, gpsLatitude: Number(e.target.value) })}
-                error={formErrors.gpsLatitude}
+                value={formData.latitude}
+                onChange={(e) => setFormData({ ...formData, latitude: Number(e.target.value) })}
+                error={formErrors.latitude}
                 placeholder="例: 34.661749"
               />
               
+              {/* ✅ gpsLongitude → longitude */}
               <Input
                 label="経度"
                 type="number"
                 step="0.000001"
                 min="-180"
                 max="180"
-                value={formData.gpsLongitude}
-                onChange={(e) => setFormData({ ...formData, gpsLongitude: Number(e.target.value) })}
-                error={formErrors.gpsLongitude}
+                value={formData.longitude}
+                onChange={(e) => setFormData({ ...formData, longitude: Number(e.target.value) })}
+                error={formErrors.longitude}
                 placeholder="例: 133.934406"
               />
             </div>
@@ -450,12 +465,13 @@ const LocationManagement: React.FC = () => {
               required
             />
             
+            {/* ✅ locationName → name */}
             <Input
               label="場所名"
               type="text"
-              value={formData.locationName}
-              onChange={(e) => setFormData({ ...formData, locationName: e.target.value })}
-              error={formErrors.locationName}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              error={formErrors.name}
               required
             />
           </div>
@@ -469,40 +485,43 @@ const LocationManagement: React.FC = () => {
             required
           />
           
+          {/* ✅ 場所種別のオプション値を修正 */}
           <Select
             label="場所種別"
             options={[
-              { value: 'pickup', label: '積込' },
-              { value: 'delivery', label: '積下' },
+              { value: 'PICKUP', label: '積込' },
+              { value: 'DELIVERY', label: '積降' },
             ]}
-            value={formData.type}
-            onChange={(e) => setFormData({ ...formData, type: e.target.value as 'pickup' | 'delivery' })}
+            value={formData.locationType}
+            onChange={(e) => setFormData({ ...formData, locationType: e.target.value as 'PICKUP' | 'DELIVERY' })}
             required
           />
           
           <div className="border-t pt-4">
             <h4 className="text-sm font-medium text-gray-900 mb-3">GPS座標情報（任意）</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* ✅ gpsLatitude → latitude */}
               <Input
                 label="緯度"
                 type="number"
                 step="0.000001"
                 min="-90"
                 max="90"
-                value={formData.gpsLatitude}
-                onChange={(e) => setFormData({ ...formData, gpsLatitude: Number(e.target.value) })}
-                error={formErrors.gpsLatitude}
+                value={formData.latitude}
+                onChange={(e) => setFormData({ ...formData, latitude: Number(e.target.value) })}
+                error={formErrors.latitude}
               />
               
+              {/* ✅ gpsLongitude → longitude */}
               <Input
                 label="経度"
                 type="number"
                 step="0.000001"
                 min="-180"
                 max="180"
-                value={formData.gpsLongitude}
-                onChange={(e) => setFormData({ ...formData, gpsLongitude: Number(e.target.value) })}
-                error={formErrors.gpsLongitude}
+                value={formData.longitude}
+                onChange={(e) => setFormData({ ...formData, longitude: Number(e.target.value) })}
+                error={formErrors.longitude}
               />
             </div>
           </div>

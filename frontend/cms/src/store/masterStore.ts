@@ -195,11 +195,29 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     set({ locationLoading: true, locationError: null });
 
     try {
+      console.log('[masterStore] fetchLocations 開始', filters);
       const response = await locationAPI.getLocations(filters);
+      console.log('[masterStore] APIレスポンス:', response);
 
       if (response.success && response.data) {
+        // 二重ネスト構造の確認
+        let locationsData: Location[];
+        
+        if (Array.isArray(response.data)) {
+          // response.dataが直接配列の場合
+          locationsData = response.data;
+          console.log('[masterStore] パターン1: 直接配列', locationsData.length);
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          // response.data.dataが配列の場合（二重ネスト）
+          locationsData = response.data.data;
+          console.log('[masterStore] パターン2: 二重ネスト', locationsData.length);
+        } else {
+          console.error('[masterStore] 予期しないデータ構造:', response.data);
+          locationsData = [];
+        }
+
         set({
-          locations: response.data,
+          locations: locationsData,
           locationLoading: false,
         });
       } else {
@@ -209,6 +227,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         });
       }
     } catch (error) {
+      console.error('[masterStore] fetchLocations エラー:', error);
       set({
         locationError: 'ネットワークエラーが発生しました',
         locationLoading: false,
