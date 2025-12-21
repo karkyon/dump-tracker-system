@@ -29,8 +29,17 @@ const LocationManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
+  interface LocationFormData {
+    clientName: string;
+    name: string;
+    address: string;
+    locationType: 'PICKUP' | 'DELIVERY' | 'DEPOT' | 'MAINTENANCE' | 'FUEL_STATION' | 'REST_AREA' | 'CHECKPOINT' | 'OTHER';
+    latitude: number;
+    longitude: number;
+  }
+
   // フォームデータ
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<LocationFormData>({
     clientName: '',
     name: '',
     address: '',

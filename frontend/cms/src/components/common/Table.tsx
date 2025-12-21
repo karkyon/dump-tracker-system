@@ -151,16 +151,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         switch (status) {
           case 'ACTIVE':
           case 'active':
-          case true:
             return { color: 'bg-green-100 text-green-800', label: '有効' };
           case 'INACTIVE':
           case 'inactive':
-          case false:
             return { color: 'bg-gray-100 text-gray-800', label: '無効' };
           default:
             return { color: 'bg-gray-100 text-gray-800', label: status };
         }
-      case 'vehicle':
         switch (status) {
           case 'ACTIVE':
             return { color: 'bg-green-100 text-green-800', label: '稼働中' };

@@ -70,6 +70,7 @@ export interface InspectionItem {
   description?: string;
   category?: 'pre' | 'post';
   type?: string;
+  inputType?: 'CHECKBOX' | 'TEXT' | 'NUMBER' | 'SELECT' | 'TEXTAREA';  // 追加
   order?: number;
   isRequired?: boolean;
   isActive?: boolean;
