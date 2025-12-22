@@ -6,7 +6,8 @@ import { Location } from '../types';
 import Button from '../components/common/Button';
 import Input, { Select } from '../components/common/Input';
 import Table, { ActionButtons } from '../components/common/Table';
-import { FormModal, ConfirmDialog } from '../components/common/Modal';
+import { ConfirmDialog } from '../components/common/Modal';
+import LocationFormModal from '../components/location/LocationFormModal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate } from '../utils/helpers';
 
@@ -33,7 +34,7 @@ const LocationManagement: React.FC = () => {
     clientName: string;
     name: string;
     address: string;
-    locationType: 'PICKUP' | 'DELIVERY' | 'DEPOT' | 'MAINTENANCE' | 'FUEL_STATION' | 'REST_AREA' | 'CHECKPOINT' | 'OTHER';
+    locationType: 'PICKUP' | 'DELIVERY';
     latitude: number;
     longitude: number;
   }
@@ -43,12 +44,10 @@ const LocationManagement: React.FC = () => {
     clientName: '',
     name: '',
     address: '',
-    locationType: 'DELIVERY' as 'PICKUP' | 'DELIVERY',
+    locationType: 'DELIVERY',
     latitude: 0,
     longitude: 0,
   });
-
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // ページ初期化時にデータを取得
   useEffect(() => {
@@ -64,7 +63,7 @@ const LocationManagement: React.FC = () => {
     }
   }, [locationError, clearErrors]);
 
-
+  // フィルタリング処理
   const filteredLocations = Array.isArray(locations) ? locations.filter(location => {
     const matchesSearch = !searchTerm || 
       (location.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
@@ -78,7 +77,7 @@ const LocationManagement: React.FC = () => {
 
   console.log('[LocationManagement] Filtered locations:', filteredLocations.length);
 
-
+  // テーブルの列定義
   const columns = [
     {
       key: 'clientName',
@@ -154,38 +153,8 @@ const LocationManagement: React.FC = () => {
     },
   ];
 
-  // フォームバリデーション
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!formData.clientName.trim()) {
-      errors.clientName = '客先名は必須です';
-    }
-
-
-    if (!formData.name.trim()) {
-      errors.name = '場所名は必須です';
-    }
-
-    if (!formData.address.trim()) {
-      errors.address = '住所は必須です';
-    }
-
-
-    if (formData.latitude && (formData.latitude < -90 || formData.latitude > 90)) {
-      errors.latitude = '緯度は-90から90の間で入力してください';
-    }
-
-    if (formData.longitude && (formData.longitude < -180 || formData.longitude > 180)) {
-      errors.longitude = '経度は-180から180の間で入力してください';
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // フォームをリセット
-  const resetForm = () => {
+  // 新規作成
+  const handleCreate = () => {
     setFormData({
       clientName: '',
       name: '',
@@ -194,28 +163,23 @@ const LocationManagement: React.FC = () => {
       latitude: 0,
       longitude: 0,
     });
-    setFormErrors({});
-  };
-
-  // 新規作成
-  const handleCreate = () => {
-    resetForm();
     setShowCreateModal(true);
   };
 
-
+  // 編集
   const handleEdit = (location: Location) => {
     console.log('[LocationManagement] Editing location:', location);
     setFormData({
       clientName: location.clientName || '',
       name: location.name || '',
       address: location.address || '',
-      locationType: location.locationType || 'DELIVERY',
+      locationType: (location.locationType === 'PICKUP' || location.locationType === 'DELIVERY') 
+        ? location.locationType 
+        : 'DELIVERY',
       latitude: location.latitude || 0,
       longitude: location.longitude || 0,
     });
     setSelectedLocationId(location.id);
-    setFormErrors({});
     setShowEditModal(true);
   };
 
@@ -225,20 +189,17 @@ const LocationManagement: React.FC = () => {
     setShowDeleteDialog(true);
   };
 
-  // 作成処理
-  const handleSubmitCreate = async () => {
-    if (!validateForm()) return;
-
+  // 作成処理（新しいLocationFormModal用）
+  const handleSubmitCreate = async (data: Omit<LocationFormData, 'postalCode'>) => {
     const locationData = {
-      clientName: formData.clientName,
-      name: formData.name,
-      address: formData.address,
-      locationType: formData.locationType,
+      clientName: data.clientName,
+      name: data.name,
+      address: data.address,
+      locationType: data.locationType,
       registrationMethod: 'admin' as const,
-
-      ...(formData.latitude && formData.longitude && {
-        latitude: formData.latitude,
-        longitude: formData.longitude,
+      ...(data.latitude && data.longitude && {
+        latitude: data.latitude,
+        longitude: data.longitude,
       }),
     };
 
@@ -249,23 +210,21 @@ const LocationManagement: React.FC = () => {
     if (success) {
       toast.success('場所を登録しました');
       setShowCreateModal(false);
-      resetForm();
     }
   };
 
-  // 更新処理
-  const handleSubmitEdit = async () => {
-    if (!validateForm() || !selectedLocationId) return;
+  // 更新処理（新しいLocationFormModal用）
+  const handleSubmitEdit = async (data: Omit<LocationFormData, 'postalCode'>) => {
+    if (!selectedLocationId) return;
 
     const locationData = {
-      clientName: formData.clientName,
-      name: formData.name,
-      address: formData.address,
-      locationType: formData.locationType,
-
-      ...(formData.latitude && formData.longitude && {
-        latitude: formData.latitude,
-        longitude: formData.longitude,
+      clientName: data.clientName,
+      name: data.name,
+      address: data.address,
+      locationType: data.locationType,
+      ...(data.latitude && data.longitude && {
+        latitude: data.latitude,
+        longitude: data.longitude,
       }),
     };
 
@@ -276,7 +235,6 @@ const LocationManagement: React.FC = () => {
     if (success) {
       toast.success('場所情報を更新しました');
       setShowEditModal(false);
-      resetForm();
       setSelectedLocationId(null);
     }
   };
@@ -356,186 +314,34 @@ const LocationManagement: React.FC = () => {
         emptyMessage="場所が見つかりません"
       />
 
-      {/* 新規作成モーダル */}
-      <FormModal
+      {/* 新規作成モーダル（新しいLocationFormModal） */}
+      <LocationFormModal
         isOpen={showCreateModal}
-        onClose={() => {
-          setShowCreateModal(false);
-          resetForm();
-        }}
+        onClose={() => setShowCreateModal(false)}
         title="新規場所追加"
         onSubmit={handleSubmitCreate}
         loading={locationLoading}
-        size="lg"
-      >
-        <div className="grid grid-cols-1 gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="客先名"
-              type="text"
-              value={formData.clientName}
-              onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-              error={formErrors.clientName}
-              placeholder="例: 株式会社○○"
-              required
-            />
-            
-            {/* ✅ locationName → name */}
-            <Input
-              label="場所名"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              error={formErrors.name}
-              placeholder="例: 岡山工場、○○現場"
-              required
-            />
-          </div>
-          
-          <Input
-            label="住所"
-            type="text"
-            value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-            error={formErrors.address}
-            placeholder="例: 岡山県岡山市北区大供1-1-1"
-            required
-          />
-          
-          {/* ✅ 場所種別のオプション値を修正 */}
-          <Select
-            label="場所種別"
-            options={[
-              { value: 'PICKUP', label: '積込' },
-              { value: 'DELIVERY', label: '積降' },
-            ]}
-            value={formData.locationType}
-            onChange={(e) => setFormData({ ...formData, locationType: e.target.value as 'PICKUP' | 'DELIVERY' })}
-            required
-          />
-          
-          <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">GPS座標情報（任意）</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* ✅ gpsLatitude → latitude */}
-              <Input
-                label="緯度"
-                type="number"
-                step="0.000001"
-                min="-90"
-                max="90"
-                value={formData.latitude}
-                onChange={(e) => setFormData({ ...formData, latitude: Number(e.target.value) })}
-                error={formErrors.latitude}
-                placeholder="例: 34.661749"
-              />
-              
-              {/* ✅ gpsLongitude → longitude */}
-              <Input
-                label="経度"
-                type="number"
-                step="0.000001"
-                min="-180"
-                max="180"
-                value={formData.longitude}
-                onChange={(e) => setFormData({ ...formData, longitude: Number(e.target.value) })}
-                error={formErrors.longitude}
-                placeholder="例: 133.934406"
-              />
-            </div>
-            <p className="mt-2 text-xs text-gray-500">
-              GPS座標を設定すると、モバイルアプリで自動入力が可能になります
-            </p>
-          </div>
-        </div>
-      </FormModal>
+      />
 
-      {/* 編集モーダル */}
-      <FormModal
+      {/* 編集モーダル（新しいLocationFormModal） */}
+      <LocationFormModal
         isOpen={showEditModal}
         onClose={() => {
           setShowEditModal(false);
-          resetForm();
           setSelectedLocationId(null);
         }}
         title="場所情報編集"
+        initialData={{
+          clientName: formData.clientName,
+          name: formData.name,
+          address: formData.address,
+          locationType: formData.locationType,
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+        }}
         onSubmit={handleSubmitEdit}
         loading={locationLoading}
-        size="lg"
-      >
-        <div className="grid grid-cols-1 gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="客先名"
-              type="text"
-              value={formData.clientName}
-              onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-              error={formErrors.clientName}
-              required
-            />
-            
-            {/* ✅ locationName → name */}
-            <Input
-              label="場所名"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              error={formErrors.name}
-              required
-            />
-          </div>
-          
-          <Input
-            label="住所"
-            type="text"
-            value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-            error={formErrors.address}
-            required
-          />
-          
-          {/* ✅ 場所種別のオプション値を修正 */}
-          <Select
-            label="場所種別"
-            options={[
-              { value: 'PICKUP', label: '積込' },
-              { value: 'DELIVERY', label: '積降' },
-            ]}
-            value={formData.locationType}
-            onChange={(e) => setFormData({ ...formData, locationType: e.target.value as 'PICKUP' | 'DELIVERY' })}
-            required
-          />
-          
-          <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">GPS座標情報（任意）</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* ✅ gpsLatitude → latitude */}
-              <Input
-                label="緯度"
-                type="number"
-                step="0.000001"
-                min="-90"
-                max="90"
-                value={formData.latitude}
-                onChange={(e) => setFormData({ ...formData, latitude: Number(e.target.value) })}
-                error={formErrors.latitude}
-              />
-              
-              {/* ✅ gpsLongitude → longitude */}
-              <Input
-                label="経度"
-                type="number"
-                step="0.000001"
-                min="-180"
-                max="180"
-                value={formData.longitude}
-                onChange={(e) => setFormData({ ...formData, longitude: Number(e.target.value) })}
-                error={formErrors.longitude}
-              />
-            </div>
-          </div>
-        </div>
-      </FormModal>
+      />
 
       {/* 削除確認ダイアログ */}
       <ConfirmDialog
