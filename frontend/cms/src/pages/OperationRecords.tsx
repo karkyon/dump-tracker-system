@@ -23,9 +23,12 @@ const OperationRecords: React.FC = () => {
     exportOperationsCSV
   } = useOperationStore();
 
+  // ✅ 修正: 初回マウント時のみfetchOperationsを実行（無限ループ防止）
   useEffect(() => {
+    console.log('[OperationRecords] Initial mount - fetching operations');
     fetchOperations();
-  }, [fetchOperations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // 空の依存配列 = 初回マウント時のみ実行
 
   // ✅ 修正: オプショナルチェーンで安全にアクセス
   const filteredRecords = operations.filter((record: OperationRecord) => {

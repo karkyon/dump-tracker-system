@@ -2,8 +2,9 @@
 // backend/src/config/swagger.ts
 // Swagger API文書統合設定 - 企業レベル完全統合版（UI完全動作対応）
 // 5層統合システム・企業レベル完全機能・統合エンドポイント反映版
-// 最終更新: 2025年10月20日
-// 修正内容: UI動作不具合解消（docExpansion設定最適化）
+// 🔧🔧🔧 運行管理・GPS管理説明追加版
+// 最終更新: 2025年12月24日
+// 修正内容: operationRoutes, operationDetailRoutes, gpsRoutes のtagsに詳細説明追加
 // 依存関係: routes/index.ts, 全routesファイル, 統合基盤システム
 // 統合基盤: 5層統合システム・モバイル統合基盤・企業レベル完全機能
 // =====================================
@@ -460,8 +461,20 @@ const swaggerOptions: swaggerJsdoc.Options = {
         description: 'フリート管理・ステータス・予防保全API'
       },
       {
-        name: '🗺️ 運行管理 (Trip Management)',
+        name: '🗺️ 運行管理 (Operations Management)',
+        description: `運行CRUD（一覧取得・詳細取得・作成・更新・削除）、運行開始/終了、車両別ステータス取得、アクティブ運行一覧、運行効率分析、運行統計取得API - 運行記録の完全管理と効率分析を実現`
+      },
+      {
+        name: '🗺️ 運行詳細管理 (Operation Details Management)',
+        description: `運行詳細CRUD（一覧取得・詳細取得・作成・更新・削除）、運行別詳細一覧、作業効率分析、一括作業操作、運行詳細統計API - 積込・積卸作業の詳細記録と効率分析`
+      },
+      {
+        name: '🗺️ 運行記録管理 (Trip Management)',
         description: 'GPS連携・リアルタイム追跡・効率分析API'
+      },
+      {
+        name: '🌐 GPS管理 (GPS Management)',
+        description: `リアルタイム位置追跡（全車両位置取得・特定車両位置取得）、エリア内検索、ヒートマップデータ取得、移動軌跡データ取得、ジオフェンシング（一覧取得・作成・違反検出）、速度違反検出、アイドリング分析、移動パターン分析、ルート最適化、GPS統計API - 車両位置情報の包括的管理と分析`
       },
       {
         name: '🔧 点検項目管理 (Inspection Items Management)',

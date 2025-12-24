@@ -82,29 +82,89 @@ export const useOperationStore = create<OperationState>((set, get) => ({
         pageSize: get().operationPagination.pageSize,
       };
 
+      console.log('[OperationStore] fetchOperations called with params:', params);
+
       const response = await operationAPI.getOperations(params);
 
+      console.log('[OperationStore] Full API response:', response);
+
       if (response.success && response.data) {
-        // ✅ 修正: PaginatedResponse の正しい構造に対応
-        const paginatedData = response.data as PaginatedResponse<OperationRecord>;
+        // ✅ 2重ネスト構造を解決
+        // apiClient.get戻り値: { success: true, data: <バックエンドレスポンス全体> }
+        // バックエンドレスポンス: { success: true, data: { operations: [...], pagination: {...} } }
+        const backendData = (response.data as any).data;
+
+        console.log('[OperationStore] Extracted backend data:', backendData);
+
+        // ✅ 複数のレスポンス構造パターンに対応
+        let operations: any[] = [];
+        let paginationInfo: any = {};
+
+        // パターン1: { operations: [...], pagination: {...} }
+        if (backendData?.operations && Array.isArray(backendData.operations)) {
+          console.log('[OperationStore] Pattern 1: backendData.operations detected');
+          operations = backendData.operations;
+          paginationInfo = backendData.pagination || {};
+        }
+        // パターン2: { data: [...], pagination: {...} }
+        else if (backendData?.data && Array.isArray(backendData.data)) {
+          console.log('[OperationStore] Pattern 2: backendData.data detected');
+          operations = backendData.data;
+          paginationInfo = backendData.pagination || {};
+        }
+        // パターン3: 直接配列 [...]
+        else if (Array.isArray(backendData)) {
+          console.log('[OperationStore] Pattern 3: Direct array detected');
+          operations = backendData;
+          paginationInfo = (response as any).pagination || {};
+        }
+        // パターン4: response.data自体が配列
+        else if (Array.isArray(response.data)) {
+          console.log('[OperationStore] Pattern 4: response.data is array');
+          operations = response.data;
+        }
+
+        console.log('[OperationStore] Extracted operations count:', operations.length);
+        console.log('[OperationStore] Extracted pagination:', paginationInfo);
+
+        // ページネーション情報の取得（多段階フォールバック）
+        const page = paginationInfo.page || params.page || 1;
+        const limit = paginationInfo.limit || paginationInfo.pageSize || params.pageSize || 10;
+        const total = paginationInfo.total || operations.length;
+        const totalPages = paginationInfo.totalPages || Math.ceil(total / limit);
+
+        console.log('[OperationStore] Final pagination values:', {
+          page,
+          limit,
+          total,
+          totalPages
+        });
+
         set({
-          operations: paginatedData.data,  // items → data
+          operations: operations,
           operationPagination: {
-            page: paginatedData.pagination.page,
-            pageSize: paginatedData.pagination.pageSize,
-            total: paginatedData.pagination.total,
-            totalPages: paginatedData.pagination.totalPages,
+            page,
+            pageSize: limit,
+            total,
+            totalPages,
           },
           operationFilters: currentFilters,
           operationLoading: false,
         });
+
+        console.log('[OperationStore] fetchOperations success:', {
+          operationsCount: operations.length,
+          pagination: { page, limit, total, totalPages }
+        });
       } else {
+        console.error('[OperationStore] API response error:', response.error);
         set({
           operationError: response.error || '運行記録の取得に失敗しました',
           operationLoading: false,
         });
       }
     } catch (error) {
+      console.error('[OperationStore] Network error:', error);
       set({
         operationError: 'ネットワークエラーが発生しました',
         operationLoading: false,
