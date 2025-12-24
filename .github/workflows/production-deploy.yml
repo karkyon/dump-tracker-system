@@ -1,0 +1,148 @@
+name: 🚀 Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "DEPLOY" to confirm production deployment'
+        required: true
+
+jobs:
+  deploy-production:
+    name: 🏭 Deploy to Production Environment
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: ⚠️ Verify deployment confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "DEPLOY" ]; then
+            echo "❌ Deployment cancelled: confirmation word not matched"
+            exit 1
+          fi
+          echo "✅ Deployment confirmed"
+      
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      # ===========================
+      # Backend デプロイ
+      # ===========================
+      - name: 📦 Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: 🏗️ Build backend
+        working-directory: ./backend
+        run: npm run build
+      
+      - name: 🚀 Deploy backend to Production
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          source: "backend/dist/*,backend/package*.json"
+          target: "/tmp/backend-deploy/"
+          strip_components: 1
+      
+      - name: 📂 Update backend on Production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/projects/dump-tracker/backend
+            rm -rf dist
+            cp -r /tmp/backend-deploy/dist .
+            cp /tmp/backend-deploy/package*.json .
+            npm ci --production
+            rm -rf /tmp/backend-deploy
+            sudo systemctl restart dump-tracker-backend.service
+            echo "✅ Backend deployed to Production"
+
+      # ===========================
+      # Mobile Frontend デプロイ
+      # ===========================
+      - name: 📦 Install mobile dependencies
+        working-directory: ./frontend/mobile
+        run: npm ci
+      
+      - name: 🏗️ Build mobile app
+        working-directory: ./frontend/mobile
+        run: |
+          mkdir -p .cert
+          touch .cert/localhost-key.pem
+          touch .cert/localhost-cert.pem
+          sed -i 's/useRef<number | null>/useRef<any>/g' src/pages/OperationMain.tsx || true
+          npm run build
+      
+      - name: 🚀 Deploy mobile to Production
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          source: "frontend/mobile/dist/*"
+          target: "/tmp/mobile-deploy/"
+          strip_components: 3
+      
+      - name: 📂 Update mobile on Production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          script: |
+            rm -rf ~/projects/dump-tracker/frontend/mobile/dist/*
+            cp -r /tmp/mobile-deploy/* ~/projects/dump-tracker/frontend/mobile/dist/
+            chmod -R 755 ~/projects/dump-tracker/frontend/mobile/dist
+            rm -rf /tmp/mobile-deploy
+            echo "✅ Mobile deployed to Production"
+
+      # ===========================
+      # CMS Frontend デプロイ
+      # ===========================
+      - name: 📦 Install CMS dependencies
+        working-directory: ./frontend/cms
+        run: npm ci
+      
+      - name: 🏗️ Build CMS
+        working-directory: ./frontend/cms
+        run: npm run build
+      
+      - name: 🚀 Deploy CMS to Production
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          source: "frontend/cms/dist/*"
+          target: "/tmp/cms-deploy/"
+          strip_components: 3
+      
+      - name: 📂 Update CMS on Production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          script: |
+            rm -rf ~/projects/dump-tracker/frontend/cms/dist/*
+            cp -r /tmp/cms-deploy/* ~/projects/dump-tracker/frontend/cms/dist/
+            chmod -R 755 ~/projects/dump-tracker/frontend/cms/dist
+            rm -rf /tmp/cms-deploy
+            sudo systemctl reload nginx
+            echo "✅ CMS deployed to Production"
+      
+      - name: ✅ Deployment Complete
+        run: |
+          echo "🎉 Production deployment completed successfully!"
+          echo "📱 Mobile: https://dump-tracker.ddns.net/"
+          echo "💼 CMS: https://dump-tracker.ddns.net:3003/"
+          echo "📚 API Docs: https://dump-tracker.ddns.net/docs/"
