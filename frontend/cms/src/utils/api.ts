@@ -571,40 +571,40 @@ export const locationAPI = {
 // 品目関連API
 // ===================================
 
-export const cargoTypeAPI = {
+export const itemAPI = {
   /**
    * 品目一覧取得
    */
-  async getCargoTypes(params?: any): Promise<ApiResponse<any>> {
-    return apiClient.get('/cargo-types', { params });
+  async getItems(params?: any): Promise<ApiResponse<any>> {
+    return apiClient.get('/items', { params });
   },
 
   /**
    * 品目作成
    */
-  async createCargoType(cargoData: any): Promise<ApiResponse<any>> {
-    return apiClient.post('/cargo-types', cargoData);
+  async createItem(cargoData: any): Promise<ApiResponse<any>> {
+    return apiClient.post('/items', cargoData);
   },
 
   /**
    * 品目更新
    */
-  async updateCargoType(id: string, cargoData: any): Promise<ApiResponse<any>> {
-    return apiClient.put(`/cargo-types/${id}`, cargoData);
+  async updateItem(id: string, cargoData: any): Promise<ApiResponse<any>> {
+    return apiClient.put(`/items/${id}`, cargoData);
   },
 
   /**
    * 品目削除
    */
-  async deleteCargoType(id: string): Promise<ApiResponse<void>> {
-    return apiClient.delete(`/cargo-types/${id}`);
+  async deleteItem(id: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/items/${id}`);
   },
 
   /**
    * 表示順更新
    */
   async updateOrder(items: { id: string; order: number }[]): Promise<ApiResponse<void>> {
-    return apiClient.post('/cargo-types/update-order', { items });
+    return apiClient.post('/items/update-order', { items });
   }
 };
 

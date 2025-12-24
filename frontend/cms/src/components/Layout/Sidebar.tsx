@@ -1,9 +1,7 @@
-// frontend/cms/src/components/Layout/Sidebar.tsx - 完全修正版
-// 🔧 修正内容: メニュー名を「○○管理」に統一
-// - 「車両マスタ」→「車両管理」
-// - 「点検項目マスタ」→「点検項目管理」
-// - 「積込・積下場所マスタ」→「積込・積下場所管理」
-// - 「品目マスタ管理」→「品目管理」
+// frontend/cms/src/components/Layout/Sidebar.tsx - constants.ts統合版
+// 🔧 修正内容: constants.ts の NAVIGATION_ITEMS をインポートして使用
+// - menuItems を削除し、NAVIGATION_ITEMS を使用
+// - アイコンマッピングを追加
 // 既存機能: すべてのコード・ロジック・コメントを100%保持
 
 import React from 'react';
@@ -19,78 +17,30 @@ import {
   Navigation,
   Download,
   Settings,
+  LucideIcon,
 } from 'lucide-react';
+import { NAVIGATION_ITEMS } from '../../utils/constants';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  // ✅ 修正: メニュー名を「○○管理」に統一
-  const menuItems = [
-    {
-      id: 'dashboard',
-      name: 'ダッシュボード',
-      path: '/dashboard',
-      icon: BarChart3,
-    },
-    {
-      id: 'users',
-      name: 'ユーザー管理',      // 既存のまま
-      path: '/users',
-      icon: Users,
-    },
-    {
-      id: 'vehicles',
-      name: '車両管理',          // ✅ 修正: 「車両マスタ」→「車両管理」
-      path: '/vehicles',
-      icon: Truck,
-    },
-    {
-      id: 'inspection-items',
-      name: '点検項目管理',      // ✅ 修正: 「点検項目マスタ」→「点検項目管理」
-      path: '/inspection-items',
-      icon: CheckSquare,
-    },
-    {
-      id: 'locations',
-      name: '積込・積下場所管理',  // ✅ 修正: 「積込・積下場所マスタ」→「積込・積下場所管理」
-      path: '/locations',
-      icon: MapPin,
-    },
-    {
-      id: 'cargo-types',
-      name: '品目管理',          // ✅ 修正: 「品目マスタ管理」→「品目管理」
-      path: '/cargo-types',
-      icon: Package,
-    },
-    {
-      id: 'operations',
-      name: '運行記録',          // 既存のまま
-      path: '/operations',
-      icon: FileText,
-    },
-    {
-      id: 'gps-monitoring',
-      name: 'GPSモニタリング',    // 既存のまま
-      path: '/gps-monitoring',
-      icon: Navigation,
-    },
-    {
-      id: 'reports',
-      name: '帳票出力',          // 既存のまま
-      path: '/reports',
-      icon: Download,
-    },
-    {
-      id: 'settings',
-      name: 'システム設定',      // 既存のまま
-      path: '/settings',
-      icon: Settings,
-    },
-  ];
+// ✅ アイコン名から実際のアイコンコンポーネントへのマッピング
+const iconMap: Record<string, LucideIcon> = {
+  BarChart3: BarChart3,
+  Users: Users,
+  Truck: Truck,
+  CheckSquare: CheckSquare,
+  MapPin: MapPin,
+  Package: Package,
+  FileText: FileText,
+  Navigation: Navigation,
+  Download: Download,
+  Settings: Settings,
+};
 
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const handleNavClick = () => {
     // モバイルでナビゲーション時にサイドバーを閉じる
     if (window.innerWidth < 1024) {
@@ -135,8 +85,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
           {/* ナビゲーションメニュー */}
           <nav className="flex-1 px-2 py-4 bg-gray-800 space-y-1 overflow-y-auto">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
+            {NAVIGATION_ITEMS.map((item) => {
+              // ✅ constants.ts の icon 文字列から実際のアイコンコンポーネントを取得
+              const Icon = iconMap[item.icon];
+              
               return (
                 <NavLink
                   key={item.id}

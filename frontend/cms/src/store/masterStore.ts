@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { InspectionItem, Location, CargoType, FilterOptions } from '../types';
-import { inspectionItemAPI, locationAPI, cargoTypeAPI } from '../utils/api';
+import { InspectionItem, Location, Item, FilterOptions } from '../types';
+import { inspectionItemAPI, locationAPI, itemAPI } from '../utils/api';
 
 interface MasterState {
   // 点検項目
@@ -14,9 +14,9 @@ interface MasterState {
   locationError: string | null;
 
   // 品目
-  cargoTypes: CargoType[];
-  cargoLoading: boolean;
-  cargoError: string | null;
+  items: Item[];
+  itemLoading: boolean;
+  itemError: string | null;
 
   // アクション - 点検項目
   fetchInspectionItems: (filters?: FilterOptions) => Promise<void>;
@@ -32,11 +32,11 @@ interface MasterState {
   deleteLocation: (id: string) => Promise<boolean>;
 
   // アクション - 品目
-  fetchCargoTypes: (filters?: FilterOptions) => Promise<void>;
-  createCargoType: (cargoData: Partial<CargoType>) => Promise<boolean>;
-  updateCargoType: (id: string, cargoData: Partial<CargoType>) => Promise<boolean>;
-  deleteCargoType: (id: string) => Promise<boolean>;
-  updateCargoOrder: (items: { id: string; order: number }[]) => Promise<boolean>;
+  fetchItems: (filters?: FilterOptions) => Promise<void>;
+  createItem: (itemData: Partial<Item>) => Promise<boolean>;
+  updateItem: (id: string, itemData: Partial<Item>) => Promise<boolean>;
+  deleteItem: (id: string) => Promise<boolean>;
+  updateItemOrder: (items: { id: string; order: number }[]) => Promise<boolean>;
 
   // エラークリア
   clearErrors: () => void;
@@ -52,9 +52,9 @@ export const useMasterStore = create<MasterState>((set, get) => ({
   locationLoading: false,
   locationError: null,
   
-  cargoTypes: [],
-  cargoLoading: false,
-  cargoError: null,
+  items: [],
+  itemLoading: false,
+  itemError: null,
 
   // 点検項目一覧取得
   fetchInspectionItems: async (filters = {}) => {
@@ -317,134 +317,153 @@ export const useMasterStore = create<MasterState>((set, get) => ({
   },
 
   // 品目一覧取得
-  fetchCargoTypes: async (filters = {}) => {
-    set({ cargoLoading: true, cargoError: null });
+  fetchItems: async (filters = {}) => {
+    set({ itemLoading: true, itemError: null });
 
     try {
-      const response = await cargoTypeAPI.getCargoTypes(filters);
+      console.log('[masterStore] fetchItems 開始', filters);
+      const response = await itemAPI.getItems(filters);
+      console.log('[masterStore] APIレスポンス:', response);
 
       if (response.success && response.data) {
+        // 二重ネスト構造の確認
+        let itemsData: Item[];
+        
+        if (Array.isArray(response.data)) {
+          // response.dataが直接配列の場合
+          itemsData = response.data;
+          console.log('[masterStore] パターン1: 直接配列', itemsData.length);
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          // response.data.dataが配列の場合（二重ネスト）
+          itemsData = response.data.data;
+          console.log('[masterStore] パターン2: 二重ネスト', itemsData.length);
+        } else {
+          console.error('[masterStore] 予期しないデータ構造:', response.data);
+          itemsData = [];
+        }
+
         set({
-          cargoTypes: response.data,
-          cargoLoading: false,
+          items: itemsData,
+          itemLoading: false,
         });
       } else {
         set({
-          cargoError: response.error || '品目の取得に失敗しました',
-          cargoLoading: false,
+          itemError: response.error || '品目の取得に失敗しました',
+          itemLoading: false,
         });
       }
     } catch (error) {
+      console.error('[masterStore] fetchItems エラー:', error);
       set({
-        cargoError: 'ネットワークエラーが発生しました',
-        cargoLoading: false,
+        itemError: 'ネットワークエラーが発生しました',
+        itemLoading: false,
       });
     }
   },
 
   // 品目作成
-  createCargoType: async (cargoData: Partial<CargoType>) => {
-    set({ cargoLoading: true, cargoError: null });
+  createItem: async (itemData: Partial<Item>) => {
+    set({ itemLoading: true, itemError: null });
 
     try {
-      const response = await cargoTypeAPI.createCargoType(cargoData);
+      const response = await itemAPI.createItem(itemData);
 
       if (response.success) {
-        await get().fetchCargoTypes();
-        set({ cargoLoading: false });
+        await get().fetchItems();
+        set({ itemLoading: false });
         return true;
       } else {
         set({
-          cargoError: response.error || '品目の作成に失敗しました',
-          cargoLoading: false,
+          itemError: response.error || '品目の作成に失敗しました',
+          itemLoading: false,
         });
         return false;
       }
     } catch (error) {
       set({
-        cargoError: 'ネットワークエラーが発生しました',
-        cargoLoading: false,
+        itemError: 'ネットワークエラーが発生しました',
+        itemLoading: false,
       });
       return false;
     }
   },
 
   // 品目更新
-  updateCargoType: async (id: string, cargoData: Partial<CargoType>) => {
-    set({ cargoLoading: true, cargoError: null });
+  updateItem: async (id: string, itemData: Partial<Item>) => {
+    set({ itemLoading: true, itemError: null });
 
     try {
-      const response = await cargoTypeAPI.updateCargoType(id, cargoData);
+      const response = await itemAPI.updateItem(id, itemData);
 
       if (response.success) {
-        await get().fetchCargoTypes();
-        set({ cargoLoading: false });
+        await get().fetchItems();
+        set({ itemLoading: false });
         return true;
       } else {
         set({
-          cargoError: response.error || '品目の更新に失敗しました',
-          cargoLoading: false,
+          itemError: response.error || '品目の更新に失敗しました',
+          itemLoading: false,
         });
         return false;
       }
     } catch (error) {
       set({
-        cargoError: 'ネットワークエラーが発生しました',
-        cargoLoading: false,
+        itemError: 'ネットワークエラーが発生しました',
+        itemLoading: false,
       });
       return false;
     }
   },
 
   // 品目削除
-  deleteCargoType: async (id: string) => {
-    set({ cargoLoading: true, cargoError: null });
+  deleteItem: async (id: string) => {
+    set({ itemLoading: true, itemError: null });
 
     try {
-      const response = await cargoTypeAPI.deleteCargoType(id);
+      const response = await itemAPI.deleteItem(id);
 
       if (response.success) {
-        await get().fetchCargoTypes();
-        set({ cargoLoading: false });
+        await get().fetchItems();
+        set({ itemLoading: false });
         return true;
       } else {
         set({
-          cargoError: response.error || '品目の削除に失敗しました',
-          cargoLoading: false,
+          itemError: response.error || '品目の削除に失敗しました',
+          itemLoading: false,
         });
         return false;
       }
     } catch (error) {
       set({
-        cargoError: 'ネットワークエラーが発生しました',
-        cargoLoading: false,
+        itemError: 'ネットワークエラーが発生しました',
+        itemLoading: false,
       });
       return false;
     }
   },
 
   // 品目順序更新
-  updateCargoOrder: async (items: { id: string; order: number }[]) => {
-    set({ cargoLoading: true, cargoError: null });
+  updateItemOrder: async (items: { id: string; order: number }[]) => {
+    set({ itemLoading: true, itemError: null });
 
     try {
-      const response = await cargoTypeAPI.updateOrder(items);
+      const response = await itemAPI.updateOrder(items);
 
       if (response.success) {
-        await get().fetchCargoTypes();
-        set({ cargoLoading: false });
+        await get().fetchItems();
+        set({ itemLoading: false });
         return true;
       } else {
         set({
-          cargoError: response.error || '表示順の更新に失敗しました',
-          cargoLoading: false,
+          itemError: response.error || '表示順の更新に失敗しました',
+          itemLoading: false,
         });
         return false;
       }
     } catch (error) {
       set({
-        cargoError: 'ネットワークエラーが発生しました',
-        cargoLoading: false,
+        itemError: 'ネットワークエラーが発生しました',
+        itemLoading: false,
       });
       return false;
     }
@@ -454,6 +473,6 @@ export const useMasterStore = create<MasterState>((set, get) => ({
   clearErrors: () => set({ 
     inspectionError: null, 
     locationError: null, 
-    cargoError: null 
+    itemError: null 
   }),
 }));

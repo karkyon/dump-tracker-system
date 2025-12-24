@@ -1,9 +1,7 @@
 // frontend/cms/src/utils/constants.ts - 完全修正版
-// 🔧 修正内容: NAVIGATION_ITEMS のメニュー名を「○○管理」に統一
-// - 「車両マスタ」→「車両管理」
-// - 「点検項目マスタ」→「点検項目管理」
-// - 「積込・積下場所マスタ」→「積込・積下場所管理」
-// - 「品目マスタ管理」→「品目管理」
+// 🔧 修正内容: NAVIGATION_ITEMS を Sidebar.tsx で使用可能に
+// - path を '/cargo-types' → '/items' に修正
+// - Sidebar.tsx からインポートされるように設計
 // 既存機能: すべての定数・設定を100%保持
 
 /// <reference types="vite/client" />
@@ -22,7 +20,7 @@ export const STORAGE_KEYS = {
 // ページサイズ
 export const PAGE_SIZE = 10;
 
-// ✅ 修正: ナビゲーションメニュー名を「○○管理」に統一
+// ✅ 修正: ナビゲーションメニュー - Sidebar.tsx で使用
 export const NAVIGATION_ITEMS = [
   {
     id: 'dashboard',
@@ -32,55 +30,55 @@ export const NAVIGATION_ITEMS = [
   },
   {
     id: 'users',
-    name: 'ユーザー管理',       // 既存のまま
+    name: 'ユーザー管理',
     path: '/users',
     icon: 'Users'
   },
   {
     id: 'vehicles',
-    name: '車両管理',           // ✅ 修正: 「車両マスタ」→「車両管理」
+    name: '車両管理',
     path: '/vehicles',
     icon: 'Truck'
   },
   {
     id: 'inspection-items',
-    name: '点検項目管理',       // ✅ 修正: 「点検項目マスタ」→「点検項目管理」
+    name: '点検項目管理',
     path: '/inspection-items',
     icon: 'CheckSquare'
   },
   {
     id: 'locations',
-    name: '積込・積下場所管理',   // ✅ 修正: 「積込・積下場所マスタ」→「積込・積下場所管理」
+    name: '積込・積下場所管理',
     path: '/locations',
     icon: 'MapPin'
   },
   {
-    id: 'cargo-types',
-    name: '品目管理',           // ✅ 修正: 「品目マスタ管理」→「品目管理」
-    path: '/cargo-types',
+    id: 'items',                    // ✅ 修正: 'cargo-types' → 'items'
+    name: '品目管理',
+    path: '/items',                 // ✅ 修正: '/cargo-types' → '/items'
     icon: 'Package'
   },
   {
     id: 'operations',
-    name: '運行記録',           // 既存のまま
+    name: '運行記録',
     path: '/operations',
     icon: 'FileText'
   },
   {
     id: 'gps-monitoring',
-    name: 'GPSモニタリング',     // 既存のまま
+    name: 'GPSモニタリング',
     path: '/gps-monitoring',
     icon: 'Navigation'
   },
   {
     id: 'reports',
-    name: '帳票出力',           // 既存のまま
+    name: '帳票出力',
     path: '/reports',
     icon: 'Download'
   },
   {
     id: 'settings',
-    name: 'システム設定',       // 既存のまま
+    name: 'システム設定',
     path: '/settings',
     icon: 'Settings'
   }

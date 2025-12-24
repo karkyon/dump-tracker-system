@@ -1,7 +1,9 @@
-// frontend/cms/src/types/index.ts - Location型修正版
+// frontend/cms/src/types/index.ts - Item型統一版（CargoType完全廃止）
 // 🔧 修正内容: 
-// 1. Location型をバックエンドAPIレスポンスに完全対応
-// 2. フィールド名を統一: name, locationType, latitude, longitude
+// 1. CargoType → Item に完全変更（品目管理の正しい命名）
+// 2. CargoType のエイリアスを完全削除
+// 3. Location型をバックエンドAPIレスポンスに完全対応
+// 4. フィールド名を統一: name, locationType, latitude, longitude
 // 既存機能: すべての型定義を完全保持
 
 // =====================================
@@ -113,9 +115,10 @@ export interface Location {
 }
 
 // =====================================
-// 品目関連
+// 品目関連（完全修正版）
+// ✅ Item のみ使用、CargoType は完全廃止
 // =====================================
-export interface CargoType {
+export interface Item {
   id: string;
   name: string;
   description?: string;
@@ -140,7 +143,8 @@ export interface OperationRecord {
   endTime?: string;
   startLocation: string;
   endLocation?: string;
-  cargoTypeId: string;
+  itemId: string;                   // ✅ 品目ID
+  cargoTypeId?: string;             // ✅ 後方互換性維持（バックエンドが返す可能性）
   loadWeight?: number;
   status: 'ongoing' | 'completed' | 'cancelled';
   notes?: string;
@@ -154,7 +158,8 @@ export interface OperationRecord {
   clientName?: string;              // 客先名
   loadingLocation?: string;         // 積込場所名
   unloadingLocation?: string;       // 積下場所名
-  cargoType?: string;               // 荷物種別名
+  item?: string;                    // ✅ 品目名
+  cargoType?: string;               // ✅ 後方互換性維持（バックエンドが返す可能性）
   distance?: number;                // 走行距離
   operationTime?: string;           // 運行時間
 }
@@ -185,7 +190,8 @@ export interface ReportFilter {
   endDate: string;
   vehicleIds?: string[];
   driverIds?: string[];
-  cargoTypeIds?: string[];
+  itemIds?: string[];               // ✅ 品目ID配列
+  cargoTypeIds?: string[];          // ✅ 後方互換性維持（バックエンドが使用する可能性）
   status?: string[];
   format?: 'pdf' | 'excel';
 }
@@ -262,28 +268,29 @@ export interface TableProps<T> {
 }
 
 // =====================================
-// マスタストア関連
+// マスタストア関連（完全修正版）
+// ✅ Item のみ使用、CargoType は完全廃止
 // =====================================
 export interface MasterState {
   locations: Location[];
   locationLoading: boolean;
   locationError: string | null;
 
-  cargoTypes: CargoType[];
-  cargoTypeLoading: boolean;
-  cargoTypeError: string | null;
-  loading: boolean;  // CargoTypeManagement用
+  items: Item[];                    // ✅ 品目配列
+  itemLoading: boolean;             // ✅ 品目ローディング
+  itemError: string | null;         // ✅ 品目エラー
+  loading: boolean;                 // ItemManagement用
 
   fetchLocations: () => Promise<void>;
   createLocation: (data: Partial<Location>) => Promise<boolean>;
   updateLocation: (id: string, data: Partial<Location>) => Promise<boolean>;
   deleteLocation: (id: string) => Promise<boolean>;
 
-  fetchCargoTypes: () => Promise<void>;
-  addCargoType: (data: Partial<CargoType>) => Promise<boolean>;  // CargoTypeManagement用
-  createCargoType: (data: Partial<CargoType>) => Promise<boolean>;
-  updateCargoType: (id: string, data: Partial<CargoType>) => Promise<boolean>;
-  deleteCargoType: (id: string) => Promise<boolean>;
+  fetchItems: () => Promise<void>;                                      // ✅ 品目取得
+  createItem: (data: Partial<Item>) => Promise<boolean>;               // ✅ 品目作成
+  updateItem: (id: string, data: Partial<Item>) => Promise<boolean>;   // ✅ 品目更新
+  deleteItem: (id: string) => Promise<boolean>;                        // ✅ 品目削除
+  updateItemOrder: (items: { id: string; order: number }[]) => Promise<boolean>;  // ✅ 品目順序更新
 
   clearErrors: () => void;
 }

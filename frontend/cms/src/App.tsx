@@ -14,7 +14,7 @@ import UserManagement from './pages/UserManagement';
 import VehicleManagement from './pages/VehicleManagement';
 import InspectionItemManagement from './pages/InspectionItemManagement';
 import LocationManagement from './pages/LocationManagement';
-import CargoTypeManagement from './pages/CargoTypeManagement';
+import ItemManagement from './pages/ItemManagement';
 import OperationRecords from './pages/OperationRecords';
 import GPSMonitoring from './pages/GPSMonitoring';
 import ReportOutput from './pages/ReportOutput';
@@ -240,7 +240,7 @@ const App: React.FC = () => {
               <Route path="locations" element={<LocationManagement />} />
               
               {/* 品目マスタ管理 */}
-              <Route path="cargo-types" element={<CargoTypeManagement />} />
+              <Route path="items" element={<ItemManagement />} />
               
               {/* 運行記録 */}
               <Route path="operations" element={<OperationRecords />} />
