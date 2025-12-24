@@ -39,7 +39,7 @@ jobs:
           
           echo "📸 Creating pre-deployment snapshot: $SNAPSHOT_NAME"
           
-          gcloud compute disks snapshot dump-tracker-vm-prod \
+          gcloud compute disks snapshot dump-tracker-vm-prod-v2 \
             --snapshot-names=$SNAPSHOT_NAME \
             --zone=us-west1-b \
             --description="Pre-deployment snapshot - $(date '+%Y-%m-%d %H:%M:%S')" \
