@@ -7,9 +7,14 @@
 // - CargoType → Item に完全変更
 // - 2重ネスト構造対応
 // - useEffect 無限ループ回避
+// - デフォルト表示順（昇順）ソート追加
+// - 明細項目修正: 表示順/品目名/品目区分/説明/登録日
+// - 上下移動ボタン削除
+// - 編集フォームに品目区分（item_type）と説明（description）追加
+// - 品目区分表示のデバッグログ追加
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit2, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Modal from '../components/common/Modal';
@@ -23,6 +28,8 @@ const ItemManagement: React.FC = () => {
   const [editingItem, setEditingItem] = useState<Item | null>(null);  // ✅ Item 型
   const [formData, setFormData] = useState({
     name: '',
+    item_type: 'MATERIAL' as 'MATERIAL' | 'SCRAP',  // ✅ item_type 追加
+    description: '',  // ✅ description 追加
     displayOrder: 1
   });
 
@@ -46,20 +53,51 @@ const ItemManagement: React.FC = () => {
     }
   }, [fetchItems]);
 
+  // ✅ デバッグ: itemsデータの確認
+  useEffect(() => {
+    if (items.length > 0) {
+      console.log('[ItemManagement] 取得した品目データ:', items);
+      console.log('[ItemManagement] 最初の品目:', items[0]);
+      console.log('[ItemManagement] item_typeの値:', items.map(item => ({ 
+        name: item.name, 
+        item_type: item.item_type,
+        // バックエンドのフィールド名が異なる可能性を確認
+        itemType: (item as any).itemType,
+        type: (item as any).type
+      })));
+    }
+  }, [items]);
+
+  // ✅ 検索フィルタリング
   const filteredItems = items.filter((item: Item) =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // ✅ デフォルトで表示順（昇順）でソート
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    const orderA = a.displayOrder || 999;
+    const orderB = b.displayOrder || 999;
+    return orderA - orderB;
+  });
+
   const handleAddItem = () => {
     setEditingItem(null);
-    setFormData({ name: '', displayOrder: items.length + 1 });
+    setFormData({ 
+      name: '', 
+      item_type: 'MATERIAL',
+      description: '',
+      displayOrder: items.length + 1 
+    });
     setIsModalOpen(true);
   };
 
   const handleEditItem = (item: Item) => {
+    console.log('[ItemManagement] 編集する品目:', item);
     setEditingItem(item);
     setFormData({
       name: item.name,
+      item_type: item.item_type || 'MATERIAL',  // ✅ item_type 設定
+      description: item.description || '',  // ✅ description 設定
       displayOrder: item.displayOrder || 1
     });
     setIsModalOpen(true);
@@ -74,26 +112,10 @@ const ItemManagement: React.FC = () => {
     }
   };
 
-  const handleMoveUp = async (item: Item) => {
-    const order = item.displayOrder || 1;
-    if (order > 1) {
-      await updateItem(item.id, {
-        displayOrder: order - 1
-      });
-    }
-  };
-
-  const handleMoveDown = async (item: Item) => {
-    const order = item.displayOrder || 1;
-    if (order < items.length) {
-      await updateItem(item.id, {
-        displayOrder: order + 1
-      });
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    console.log('[ItemManagement] 送信するフォームデータ:', formData);
     
     let success = false;
     if (editingItem) {
@@ -104,44 +126,58 @@ const ItemManagement: React.FC = () => {
     
     if (success) {
       setIsModalOpen(false);
-      setFormData({ name: '', displayOrder: 1 });
+      setFormData({ 
+        name: '', 
+        item_type: 'MATERIAL',
+        description: '',
+        displayOrder: 1 
+      });
       console.log('[ItemManagement] 品目保存成功');
     }
   };
 
+  // ✅ 品目区分の日本語表示
+  const getItemTypeLabel = (item: Item): string => {
+    // デバッグログ
+    console.log('[getItemTypeLabel] item:', item);
+    console.log('[getItemTypeLabel] item.item_type:', item.item_type);
+    console.log('[getItemTypeLabel] item as any:', {
+      item_type: item.item_type,
+      itemType: (item as any).itemType,
+      type: (item as any).type
+    });
+
+    const itemType = item.item_type || (item as any).itemType || (item as any).type;
+    
+    switch (itemType) {
+      case 'MATERIAL':
+        return '原料';
+      case 'SCRAP':
+        return 'スクラップ';
+      default:
+        console.warn('[getItemTypeLabel] 不明な品目区分:', itemType, 'for item:', item.name);
+        return '-';
+    }
+  };
+
+  // ✅ 明細項目を修正: 表示順/品目名/品目区分/説明/登録日
   const columns = [
     { key: 'displayOrder', header: '表示順', label: '表示順', width: '100px' },
     { key: 'name', header: '品目名', label: '品目名' },
-    { key: 'itemType', header: '種別', label: '種別', width: '120px' },
+    { key: 'item_type', header: '品目区分', label: '品目区分', width: '120px' },
+    { key: 'description', header: '説明', label: '説明', width: '200px' },
     { key: 'createdAt', header: '登録日', label: '登録日', width: '150px' },
-    { key: 'actions', header: '操作', label: '操作', width: '200px' }
+    { key: 'actions', header: '操作', label: '操作', width: '150px' }  // ✅ 上下移動ボタン削除により幅縮小
   ];
 
-  const tableData = filteredItems.map((item: Item) => ({
+  const tableData = sortedItems.map((item: Item) => ({
     displayOrder: item.displayOrder || '-',
     name: item.name,
-    itemType: item.category || item.description || '-',
+    item_type: getItemTypeLabel(item),  // ✅ item型全体を渡す
+    description: item.description || '-',  // ✅ description 表示
     createdAt: item.createdAt ? new Date(item.createdAt).toLocaleDateString('ja-JP') : '-',
     actions: (
       <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handleMoveUp(item)}
-          disabled={(item.displayOrder || 1) === 1}
-          title="上に移動"
-        >
-          <ChevronUp className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handleMoveDown(item)}
-          disabled={(item.displayOrder || 1) === items.length}
-          title="下に移動"
-        >
-          <ChevronDown className="w-4 h-4" />
-        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -190,7 +226,7 @@ const ItemManagement: React.FC = () => {
 
           <div className="mb-4">
             <h3 className="text-md font-medium text-gray-900 mb-2">
-              品目一覧 ({filteredItems.length}件)
+              品目一覧 ({sortedItems.length}件)
             </h3>
           </div>
 
@@ -222,9 +258,38 @@ const ItemManagement: React.FC = () => {
             />
           </div>
 
+          {/* ✅ 品目区分（item_type）追加 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              表示順
+              品目区分 *
+            </label>
+            <select
+              value={formData.item_type}
+              onChange={(e) => setFormData({ ...formData, item_type: e.target.value as 'MATERIAL' | 'SCRAP' })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="MATERIAL">原料</option>
+              <option value="SCRAP">スクラップ</option>
+            </select>
+          </div>
+
+          {/* ✅ 説明（description）追加 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              説明
+            </label>
+            <Input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="例: リサイクルコンクリート（再生砕石）"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              表示順 *
             </label>
             <Input
               type="number"
