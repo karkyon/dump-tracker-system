@@ -121,6 +121,7 @@ export interface Location {
 export interface Item {
   id: string;
   name: string;
+  item_type?: 'MATERIAL' | 'SCRAP';  // ✅ 品目区分を追加（原料/スクラップ）
   description?: string;
   category?: string;
   unit?: string;
