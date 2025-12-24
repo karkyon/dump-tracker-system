@@ -62,6 +62,15 @@ jobs:
         working-directory: ./frontend/mobile
         run: npm ci
       
+      - name: 🔧 Create Staging .env.production for Mobile
+        working-directory: ./frontend/mobile
+        run: |
+          cat > .env.production << EOF
+          VITE_API_BASE_URL=${{ secrets.STAGING_API_URL }}
+          VITE_GOOGLE_MAPS_API_KEY=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY
+          VITE_APP_ENV=staging
+          EOF
+      
       - name: 🏗️ Build mobile app
         working-directory: ./frontend/mobile
         run: |
@@ -100,6 +109,18 @@ jobs:
       - name: 📦 Install CMS dependencies
         working-directory: ./frontend/cms
         run: npm ci
+      
+      - name: 🔧 Create Staging .env.production for CMS
+        working-directory: ./frontend/cms
+        run: |
+          cat > .env.production << EOF
+          VITE_API_BASE_URL=${{ secrets.STAGING_API_URL }}
+          VITE_GOOGLE_MAPS_API_KEY=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY
+          VITE_APP_ENV=staging
+          VITE_GPS_UPDATE_INTERVAL=5000
+          VITE_DEBUG=false
+          VITE_LOG_LEVEL=error
+          EOF
       
       - name: 🏗️ Build CMS
         working-directory: ./frontend/cms
