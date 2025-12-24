@@ -21,6 +21,33 @@ jobs:
           fi
           echo "✅ Deployment confirmed"
       
+      # ===========================
+      # 📸 GCP認証とスナップショット作成
+      # ===========================
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: 🔧 Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: 📸 Create Pre-Deployment Snapshot
+        run: |
+          DATE=$(date +%Y%m%d-%H%M%S)
+          SNAPSHOT_NAME="prod-pre-deploy-${DATE}"
+          
+          echo "📸 Creating pre-deployment snapshot: $SNAPSHOT_NAME"
+          
+          gcloud compute disks snapshot dump-tracker-vm-prod \
+            --snapshot-names=$SNAPSHOT_NAME \
+            --zone=us-west1-b \
+            --description="Pre-deployment snapshot - $(date '+%Y-%m-%d %H:%M:%S')" \
+            --project=${{ secrets.GCP_PROJECT_ID }}
+          
+          echo "✅ Snapshot created successfully: $SNAPSHOT_NAME"
+          echo "🔗 Snapshot can be used for rollback if needed"
+      
       - name: 📥 Checkout code
         uses: actions/checkout@v3
       
@@ -167,3 +194,5 @@ jobs:
           echo "📱 Mobile: https://dump-tracker.ddns.net/"
           echo "💼 CMS: https://dump-tracker.ddns.net:3003/"
           echo "📚 API Docs: https://dump-tracker.ddns.net/docs/"
+          echo ""
+          echo "📸 Pre-deployment snapshot was created for rollback"
