@@ -70,7 +70,7 @@ router.use(authenticateToken());
  *
  *       **権限:** 全ユーザー（認証必須）
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -148,7 +148,7 @@ router.get('/', validatePaginationQuery, getAllItems);
  *
  *       **権限:** 全ユーザー（認証必須）
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -184,7 +184,7 @@ router.get('/categories/list', getCategories);
  *
  *       **権限:** MANAGER, ADMIN
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -236,7 +236,7 @@ router.get('/stats/usage', requireManager, getItemUsageStats);
  *
  *       **権限:** MANAGER, ADMIN
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -275,7 +275,7 @@ router.get('/stats/analytics', requireManager, getItemStatistics);
  *
  *       **権限:** 全ユーザー（認証必須）
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -318,7 +318,7 @@ router.get('/stats/popular', getPopularItems);
  *
  *       **権限:** MANAGER, ADMIN
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -358,7 +358,7 @@ router.get('/stats/low-stock', requireManager, getLowStockItems);
  *
  *       **権限:** 全ユーザー（認証必須）
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -405,7 +405,7 @@ router.get('/:id', validateId, getItemById);
  *
  *       **権限:** MANAGER, ADMIN
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -472,7 +472,7 @@ router.post('/', requireManager, createItem);
  *
  *       **権限:** MANAGER, ADMIN
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -541,7 +541,7 @@ router.put('/:id', requireManager, validateId, updateItem);
  *
  *       **権限:** ADMIN のみ
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -590,7 +590,7 @@ router.delete('/:id', requireAdmin, validateId, deleteItem);
  *
  *       **権限:** MANAGER, ADMIN
  *     tags:
- *       - 📦 品目管理 (Item Management)
+ *       - 🏷️ 品目管理 (Item Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:

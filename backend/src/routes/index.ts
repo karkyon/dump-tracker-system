@@ -4,8 +4,9 @@
 // API基盤統合・重複ルート解消・統一ミドルウェア活用版
 // 🔧 デバッグ出力追加版（既存機能100%保持）
 // 🔧🔧🔧 userRoutes修正版（requireAuth: false に変更）
-// 最終更新: 2025年12月14日
-// 修正内容: userRoutes の requireAuth を false に変更（inspectionRoutes パターン準拠）
+// 🔧🔧🔧🔧 operationRoutes/operationDetailRoutes追加版
+// 最終更新: 2025年12月24日
+// 修正内容: operationRoutes, operationDetailRoutes の path 修正（/operation-details）
 // 依存関係: middleware/auth.ts, middleware/errorHandler.ts, utils/errors.ts, utils/response.ts
 // =====================================
 
@@ -678,7 +679,7 @@ const locationTrackingRoutes = [
   },
   {
     name: 'operationDetailRoutes',
-    path: '/operationDetails',
+    path: '/operation-details',
     priority: 'normal' as const,
     requireAuth: false,
     description: '運行詳細管理・操作'
@@ -824,12 +825,13 @@ router.use('*', asyncHandler(async (req: Request, res: Response) => {
 // 初期化完了ログ・エクスポート
 // =====================================
 
-logger.info('✅ routes/index.ts 統合完了（デバッグ出力追加）', {
+logger.info('✅ routes/index.ts 統合完了（operationRoutes追加版）', {
   registeredRoutes: routeStats.successfulRegistrations,
   duplicatesResolved: routeStats.duplicateResolutions.length,
   integrationStatus: 'Phase 1 - API Foundation Complete',
   middleware: 'auth + errorHandler integrated',
   debugMode: true,
+  newRoutes: ['operationRoutes (/operations)', 'operationDetailRoutes (/operation-details)'],
   timestamp: new Date().toISOString()
 });
 
@@ -857,7 +859,7 @@ export const resetRouteStatistics = (): void => {
 // =====================================
 
 /**
- * ✅ routes/index.ts統合完了（デバッグ出力追加版）
+ * ✅ routes/index.ts統合完了（operationRoutes追加版）
  *
  * 【完了項目】
  * ✅ 重複ルート定義の解消（authRoutes.ts優先、userRoutes.ts優先）
@@ -872,10 +874,13 @@ export const resetRouteStatistics = (): void => {
  * ✅ 統一コメントポリシー適用（ファイルヘッダー・TSDoc・統合説明）
  * ✅ デバッグ出力追加（inspectionRoutes特化・全ルート対応）
  * ✅ userRoutes修正（requireAuth: false - inspectionRoutesパターン準拠）
+ * ✅ operationRoutes登録追加（/operations）
+ * ✅ operationDetailRoutes登録追加（/operation-details）← 修正完了
  *
  * 【修正内容】
  * 🔧 userRoutes の requireAuth を true → false に変更
  * 🔧 フォールバック版(users.ts)の requireAuth も false に統一
+ * 🔧 operationDetailRoutes の path を /operationDetails → /operation-details に修正
  *
  * 【次のPhase 1対象】
  * 🎯 routes/authRoutes.ts: 認証ルート統合（API機能実現必須）
@@ -890,7 +895,7 @@ export const resetRouteStatistics = (): void => {
 // =====================================
 
 /**
- * 📋 全登録ルート（gpsRoutes追加後）
+ * 📋 全登録ルート（operationRoutes追加後）
  *
  * 認証・管理系:
  * - /auth - 認証・JWT管理
@@ -901,48 +906,66 @@ export const resetRouteStatistics = (): void => {
  * - /trips - 運行記録管理
  * - /locations - 位置・場所管理
  * - /items - 品目管理
+ * - /inspection-items - 点検項目管理
  * - /inspections - 点検記録管理
  * - /reports - レポート・分析
  *
  * GPS・運行系:
- * - /gps - GPS横断機能（NEW!）
- * - /operations - 運行管理・操作
- * - /operationDetails - 運行詳細管理
+ * - /gps - GPS横断機能
+ * - /operations - 運行管理・操作（NEW!）
+ * - /operation-details - 運行詳細管理・操作（NEW!）
  *
  * モバイル・ヘルスチェック:
  * - /mobile - モバイル専用API
  * - /health-detailed - 詳細ヘルスチェック
  *
- * 合計: 13ルート + 1新規 = 14ルート
+ * 合計: 14ルート + 2新規 = 16ルート
  */
 
 // =====================================
-// エンドポイント一覧（gpsRoutes）
+// エンドポイント一覧（operationRoutes）
 // =====================================
 
 /**
- * 🌐 GPS横断機能エンドポイント
+ * 🗺️ 運行管理エンドポイント（operationRoutes）
  *
- * リアルタイム追跡:
- * - GET /api/v1/gps/realtime/vehicles - 全車両位置
- * - GET /api/v1/gps/realtime/vehicle/:id - 特定車両位置
- * - POST /api/v1/gps/realtime/area - エリア内検索
+ * 運行CRUD:
+ * - GET /api/v1/operations - 運行一覧取得
+ * - GET /api/v1/operations/:id - 運行詳細取得
+ * - POST /api/v1/operations - 運行作成
+ * - PUT /api/v1/operations/:id - 運行更新
+ * - DELETE /api/v1/operations/:id - 運行削除
  *
- * ヒートマップ・可視化:
- * - GET /api/v1/gps/heatmap - ヒートマップデータ
- * - GET /api/v1/gps/tracks - 移動軌跡データ
+ * 運行操作:
+ * - POST /api/v1/operations/start - 運行開始
+ * - POST /api/v1/operations/end - 運行終了
  *
- * ジオフェンシング:
- * - GET /api/v1/gps/geofences - ジオフェンス一覧
- * - POST /api/v1/gps/geofences - ジオフェンス作成
- * - GET /api/v1/gps/geofence/violations - 違反検出
+ * 運行ステータス:
+ * - GET /api/v1/operations/status/:vehicleId - 車両別ステータス
+ * - GET /api/v1/operations/active - アクティブ運行一覧
  *
- * データ分析:
- * - GET /api/v1/gps/speed-violations - 速度違反
- * - GET /api/v1/gps/idle-analysis - アイドリング分析
- * - GET /api/v1/gps/analytics/patterns - 移動パターン
- * - POST /api/v1/gps/route-optimization - ルート最適化
- * - GET /api/v1/gps/statistics - GPS統計
+ * 運行分析:
+ * - GET /api/v1/operations/efficiency - 運行効率分析
+ * - GET /api/v1/operations/stats - 運行統計
  *
- * 合計: 13エンドポイント
+ * 合計: 11エンドポイント
+ */
+
+/**
+ * 🗺️ 運行詳細管理エンドポイント（operationDetailRoutes）
+ *
+ * 運行詳細CRUD:
+ * - GET /api/v1/operation-details - 運行詳細一覧取得
+ * - GET /api/v1/operation-details/:id - 運行詳細詳細取得
+ * - POST /api/v1/operation-details - 運行詳細作成
+ * - PUT /api/v1/operation-details/:id - 運行詳細更新
+ * - DELETE /api/v1/operation-details/:id - 運行詳細削除
+ *
+ * 運行詳細特殊操作:
+ * - GET /api/v1/operation-details/by-operation/:operationId - 運行別詳細一覧
+ * - GET /api/v1/operation-details/efficiency-analysis - 作業効率分析
+ * - POST /api/v1/operation-details/bulk-operation - 一括作業操作
+ * - GET /api/v1/operation-details/stats - 運行詳細統計
+ *
+ * 合計: 9エンドポイント
  */
