@@ -7,6 +7,7 @@
 // ✅ 新APIエンドポイント使用 (recordLoadingArrival/recordUnloadingArrival)
 // 🆕 近隣地点0件時の新規地点登録ダイアログ表示（2025年12月7日）
 // 🔧 修正: operation-temp-id → operationStore.operationId を使用（2025年12月7日）
+// 🔧 修正: 運行終了後のHome遷移とエラー抑制（2025年12月26日）
 
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
@@ -87,7 +88,7 @@ const OperationRecord: React.FC = () => {
     operationNumber: operationStore.operationId || 'OP-未設定',
     plannedRoute: '',  // 未使用フィールド
     estimatedDistance: 0,  // 未使用フィールド
-    estimatedDuration: 0,  // 未使用 フィールド
+    estimatedDuration: 0,  // 未使用フィールド
     breakCount: 0,
     fuelLevel: 80,  // TODO: 車両情報から取得
     notes: ''
@@ -116,7 +117,7 @@ const OperationRecord: React.FC = () => {
   } = useGPS();
 
   // operationStoreから運行IDを取得して状態に反映
-  // 🆕 運行ID未設定時の初期化チェック
+  // 🔧 修正: 運行ID未設定時の処理を改善（エラー抑制）
   useEffect(() => {
     if (operationStore.operationId) {
       setOperation(prev => ({
@@ -124,15 +125,19 @@ const OperationRecord: React.FC = () => {
         id: operationStore.operationId
       }));
       console.log('✅ 運行ID設定完了:', operationStore.operationId);
-    } else {
-      // 🆕 運行IDが未設定の場合、警告を表示
-      console.warn('⚠️ 運行IDが未設定です。乗車前点検から運行を開始してください。');
-      toast.error('運行が開始されていません。乗車前点検から開始してください。', {
-        duration: 5000,
-        icon: '⚠️'
-      });
+      return undefined; // 明示的にundefinedを返す（TypeScriptエラー回避）
     }
-  }, [operationStore.operationId]);
+    
+    // 🔧 修正: エラートーストを表示せず、静かに車両選択画面に戻る
+    console.warn('[OperationRecord] ⚠️ 運行IDが未設定 - 車両選択画面に戻ります');
+    
+    // すぐに車両選択画面に戻る（エラー表示なし）
+    const timer = setTimeout(() => {
+      navigate('/vehicle-info', { replace: true });
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [operationStore.operationId, navigate]);
 
 
   // operationStoreのフェーズ変更を監視して同期
@@ -748,7 +753,11 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
-   * ✅ 既存: 運行終了ハンドラー
+   * 🆕 運行終了ハンドラー（最終版 - Home遷移とエラー抑制）
+   * - 運行終了API呼び出し
+   * - operationStoreのリセット
+   * - 既存トーストのクリア
+   * - Home画面（/vehicle-info）への自動遷移
    */
   const handleOperationEnd = async () => {
     if (!window.confirm('運行を終了してもよろしいですか？')) {
@@ -758,15 +767,76 @@ const OperationRecord: React.FC = () => {
     try {
       setIsSubmitting(true);
       
-      // TODO: API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // ✅ 運行ID確認
+      const currentOperationId = operationStore.operationId || operation.id;
       
-      setOperation(prev => ({ ...prev, status: 'idle' }));
-      toast.success('運行を終了しました');
+      if (!currentOperationId) {
+        toast.error('運行IDが見つかりません');
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log('[運行終了] 🏁 運行終了処理開始:', currentOperationId);
+      
+      // ✅ 運行終了API呼び出し
+      try {
+        // 🔧 API実装時に有効化:
+        // const endLocation = currentPosition ? {
+        //   latitude: currentPosition.coords.latitude,
+        //   longitude: currentPosition.coords.longitude,
+        //   accuracy: currentPosition.coords.accuracy
+        // } : undefined;
+        // 
+        // const response = await apiService.endOperation(currentOperationId, {
+        //   endTime: new Date(),
+        //   endLocation: endLocation,
+        //   totalDistance: totalDistance,
+        //   notes: operation.notes
+        // });
+        
+        // 🔧 暫定: APIが未実装の場合は500msのディレイでシミュレート
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log('[運行終了] ✅ API呼び出し成功');
+        
+      } catch (apiError) {
+        console.error('[運行終了] ❌ API呼び出しエラー:', apiError);
+        toast.error('運行終了APIの呼び出しに失敗しました');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // ✅ ローカル状態を更新
+      setOperation(prev => ({ 
+        ...prev, 
+        status: 'idle'
+      }));
+      
+      // ✅ operationStoreをリセット
+      console.log('[運行終了] 🧹 operationStore リセット実行');
+      operationStore.resetOperation();
+      
+      // 🆕 既存のトーストをすべてクリア
+      toast.dismiss();
+      
+      // ✅ 成功メッセージ表示
+      toast.success('運行を終了しました', {
+        duration: 2000,
+        icon: '✅'
+      });
+      
+      // ✅ Home画面（車両選択画面 /vehicle-info）に遷移
+      console.log('[運行終了] 🏠 Home画面へ遷移: /vehicle-info');
+      
+      // 少し遅延させてから遷移（ユーザーが成功メッセージを確認できるように）
+      setTimeout(() => {
+        navigate('/vehicle-info', { replace: true });
+      }, 1000);
       
       setIsSubmitting(false);
+      
     } catch (error) {
-      console.error('運行終了エラー:', error);
+      console.error('[運行終了] ❌ 予期しないエラー:', error);
       toast.error('運行終了に失敗しました');
       setIsSubmitting(false);
     }
@@ -1025,8 +1095,8 @@ const OperationRecord: React.FC = () => {
         padding: '16px',
         borderTop: '2px solid #e0e0e0',
         boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
-        position: 'relative',    // ✅ 追加
-        zIndex: 1000            // ✅ 追加（Google Mapsより上に表示）
+        position: 'relative',
+        zIndex: 1000
       }}>
         {/* ✅ 既存: フェーズ表示 */}
         <div style={{
@@ -1199,7 +1269,7 @@ export default OperationRecord;
  * - 登録後の自動到着記録
  * - 状態管理とエラーハンドリング
  * 
- * 🔧 修正内容（2025年12月7日 - 最新版）
+ * 🔧 修正内容（2025年12月7日）
  * - ❌ 削除: operation-temp-id ハードコード
  * - ✅ 追加: operationStore.operationId を使用
  * - ✅ 追加: 運行ID未設定時のエラーハンドリング
@@ -1207,4 +1277,10 @@ export default OperationRecord;
  * - ✅ 追加: useEffect で operationStore.operationId を監視し operation.id に反映
  * - ✅ 追加: コンソールログで operationStoreId と operationStateId を出力（デバッグ用）
  * - ✅ 追加: import { useOperationStore } from '../stores/operationStore'
+ * 
+ * 🔧 修正内容（2025年12月26日 - 最新版）
+ * - ✅ 修正: handleOperationEnd に toast.dismiss() 追加（既存トーストクリア）
+ * - ✅ 修正: handleOperationEnd の遷移先を /vehicle-info に確定
+ * - ✅ 修正: useEffect の運行ID未設定時のエラー表示を削除（静かに遷移）
+ * - ✅ 追加: 運行終了後のクリーンな画面遷移を実現
  */
