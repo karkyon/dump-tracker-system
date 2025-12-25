@@ -72,7 +72,7 @@ router.use(authenticateToken());
  *       - 車両IDフィルタ
  *       - 期間フィルタ（startDate, endDate）
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -184,7 +184,7 @@ router.get('/', validatePaginationQuery, operationController.getAllOperations);
  *       - 運行詳細（operationDetails）
  *       - GPS履歴（gpsLogs、最新100件）
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -238,7 +238,7 @@ router.get('/:id', validateId, operationController.getOperationById);
  *       - ステータスをIN_PROGRESSに設定
  *       - actualStartTime自動記録
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -288,7 +288,7 @@ router.post('/start', requireManager, operationController.startOperation);
  *       - actualEndTime自動記録
  *       - 走行距離計算（endOdometer - startOdometer）
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -336,7 +336,7 @@ router.post('/end', requireManager, operationController.endOperation);
  *       - status: IN_PROGRESS または IDLE
  *       - lastOperationEndTime: 最終運行終了時刻
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -378,7 +378,7 @@ router.get('/status/:vehicleId', validateId, operationController.getOperationSta
  *       現在実行中（IN_PROGRESS）の全運行を取得します（管理者・マネージャーのみ）。
  *       リアルタイム監視ダッシュボードで使用します。
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -413,7 +413,7 @@ router.get('/active', requireManager, operationController.getActiveOperations);
  *       - totalDistance: 総走行距離
  *       - utilizationRate: 稼働率（完了/全体）
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -466,7 +466,7 @@ router.get('/efficiency', requireManager, operationController.getOperationEffici
  *       - averageDuration: 平均運行時間
  *       - totalDistance: 総走行距離
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -505,7 +505,7 @@ router.get('/stats', requireAdmin, operationController.getOperationStats);
  *       新規運行レコードを作成します（管理者・マネージャーのみ）。
  *       運行開始と同じ処理を実行します。
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -548,7 +548,7 @@ router.post('/', requireManager, operationController.createOperation);
  *     summary: 運行更新
  *     description: 既存運行を更新します（管理者・マネージャーのみ）
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -591,7 +591,7 @@ router.put('/:id', requireManager, validateId, operationController.updateOperati
  *     summary: 運行削除
  *     description: 運行レコードを削除します（管理者のみ）
  *     tags:
- *       - 🗺️ 運行管理 (Operations Management)
+ *       - 🚚 運行管理 (Operations Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:

@@ -3,6 +3,7 @@
 // 運行管理Controller - tripController.tsパターン準拠・Service分離版
 // Router層からビジネスロジックを分離
 // 最終更新: 2025-12-24 - operationService統合
+// 🔧🔧🔧 TypeScriptエラー修正版（既存コード100%保持）
 // 依存関係: services/operationService.ts, middleware/errorHandler.ts
 // =====================================
 
@@ -92,6 +93,11 @@ export class OperationController {
     const { id } = req.params;
     const userId = req.user!.userId;
 
+    // 🔧 TypeScriptエラー修正: undefinedチェック追加
+    if (!id) {
+      throw new ValidationError('運行IDは必須です');
+    }
+
     logger.info('運行詳細取得', { userId, operationId: id });
 
     // ✅ Service層に委譲
@@ -165,16 +171,24 @@ export class OperationController {
     const { vehicleId } = req.params;
     const userId = req.user!.userId;
 
+    // 🔧 TypeScriptエラー修正: undefinedチェック追加
+    if (!vehicleId) {
+      throw new ValidationError('車両IDは必須です');
+    }
+
     logger.info('車両別運行ステータス取得', { userId, vehicleId });
 
     // ✅ Service層に委譲
     const operations = await operationService.findByVehicleId(vehicleId, 1);
 
+    // 🔧 TypeScriptエラー修正: operations[0]のundefinedチェック
+    const currentOperation = operations.length > 0 ? operations[0] : null;
+
     const status = {
       vehicleId,
-      currentOperation: operations.length > 0 ? operations[0] : null,
-      status: operations.length > 0 && operations[0].status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'IDLE',
-      lastOperationEndTime: operations.length > 0 ? operations[0].actualEndTime : null
+      currentOperation,
+      status: currentOperation && currentOperation.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'IDLE',
+      lastOperationEndTime: currentOperation ? currentOperation.actualEndTime : null
     };
 
     return sendSuccess(res, status, '運行ステータスを取得しました');
@@ -355,4 +369,9 @@ export default OperationController;
  *    - createOperation: 運行作成
  *    - updateOperation: 運行更新
  *    - deleteOperation: 運行削除
+ *
+ * 🔧🔧🔧 TypeScriptエラー修正内容
+ *    - getOperationById: id undefinedチェック追加
+ *    - getOperationStatus: vehicleId undefinedチェック追加
+ *    - getOperationStatus: operations[0] undefinedチェック追加
  */

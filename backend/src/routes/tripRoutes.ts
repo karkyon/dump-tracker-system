@@ -84,7 +84,7 @@ logger.info('🚛 TripRoutes初期化開始', {
  *
  *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -156,7 +156,7 @@ router.get(
  *
  *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -193,7 +193,7 @@ router.get(
  *
  *       **権限:** MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -255,7 +255,7 @@ router.get(
  *
  *       **権限:** DRIVER, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -296,7 +296,7 @@ router.get(
  *
  *       **権限:** DRIVER, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -357,7 +357,7 @@ router.get(
  *
  *       **権限:** DRIVER, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -421,7 +421,7 @@ router.post(
  *     summary: 運行作成/開始（エイリアス）
  *     description: POST /tripsのエイリアス
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -451,7 +451,7 @@ router.post(
  *
  *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -509,7 +509,7 @@ router.put(
  *
  *       **権限:** DRIVER（自分の運行のみ）, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -584,7 +584,7 @@ router.post(
  *
  *       **権限:** DRIVER, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -652,7 +652,7 @@ router.post(
  *
  *       **権限:** DRIVER, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -718,7 +718,7 @@ router.post(
  *
  *       **権限:** DRIVER, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -784,7 +784,7 @@ router.post(
  *
  *       **権限:** DRIVER, MANAGER, ADMIN
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -852,7 +852,7 @@ router.post(
  *
  *       **権限:** ADMIN のみ
  *     tags:
- *       - 🗺️ 運行管理 (Trip Management)
+ *       - 📋 運行記録管理 (Trip Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:

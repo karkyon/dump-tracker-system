@@ -64,7 +64,7 @@ router.use(authenticateToken());
  *       - 運行ID、作業種別、期間、位置ID、品目IDでフィルタ
  *       - シーケンス順ソート
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -132,7 +132,7 @@ router.get('/', validatePaginationQuery, operationDetailController.getAllOperati
  *       - 関連位置情報（locations）
  *       - 関連品目情報（items）
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -163,7 +163,7 @@ router.get('/:id', validateId, operationDetailController.getOperationDetailById)
  *       - シーケンス番号の自動採番
  *       - 作業種別の検証
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -231,7 +231,7 @@ router.post('/', requireManager, operationDetailController.createOperationDetail
  *       - 運行詳細データ更新
  *       - 作業時間記録（actualStartTime, actualEndTime）
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -290,7 +290,7 @@ router.put('/:id', requireManager, validateId, operationDetailController.updateO
  *       運行詳細を削除します（管理者のみ）。
  *       物理削除を実行します。
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -322,7 +322,7 @@ router.delete('/:id', requireAdmin, validateId, operationDetailController.delete
  *       - シーケンス番号順にソート
  *       - 関連位置・品目情報を含む
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -353,7 +353,7 @@ router.get('/by-operation/:operationId', operationDetailController.getOperationD
  *       - 時間帯別分析
  *       - 遅延分析
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -399,7 +399,7 @@ router.get('/efficiency-analysis', requireManager, operationDetailController.get
  *       複数の運行詳細を一括操作します（管理者・マネージャーのみ）。
  *       対応アクション: complete（完了）, cancel（キャンセル）
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -461,7 +461,7 @@ router.post('/bulk-operation', requireManager, operationDetailController.bulkOpe
  *       - inProgress: 実行中件数
  *       - completionRate: 完了率
  *     tags:
- *       - 🗺️ 運行詳細管理 (Operation Details Management)
+ *       - 📦 運行詳細管理 (Operation Details Management)
  *     security:
  *       - bearerAuth: []
  *     responses:

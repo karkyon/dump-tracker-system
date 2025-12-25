@@ -136,7 +136,7 @@ router.use((req, res, next) => {
  *       - 統計情報取得
  *       - 車両連携
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -209,7 +209,7 @@ router.get(
  *       - 関連データ取得
  *       - 権限制御
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -252,7 +252,7 @@ router.get(
  *       - ステータス管理
  *       - 業務フロー統合
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -338,7 +338,7 @@ router.post(
  *       - 進捗管理
  *       - 権限制御
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -396,7 +396,7 @@ router.put(
  *       - 論理削除
  *       - 履歴保持
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -442,7 +442,7 @@ router.delete(
  *       - 品質管理指標
  *       - 予測分析
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -492,7 +492,7 @@ router.get(
  *       - 問題傾向分析
  *       - メンテナンス推奨
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -534,7 +534,7 @@ router.get(
  *       - アラート・通知
  *       - KPI可視化
  *     tags:
- *       - 🔧 点検記録管理 (Inspection Records Management)
+ *       - ✅ 点検記録管理 (Inspection Records Management)
  *     security:
  *       - bearerAuth: []
  *     responses:
