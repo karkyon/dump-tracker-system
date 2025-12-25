@@ -1,8 +1,5 @@
 // frontend/mobile/src/components/GoogleMapWrapper.tsx
-// 🗺️ Google Mapコンポーネント - 完全版
-// ✅ ヘッドアップ表示（地図回転）
-// ✅ 走行軌跡（赤いライン）
-// ✅ 三角矢印マーカー（進行方向・速度・距離表示）
+// 🗺️ Google Mapコンポーネント - Polyline初期化エラー修正版
 
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -30,32 +27,17 @@ const createCustomMarkerSVG = (distance: number, speed: number, heading: number 
     <svg width="60" height="80" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <g id="arrow-marker">
-          <!-- 外側の円（影） -->
           <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)" />
-          
-          <!-- メインの円 -->
           <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-          
-          <!-- 🔺 進行方向を示す三角形（上向き） -->
           <path d="M 30 13 L 38 25 L 22 25 Z" fill="#ffffff" stroke="#1a73e8" stroke-width="1.5"/>
-          
-          <!-- 中心点 -->
           <circle cx="30" cy="28" r="4" fill="#ffffff"/>
         </g>
       </defs>
-      
-      <!-- 回転適用（headingに基づいて回転） -->
       <use href="#arrow-marker" transform="rotate(${heading} 30 28)"/>
-      
-      <!-- 情報ボックス背景 -->
       <rect x="8" y="52" width="44" height="24" rx="4" fill="#ffffff" stroke="#4285F4" stroke-width="2"/>
-      
-      <!-- 速度表示 -->
       <text x="30" y="62" text-anchor="middle" font-family="Arial" font-size="9" font-weight="bold" fill="#1a73e8">
         ${speed.toFixed(0)} km/h
       </text>
-      
-      <!-- 距離表示 -->
       <text x="30" y="71" text-anchor="middle" font-family="Arial" font-size="8" fill="#666">
         ${distance.toFixed(1)} km
       </text>
@@ -75,7 +57,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     mountedRef.current = true;
     console.log('🗺️ GoogleMapWrapper 初期化開始');
 
-    // 既存マップの再利用
     if (isGlobalMapInitialized && globalMapInstance) {
       console.log('♻️ 既存マップを再利用');
       setIsLoading(false);
@@ -105,14 +86,13 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       }
 
       try {
-        const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 }; // 大阪城
+        const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 };
 
-        // 🗺️ WebGLベクターマップ設定（ヘッドアップ表示に必須）
         const mapOptions: any = {
           center: centerPosition,
           zoom: 18,
           renderingType: window.google.maps.RenderingType.VECTOR,
-          mapId: "DEMO_MAP_ID", // 本番環境では実際のMap IDを使用
+          mapId: "DEMO_MAP_ID",
           heading: 0,
           tilt: 0,
           disableDefaultUI: true,
@@ -125,7 +105,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         const map = new window.google.maps.Map(mapContainerRef.current, mapOptions);
         console.log('✅ Map作成成功');
 
-        // 🚗 三角矢印マーカー作成
         const markerSVG = createCustomMarkerSVG(0, 0, 0);
         const markerIcon = {
           url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
@@ -143,7 +122,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
         console.log('✅ 三角マーカー作成成功');
 
-        // 🛤️ 走行軌跡用Polyline（赤いライン）
         const polyline = new window.google.maps.Polyline({
           map: map,
           path: [],
@@ -156,7 +134,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
         console.log('✅ Polyline作成成功');
 
-        // グローバルインスタンスに保存
         globalMapInstance = map;
         globalMarkerInstance = marker;
         globalPolylineInstance = polyline;
@@ -171,7 +148,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         
         console.log('🎉 マップ初期化完了!');
 
-        // レンダリングタイプ確認
         map.addListener('renderingtype_changed', () => {
           const renderingType = map.getRenderingType();
           const isVector = (renderingType === window.google.maps.RenderingType.VECTOR);
@@ -193,7 +169,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       return;
     }
 
-    // スクリプト読み込み
     const existingScript = document.getElementById('google-maps-script');
     if (existingScript) {
       if (window.google?.maps?.Map) {
@@ -227,7 +202,6 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     };
   }, []);
 
-  // 初期位置変更時の処理
   useEffect(() => {
     if (isGlobalMapInitialized && globalMapInstance && globalMarkerInstance && initialPosition) {
       globalMapInstance.setCenter(initialPosition);
@@ -264,17 +238,10 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
   );
 };
 
-// =====================================
-// エクスポート関数
-// =====================================
-
 export const getGlobalMapInstance = () => globalMapInstance;
 export const getGlobalMarkerInstance = () => globalMarkerInstance;
 export const getGlobalPolylineInstance = () => globalPolylineInstance;
 
-/**
- * 🔺 マーカーアイコンを更新（三角矢印の向きも更新）
- */
 export const updateMarkerIcon = (distance: number, speed: number, heading: number = 0) => {
   if (!globalMarkerInstance) {
     console.warn('⚠️ マーカー未初期化');
@@ -291,9 +258,6 @@ export const updateMarkerIcon = (distance: number, speed: number, heading: numbe
   globalMarkerInstance.setIcon(markerIcon);
 };
 
-/**
- * マーカー位置を更新
- */
 export const updateMarkerPosition = (lat: number, lng: number) => {
   if (!globalMarkerInstance) {
     console.warn('⚠️ マーカー未初期化');
@@ -303,9 +267,6 @@ export const updateMarkerPosition = (lat: number, lng: number) => {
   globalMarkerInstance.setPosition({ lat, lng });
 };
 
-/**
- * 地図の中心を移動（スムーズ移動）
- */
 export const panMapToPosition = (lat: number, lng: number) => {
   if (!globalMapInstance) {
     console.warn('⚠️ マップ未初期化');
@@ -315,9 +276,6 @@ export const panMapToPosition = (lat: number, lng: number) => {
   globalMapInstance.panTo({ lat, lng });
 };
 
-/**
- * 🧭 ヘッドアップ表示: 地図を回転
- */
 export const setMapHeading = (heading: number) => {
   if (!globalMapInstance) {
     console.warn('⚠️ マップ未初期化');
@@ -339,29 +297,42 @@ export const setMapHeading = (heading: number) => {
 };
 
 /**
- * 🛤️ 走行軌跡に座標を追加
+ * 🛤️ 走行軌跡に座標を追加 - 修正版（初期化チェック追加）
  */
 export const addPathPoint = (lat: number, lng: number) => {
   if (!globalPolylineInstance) {
-    console.warn('⚠️ Polyline未初期化');
+    console.warn('⚠️ Polyline未初期化 - 座標追加スキップ');
     return;
   }
 
-  const path = globalPolylineInstance.getPath();
-  path.push(new window.google.maps.LatLng(lat, lng));
+  try {
+    const path = globalPolylineInstance.getPath();
+    
+    // ✅ 修正: pathがundefinedの場合はエラー回避
+    if (!path) {
+      console.warn('⚠️ Polyline path未初期化');
+      return;
+    }
+
+    path.push(new window.google.maps.LatLng(lat, lng));
+    console.log(`📍 座標追加: (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
+  } catch (error) {
+    console.error('❌ 座標追加エラー:', error);
+  }
 };
 
-/**
- * 走行軌跡をクリア
- */
 export const clearPath = () => {
   if (!globalPolylineInstance) {
     console.warn('⚠️ Polyline未初期化');
     return;
   }
 
-  globalPolylineInstance.setPath([]);
-  console.log('🗑️ 走行軌跡クリア');
+  try {
+    globalPolylineInstance.setPath([]);
+    console.log('🗑️ 走行軌跡クリア');
+  } catch (error) {
+    console.error('❌ 軌跡クリアエラー:', error);
+  }
 };
 
 export default GoogleMapWrapper;
