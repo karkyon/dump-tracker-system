@@ -232,7 +232,7 @@ const VehicleInfo: React.FC = () => {
     }
     
     // ✅ operationStoreに車両情報を保存（sessionStorageは使わない）
-if (vehicleInfo) {
+    if (vehicleInfo) {
       saveVehicleToStore({
         vehicleId: selectedVehicleId,
         vehicleNumber: vehicleInfo.vehicleNumber,
@@ -253,9 +253,10 @@ if (vehicleInfo) {
       toast.error('車両情報の取得に失敗しました');
     }
   };
+
+  // ✅ 修正: ログアウトせずにHome画面に戻る
   const handleBack = () => {
-    logout();
-    navigate('/login', { replace: true });
+    navigate('/home');
   };
 
   // ✅ ローディング中の表示

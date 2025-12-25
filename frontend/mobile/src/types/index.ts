@@ -209,3 +209,17 @@ export type Optional<T> = T | undefined;
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
+
+// ============================================================================
+// 🆕 Home画面関連 - 今日の運行サマリー
+// ============================================================================
+
+/**
+ * 今日の運行サマリー
+ */
+export interface TodaysSummary {
+  operationCount: number;        // 今日の運行回数
+  totalDistance: number;         // 今日の総走行距離 (km)
+  totalDuration: number;         // 今日の総運行時間 (分)
+  lastOperationEndTime?: string; // 最終運行終了時刻 (ISO 8601形式)
+}
