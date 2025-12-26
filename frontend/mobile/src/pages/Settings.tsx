@@ -57,7 +57,6 @@ const Settings: React.FC = () => {
   
   // 🎨 季節テーマHook
   const {
-    currentTheme,
     activeThemeKey,
     isAutoApply,
     manualTheme,
