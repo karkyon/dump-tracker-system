@@ -1,8 +1,10 @@
 // frontend/mobile/src/App.tsx
 // =====================================
-// App.tsx - 起動時運行状態復元機能追加版
+// App.tsx - 起動時運行状態復元機能追加版 + 運行履歴・設定画面対応
 // 🆕 運行中の状態を復元してOperationRecord画面に遷移
 // 🔧 修正: Home画面 = /home （ダッシュボード）
+// 🆕 追加: 運行履歴画面 = /operation-history
+// 🆕 追加: 設定画面 = /settings
 // =====================================
 
 import React, { useEffect } from 'react';
@@ -20,6 +22,8 @@ import OperationRecord from './pages/OperationRecord';
 import RefuelRecord from './pages/RefuelRecord';
 import LoadingInput from './pages/LoadingInput';
 import LoadingConfirmation from './pages/LoadingConfirmation';
+import OperationHistory from './pages/OperationHistory';  // 🆕 運行履歴画面
+import Settings from './pages/Settings';                  // 🆕 設定画面
 
 // 🆕 運行状態復元コンポーネント
 const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -182,6 +186,26 @@ const App: React.FC = () => {
             }
           />
 
+          {/* 🆕 運行履歴画面 */}
+          <Route
+            path="/operation-history"
+            element={
+              <ProtectedRoute>
+                <OperationHistory />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* 🆕 設定画面（D9a） */}
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+
           {/* D2: 車両選択画面 */}
           <Route
             path="/vehicle-info"
@@ -276,19 +300,29 @@ export default App;
 //    - import Home from './pages/Home'
 //    - <Route path="/home" element={<Home />} />
 // 
-// 2. ログイン後のリダイレクト先を /home に変更
+// 2. 🆕 運行履歴画面（/operation-history）ルート追加
+//    - import OperationHistory from './pages/OperationHistory'
+//    - <Route path="/operation-history" element={<OperationHistory />} />
+// 
+// 3. 🆕 設定画面（/settings）ルート追加
+//    - import Settings from './pages/Settings'
+//    - <Route path="/settings" element={<Settings />} />
+// 
+// 4. ログイン後のリダイレクト先を /home に変更
 //    - path="/login" → Navigate to="/home"
 // 
-// 3. デフォルトルートを /home に変更
+// 5. デフォルトルートを /home に変更
 //    - path="/" → Navigate to="/home"
 // 
-// 4. OperationStateRestorer の修正
+// 6. OperationStateRestorer の修正
 //    - status='COMPLETED' → navigate('/home')
 // 
-// 5. 404ルートを /home に自動リダイレクト
+// 7. 404ルートを /home に自動リダイレクト
 //    - path="*" → Navigate to="/home"
 // 
 // 使用方法:
 // - この App.tsx を frontend/mobile/src/App.tsx に上書き
+// - OperationHistory.tsx を frontend/mobile/src/pages/ に配置
+// - Settings.tsx を frontend/mobile/src/pages/ に配置
 // - npm run dev で再起動
 // =====================================
