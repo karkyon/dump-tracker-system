@@ -249,9 +249,18 @@ router.get(
  *     description: |
  *       新規点検記録を作成
  *
+ *       **権限要件:**
+ *       - DRIVER（運転手）: 点検記録を作成可能
+ *       - 現時点ではDRIVERが点検も実施
+ *       - 将来的にはINSPECTORロールとして分離予定
+ *
+ *       **設計思想:**
+ *       - Phase 1: DRIVER = 点検実施者（現在）
+ *       - Phase 2: DRIVER ≠ INSPECTOR（将来的に分離）
+ *
  *       **トランザクションデータ管理:**
  *       - 新しい点検実施記録を作成
- *       - 例: 「2025年12月15日 10:00、田中運転手が車両A号を点検開始」
+ *       - 例: 「2025年12月26日、田中運転手が車両A号を点検開始」
  *
  *       **企業レベル機能:**
  *       - 車両連携
@@ -280,7 +289,7 @@ router.get(
  *               inspectorId:
  *                 type: string
  *                 format: uuid
- *                 description: 点検者ID
+ *                 description: 点検者ID（現時点ではDRIVER）
  *               inspectionType:
  *                 type: string
  *                 enum: [PRE_TRIP, POST_TRIP]
@@ -321,10 +330,12 @@ router.get(
  *         description: バリデーションエラー
  *       401:
  *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー
  */
 router.post(
   '/',
-  requireRole('INSPECTOR' as UserRole),
+  requireRole('DRIVER' as UserRole),  // ✅ DRIVER（Prismaスキーマ変更不要）
   createInspectionRecord
 );
 

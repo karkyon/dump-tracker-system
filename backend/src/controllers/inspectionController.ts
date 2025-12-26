@@ -24,7 +24,7 @@ import {
 } from '../utils/response';
 
 // 🎯 今回完成services層との密連携
-import { InspectionService } from '../services/inspectionService';
+import { InspectionService, InspectionRecordCreateDTO } from '../services/inspectionService';
 
 // 🎯 types/からの統一型定義インポート
 import type {
@@ -33,6 +33,7 @@ import type {
   InspectionStatus,
   InspectionType
 } from '../types';
+
 import type {
   AuthenticatedRequest
 } from '../types/auth';
@@ -210,15 +211,24 @@ class InspectionController {
         return sendUnauthorizedError(res, '認証が必要です');
       }
 
-      const recordData: InspectionRecordCreateInput = {
+      // ✅ バリデーション追加
+      if (!req.body.vehicleId) {
+        return sendValidationError(res, [
+          { field: 'vehicleId', message: 'vehicleIdは必須です', value: req.body.vehicleId }
+        ], 'バリデーションエラー');
+      }
+
+      // ✅ OK: 型が正しくインポートされた
+      const recordData: InspectionRecordCreateDTO = {
         ...req.body,
-        inspectorId: req.user.userId
+        vehicleId: req.body.vehicleId,      // required
+        inspectorId: req.user.userId        // required
       };
 
       const newRecord = await this.inspectionService.createInspectionRecord(
         recordData,
         req.user.userId,
-        req.user.role  // 追加
+        req.user.role
       );
 
       logger.info(`📝 点検記録作成成功`, {
