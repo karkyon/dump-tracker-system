@@ -1,5 +1,6 @@
 // frontend/mobile/src/pages/Settings.tsx
-// 設定画面（D9a仕様） - システム設定管理
+// 設定画面（D9a仕様） - 季節テーマ設定機能追加版
+// ✅ 既存機能100%保持 + 季節テーマ設定追加
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,50 +13,58 @@ import {
   AlertTriangle,
   Database,
   Save,
-  RotateCcw
+  RotateCcw,
+  Palette
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useSeasonalTheme, ThemeKey, THEME_ICONS } from '../hooks/useSeasonalTheme';
 
 /**
  * 設定データ型定義
  */
 interface SettingsData {
-  // 通知設定
   notifications: {
-    operationStart: boolean;      // 運行開始通知
-    gpsAutoUpdate: boolean;       // 手渡高さデータ
-    dataCompletion: boolean;      // データ完成通知
+    operationStart: boolean;
+    gpsAutoUpdate: boolean;
+    dataCompletion: boolean;
   };
-  // 表示設定
   display: {
-    darkMode: boolean;            // ダークモード
-    fontSize: 'small' | 'medium' | 'large'; // フォントサイズ
-    orientation: 'portrait' | 'landscape' | 'auto'; // 画面向き
+    darkMode: boolean;
+    fontSize: 'small' | 'medium' | 'large';
+    orientation: 'portrait' | 'landscape' | 'auto';
   };
-  // 操作設定
   operation: {
-    autoLogoutMinutes: number;    // 自動ログアウト時間（分）
-    gpsAutoRecording: boolean;    // GPS自動取得
-    offlineSync: boolean;         // オフライン反映
-    autoBackup: boolean;          // データ自動バックアップ
+    autoLogoutMinutes: number;
+    gpsAutoRecording: boolean;
+    offlineSync: boolean;
+    autoBackup: boolean;
   };
-  // アラート設定
   alerts: {
-    speedLimit: number;           // 速度超過閾値（km/h）
-    continuousDriving: number;    // 連続運転時間閾値（分）
+    speedLimit: number;
+    continuousDriving: number;
   };
-  // データ設定
   data: {
-    syncInterval: number;         // 同期間隔（分）
-    backupFrequency: number;      // バックアップ頻度（時間）
+    syncInterval: number;
+    backupFrequency: number;
   };
 }
 
 /**
- * Settings画面コンポーネント
+ * Settings画面コンポーネント - 季節テーマ設定追加版
  */
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  
+  // 🎨 季節テーマHook
+  const {
+    currentTheme,
+    activeThemeKey,
+    isAutoApply,
+    manualTheme,
+    toggleAutoApply,
+    setManualTheme,
+    allThemes
+  } = useSeasonalTheme();
 
   // デフォルト設定値
   const defaultSettings: SettingsData = {
@@ -167,6 +176,28 @@ const Settings: React.FC = () => {
     }
   };
 
+  /**
+   * テーマ表示名マッピング
+   */
+  const themeNameMap: Record<ThemeKey, string> = {
+    'default': 'デフォルト',
+    'newyear': '正月',
+    'spring': '春・桜',
+    'early_summer': '初夏',
+    'midsummer': '真夏',
+    'rainy': '梅雨',
+    'autumn': '秋',
+    'maple': '紅葉',
+    'winter': '冬',
+    'snowman': '雪だるま',
+    'valentine': 'バレンタイン',
+    'children': 'こどもの日',
+    'hinamatsuri': 'ひな祭り',
+    'moon': '月見',
+    'obon': 'お盆',
+    'war_memorial': '終戦記念日'
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* ヘッダー */}
@@ -239,13 +270,71 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
-        {/* 表示設定 */}
+        {/* 表示設定 + 🆕 季節テーマ設定 */}
         <section className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="bg-pink-50 px-4 py-3 flex items-center gap-2 border-b border-pink-100">
             <Eye className="w-5 h-5 text-pink-600" />
             <h2 className="font-semibold text-gray-800">表示設定</h2>
           </div>
           <div className="p-4 space-y-4">
+            
+            {/* 🎨 季節テーマ自動適用 */}
+            <div className="border-b border-gray-100 pb-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-pink-600" />
+                  <span className="text-gray-700 font-medium">季節テーマ自動適用</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isAutoApply}
+                  onChange={toggleAutoApply}
+                  className="w-12 h-6 appearance-none bg-gray-300 rounded-full relative
+                           checked:bg-pink-600 transition-colors cursor-pointer
+                           before:content-[''] before:absolute before:w-5 before:h-5 
+                           before:bg-white before:rounded-full before:top-0.5 before:left-0.5
+                           before:transition-transform checked:before:translate-x-6"
+                />
+              </div>
+              
+              {/* 🎨 手動テーマ選択 */}
+              {!isAutoApply && (
+                <div className="mt-3">
+                  <label className="block text-sm text-gray-600 mb-2">
+                    テーマを選択
+                  </label>
+                  <select
+                    value={manualTheme || 'default'}
+                    onChange={(e) => setManualTheme(e.target.value as ThemeKey)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                             focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  >
+                    {Object.keys(allThemes).map((key) => (
+                      <option key={key} value={key}>
+                        {THEME_ICONS[key as ThemeKey]} {themeNameMap[key as ThemeKey]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {/* 現在のテーマ表示 */}
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">現在のテーマ</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{THEME_ICONS[activeThemeKey]}</span>
+                  <span className="font-medium text-gray-800">
+                    {themeNameMap[activeThemeKey]}
+                  </span>
+                  {isAutoApply && (
+                    <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full">
+                      自動
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* ダークモード */}
             <label className="flex items-center justify-between">
               <span className="text-gray-700">ダークモード</span>
@@ -300,7 +389,6 @@ const Settings: React.FC = () => {
             <h2 className="font-semibold text-gray-800">操作設定</h2>
           </div>
           <div className="p-4 space-y-4">
-            {/* 自動ログアウト時間 */}
             <div>
               <label className="block text-gray-700 mb-2">
                 自動ログアウト時間
@@ -317,7 +405,6 @@ const Settings: React.FC = () => {
               </select>
             </div>
 
-            {/* GPS自動取得 */}
             <label className="flex items-center justify-between">
               <span className="text-gray-700">GPS自動取得</span>
               <input
@@ -332,7 +419,6 @@ const Settings: React.FC = () => {
               />
             </label>
 
-            {/* オフライン反映 */}
             <label className="flex items-center justify-between">
               <span className="text-gray-700">オフライン反映</span>
               <input
@@ -347,7 +433,6 @@ const Settings: React.FC = () => {
               />
             </label>
 
-            {/* データ自動バックアップ */}
             <label className="flex items-center justify-between">
               <span className="text-gray-700">データ自動バックアップ</span>
               <input
@@ -371,7 +456,6 @@ const Settings: React.FC = () => {
             <h2 className="font-semibold text-gray-800">アラート設定</h2>
           </div>
           <div className="p-4 space-y-4">
-            {/* 速度超過閾値 */}
             <div>
               <label className="block text-gray-700 mb-2">
                 速度超過閾値（km/h）
@@ -388,7 +472,6 @@ const Settings: React.FC = () => {
               />
             </div>
 
-            {/* 連続運転時間閾値 */}
             <div>
               <label className="block text-gray-700 mb-2">
                 連続運転時間閾値（分）
@@ -414,7 +497,6 @@ const Settings: React.FC = () => {
             <h2 className="font-semibold text-gray-800">データ設定</h2>
           </div>
           <div className="p-4 space-y-4">
-            {/* 同期間隔 */}
             <div>
               <label className="block text-gray-700 mb-2">
                 同期間隔（分）
@@ -431,7 +513,6 @@ const Settings: React.FC = () => {
               </select>
             </div>
 
-            {/* バックアップ頻度 */}
             <div>
               <label className="block text-gray-700 mb-2">
                 バックアップ頻度（時間）
@@ -454,7 +535,6 @@ const Settings: React.FC = () => {
       {/* 固定フッター（保存・リセットボタン） */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3">
         <div className="flex gap-3">
-          {/* リセットボタン */}
           <button
             onClick={handleReset}
             className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700
@@ -465,7 +545,6 @@ const Settings: React.FC = () => {
             リセット
           </button>
 
-          {/* 保存ボタン */}
           <button
             onClick={handleSave}
             disabled={!hasChanges}
