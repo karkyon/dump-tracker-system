@@ -133,7 +133,7 @@ const OperationRecord: React.FC = () => {
     
     // すぐに車両選択画面に戻る（エラー表示なし）
     const timer = setTimeout(() => {
-      navigate('/vehicle-info', { replace: true });
+      navigate('/home', { replace: true });
     }, 100);
     
     return () => clearTimeout(timer);
@@ -830,7 +830,7 @@ const OperationRecord: React.FC = () => {
       
       // 少し遅延させてから遷移（ユーザーが成功メッセージを確認できるように）
       setTimeout(() => {
-        navigate('/vehicle-info', { replace: true });
+        navigate('/home', { replace: true });
       }, 1000);
       
       setIsSubmitting(false);

@@ -1,16 +1,19 @@
+// frontend/mobile/src/App.tsx
 // =====================================
 // App.tsx - 起動時運行状態復元機能追加版
 // 🆕 運行中の状態を復元してOperationRecord画面に遷移
+// 🔧 修正: Home画面 = /home （ダッシュボード）
 // =====================================
 
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
-import { useOperationStore } from './stores/operationStore'; // 🆕 追加
+import { useOperationStore } from './stores/operationStore';
 
 // Pages
 import Login from './pages/Login';
+import Home from './pages/Home';
 import VehicleInfo from './pages/VehicleInfo';
 import PreDepartureInspection from './pages/PreDepartureInspection';
 import OperationRecord from './pages/OperationRecord';
@@ -78,10 +81,10 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
       console.log('[StateRestorer] ✅ 運行完了状態を検出 - stateをクリア');
       operationStore.resetOperation();
       
-      // Home画面（vehicle-info）に遷移
-      if (location.pathname !== '/vehicle-info') {
+      // ✅ Home画面（/home）に遷移
+      if (location.pathname !== '/home') {
         setTimeout(() => {
-          navigate('/vehicle-info', { replace: true });
+          navigate('/home', { replace: true });
         }, 100);
       }
       
@@ -90,7 +93,7 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
       console.log('[StateRestorer] ℹ️ ステータス:', status, '- 通常フロー');
     }
     
-  }, [isAuthenticated, location.pathname]); // operationStoreは依存配列に含めない（無限ループ防止）
+  }, [isAuthenticated, location.pathname]);
 
   return <>{children}</>;
 };
@@ -165,11 +168,21 @@ const App: React.FC = () => {
           <Route 
             path="/login" 
             element={
-              isAuthenticated ? <Navigate to="/vehicle-info" replace /> : <Login />
+              isAuthenticated ? <Navigate to="/home" replace /> : <Login />
             } 
           />
 
-          {/* プロテクトルート */}
+          {/* ✅ Home画面（ダッシュボード） */}
+          <Route
+            path="/home"
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* D2: 車両選択画面 */}
           <Route
             path="/vehicle-info"
             element={
@@ -179,7 +192,7 @@ const App: React.FC = () => {
             }
           />
 
-          {/* 出発前点検画面 */}
+          {/* D3: 出発前点検画面 */}
           <Route
             path="/pre-departure-inspection"
             element={
@@ -189,7 +202,7 @@ const App: React.FC = () => {
             }
           />
 
-          {/* 運行記録画面 */}
+          {/* D4: 運行記録画面 */}
           <Route
             path="/operation-record"
             element={
@@ -229,35 +242,23 @@ const App: React.FC = () => {
             }
           />
 
-          {/* デフォルトルート */}
+          {/* ✅ デフォルトルート: /home にリダイレクト */}
           <Route
             path="/"
             element={
               isAuthenticated ? (
-                <Navigate to="/vehicle-info" replace />
+                <Navigate to="/home" replace />
               ) : (
                 <Navigate to="/login" replace />
               )
             }
           />
 
-          {/* 404ルート */}
+          {/* ✅ 404ルート: /home に自動リダイレクト */}
           <Route
             path="*"
             element={
-              <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-                <div className="text-center">
-                  <h1 className="text-6xl font-bold text-blue-600 mb-4">404</h1>
-                  <p className="text-xl text-gray-600 mb-8">ページが見つかりません</p>
-                  <a
-                    href={isAuthenticated ? '/vehicle-info' : '/login'}
-                    className="inline-block px-6 py-3 bg-blue-600 text-white font-semibold 
-                      rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    {isAuthenticated ? 'ホームへ戻る' : 'ログインへ'}
-                  </a>
-                </div>
-              </div>
+              <Navigate to={isAuthenticated ? '/home' : '/login'} replace />
             }
           />
         </Routes>
@@ -269,20 +270,25 @@ const App: React.FC = () => {
 export default App;
 
 // =====================================
-// 実装内容:
+// 修正内容:
 // 
-// 1. OperationStateRestorer コンポーネント追加
-//    - アプリ起動時に operationStore の状態をチェック
-//    - status === 'IN_PROGRESS' なら /operation-record に遷移
-//    - status === 'COMPLETED' なら stateをクリアして /vehicle-info に遷移
+// 1. Home画面（/home）ルート追加
+//    - import Home from './pages/Home'
+//    - <Route path="/home" element={<Home />} />
 // 
-// 2. OperationStateRestorer を Router内にラップ
-//    - すべてのルートに対して状態復元ロジックが適用される
+// 2. ログイン後のリダイレクト先を /home に変更
+//    - path="/login" → Navigate to="/home"
 // 
-// 3. 詳細なデバッグログ出力
-//    - 運行状態チェックのプロセスを追跡可能
+// 3. デフォルトルートを /home に変更
+//    - path="/" → Navigate to="/home"
+// 
+// 4. OperationStateRestorer の修正
+//    - status='COMPLETED' → navigate('/home')
+// 
+// 5. 404ルートを /home に自動リダイレクト
+//    - path="*" → Navigate to="/home"
 // 
 // 使用方法:
-// - この App.tsx を frontend/mobile/src/App.tsx と置き換える
-// - 必要なimportが追加済み: useOperationStore
+// - この App.tsx を frontend/mobile/src/App.tsx に上書き
+// - npm run dev で再起動
 // =====================================
