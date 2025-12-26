@@ -1,5 +1,7 @@
 // ✅✅✅ 運行記録詳細ダイアログ - 完全版（仕様書A7準拠）
 // 基本情報・運行情報・場所情報・タイムライン・GPSルート・点検項目管理を完全実装
+// 🔧 修正: 欠けているState定義を追加（inspectionsLoading, inspectionsError）
+// 🔧 修正: Inspection型をInspectionRecordに統一
 import React, { useEffect, useState } from 'react';
 import { 
   User, Truck, MapPin, Package, Clock,
@@ -132,6 +134,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const [activities, setActivities] = useState<OperationActivity[]>([]);
   const [gpsRecords, setGpsRecords] = useState<GpsRecord[]>([]);
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
+  
+  // 🔧 修正: 欠けていたState定義を追加
+  const [inspectionsLoading, setInspectionsLoading] = useState(false);
+  const [inspectionsError, setInspectionsError] = useState<string | null>(null);
 
   // タブ切り替え state
   const [activeTab, setActiveTab] = useState<'basic' | 'timeline' | 'gps' | 'inspection'>('basic');
@@ -261,6 +267,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
   /**
    * 点検記録を取得
+   * 🔧 修正: Inspection型をInspectionRecordに統一
    */
   const fetchInspections = async () => {
     console.log('🔍 [Debug] fetchInspections開始', { operationId });
@@ -293,16 +300,16 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         dataKeys: response?.data ? Object.keys(response.data) : []
       });
 
-      // ... レスポンス処理(既存のまま)
+      // レスポンス処理 - 🔧 Inspection型をInspectionRecordに修正
       const responseData: any = response.data;
-      let inspectionsData: Inspection[];
+      let inspectionsData: InspectionRecord[];
       
       if (responseData.data?.data) {
-        inspectionsData = responseData.data.data as Inspection[];
+        inspectionsData = responseData.data.data as InspectionRecord[];
       } else if (responseData.data) {
-        inspectionsData = responseData.data as Inspection[];
+        inspectionsData = responseData.data as InspectionRecord[];
       } else {
-        inspectionsData = responseData as Inspection[];
+        inspectionsData = responseData as InspectionRecord[];
       }
 
       console.log('✅ [Debug] 点検記録データ解析完了', {
@@ -797,7 +804,19 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                     点検項目 ({inspections.length}件)
                   </h3>
                   
-                  {inspections.length === 0 ? (
+                  {inspectionsLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <p className="text-gray-600">点検記録を読み込み中...</p>
+                    </div>
+                  ) : inspectionsError ? (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-red-800">
+                        <AlertCircle className="w-5 h-5" />
+                        <span className="font-medium">{inspectionsError}</span>
+                      </div>
+                    </div>
+                  ) : inspections.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
                       点検記録がありません
                     </div>
