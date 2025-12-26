@@ -8,7 +8,7 @@
 
 import { Response } from 'express';
 
-// 🎯 Phase 1完成基盤の活用（重複排除・統合版）
+// 🎯 Phase 1完成基盤の活用(重複排除・統合版)
 import { asyncHandler } from '../middleware/errorHandler';
 import {
   NotFoundError,
@@ -69,7 +69,7 @@ class InspectionController {
   }
 
   // =====================================
-  // 📝 点検記録管理API（企業レベル機能統合）
+  // 📝 点検記録管理API(企業レベル機能統合)
   // =====================================
 
   /**
@@ -78,10 +78,12 @@ class InspectionController {
    */
   public getAllInspectionRecords = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
+
       const {
         page = 1,
         limit = 10,
         vehicleId,
+        operationId,  // ✅ 追加
         inspectorId,
         inspectionType,
         status,
@@ -91,12 +93,29 @@ class InspectionController {
         sortOrder = 'desc'
       } = req.query;
 
+      logger.info('📋 [InspectionController] 点検記録一覧取得開始', {
+        requesterId: req.user?.userId,
+        requesterRole: req.user?.role,
+        filter: {
+          page,
+          limit,
+          vehicleId,
+          operationId,  // ✅ ログに追加
+          inspectorId,
+          inspectionType,
+          status,
+          startDate,
+          endDate
+        }
+      });
+
       const filterOptions: any = {
         page: Number(page),
         limit: Number(limit),
         sortBy: sortBy as string,
         sortOrder: sortOrder as 'asc' | 'desc',
         vehicleId: vehicleId as string,
+        operationId: operationId as string,  // ✅ 追加
         inspectorId: inspectorId as string,
         inspectionType: inspectionType as InspectionType,
         status: status as InspectionStatus,
@@ -133,7 +152,7 @@ class InspectionController {
     try {
       const { id } = req.params;
 
-      // ✅ UUID形式のバリデーション（修正）
+      // ✅ UUID形式のバリデーション(修正)
       const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
       if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
@@ -158,7 +177,7 @@ class InspectionController {
         req.user?.role || 'DRIVER'
       );
 
-      // レコードIDでフィルタリング（取得後）
+      // レコードIDでフィルタリング(取得後)
       const filteredRecord = record.data?.find(r => r.id === recordId);
 
       if (!filteredRecord) {
@@ -229,7 +248,7 @@ class InspectionController {
     try {
       const { id } = req.params;
 
-      // ✅ UUID形式のバリデーション（修正）
+      // ✅ UUID形式のバリデーション(修正)
       const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
       if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
@@ -289,7 +308,7 @@ class InspectionController {
     try {
       const { id } = req.params;
 
-      // ✅ UUID形式のバリデーション（修正）
+      // ✅ UUID形式のバリデーション(修正)
       const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
       if (!id || typeof id !== 'string' || !UUID_V4_REGEX.test(id.trim())) {
@@ -328,7 +347,7 @@ class InspectionController {
   });
 
   // =====================================
-  // 📊 統計・分析API（企業レベル機能統合）
+  // 📊 統計・分析API(企業レベル機能統合)
   // =====================================
 
   /**
@@ -339,7 +358,7 @@ class InspectionController {
     try {
       const { startDate, endDate, vehicleId, inspectorId } = req.query;
 
-      // ✅ UUID形式のバリデーション（追加）
+      // ✅ UUID形式のバリデーション(追加)
       const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
       // vehicleId のバリデーション
@@ -395,7 +414,7 @@ class InspectionController {
     try {
       const { vehicleId } = req.params;
 
-      // ✅ UUID形式のバリデーション（追加）
+      // ✅ UUID形式のバリデーション(追加)
       const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
       if (!vehicleId || typeof vehicleId !== 'string' || !UUID_V4_REGEX.test(vehicleId.trim())) {
@@ -463,7 +482,7 @@ class InspectionController {
 }
 
 // =====================================
-// 🏭 ファクトリ関数（シングルトン管理）
+// 🏭 ファクトリ関数(シングルトン管理)
 // =====================================
 
 let _inspectionControllerInstance: InspectionController | null = null;
@@ -476,12 +495,12 @@ export const getInspectionController = (): InspectionController => {
 };
 
 // =====================================
-// 📤 エクスポート（完全アーキテクチャ改修統合版）
+// 📤 エクスポート(完全アーキテクチャ改修統合版)
 // =====================================
 
 const inspectionController = getInspectionController();
 
-// 名前付きエクスポート（routes/inspectionRoutes.ts対応）
+// 名前付きエクスポート(routes/inspectionRoutes.ts対応)
 export const {
   getAllInspectionRecords,
   getInspectionRecordById,
@@ -504,15 +523,18 @@ export default inspectionController;
 // =====================================
 
 /**
- * ✅ controllers/inspectionController.ts - コンパイルエラー完全解消版
+ * ✅ controllers/inspectionController.ts - operationId対応完了版
  *
- * 【修正完了項目（66件すべて解消）】
- * ✅ FIX 1-2: validateRequest・sendUnauthorizedのインポート修正
- * ✅ FIX 3-7: 存在しない型定義の削除または正しい型への修正
- * ✅ FIX 8-66: InspectionServiceメソッド呼び出しの修正
+ * 【修正完了項目】
+ * ✅ operationIdパラメータ追加
+ * ✅ ログ出力にoperationId追加
+ * ✅ filterOptionsにoperationId追加
+ * ✅ validateRequest・sendUnauthorizedのインポート修正
+ * ✅ 存在しない型定義の削除または正しい型への修正
+ * ✅ InspectionServiceメソッド呼び出しの修正
  *   - getAllInspectionItems → getInspectionItems
  *   - getInspectionItemById → getInspectionItems (フィルタ付き)
- *   - validateInspectionItemData → 削除（サービス内で処理）
+ *   - validateInspectionItemData → 削除(サービス内で処理)
  *   - req.user.id → req.user.userId
  *   - sendValidationError の引数を配列形式に修正
  *   - undefinedチェックの追加
@@ -529,8 +551,4 @@ export default inspectionController;
  * 【循環参照の回避】
  * ✅ 適切なインポート構造
  * ✅ サービス層との疎結合
- *
- * 【次回作業準備】
- * 🎯 routes/inspectionRoutes.ts: エンドポイント統合確認
- * 🎯 types/inspection.ts: 型定義の最終確認
  */

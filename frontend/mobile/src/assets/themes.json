@@ -1,0 +1,114 @@
+{
+  "default": {
+    "primary": "#2563eb",
+    "background": "#f8fafc",
+    "tone": "modern-neutral",
+    "backgroundImage": "/backgrounds/default.svg",
+    "marker": "#2563eb"
+  },
+  "newyear": {
+    "primary": "#dc2626",
+    "background": "#fff7ed",
+    "tone": "newyear",
+    "backgroundImage": "/backgrounds/newyear.svg",
+    "marker": "#dc2626"
+  },
+  "spring": {
+    "primary": "#ec4899",
+    "background": "#fff1f2",
+    "tone": "sakura",
+    "backgroundImage": "/backgrounds/spring.svg",
+    "marker": "#ec4899"
+  },
+  "early_summer": {
+    "primary": "#22c55e",
+    "background": "#f0fdf4",
+    "tone": "fresh",
+    "backgroundImage": "/backgrounds/early_summer.svg",
+    "marker": "#22c55e"
+  },
+  "midsummer": {
+    "primary": "#0ea5e9",
+    "background": "#ecfeff",
+    "tone": "summer",
+    "backgroundImage": "/backgrounds/midsummer.svg",
+    "marker": "#0ea5e9"
+  },
+  "rainy": {
+    "primary": "#6366f1",
+    "background": "#eef2ff",
+    "tone": "rain",
+    "backgroundImage": "/backgrounds/rainy.svg",
+    "marker": "#6366f1"
+  },
+  "autumn": {
+    "primary": "#f97316",
+    "background": "#fff7ed",
+    "tone": "autumn",
+    "backgroundImage": "/backgrounds/autumn.svg",
+    "marker": "#f97316"
+  },
+  "maple": {
+    "primary": "#b91c1c",
+    "background": "#fff1f2",
+    "tone": "maple",
+    "backgroundImage": "/backgrounds/maple.svg",
+    "marker": "#b91c1c"
+  },
+  "winter": {
+    "primary": "#64748b",
+    "background": "#f8fafc",
+    "tone": "winter",
+    "backgroundImage": "/backgrounds/winter.svg",
+    "marker": "#64748b"
+  },
+  "snowman": {
+    "primary": "#0ea5e9",
+    "background": "#f0f9ff",
+    "tone": "snow",
+    "backgroundImage": "/backgrounds/snowman.svg",
+    "marker": "#0ea5e9"
+  },
+  "valentine": {
+    "primary": "#e11d48",
+    "background": "#fff1f2",
+    "tone": "heart",
+    "backgroundImage": "/backgrounds/valentine.svg",
+    "marker": "#e11d48"
+  },
+  "children": {
+    "primary": "#16a34a",
+    "background": "#f0fdf4",
+    "tone": "kids",
+    "backgroundImage": "/backgrounds/children.svg",
+    "marker": "#16a34a"
+  },
+  "hinamatsuri": {
+    "primary": "#db2777",
+    "background": "#fff1f2",
+    "tone": "hina",
+    "backgroundImage": "/backgrounds/hinamatsuri.svg",
+    "marker": "#db2777"
+  },
+  "moon": {
+    "primary": "#4338ca",
+    "background": "#eef2ff",
+    "tone": "moon",
+    "backgroundImage": "/backgrounds/moon.svg",
+    "marker": "#4338ca"
+  },
+  "obon": {
+    "primary": "#ea580c",
+    "background": "#fff7ed",
+    "tone": "lantern",
+    "backgroundImage": "/backgrounds/obon.svg",
+    "marker": "#ea580c"
+  },
+  "war_memorial": {
+    "primary": "#334155",
+    "background": "#f8fafc",
+    "tone": "quiet",
+    "backgroundImage": "/backgrounds/war_memorial.svg",
+    "marker": "#334155"
+  }
+}

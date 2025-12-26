@@ -28,7 +28,7 @@ const Login: React.FC = () => {
   // 認証済みの場合は車両情報画面へリダイレクト
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/vehicle-info', { replace: true });
+      navigate('/home', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -128,8 +128,8 @@ const Login: React.FC = () => {
       
       toast.success('ログインに成功しました');
       
-      // 車両情報画面へ遷移
-      navigate('/vehicle-info', { replace: true });
+      // Home画面へ遷移
+      navigate('/home', { replace: true });
       
     } catch (err: any) {
       console.error('Login error:', err);

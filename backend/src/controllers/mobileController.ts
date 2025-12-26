@@ -8,7 +8,7 @@
 // 統合基盤: Controller層責務に徹した実装・Service層完全活用
 // =====================================
 
-import { LocationType, OperationStatus, UserRole } from '@prisma/client'; // ✅ 修正: LocationType, UserRole追加
+import { LocationType, OperationStatus } from '@prisma/client'; // ✅ 修正: LocationType, UserRole追加
 import { Decimal } from '@prisma/client/runtime/library';
 import { Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler';
@@ -16,9 +16,11 @@ import { getGpsLogService } from '../models/GpsLogModel';
 import { getLocationService } from '../models/LocationModel';
 import { getAuthService } from '../services/authService';
 import { getLocationServiceWrapper } from '../services/locationService';
+import { getSummaryService } from '../services/summaryService';
 import { getTripService } from '../services/tripService';
 import { getUserService } from '../services/userService';
 import { getVehicleService } from '../services/vehicleService';
+
 import type { AuthenticatedRequest } from '../types/auth';
 import type { PaginationQuery } from '../types/common';
 import type { CreateTripRequest, EndTripRequest, TripFilter } from '../types/trip';
@@ -57,7 +59,7 @@ export class MobileController {
   private readonly gpsLogService: ReturnType<typeof getGpsLogService>;
   private readonly mobileStats: MobileApiStats;
   private readonly locationServiceWrapper: ReturnType<typeof getLocationServiceWrapper>;
-
+  private readonly summaryService: ReturnType<typeof getSummaryService>;
 
   constructor() {
     this.authService = getAuthService();
@@ -66,6 +68,7 @@ export class MobileController {
     this.vehicleService = getVehicleService();
     this.locationService = getLocationService();
     this.locationServiceWrapper = getLocationServiceWrapper();
+    this.summaryService = getSummaryService();
 
     // GpsLogServiceの初期化
     const prisma = DatabaseService.getInstance();
@@ -785,7 +788,7 @@ export class MobileController {
       const nearbyLocations = await this.locationServiceWrapper.findNearbyLocations(
         nearbyRequest,
         req.user.userId,
-        req.user.role as UserRole
+        req.user.role
       );
 
       logger.info('近隣地点検知結果', {
@@ -1018,6 +1021,31 @@ export class MobileController {
         error: error instanceof Error ? error.message : String(error)
       });
       sendError(res, '車両ステータスの更新に失敗しました', 500, 'VEHICLE_STATUS_ERROR');
+    }
+  });
+
+  /**
+   * 今日の運行サマリー取得
+   * GET /api/v1/mobile/summary/today
+   */
+  public getTodaysSummary = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        sendError(res, '認証が必要です', 401, 'AUTHENTICATION_REQUIRED');
+        return;
+      }
+
+      this.collectStats('operation', req.user.userId);
+
+      const summary = await this.summaryService.getTodaysSummary(req.user.userId);
+
+      sendSuccess(res, summary, '今日の運行サマリーを取得しました');
+
+    } catch (error) {
+      logger.error('今日の運行サマリー取得エラー', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      sendError(res, '運行サマリーの取得に失敗しました', 500, 'SUMMARY_FETCH_ERROR');
     }
   });
 

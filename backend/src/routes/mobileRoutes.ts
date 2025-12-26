@@ -1075,6 +1075,26 @@ router.get('/health',
   mobileController.healthCheck
 );
 
+/**
+ * @swagger
+ * /mobile/summary/today:
+ *   get:
+ *     summary: 今日の運行サマリー取得
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: サマリー取得成功
+ */
+router.get('/summary/today',
+  logRequest('GET /mobile/summary/today'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  mobileController.getTodaysSummary
+);
+
 // =====================================
 // 🚫 404ハンドラー
 // =====================================

@@ -1,5 +1,6 @@
 // frontend/mobile/src/pages/PreDepartureInspection.tsx
 // D3: 乗車前点検画面 - エラーハンドリング強化版（ハードコードフォールバック完全削除）
+// ✅ 全機能保持版（557行）- 文字化けのみ修正
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -163,7 +164,7 @@ const PreDepartureInspection: React.FC = () => {
     );
   };
 
-/**
+  /**
    * 運行開始処理
    * 
    * 🔧 完全修正 (2025年12月9日):
@@ -515,7 +516,7 @@ const PreDepartureInspection: React.FC = () => {
         {!allChecked && (
           <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
             <p className="text-sm text-yellow-800 font-medium">
-              ⚠ すべての点検項目を確認してから運行を開始してください
+              ⚠️ すべての点検項目を確認してから運行を開始してください
             </p>
           </div>
         )}

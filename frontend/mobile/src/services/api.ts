@@ -6,7 +6,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
-import type { GPSLogData } from '../types/index';
+import type { GPSLogData,TodaysSummary } from '../types/index';
 
 // =============================================================================
 // 型定義
@@ -312,6 +312,31 @@ class APIServiceClass {
    */
   logout(): void {
     this.clearToken();
+  }
+
+  /**
+   * 🆕 今日の運行サマリーを取得
+   * @returns {Promise<APIResponse<TodaysSummary>>} 今日の運行サマリー
+   */
+  async getTodaysSummary(): Promise<APIResponse<TodaysSummary>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<TodaysSummary>>(  // ✅ 修正!
+        '/mobile/summary/today'
+      );
+      return response.data;
+    } catch (error) {
+      console.error('今日の運行サマリー取得エラー:', error);
+      // エラー時はデフォルト値を返す
+      return {
+        success: false,
+        data: {
+          operationCount: 0,
+          totalDistance: 0,
+          totalDuration: 0
+        },
+        message: '運行サマリーの取得に失敗しました'
+      };
+    }
   }
 
   // =============================================================================
