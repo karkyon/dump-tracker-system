@@ -292,7 +292,9 @@ model Operation {
   weatherCondition                String?            @map("weather_condition") @db.VarChar(50)
   roadCondition                   String?            @map("road_condition") @db.VarChar(100)
   startOdometer                   Decimal?           @map("start_odometer") @db.Decimal(8, 2)
+  endOdometer                     Decimal?           @map("end_odometer") @db.Decimal(8, 2)     // 🆕 追加
   startFuelLevel                  Decimal?           @map("start_fuel_level") @db.Decimal(8, 2)
+  endFuelLevel                    Decimal?           @map("end_fuel_level") @db.Decimal(8, 2)   // 🆕 追加
   gpsLogs                         GpsLog[]
   inspectionRecords               InspectionRecord[]
   operationDetails                OperationDetail[]

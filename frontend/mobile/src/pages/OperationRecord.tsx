@@ -753,88 +753,13 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
-   * 🆕 運行終了ハンドラー（最終版 - Home遷移とエラー抑制）
-   * - 運行終了API呼び出し
-   * - operationStoreのリセット
-   * - 既存トーストのクリア
-   * - Home画面（/vehicle-info）への自動遷移
+   * 🆕 運行終了ハンドラー（D8画面遷移版）
+   * - D8（乗車後点検）画面へ遷移
+   * - 実際の運行終了処理はD8画面で実行
    */
-  const handleOperationEnd = async () => {
-    if (!window.confirm('運行を終了してもよろしいですか？')) {
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      
-      // ✅ 運行ID確認
-      const currentOperationId = operationStore.operationId || operation.id;
-      
-      if (!currentOperationId) {
-        toast.error('運行IDが見つかりません');
-        setIsSubmitting(false);
-        return;
-      }
-
-      console.log('[運行終了] 🏁 運行終了処理開始:', currentOperationId);
-      
-      // ✅ 運行終了API呼び出し
-      try {
-        const endLocation = currentPosition ? {
-          latitude: currentPosition.coords.latitude,
-          longitude: currentPosition.coords.longitude,
-          accuracy: currentPosition.coords.accuracy
-        } : undefined;
-        
-        const response = await apiService.endOperation(currentOperationId, {
-          endTime: new Date(),
-          endPosition: endLocation,
-          notes: operation.notes
-        });
-        
-        console.log('[運行終了] ✅ API呼び出し成功:', response);
-        
-      } catch (apiError) {
-        console.error('[運行終了] ❌ API呼び出しエラー:', apiError);
-        toast.error('運行終了APIの呼び出しに失敗しました');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // ✅ ローカル状態を更新
-      setOperation(prev => ({ 
-        ...prev, 
-        status: 'idle'
-      }));
-      
-      // ✅ operationStoreをリセット
-      console.log('[運行終了] 🧹 operationStore リセット実行');
-      operationStore.resetOperation();
-      
-      // 🆕 既存のトーストをすべてクリア
-      toast.dismiss();
-      
-      // ✅ 成功メッセージ表示
-      toast.success('運行を終了しました', {
-        duration: 2000,
-        icon: '✅'
-      });
-      
-      // ✅ Home画面（車両選択画面 /vehicle-info）に遷移
-      console.log('[運行終了] 🏠 Home画面へ遷移: /vehicle-info');
-      
-      // 少し遅延させてから遷移（ユーザーが成功メッセージを確認できるように）
-      setTimeout(() => {
-        navigate('/home', { replace: true });
-      }, 1000);
-      
-      setIsSubmitting(false);
-      
-    } catch (error) {
-      console.error('[運行終了] ❌ 予期しないエラー:', error);
-      toast.error('運行終了に失敗しました');
-      setIsSubmitting(false);
-    }
+  const handleOperationEnd = () => {
+    console.log('[運行終了ボタン] D8（乗車後点検）画面へ遷移');
+    navigate('/post-trip-inspection');
   };
 
   // =====================================

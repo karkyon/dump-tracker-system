@@ -49,7 +49,9 @@ export interface OperationUpdateInput {
   plannedEndTime?: Date;
   actualEndTime?: Date;
   startOdometer?: number;
-  endOdometer?: number;
+  endOdometer?: number;    // 🆕 追加
+  startFuelLevel?: number;
+  endFuelLevel?: number;   // 🆕 追加
   totalDistance?: number;
   notes?: string;
 }
@@ -85,6 +87,7 @@ export interface EndOperationRequest {
   operationId: string;
   actualEndTime?: Date;
   endOdometer?: number;
+  endFuelLevel?: number;   // 🆕 追加
   notes?: string;
 }
 
@@ -454,11 +457,14 @@ export class OperationService {
   }
 
   /**
-   * 運行終了
+   * 🚀 Phase 1-B-16新機能: 運行終了
+   * 🆕 D8機能対応: endOdometer, endFuelLevel, 自動計算ロジック追加
+   * ✅ 修正: schema.camel.prisma の正しいリレーション名を使用
    */
   async endTrip(operationId: string, endData: {
     endTime?: Date;
-    endOdometer?: number;
+    endOdometer?: number;      // 🆕 運行終了時走行距離計（km）
+    endFuelLevel?: number;     // 🆕 運行終了時燃料レベル（L）
     notes?: string;
   }) {
     try {
@@ -476,12 +482,39 @@ export class OperationService {
         throw new NotFoundError('指定された運行が見つかりません');
       }
 
+      // 🆕 距離の自動計算（endOdometerとstartOdometerがある場合）
+      let totalDistanceKm: number | undefined;
+      if (endData.endOdometer && operation.startOdometer) {
+        totalDistanceKm = endData.endOdometer - Number(operation.startOdometer);
+        logger.info('走行距離を計算', {
+          startOdometer: operation.startOdometer,
+          endOdometer: endData.endOdometer,
+          totalDistanceKm
+        });
+      }
+
+      // 🆕 燃料消費量の自動計算（endFuelLevelとstartFuelLevelがある場合）
+      let fuelConsumedLiters: number | undefined;
+      if (endData.endFuelLevel !== undefined && operation.startFuelLevel) {
+        fuelConsumedLiters = Number(operation.startFuelLevel) - endData.endFuelLevel;
+        logger.info('燃料消費量を計算', {
+          startFuelLevel: operation.startFuelLevel,
+          endFuelLevel: endData.endFuelLevel,
+          fuelConsumedLiters
+        });
+      }
+
       const updated = await this.prisma.operation.update({
         where: { id: operationId },
         data: {
           status: 'COMPLETED',
           actualEndTime: endData.endTime || new Date(),
-          notes: endData.notes ? `${operation.notes || ''}\n${endData.notes}` : operation.notes
+          endOdometer: endData.endOdometer,           // 🆕 追加
+          endFuelLevel: endData.endFuelLevel,         // 🆕 追加
+          totalDistanceKm: totalDistanceKm,           // 🆕 自動計算値
+          fuelConsumedLiters: fuelConsumedLiters,     // 🆕 自動計算値
+          notes: endData.notes ? `${operation.notes || ''}\n${endData.notes}` : operation.notes,
+          updatedAt: new Date()                       // 🆕 追加
         },
         include: {
           vehicles: true,
@@ -489,7 +522,12 @@ export class OperationService {
         }
       });
 
-      logger.info('運行終了完了', { operationId });
+      logger.info('運行終了完了', {
+        operationId,
+        endOdometer: endData.endOdometer,
+        totalDistanceKm,
+        fuelConsumed: fuelConsumedLiters
+      });
 
       return updated;
     } catch (error) {

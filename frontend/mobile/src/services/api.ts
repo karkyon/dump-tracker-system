@@ -66,6 +66,8 @@ export interface EndOperationRequest {
     longitude: number;
     accuracy?: number;
   };
+  endOdometer?: number;     // ✅ 変更: endMileage → endOdometer
+  endFuelLevel?: number;    // ✅ 追加: 終了燃料レベル
   notes?: string;
 }
 

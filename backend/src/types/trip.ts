@@ -183,6 +183,8 @@ export interface UpdateTripRequestExtended extends Prisma.OperationUpdateInput {
 export interface EndTripRequest {
   endTime: Date;
   endMileage?: number;
+  endOdometer?: number;              // ✅ 追加: 運行終了時走行距離
+  endFuelLevel?: number;             // ✅ 追加: 運行終了時燃料レベル
   endLocation?: {
     latitude: number;
     longitude: number;
@@ -578,99 +580,3 @@ export class TripVehicleStatusManager {
     return 'ステータス変更';
   }
 }
-
-// =====================================
-// 📋 Phase 1-A-5 修正サマリー
-// =====================================
-
-/**
- * 【Phase 1-A-5 改修完了】
- *
- * ✅ 完了項目:
- * 1. vehicleStatusHelper.toBusiness()内のswitchケースをEnum値に変更
- *    - case 'AVAILABLE' → case VehicleStatus.AVAILABLE
- *    - 全4ケース（AVAILABLE, IN_USE, MAINTENANCE, OUT_OF_SERVICE）を修正
- *
- * 2. vehicleStatusHelper.toPrisma()内の返却値をEnum値に変更
- *    - return 'AVAILABLE' → return VehicleStatus.AVAILABLE
- *    - 全4ケース + defaultケースを修正
- *    - VehicleStatus.OUT_OF_SERVICE → VehicleStatus.RETIRED に修正
- *
- * 3. 既存機能の100%保持
- *    - vehicleStatusHelperの全メソッド保持
- *    - VEHICLE_STATUS_CONSTANTSの全定数保持（後方互換性）
- *    - TripVehicleStatusManagerの全メソッド保持
- *    - 全型定義（20+型）を完全保持
- *
- * 4. 重複export削除
- *    - ファイル末尾の重複したexport文を削除
- *    - 型の二重定義を解消
- *
- * 📊 解消されるエラー:
- * - TypeScriptコンパイルエラー: 27件（100%解消）
- *   - Cannot redeclare exported variable: 6件
- *   - Export declaration conflicts: 21件
- *
- * 🎯 影響範囲:
- * - models/OperationModel.ts: vehicleStatusHelper使用箇所
- * - services/tripService.ts: vehicleStatusHelper使用箇所
- * - controllers/tripController.ts: 間接的な型安全性向上
- *
- * 📝 コード量の変化:
- * - コード行数: 減少（重複export削除）
- * - Phase 1-A-5詳細コメント追加: 約50行
- * - TSDocコメント拡充: 既存メソッドへの詳細説明追加
- *
- * 🔧 後方互換性:
- * - VEHICLE_STATUS_CONSTANTSは文字列リテラル定数として維持
- * - 既存コードでの使用に影響なし
- * - 新規コードではVehicleStatus Enum推奨
- *
- * 🚀 次フェーズ準備:
- * - Phase 1-B-1: utils/errors.ts SecurityError実装準備完了
- * - Phase 1全体: types/層修正完了（5/5ファイル）
- */
-
-// =====================================
-// 🆕🆕🆕 D5/D6機能追加サマリー（2025年12月2日）
-// =====================================
-
-/**
- * 【D5/D6機能: AddActivityRequest型拡張】
- *
- * ✅ 追加項目:
- * 1. startTime: Date → startTime?: Date（オプション化）
- *    - 理由: 到着時刻を自動設定可能にするため
- *    - バックエンドでarrivalTimeまたは現在時刻を使用
- *
- * 2. latitude?: number（GPS緯度の直接指定）
- *    - 範囲: -90 ~ 90
- *    - gpsLocation.latitudeの代替として使用可能
- *
- * 3. longitude?: number（GPS経度の直接指定）
- *    - 範囲: -180 ~ 180
- *    - gpsLocation.longitudeの代替として使用可能
- *
- * 4. accuracy?: number（GPS測位精度）
- *    - 単位: メートル
- *    - gpsLocation.accuracyの代替として使用可能
- *
- * 5. arrivalTime?: Date（到着時刻）
- *    - 省略時は現在時刻を使用
- *    - モバイルアプリから明示的に指定可能
- *
- * 🔄 下位互換性:
- * - 既存のgpsLocationオブジェクトも引き続きサポート
- * - latitude/longitudeとgpsLocationの両方が指定された場合、
- *   latitude/longitudeを優先（新しいAPI仕様）
- *
- * 📱 使用シーン:
- * - D5画面: 積込場所到着ボタンクリック
- * - D6画面: 積降場所到着ボタンクリック
- * - モバイルアプリが現在のGPS座標とタイムスタンプを送信
- *
- * 🎯 実装計画書準拠:
- * - D5-D6-API-Implementation-Plan.md「アプローチA: 既存API拡張」に準拠
- * - バックエンドAPI: POST /api/v1/trips/:id/loading
- * - バックエンドAPI: POST /api/v1/trips/:id/unloading
- */
