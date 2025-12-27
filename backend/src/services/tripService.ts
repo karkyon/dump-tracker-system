@@ -125,31 +125,47 @@ class TripService {
   // 🚛 運行管理機能（Phase 2完全統合 + 性能最適化）
   // =====================================
 
-  /**
-   * 運行開始（Phase 2完全統合版）
-   */
+/**
+ * 運行開始（Phase 2完全統合版）
+ * 【修正】点検記録自動紐付け追加
+ */
   async startTrip(request: CreateTripRequest): Promise<ApiResponse<TripOperationModel>> {
+    logger.info('🚀🚀🚀 ============================================');
+    logger.info('🚀🚀🚀 [TripService.startTrip] メソッド開始');
+    logger.info('🚀🚀🚀 ============================================');
+    logger.info('🚀 [LINE 1] startTrip メソッドに入りました', { request });
+
     try {
+      logger.info('🚀 [LINE 2] try ブロック開始');
       logger.info('運行開始処理開始', { request });
 
       // バリデーション
+      logger.info('🚀 [LINE 3] バリデーション開始');
       await this.validateStartTripRequest(request);
+      logger.info('✅ [LINE 4] バリデーション成功');
 
       if (!request.driverId) {
+        logger.error('❌ [LINE 5] driverId なし');
         throw new ValidationError('ドライバーIDは必須です', 'driverId');
       }
+      logger.info('✅ [LINE 6] driverId 確認完了', { driverId: request.driverId });
 
       // 車両状態確認・更新
+      logger.info('🚀 [LINE 7] 車両状態確認開始');
       const statusResult = await this.checkAndUpdateVehicleStatus(
         request.vehicleId,
         'IN_USE'
       );
+      logger.info('🚀 [LINE 8] 車両状態確認完了', { statusResult });
 
       if (!statusResult.canProceed) {
+        logger.error('❌ [LINE 9] 車両使用不可');
         throw new ConflictError(statusResult.message || '車両が使用できません');
       }
+      logger.info('✅ [LINE 10] 車両使用可能確認');
 
       // StartTripOperationRequestへマッピング
+      logger.info('🚀 [LINE 11] リクエストマッピング開始');
       const startTripRequest: StartTripOperationRequest = {
         vehicleId: request.vehicleId,
         driverId: request.driverId,
@@ -158,12 +174,176 @@ class TripService {
           : request.actualStartTime,
         notes: request.notes
       };
+      logger.info('✅ [LINE 12] リクエストマッピング完了', { startTripRequest });
 
-      // 運行開始
+      // 運行開始（operationService 呼び出し）
+      logger.info('🚀 [LINE 13] operationService.startTrip 呼び出し開始');
       const tripOperation = await this.operationService.startTrip(startTripRequest);
+      logger.info('✅ [LINE 14] operationService.startTrip 成功', {
+        operationId: tripOperation.id,
+        operationNumber: tripOperation.operationNumber
+      });
+
+      // ================================================================
+      // ✅✅✅ 【追加】点検記録の自動紐付け (2025-12-27)
+      // ================================================================
+      logger.info('🔗🔗🔗 ============================================');
+      logger.info('🔗🔗🔗 [LINE 15] 点検記録の自動紐付け処理開始！！！');
+      logger.info('🔗🔗🔗 ============================================');
+
+      try {
+        logger.info('🔗 [LINE 16] try ブロック開始（紐付け処理）');
+        logger.info('🔗 [LINE 17] 🔗 点検記録の自動紐付け開始', {
+          operationId: tripOperation.id,
+          driverId: request.driverId,
+          vehicleId: request.vehicleId,
+          現在時刻: new Date().toISOString(),
+          検索範囲: '直近5分以内'
+        });
+
+        // Prisma Client取得
+        logger.info('🔗 [LINE 18] Prisma Client 取得開始');
+        const prisma = DatabaseService.getInstance();
+        logger.info('✅ [LINE 19] Prisma Client 取得完了');
+
+        // 検索条件のログ
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        logger.info('🔗 [LINE 20] 検索条件詳細', {
+          where: {
+            inspectorId: request.driverId,
+            vehicleId: request.vehicleId,
+            operationId: null,
+            inspectionType: 'PRE_TRIP',
+            createdAt: { gte: fiveMinutesAgo }
+          },
+          fiveMinutesAgo: fiveMinutesAgo.toISOString(),
+          現在時刻: new Date().toISOString()
+        });
+
+        logger.info('🔗 [LINE 21] Prisma検索実行開始（inspection_records）');
+
+        // 1. 最新の点検記録を検索
+        const latestInspection = await prisma.inspectionRecord.findFirst({
+          where: {
+            inspectorId: request.driverId,
+            vehicleId: request.vehicleId,
+            operationId: null,
+            inspectionType: 'PRE_TRIP',
+            createdAt: {
+              gte: fiveMinutesAgo
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        });
+
+        logger.info('🔗 [LINE 22] Prisma検索完了', {
+          found: !!latestInspection,
+          inspectionId: latestInspection?.id,
+          createdAt: latestInspection?.createdAt
+        });
+
+        // 2. 見つかった場合、operation_idを更新
+        if (latestInspection) {
+          logger.info('🔗 [LINE 23] ✅ 点検記録が見つかりました！更新処理開始');
+          logger.info('🔗 [LINE 24] 更新前の点検記録', {
+            inspectionId: latestInspection.id,
+            currentOperationId: latestInspection.operationId,
+            vehicleId: latestInspection.vehicleId,
+            inspectorId: latestInspection.inspectorId,
+            inspectionType: latestInspection.inspectionType,
+            createdAt: latestInspection.createdAt,
+            経過秒数: Math.floor((Date.now() - new Date(latestInspection.createdAt).getTime()) / 1000)
+          });
+
+          logger.info('🔗 [LINE 25] Prisma UPDATE実行開始');
+          await prisma.inspectionRecord.update({
+            where: { id: latestInspection.id },
+            data: {
+              operationId: tripOperation.id,
+              updatedAt: new Date()
+            }
+          });
+          logger.info('🔗 [LINE 26] Prisma UPDATE実行完了');
+
+          logger.info('🔗 [LINE 27] ✅✅✅ 点検記録を運行に紐付けました', {
+            inspectionRecordId: latestInspection.id,
+            operationId: tripOperation.id,
+            inspectionType: latestInspection.inspectionType,
+            vehicleId: latestInspection.vehicleId,
+            createdAt: latestInspection.createdAt,
+            更新時刻: new Date().toISOString()
+          });
+
+          // 確認のためもう一度読み込み
+          logger.info('🔗 [LINE 28] 更新後の確認読み込み開始');
+          const updatedInspection = await prisma.inspectionRecord.findUnique({
+            where: { id: latestInspection.id }
+          });
+          logger.info('🔗 [LINE 29] 更新後の点検記録', {
+            inspectionId: updatedInspection?.id,
+            operationId: updatedInspection?.operationId,
+            updatedAt: updatedInspection?.updatedAt,
+            紐付け成功: updatedInspection?.operationId === tripOperation.id
+          });
+
+        } else {
+          logger.warn('🔗 [LINE 30] ⚠️ 点検記録が見つかりませんでした');
+          logger.warn('⚠️ 紐付け可能な点検記録が見つかりませんでした', {
+            driverId: request.driverId,
+            vehicleId: request.vehicleId,
+            operationId: tripOperation.id,
+            reason: '直近5分以内のPRE_TRIP点検記録が存在しません',
+            検索範囲: `${fiveMinutesAgo.toISOString()} 以降`,
+            現在時刻: new Date().toISOString()
+          });
+
+          // デバッグ用: 全点検記録を表示
+          logger.warn('🔗 [LINE 31] デバッグ: 全点検記録を検索（時間制限なし）');
+          const allInspections = await prisma.inspectionRecord.findMany({
+            where: {
+              inspectorId: request.driverId,
+              vehicleId: request.vehicleId,
+              inspectionType: 'PRE_TRIP'
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 5
+          });
+          logger.warn('🔗 [LINE 32] デバッグ: 見つかった点検記録', {
+            count: allInspections.length,
+            inspections: allInspections.map(i => ({
+              id: i.id,
+              operationId: i.operationId,
+              createdAt: i.createdAt,
+              経過秒数: Math.floor((Date.now() - new Date(i.createdAt).getTime()) / 1000),
+              経過分数: Math.floor((Date.now() - new Date(i.createdAt).getTime()) / 1000 / 60)
+            }))
+          });
+        }
+
+        logger.info('🔗 [LINE 33] 点検記録紐付け処理完了');
+
+      } catch (linkError) {
+        logger.error('🔗 [LINE 34] ❌❌❌ 点検記録紐付けエラー発生', {
+          operationId: tripOperation.id,
+          driverId: request.driverId,
+          vehicleId: request.vehicleId,
+          error: linkError instanceof Error ? linkError.message : linkError,
+          stack: linkError instanceof Error ? linkError.stack : undefined
+        });
+        // エラーでも運行開始は継続（throw しない）
+      }
+
+      logger.info('🔗🔗🔗 ============================================');
+      logger.info('🔗🔗🔗 [LINE 35] 点検記録の自動紐付け処理終了');
+      logger.info('🔗🔗🔗 ============================================');
+      // ================================================================
 
       // ✅ GPS開始位置を記録（運行開始直後）
+      logger.info('🚀 [LINE 36] GPS開始位置記録処理開始');
       if (request.startLocation) {
+        logger.info('🚀 [LINE 37] startLocation あり - GPS記録開始');
         try {
           await this.gpsLogService.create({
             operations: {
@@ -185,8 +365,9 @@ class TripService {
             tripId: tripOperation.id,
             location: request.startLocation
           });
+          logger.info('✅ [LINE 38] GPS開始位置記録成功');
         } catch (gpsError) {
-          logger.error('GPS開始位置記録エラー - 運行をロールバック', { gpsError });
+          logger.error('❌ [LINE 39] GPS開始位置記録エラー - 運行をロールバック', { gpsError });
 
           try {
             await this.operationService.delete({ id: tripOperation.id });
@@ -197,12 +378,19 @@ class TripService {
 
           throw new Error('GPS開始位置の記録に失敗したため、運行を開始できませんでした');
         }
+      } else {
+        logger.info('🚀 [LINE 40] startLocation なし - GPS記録スキップ');
       }
 
       logger.info('運行開始完了', {
         tripId: tripOperation.id,
         operationNumber: tripOperation.operationNumber
       });
+      logger.info('✅ [LINE 41] 運行開始処理 全て完了');
+
+      logger.info('🚀🚀🚀 ============================================');
+      logger.info('🚀🚀🚀 [TripService.startTrip] メソッド終了');
+      logger.info('🚀🚀🚀 ============================================');
 
       return {
         success: true,
@@ -211,6 +399,7 @@ class TripService {
       };
 
     } catch (error) {
+      logger.error('🚀 [LINE 42] ❌ startTrip エラー発生', { error, request });
       logger.error('運行開始エラー', { error, request });
 
       try {

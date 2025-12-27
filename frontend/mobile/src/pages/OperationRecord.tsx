@@ -780,24 +780,19 @@ const OperationRecord: React.FC = () => {
       
       // ✅ 運行終了API呼び出し
       try {
-        // 🔧 API実装時に有効化:
-        // const endLocation = currentPosition ? {
-        //   latitude: currentPosition.coords.latitude,
-        //   longitude: currentPosition.coords.longitude,
-        //   accuracy: currentPosition.coords.accuracy
-        // } : undefined;
-        // 
-        // const response = await apiService.endOperation(currentOperationId, {
-        //   endTime: new Date(),
-        //   endLocation: endLocation,
-        //   totalDistance: totalDistance,
-        //   notes: operation.notes
-        // });
+        const endLocation = currentPosition ? {
+          latitude: currentPosition.coords.latitude,
+          longitude: currentPosition.coords.longitude,
+          accuracy: currentPosition.coords.accuracy
+        } : undefined;
         
-        // 🔧 暫定: APIが未実装の場合は500msのディレイでシミュレート
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const response = await apiService.endOperation(currentOperationId, {
+          endTime: new Date(),
+          endPosition: endLocation,
+          notes: operation.notes
+        });
         
-        console.log('[運行終了] ✅ API呼び出し成功');
+        console.log('[運行終了] ✅ API呼び出し成功:', response);
         
       } catch (apiError) {
         console.error('[運行終了] ❌ API呼び出しエラー:', apiError);

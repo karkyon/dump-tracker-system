@@ -60,11 +60,13 @@ export interface StartOperationRequest {
 }
 
 export interface EndOperationRequest {
-  operationId: string;
-  endLatitude: number;
-  endLongitude: number;
-  endLocation?: string;
-  totalDistance: number;
+  endTime?: Date;
+  endPosition?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+  notes?: string;
 }
 
 export interface RecordActionRequest {
@@ -320,7 +322,7 @@ class APIServiceClass {
    */
   async getTodaysSummary(): Promise<APIResponse<TodaysSummary>> {
     try {
-      const response = await this.axiosInstance.get<APIResponse<TodaysSummary>>(  // ✅ 修正!
+      const response = await this.axiosInstance.get<APIResponse<TodaysSummary>>(
         '/mobile/summary/today'
       );
       return response.data;
@@ -388,17 +390,21 @@ class APIServiceClass {
   
   /**
    * 運行終了
-   * POST /api/v1/mobile/operations/end
+   * POST /api/v1/mobile/operations/:id/end
    */
-  async endOperation(data: EndOperationRequest): Promise<APIResponse<OperationInfo>> {
+  async endOperation(operationId: string, data: EndOperationRequest): Promise<APIResponse<OperationInfo>> {
     try {
+      console.log('[API] 🏁 運行終了API呼び出し:', { operationId, data });
+      
       const response = await this.axiosInstance.post<APIResponse<OperationInfo>>(
-        '/mobile/operations/end',
+        `/mobile/operations/${operationId}/end`,
         data
       );
+      
+      console.log('[API] ✅ 運行終了API成功:', response.data);
       return response.data;
     } catch (error) {
-      console.error('End operation error:', error);
+      console.error('[API] ❌ 運行終了エラー:', error);
       throw error;
     }
   }
@@ -907,14 +913,14 @@ class APIServiceClass {
 
       // 🔧🔧🔧 デバッグ5: axios.get実行前
       console.log('🔍🔍🔍 [DEBUG-api.ts] axios.get実行開始', {
-        endpoint: '/inspection-items',  // ✅ 修正
+        endpoint: '/inspection-items',
         params,
         timestamp: new Date().toISOString()
       });
 
       // ✅✅✅ 修正: エンドポイントパスを変更
       const response = await this.axiosInstance.get<APIResponse<any>>(
-        '/inspection-items',  // ✅ 正しい: ハイフン付き
+        '/inspection-items',
         { params }
       );
 
@@ -980,7 +986,7 @@ class APIServiceClass {
   }): Promise<APIResponse<any>> {
     try {
       const response = await this.axiosInstance.post<APIResponse<any>>(
-        '/inspections',  // ✅ 修正: 正しいエンドポイント
+        '/inspections',
         data
       );
       return response.data;

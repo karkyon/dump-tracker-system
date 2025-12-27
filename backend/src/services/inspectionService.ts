@@ -53,10 +53,24 @@ import type {
 // 🎯 エイリアス定義（後方互換性のため - 修正版：型安全性向上）
 export type InspectionItemCreateDTO = InspectionItemCreateInput;
 export type InspectionItemUpdateDTO = InspectionItemUpdateInput;
+
+// ✅ 【追加】点検項目結果入力DTO (inspection_item_results保存用)
+export interface InspectionItemResultInput {
+  inspectionItemId: string;
+  resultValue: string;
+  isPassed: boolean;
+  notes?: string;
+  defectLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  photoUrls?: string[];
+  attachmentUrls?: string[];
+}
+
 // ✅ 修正3: vehicleId と inspectorId を required に変更（型エラー解消）
+// ✅ 修正4: results フィールド追加（点検項目結果保存用）
 export type InspectionRecordCreateDTO = InspectionRecordCreateInput & {
   vehicleId: string;      // ← optional から required に変更
   inspectorId: string;    // ← optional から required に変更
+  results?: InspectionItemResultInput[];  // ← 点検項目結果配列
 };
 export type InspectionRecordUpdateDTO = InspectionRecordUpdateInput & {
   reason?: string;
@@ -1001,6 +1015,73 @@ export class InspectionService {
         inspectionType: data.inspectionType,
         createdBy: requesterId
       });
+
+      // ================================================================
+      // ✅ 【追加】点検項目結果の保存処理（inspection_item_results）
+      // ================================================================
+      if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+        logger.info('📝 [InspectionService] 点検項目結果の保存開始', {
+          recordId: createdRecord.id,
+          resultsCount: data.results.length
+        });
+
+        try {
+          // results配列をループして各項目を保存
+          for (const resultItem of data.results) {
+            // バリデーション
+            if (!resultItem.inspectionItemId) {
+              logger.warn('⚠️ inspectionItemIdが不足しているresultをスキップ', { resultItem });
+              continue;
+            }
+
+            // InspectionItemResultServiceを使用して保存
+            await this.inspectionItemResultService.create({
+              inspectionRecordId: createdRecord.id,
+              inspectionItemId: resultItem.inspectionItemId,
+              resultValue: resultItem.resultValue,
+              isPassed: resultItem.isPassed,
+              notes: resultItem.notes || undefined,
+              defectLevel: resultItem.defectLevel || undefined,
+              photoUrls: resultItem.photoUrls || [],
+              attachmentUrls: resultItem.attachmentUrls || [],
+              checkedAt: new Date(),
+              checkedBy: data.inspectorId
+            });
+          }
+
+          logger.info('✅ [InspectionService] 点検項目結果の保存完了', {
+            recordId: createdRecord.id,
+            savedCount: data.results.length
+          });
+
+          // 不合格項目数を集計してdefectsFoundを更新
+          const failedCount = data.results.filter((r: InspectionItemResultInput) => r.isPassed === false).length;
+          if (failedCount > 0) {
+            await this.prisma.inspectionRecord.update({
+              where: { id: createdRecord.id },
+              data: { defectsFound: failedCount }
+            });
+
+            logger.info('📊 defectsFound更新完了', {
+              recordId: createdRecord.id,
+              defectsFound: failedCount
+            });
+          }
+
+        } catch (resultError) {
+          logger.error('❌ 点検項目結果の保存エラー', {
+            recordId: createdRecord.id,
+            error: resultError instanceof Error ? resultError.message : resultError
+          });
+          // エラーでもrecordは返す（部分的な成功）
+          // 本番環境では、トランザクションでロールバックする方が安全
+        }
+      } else {
+        logger.info('ℹ️ 点検項目結果なし（resultsフィールドが空）', {
+          recordId: createdRecord.id
+        });
+      }
+      // ================================================================
 
       return createdRecord;
 
