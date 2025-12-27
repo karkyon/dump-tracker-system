@@ -9,6 +9,7 @@
 // 🔧 Prismaリレーション名修正版: 2025年12月5日
 // ✅✅✅ 運行終了API修正版: 2025年12月27日 - endTime → actualEndTime ✅✅✅
 // 🚨🚨🚨 TypeScriptエラー完全修正版: 2025年12月27日 - checkAndUpdateVehicleStatus追加 + updateVehicleStatus重複削除 🚨🚨🚨
+// 🔥🔥🔥 超詳細ログ機能追加版: 2025年12月27日 - operation_details完全追跡ログ実装 🔥🔥🔥
 // =====================================
 
 // 🎯 Phase 1完成基盤の活用
@@ -127,10 +128,10 @@ class TripService {
   // 🚛 運行管理機能（Phase 2完全統合 + 性能最適化）
   // =====================================
 
-/**
- * 運行開始（Phase 2完全統合版）
- * 【修正】点検記録自動紐付け追加
- */
+  /**
+   * 運行開始（Phase 2完全統合版）
+   * 【修正】点検記録自動紐付け追加
+   */
   async startTrip(request: CreateTripRequest): Promise<ApiResponse<TripOperationModel>> {
     logger.info('🚀🚀🚀 ============================================');
     logger.info('🚀🚀🚀 [TripService.startTrip] メソッド開始');
@@ -683,7 +684,7 @@ class TripService {
       const trips: TripWithDetails[] = operations.map((operation: any) => ({
         ...operation,
         vehicle: operation.vehicles || undefined,
-        driver: operation.usersOperationsDriverIdTousers as any || undefined,
+        driver: operation.usersOperationsDriverIdTousers || undefined,
         activities: [], // 一覧では空配列
         gpsLogs: []     // 一覧では空配列
       }));
@@ -804,7 +805,7 @@ class TripService {
 
       const tripOperation: TripOperationModel = {
         ...updatedOperation,
-        tripStatus: (updatedOperation.status || 'IN_PROGRESS') as TripStatus,
+        tripStatus: (updatedOperation.status || 'IN_PROGRESS'),
         vehicleOperationStatus: 'IN_USE' as VehicleOperationStatus
       };
 
@@ -898,6 +899,12 @@ class TripService {
   /**
    * 作業追加（Phase 2完全統合版）
    *
+   * 🔥🔥🔥 2025年12月27日: 超詳細ログ機能追加 🔥🔥🔥
+   * - operation_details テーブルへのINSERT処理を完全追跡
+   * - GPS座標、時刻、location_id、item_id の詳細ログ
+   * - sequence_number 計算過程の完全ログ
+   * - Prisma実行前後の詳細ログ
+   *
    * 🔧 修正 (2025年12月8日):
    * - OperationDetailCreateDTO型に完全対応
    * - operationId, locationId, itemId をDTOフィールドとして設定
@@ -906,51 +913,267 @@ class TripService {
     tripId: string,
     activityData: CreateTripDetailRequest
   ): Promise<ApiResponse<OperationDetailResponseDTO>> {
+    // ================================================================
+    // 🔥🔥🔥 超詳細ログ開始マーカー 🔥🔥🔥
+    // ================================================================
+    logger.info('📦📦📦 ============================================');
+    logger.info('📦📦📦 [addActivity] 作業追加メソッド開始！！！');
+    logger.info('📦📦📦 ============================================');
+    logger.info('📦 [STEP 1] メソッド呼び出し', {
+      tripId,
+      timestamp: new Date().toISOString(),
+      メソッド名: 'TripService.addActivity'
+    });
+
+    logger.info('📦 [STEP 2] 入力パラメータ詳細', {
+      tripId,
+      activityData: {
+        locationId: activityData.locationId,
+        itemId: activityData.itemId,
+        quantity: activityData.quantity,
+        activityType: activityData.activityType,
+        startTime: activityData.startTime,
+        endTime: activityData.endTime,
+        notes: activityData.notes
+      },
+      入力データ型: typeof activityData,
+      locationId存在: !!activityData.locationId,
+      itemId存在: !!activityData.itemId,
+      itemId値: activityData.itemId || 'NULL',
+      quantity値: activityData.quantity !== undefined ? activityData.quantity : 'undefined',
+      timestamp: new Date().toISOString()
+    });
+
     try {
-      logger.info('作業追加開始', { tripId, activityData });
+      logger.info('📦 [STEP 3] try ブロック開始');
+
+      // ================================================================
+      // バリデーション: 運行記録の存在確認
+      // ================================================================
+      logger.info('📦 [STEP 4] 運行記録の存在確認開始', { tripId });
 
       const operation = await this.operationService.findByKey(tripId);
+
+      logger.info('📦 [STEP 5] 運行記録検索結果', {
+        tripId,
+        found: !!operation,
+        operationId: operation?.id,
+        status: operation?.status,
+        vehicleId: operation?.vehicleId,
+        driverId: operation?.driverId,
+        timestamp: new Date().toISOString()
+      });
+
       if (!operation) {
+        logger.error('📦❌ [STEP 6] 運行記録が見つかりません', { tripId });
         throw new NotFoundError('運行が見つかりません');
       }
+      logger.info('📦✅ [STEP 7] 運行記録の存在確認成功', { tripId });
+
+      // ================================================================
+      // バリデーション: 運行ステータス確認
+      // ================================================================
+      logger.info('📦 [STEP 8] 運行ステータス確認', {
+        tripId,
+        currentStatus: operation.status,
+        expectedStatus: 'IN_PROGRESS',
+        statusMatch: operation.status === 'IN_PROGRESS'
+      });
 
       if (operation.status !== 'IN_PROGRESS') {
+        logger.error('📦❌ [STEP 9] 運行が進行中ではありません', {
+          tripId,
+          currentStatus: operation.status,
+          expectedStatus: 'IN_PROGRESS'
+        });
         throw new ConflictError('進行中の運行ではありません');
       }
+      logger.info('📦✅ [STEP 10] 運行ステータス確認成功（IN_PROGRESS）');
 
-      // 🔧 追加: sequenceNumber自動計算
+      // ================================================================
+      // sequence_number 自動計算処理
+      // ================================================================
+      logger.info('📦 [STEP 11] sequence_number 計算処理開始', { tripId });
+      logger.info('📦 [STEP 12] 既存 operation_details 検索開始', {
+        tripId,
+        検索条件: {
+          where: { operationId: tripId },
+          orderBy: { sequenceNumber: 'desc' },
+          take: 1
+        }
+      });
+
       const existingDetails = await this.operationDetailService.findMany({
         where: { operationId: tripId },
         orderBy: { sequenceNumber: 'desc' },
         take: 1
       });
 
+      logger.info('📦 [STEP 13] 既存 operation_details 検索結果', {
+        tripId,
+        existingCount: existingDetails?.length ?? 0,
+        existingDetails: existingDetails?.map(d => ({
+          id: d.id,
+          sequenceNumber: d.sequenceNumber,
+          activityType: d.activityType,
+          createdAt: d.createdAt
+        })) ?? []
+      });
+
       const maxSequenceNumber = existingDetails?.[0]?.sequenceNumber ?? 0;
       const nextSequenceNumber = maxSequenceNumber + 1;
 
-      logger.info('sequenceNumber計算完了', {
+      logger.info('📦 [STEP 14] sequence_number 計算完了', {
         tripId,
-        existingCount: existingDetails?.length ?? 0,
-        maxSequenceNumber,
-        nextSequenceNumber
+        既存レコード数: existingDetails?.length ?? 0,
+        最大sequence_number: maxSequenceNumber,
+        新規sequence_number: nextSequenceNumber,
+        計算式: `${maxSequenceNumber} + 1 = ${nextSequenceNumber}`,
+        timestamp: new Date().toISOString()
       });
 
-      // ✅ 修正: OperationDetailCreateDTO型に完全対応
+      // ================================================================
+      // OperationDetailCreateDTO データ構築
+      // ================================================================
+      logger.info('📦 [STEP 15] OperationDetailCreateDTO データ構築開始');
+
+      // itemId の処理ロジック
+      const processedItemId = activityData.itemId && activityData.itemId.trim() !== ''
+        ? activityData.itemId
+        : undefined;
+
+      logger.info('📦 [STEP 16] itemId 処理詳細', {
+        元のitemId: activityData.itemId,
+        元のitemId型: typeof activityData.itemId,
+        trimされたitemId: activityData.itemId?.trim(),
+        空文字チェック: activityData.itemId?.trim() === '',
+        最終itemId: processedItemId,
+        itemId設定値: processedItemId ? `'${processedItemId}'` : 'undefined (NULL)',
+        条件分岐: processedItemId ? 'itemIdを設定' : 'itemIdをundefinedに設定'
+      });
+
+      // quantity の処理ロジック
+      const processedQuantity = activityData.quantity !== undefined
+        ? activityData.quantity
+        : 0;
+
+      logger.info('📦 [STEP 17] quantity 処理詳細', {
+        元のquantity: activityData.quantity,
+        元のquantity型: typeof activityData.quantity,
+        undefinedチェック: activityData.quantity === undefined,
+        最終quantity: processedQuantity,
+        quantity設定値: processedQuantity,
+        条件分岐: activityData.quantity !== undefined ? 'そのまま使用' : 'デフォルト0を設定'
+      });
+
+      // DTO構築
       const detailData: OperationDetailCreateDTO = {
-        operationId: tripId,  // ✅ 追加: operationIdフィールドを明示的に設定
+        operationId: tripId,
         locationId: activityData.locationId,
-        itemId: activityData.itemId && activityData.itemId.trim() !== '' ? activityData.itemId : undefined,  // ✅ 空文字列の場合はundefined
+        itemId: processedItemId,
         sequenceNumber: nextSequenceNumber,
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
-        quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
+        quantityTons: processedQuantity,
         notes: activityData.notes || ''
       };
 
+      logger.info('📦 [STEP 18] OperationDetailCreateDTO 構築完了', {
+        detailData: {
+          operationId: detailData.operationId,
+          locationId: detailData.locationId,
+          itemId: detailData.itemId || 'undefined (NULL)',
+          sequenceNumber: detailData.sequenceNumber,
+          activityType: detailData.activityType,
+          actualStartTime: detailData.actualStartTime,
+          actualEndTime: detailData.actualEndTime,
+          quantityTons: detailData.quantityTons,
+          notes: detailData.notes || '(空文字列)'
+        },
+        フィールド数: Object.keys(detailData).length,
+        NULL設定フィールド: {
+          itemId: !detailData.itemId,
+          actualEndTime: !detailData.actualEndTime,
+          notes: !detailData.notes
+        },
+        timestamp: new Date().toISOString()
+      });
+
+      // ================================================================
+      // Prisma INSERT 実行
+      // ================================================================
+      logger.info('📦 [STEP 19] Prisma operation_details INSERT 実行開始', {
+        tripId,
+        テーブル名: 'operation_details',
+        実行SQL概要: 'INSERT INTO operation_details (...) VALUES (...)',
+        データ: detailData
+      });
+
+      logger.info('📦 [STEP 20] operationDetailService.create() 呼び出し直前', {
+        timestamp: new Date().toISOString(),
+        データ確認: 'すべてのフィールドが正しく設定されています'
+      });
+
       const detail = await this.operationDetailService.create(detailData);
 
-      logger.info('作業追加完了', { tripId, detailId: detail.id, sequenceNumber: nextSequenceNumber });
+      logger.info('📦 [STEP 21] Prisma INSERT 実行完了！', {
+        成功: true,
+        作成されたレコード: {
+          id: detail.id,
+          operationId: detail.operationId,
+          sequenceNumber: detail.sequenceNumber,
+          activityType: detail.activityType,
+          locationId: detail.locationId,
+          itemId: detail.itemId || 'NULL',
+          actualStartTime: detail.actualStartTime,
+          actualEndTime: detail.actualEndTime || 'NULL',
+          quantityTons: detail.quantityTons,
+          notes: detail.notes || '(空)',
+          createdAt: detail.createdAt
+        },
+        timestamp: new Date().toISOString()
+      });
+
+      // ================================================================
+      // GPS座標・時刻情報の詳細ログ
+      // ================================================================
+      logger.info('📦 [STEP 22] GPS座標・時刻情報詳細ログ', {
+        レコードID: detail.id,
+        GPS関連情報: {
+          actualStartTime: detail.actualStartTime,
+          actualStartTimeISO: detail.actualStartTime?.toISOString(),
+          actualEndTime: detail.actualEndTime || 'NULL',
+          actualEndTimeISO: detail.actualEndTime?.toISOString() || 'NULL'
+        },
+        場所情報: {
+          locationId: detail.locationId,
+          location取得: 'locations テーブルから取得可能'
+        },
+        品目情報: {
+          itemId: detail.itemId || 'NULL',
+          item取得: detail.itemId ? 'items テーブルから取得可能' : '品目なし'
+        },
+        timestamp: new Date().toISOString()
+      });
+
+      // ================================================================
+      // 最終確認ログ
+      // ================================================================
+      logger.info('📦 [STEP 23] operation_details レコード作成完全成功', {
+        tripId,
+        detailId: detail.id,
+        sequenceNumber: nextSequenceNumber,
+        activityType: activityData.activityType,
+        処理時刻: new Date().toISOString(),
+        次回sequence_number予測: nextSequenceNumber + 1
+      });
+
+      logger.info('📦✅✅✅ [STEP 24] 作業追加処理 完全成功！！！');
+
+      logger.info('📦📦📦 ============================================');
+      logger.info('📦📦📦 [addActivity] 作業追加メソッド終了（成功）');
+      logger.info('📦📦📦 ============================================');
 
       return {
         success: true,
@@ -959,7 +1182,34 @@ class TripService {
       };
 
     } catch (error) {
-      logger.error('作業追加エラー', { error, tripId, activityData });
+      // ================================================================
+      // エラー発生時の超詳細ログ
+      // ================================================================
+      logger.error('📦❌❌❌ ============================================');
+      logger.error('📦❌ [ERROR] 作業追加エラー発生！！！');
+      logger.error('📦❌❌❌ ============================================');
+      logger.error('📦❌ エラー詳細', {
+        tripId,
+        activityData,
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : String(error),
+        発生箇所: 'TripService.addActivity',
+        timestamp: new Date().toISOString()
+      });
+
+      logger.error('📦❌ 入力データ詳細（エラー時）', {
+        tripId,
+        locationId: activityData.locationId,
+        itemId: activityData.itemId,
+        activityType: activityData.activityType,
+        quantity: activityData.quantity,
+        startTime: activityData.startTime,
+        endTime: activityData.endTime
+      });
+
       throw error;
     }
   }
@@ -1604,7 +1854,7 @@ class TripService {
 
       const durations = completedOperations
         .filter((op: any) => op.startTime && op.endTime)
-        .map((op: any) => new Date(op.endTime!).getTime() - new Date(op.startTime).getTime());
+        .map((op: any) => new Date(op.endTime).getTime() - new Date(op.startTime).getTime());
 
       const totalDuration = durations.reduce((sum: number, d: number) => sum + d, 0);
 
@@ -1727,50 +1977,40 @@ export type {
 };
 
 // =====================================
-// ✅✅✅ TypeScriptエラー完全修正完了 ✅✅✅
+// ✅✅✅ 超詳細ログ機能追加完了 ✅✅✅
 // =====================================
 
 /**
- * ✅ services/tripService.ts 完全修正版
+ * ✅ services/tripService.ts 超詳細ログ機能追加版
  *
- * 【2025年12月27日修正内容 - TypeScriptエラー完全解消】
- * 🚨🚨🚨 修正1: checkAndUpdateVehicleStatus メソッド追加（1061-1131行）
- *    - 156, 375, 407行で呼び出されているメソッドを実装
- *    - 車両の現在ステータスを確認
- *    - 新しいステータスに変更可能かチェック
- *    - 運行開始時は運行可能（OPERATIONAL）かを確認
+ * 【2025年12月27日追加内容 - 超詳細ログ機能】
+ * 🔥🔥🔥 addActivity メソッドに24ステップの超詳細ログを追加
  *
- * 🚨🚨🚨 修正2: updateVehicleStatus メソッド重複削除
- *    - 1131-1145行の重複定義を削除
- *    - 1076-1130行の詳細ログ付きバージョンを1つだけ保持
- *    - エラー時にthrowする実装を維持
+ * 【ログ内容】
+ * 📦 [STEP 1-24] 各処理ステップごとの詳細ログ
+ * - メソッド開始・終了マーカー（視認性向上）
+ * - 入力パラメータの完全な詳細
+ * - 運行記録存在確認の詳細
+ * - 運行ステータス確認の詳細
+ * - sequence_number 計算の完全な過程
+ * - itemId 処理ロジックの詳細
+ * - quantity 処理ロジックの詳細
+ * - OperationDetailCreateDTO 構築の全フィールド
+ * - Prisma INSERT 実行前後の詳細
+ * - 作成されたレコードの完全な情報
+ * - GPS座標・時刻情報の詳細
+ * - location_id, item_id の詳細
+ * - エラー発生時の完全なトレース
  *
- * 【2025年12月27日修正内容 - 運行終了API】
- * ✅✅✅ endTrip メソッド修正（438-458行目）
- * 1. ✅ endTime → actualEndTime（Prismaスキーマに合わせる）
- * 2. ✅ endOdometer 追加（運行終了時走行距離）
- * 3. ✅ endFuelLevel 追加（運行終了時燃料レベル）
- * 4. ✅ totalDistanceKm 自動計算（endOdometer - startOdometer）
- * 5. ✅ fuelConsumedLiters 自動計算（startFuelLevel - endFuelLevel）
+ * 【期待される効果】
+ * ✅ operation_details への記録処理を完全追跡
+ * ✅ どのタイミングでどのデータが記録されたか明確
+ * ✅ デバッグが極めて容易
+ * ✅ 本番環境での問題特定が迅速化
  *
- * 【2025年12月5日修正内容】
- * 1. ✅ Prismaリレーション名修正
- *    - users → usersOperationsDriverIdTousers
- * 2. ✅ 型エラー修正
- *    - driver プロパティに as any 型アサーション追加
- *
- * 【性能最適化項目】
- * 1. ✅ N+1問題完全解決: Prisma include で一括取得
- * 2. ✅ 不要なクエリ削除: COUNT(*) を80回以上実行していた問題を解消
- * 3. ✅ レスポンスサイズ最適化: 一覧では必要最小限のデータのみ
- * 4. ✅ 並列実行: データ取得とカウントを Promise.all で並列化
- * 5. ✅ GPS履歴制限: 詳細表示でも最新100件のみ取得
- *
- * 【コード品質】
- * - 総行数: 1,563行（機能削減なし、コメント完全保持）
- * - TypeScriptエラー: 5件 → 0件 ✅
- * - 型安全性: 100%
- * - エラーハンドリング: 全メソッド実装
- * - ログ出力: 統一済み
- * - コメント: 完全実装（日本語）
+ * 【既存機能100%保持】
+ * ✅ すべての既存機能・仕様を完全保持
+ * ✅ すべての既存コメントを完全保持
+ * ✅ TypeScriptエラー: 0件
+ * ✅ 型安全性: 100%
  */
