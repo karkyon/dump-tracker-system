@@ -4,6 +4,7 @@
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
 // 最終更新: Mon Oct 13 2025 - コンパイルエラー完全修正版
 // アーキテクチャ指針準拠版 - 企業レベル運行詳細管理システム
+// 🔧🔧🔧 2025年12月28日修正: locationId条件分岐追加（休憩・給油エラー修正）🔧🔧🔧
 // =====================================
 
 import type {
@@ -62,7 +63,7 @@ export interface OperationDetailCreateDTO {
   operationId: string;
   sequenceNumber: number;
   activityType: string;
-  locationId: string;
+  locationId?: string;  // 🔧 修正: オプショナルに変更
   itemId?: string;
   plannedTime?: Date;
   actualStartTime?: Date;
@@ -136,7 +137,7 @@ export interface OperationDetailInfo {
   workDuration?: number;         // 作業時間（分）- 計算フィールド
 
   // 位置・積載情報
-  locationId: string;
+  locationId?: string;           // 🔧 修正: オプショナルに変更
   itemId?: string;               // ✅ オプショナルに変更（string? に変更）
   quantityTons: number;
 
@@ -238,21 +239,24 @@ export class OperationDetailService {
      * - Prismaリレーション構文に完全対応
      * - operationId, locationId, itemId を connect 形式で設定
      * - itemId が null/undefined の場合は items リレーションを設定しない
+     *
+     * 🔧🔧🔧 修正 (2025年12月28日): 🔧🔧🔧
+     * - locationId も itemId と同様に条件分岐を追加
+     * - 休憩・給油時の空locationIdエラーを修正
      */
   async create(data: OperationDetailCreateDTO): Promise<OperationDetailModel> {
     try {
       logger.info('運行詳細作成開始', {
         operationId: data.operationId,
-        activityType: data.activityType
+        activityType: data.activityType,
+        locationId: data.locationId,
+        itemId: data.itemId
       });
 
       // 🔧 Prismaリレーション構築
       const createData: any = {
         operations: {
           connect: { id: data.operationId }
-        },
-        locations: {
-          connect: { id: data.locationId }
         },
         sequenceNumber: data.sequenceNumber,
         activityType: data.activityType,
@@ -265,12 +269,33 @@ export class OperationDetailService {
         updatedAt: new Date()
       };
 
-      // 🔧 itemId が存在する場合のみ items リレーションを設定
+      // 🔧🔧🔧 修正: locationId が有効な場合のみ locations リレーションを設定
+      if (data.locationId && data.locationId.trim() !== '') {
+        createData.locations = {
+          connect: { id: data.locationId }
+        };
+        logger.info('✅ locationId を設定しました', { locationId: data.locationId });
+      } else {
+        logger.info('⏭️ locationId が空のため locations リレーションをスキップ');
+      }
+
+      // 🔧 itemId が有効な場合のみ items リレーションを設定
       if (data.itemId && data.itemId.trim() !== '') {
         createData.items = {
           connect: { id: data.itemId }
         };
+        logger.info('✅ itemId を設定しました', { itemId: data.itemId });
+      } else {
+        logger.info('⏭️ itemId が空のため items リレーションをスキップ');
       }
+
+      logger.info('🔧 Prisma createData 構築完了', {
+        hasOperations: !!createData.operations,
+        hasLocations: !!createData.locations,
+        hasItems: !!createData.items,
+        sequenceNumber: createData.sequenceNumber,
+        activityType: createData.activityType
+      });
 
       const operationDetail = await this.prisma.operationDetail.create({
         data: createData
@@ -278,7 +303,9 @@ export class OperationDetailService {
 
       logger.info('運行詳細作成完了', {
         id: operationDetail.id,
-        operationId: operationDetail.operationId
+        operationId: operationDetail.operationId,
+        locationId: operationDetail.locationId,
+        itemId: operationDetail.itemId
       });
 
       return operationDetail;
@@ -561,7 +588,7 @@ export class OperationDetailService {
         actualStartTime: detail.actualStartTime || undefined,
         actualEndTime: detail.actualEndTime || undefined,
         workDuration: this.calculateWorkDuration(detail) || undefined,
-        locationId: detail.locationId,
+        locationId: detail.locationId || undefined,  // 🔧 修正: null の場合は undefined
         itemId: detail.itemId || undefined,  // ✅ null の場合は undefined を返す
         quantityTons: Number(detail.quantityTons),
         notes: detail.notes || undefined,
