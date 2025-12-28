@@ -1,6 +1,7 @@
 // frontend/mobile/src/stores/operationStore.ts
 // 運行状態管理Store - フェーズ管理機能追加版
 // 🔧 修正: phase, loadingLocation, unloadingLocation フィールドとアクション追加 (2025-12-12)
+// 🔧 修正: previousPhase フィールドとアクション追加 (2025-12-28) - 休憩終了時のフェーズ復元対応
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -13,6 +14,7 @@ export type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_
 /**
  * 運行状態インターフェース
  * 🔧 修正: phase, loadingLocation, unloadingLocation フィールド追加
+ * 🔧 修正: previousPhase フィールド追加 (2025-12-28)
  */
 export interface OperationState {
   // 運行情報
@@ -26,6 +28,7 @@ export interface OperationState {
   
   // 🆕 運行フェーズ管理
   phase: OperationPhase;
+  previousPhase: OperationPhase | null; // 🆕 休憩前のフェーズを記憶 (2025-12-28)
   loadingLocation: string | null;
   unloadingLocation: string | null;
   
@@ -55,6 +58,7 @@ export interface OperationState {
   
   // 🆕 フェーズ管理アクション
   setPhase: (phase: OperationPhase) => void;
+  savePreviousPhase: (phase: OperationPhase) => void; // 🆕 休憩前フェーズ保存 (2025-12-28)
   setLoadingLocation: (location: string) => void;
   setUnloadingLocation: (location: string) => void;
   
@@ -83,6 +87,7 @@ export const useOperationStore = create<OperationState>()(
       
       // 🆕 フェーズ管理初期値
       phase: 'TO_LOADING',
+      previousPhase: null, // 🆕 初期状態ではnull (2025-12-28)
       loadingLocation: null,
       unloadingLocation: null,
 
@@ -177,6 +182,24 @@ export const useOperationStore = create<OperationState>()(
         }, 100);
       },
 
+      // 🆕 休憩前フェーズ保存 (2025-12-28)
+      savePreviousPhase: (phase) => {
+        console.log('[Operation Store] 💾 SAVE PREVIOUS PHASE CALLED:', phase);
+        console.log('[Operation Store] 📋 Before save - current previousPhase:', get().previousPhase);
+        
+        set({ previousPhase: phase });
+        
+        const currentState = get();
+        console.log('[Operation Store] ✅ After save - previousPhase set to:', currentState.previousPhase);
+        console.log('[Operation Store] 📊 Full state after savePreviousPhase:', currentState);
+        
+        // localStorage確認
+        setTimeout(() => {
+          const stored = localStorage.getItem('operation-storage');
+          console.log('[Operation Store] 💾 localStorage after savePreviousPhase:', stored);
+        }, 100);
+      },
+
       // 🆕 積込場所設定
       setLoadingLocation: (location) => {
         console.log('[Operation Store] 📍 SET LOADING LOCATION:', location);
@@ -216,6 +239,7 @@ export const useOperationStore = create<OperationState>()(
           inspectionCompleted: false,
           inspectionRecordId: null,
           phase: 'TO_LOADING', // 🔧 リセット時も初期フェーズに戻す
+          previousPhase: null, // 🆕 リセット時にクリア (2025-12-28)
           loadingLocation: null,
           unloadingLocation: null
         });
@@ -228,7 +252,8 @@ export const useOperationStore = create<OperationState>()(
           operationId: state.operationId,
           vehicleId: state.vehicleId,
           status: state.status,
-          phase: state.phase // 🔧 フェーズも保存
+          phase: state.phase, // 🔧 フェーズも保存
+          previousPhase: state.previousPhase // 🆕 休憩前フェーズも保存 (2025-12-28)
         });
         
         return {
@@ -244,6 +269,7 @@ export const useOperationStore = create<OperationState>()(
           inspectionRecordId: state.inspectionRecordId,
           // 🆕 フェーズ管理フィールドも永続化
           phase: state.phase,
+          previousPhase: state.previousPhase, // 🆕 休憩前フェーズも永続化 (2025-12-28)
           loadingLocation: state.loadingLocation,
           unloadingLocation: state.unloadingLocation
         };
@@ -296,4 +322,24 @@ if (typeof window !== 'undefined') {
  *    - phase, loadingLocation, unloadingLocation も永続化対象に追加
  * 
  * これにより、フェーズ状態がブラウザ再読み込み後も保持されます。
+ * 
+ * 🔧 修正内容 (2025-12-28) - 休憩終了時のフェーズ復元対応
+ * 
+ * 1. OperationState インターフェースに追加:
+ *    - previousPhase: OperationPhase | null - 休憩前のフェーズを記憶
+ * 
+ * 2. アクション追加:
+ *    - savePreviousPhase(phase: OperationPhase) - 休憩前のフェーズを保存
+ * 
+ * 3. 初期状態に追加:
+ *    - previousPhase: null
+ * 
+ * 4. resetOperation アクションを修正:
+ *    - previousPhase もリセット
+ * 
+ * 5. partialize 設定を修正:
+ *    - previousPhase も永続化対象に追加
+ * 
+ * これにより、休憩開始時に現在のフェーズを保存し、休憩終了時に元のフェーズに戻せるようになります。
+ * 例: TO_LOADING → 休憩開始(previousPhase=TO_LOADING保存) → BREAK → 休憩終了 → TO_LOADING復元
  */

@@ -2,8 +2,8 @@
 // backend/src/routes/tripRoutes.ts
 // 運行管理ルート統合 - SwaggerUI完全対応・認証問題完全解決版
 // 運行記録CRUD・GPS連携・状態管理・リアルタイム追跡・統計分析
-// 最終更新: 2025年12月4日 v2
-// 修正内容: 認証ミドルウェア二重適用問題の完全解決・inspectionRoutesパターン準拠
+// 最終更新: 2025年12月28日 v3
+// 🆕🆕🆕 修正内容: 休憩開始/終了エンドポイント追加（既存14エンドポイント100%保持）
 // 依存関係: middleware/auth.ts, controllers/tripController.ts
 // =====================================
 
@@ -26,11 +26,11 @@
 import { Router } from 'express';
 
 // 🎯 Phase 1完了基盤の活用
-import { 
-  authenticateToken, 
-  requireAdmin, 
-  requireManagerOrAdmin, 
-  requireRole 
+import {
+  authenticateToken,
+  requireAdmin,
+  requireManagerOrAdmin,
+  requireRole
 } from '../middleware/auth';
 import logger from '../utils/logger';
 
@@ -57,6 +57,8 @@ logger.info('🚛 TripRoutes初期化開始', {
     addFuelRecord: typeof tripController.addFuelRecord === 'function',
     addLoadingRecord: typeof tripController.addLoadingRecord === 'function',
     addUnloadingRecord: typeof tripController.addUnloadingRecord === 'function',
+    startBreak: typeof tripController.startBreak === 'function',  // 🆕 休憩開始
+    endBreak: typeof tripController.endBreak === 'function',      // 🆕 休憩終了
     getCurrentTrip: typeof tripController.getCurrentTrip === 'function',
     getTripStatistics: typeof tripController.getTripStatistics === 'function',
     deleteTrip: typeof tripController.deleteTrip === 'function'
@@ -64,7 +66,7 @@ logger.info('🚛 TripRoutes初期化開始', {
 });
 
 // =====================================
-// 🚛 運行管理APIエンドポイント（全14エンドポイント）
+// 🚛 運行管理APIエンドポイント（全16エンドポイント）
 // =====================================
 
 /**
@@ -835,6 +837,131 @@ router.post(
   tripController.addUnloadingRecord
 );
 
+// =====================================
+// 🆕🆕🆕 休憩管理エンドポイント（2025年12月28日追加）
+// =====================================
+
+/**
+ * @swagger
+ * /trips/{id}/break/start:
+ *   post:
+ *     summary: 🆕 休憩開始（2025年12月28日追加）
+ *     description: |
+ *       運行中に休憩を開始
+ *
+ *       **実装機能:**
+ *       - 休憩開始記録
+ *       - GPS座標記録（オプション）
+ *       - operation_detailsテーブルにBREAK_STARTレコード追加
+ *
+ *       **権限:** DRIVER, MANAGER, ADMIN
+ *     tags:
+ *       - 📋 運行記録管理 (Trip Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行記録ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               latitude:
+ *                 type: number
+ *                 description: GPS緯度（オプション）
+ *               longitude:
+ *                 type: number
+ *                 description: GPS経度（オプション）
+ *               location:
+ *                 type: string
+ *                 description: 休憩場所名（オプション）
+ *               notes:
+ *                 type: string
+ *                 description: メモ（オプション）
+ *     responses:
+ *       201:
+ *         description: 休憩開始成功
+ *       400:
+ *         description: バリデーションエラー
+ *       401:
+ *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー
+ *       404:
+ *         description: 運行記録が見つかりません
+ *       500:
+ *         description: サーバーエラー
+ */
+router.post(
+  '/:id/break/start',
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN']),
+  tripController.startBreak
+);
+
+/**
+ * @swagger
+ * /trips/{id}/break/end:
+ *   post:
+ *     summary: 🆕 休憩終了（2025年12月28日追加）
+ *     description: |
+ *       休憩を終了
+ *
+ *       **実装機能:**
+ *       - 休憩終了記録
+ *       - 休憩時間の自動計算
+ *       - operation_detailsテーブルにBREAK_ENDレコード追加
+ *
+ *       **権限:** DRIVER, MANAGER, ADMIN
+ *     tags:
+ *       - 📋 運行記録管理 (Trip Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行記録ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *                 description: メモ（オプション）
+ *     responses:
+ *       201:
+ *         description: 休憩終了成功
+ *       400:
+ *         description: バリデーションエラー
+ *       401:
+ *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー
+ *       404:
+ *         description: 運行記録が見つかりません
+ *       500:
+ *         description: サーバーエラー
+ */
+router.post(
+  '/:id/break/end',
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN']),
+  tripController.endBreak
+);
+
 /**
  * @swagger
  * /trips/{id}:
@@ -885,10 +1012,11 @@ router.delete(
 // 登録完了ログ
 // =====================================
 
-logger.info('✅ TripRoutes登録完了 - inspectionRoutesパターン準拠版', {
-  totalEndpoints: 14,
+logger.info('✅ TripRoutes登録完了 - inspectionRoutesパターン準拠版 + 🆕休憩管理機能追加', {
+  totalEndpoints: 16,  // 🆕 14 → 16（休憩開始/終了追加）
   authenticationPattern: 'Individual endpoint authentication (like inspectionRoutes)',
   middlewareApplied: 'authenticateToken() per endpoint + role-based authorization',
+  newFeatures: ['POST /trips/:id/break/start', 'POST /trips/:id/break/end'],  // 🆕
   timestamp: new Date().toISOString()
 });
 
@@ -899,11 +1027,12 @@ logger.info('✅ TripRoutes登録完了 - inspectionRoutesパターン準拠版'
 export default router;
 
 // =====================================
-// ✅ SwaggerUI完全対応・認証問題完全解決版 v2 完成
+// ✅ SwaggerUI完全対応・認証問題完全解決版 v3 完成
+// 🆕🆕🆕 休憩開始/終了エンドポイント追加
 // =====================================
 
 /**
- * 【修正完了サマリー v2】
+ * 【修正完了サマリー v3】
  *
  * ✅ 真の問題の特定:
  * - routes/index.tsでrequireAuth: trueが設定されている
@@ -915,21 +1044,27 @@ export default router;
  * 2. 各エンドポイントで個別にauthenticateToken()を適用
  * 3. 必要に応じて権限制御ミドルウェアを追加
  *
- * ✅ 全14エンドポイント実装:
- * 1. GET    /trips               - 運行一覧取得
- * 2. GET    /trips/current       - 現在の運行取得（パス順序最適化）
- * 3. GET    /trips/api/stats     - 運行統計取得（パス順序最適化）
- * 4. GET    /trips/:id           - 運行詳細取得
- * 5. GET    /trips/:id/gps-history - GPS履歴取得
- * 6. POST   /trips               - 運行開始
- * 7. POST   /trips/start         - 運行開始（エイリアス）
- * 8. PUT    /trips/:id           - 運行更新
- * 9. POST   /trips/:id/end       - 運行終了
- * 10. POST  /trips/:id/location  - GPS位置更新
- * 11. POST  /trips/:id/fuel      - 燃料記録追加
- * 12. POST  /trips/:id/loading   - 積込記録追加（D5機能）
- * 13. POST  /trips/:id/unloading - 積降記録追加（D6機能）
- * 14. DELETE /trips/:id          - 運行削除
+ * ✅ 🆕 休憩管理エンドポイント追加（2025年12月28日）:
+ * 15. POST  /trips/:id/break/start   - 休憩開始（新規追加）
+ * 16. POST  /trips/:id/break/end     - 休憩終了（新規追加）
+ *
+ * ✅ 全16エンドポイント実装（既存14 + 新規2）:
+ * 1. GET    /trips                   - 運行一覧取得
+ * 2. GET    /trips/current           - 現在の運行取得（パス順序最適化）
+ * 3. GET    /trips/api/stats         - 運行統計取得（パス順序最適化）
+ * 4. GET    /trips/:id               - 運行詳細取得
+ * 5. GET    /trips/:id/gps-history   - GPS履歴取得
+ * 6. POST   /trips                   - 運行開始
+ * 7. POST   /trips/start             - 運行開始（エイリアス）
+ * 8. PUT    /trips/:id               - 運行更新
+ * 9. POST   /trips/:id/end           - 運行終了
+ * 10. POST  /trips/:id/location      - GPS位置更新
+ * 11. POST  /trips/:id/fuel          - 燃料記録追加
+ * 12. POST  /trips/:id/loading       - 積込記録追加（D5機能）
+ * 13. POST  /trips/:id/unloading     - 積降記録追加（D6機能）
+ * 14. DELETE /trips/:id              - 運行削除
+ * 15. 🆕 POST  /trips/:id/break/start  - 休憩開始（新規追加）
+ * 16. 🆕 POST  /trips/:id/break/end    - 休憩終了（新規追加）
  *
  * ✅ 認証パターン:
  * - 全エンドポイントで個別にauthenticateToken()を適用
@@ -937,7 +1072,7 @@ export default router;
  * - inspectionRoutesと同じパターンで実装
  *
  * ✅ Swagger UI完全対応:
- * - 全エンドポイントにSwagger定義
+ * - 全エンドポイントにSwagger定義（休憩エンドポイント含む）
  * - パラメータ定義完備
  * - レスポンススキーマ定義
  * - 認証・権限要件明記
@@ -946,4 +1081,11 @@ export default router;
  * - /trips/current を /trips/:id より前に配置
  * - /trips/api/stats を /trips/:id より前に配置
  * - パラメータパスとの競合を回避
+ *
+ * ✅ 🆕 休憩管理機能の特徴:
+ * - operation_detailsテーブルにBREAK_START/BREAK_ENDレコード追加
+ * - GPS座標と休憩場所の記録（オプション）
+ * - 休憩時間の自動計算
+ * - 既存の運行フロー完全保持
+ * - Swagger UI完全対応
  */

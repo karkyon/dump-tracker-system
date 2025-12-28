@@ -3,6 +3,7 @@
 // ✅ HTTPS対応修正版 + 点検項目API追加
 // 🆕 D5/D6/D7機能対応: recordLoadingArrival, recordUnloadingArrival, getNearbyLocationsメソッド追加（2025年12月7日）
 // 🆕 新規地点登録機能追加: createQuickLocationメソッド追加（2025年12月7日）
+// 🆕🆕🆕 休憩管理・給油記録機能追加: startBreak, endBreak, recordFuelメソッド追加（2025年12月28日）
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
@@ -532,6 +533,169 @@ class APIServiceClass {
   }
 
   // =============================================================================
+  // 🆕🆕🆕 休憩管理API（2025年12月28日追加）
+  // =============================================================================
+
+  /**
+   * 🆕 休憩開始（2025年12月28日新規追加）
+   * POST /api/v1/trips/:tripId/break/start
+   * 
+   * 【機能概要】
+   * - 運行中に休憩を開始
+   * - operation_detailsテーブルにBREAK_STARTレコード追加
+   * - GPS座標と開始時刻を記録
+   * 
+   * 【パラメータ】
+   * @param tripId - 運行記録ID
+   * @param data - 休憩開始データ
+   * @param data.latitude - GPS緯度（オプション）
+   * @param data.longitude - GPS経度（オプション）
+   * @param data.location - 休憩場所名（オプション）
+   * @param data.notes - メモ（オプション）
+   * 
+   * 【レスポンス】
+   * - operation_detailsレコード（activityType: BREAK_START）
+   * 
+   * 【使用例】
+   * ```typescript
+   * const result = await apiService.startBreak('trip-123', {
+   *   latitude: 35.6812,
+   *   longitude: 139.7671,
+   *   location: '○○パーキングエリア',
+   *   notes: '昼食休憩'
+   * });
+   * ```
+   */
+  async startBreak(
+    tripId: string,
+    data?: {
+      latitude?: number;
+      longitude?: number;
+      location?: string;
+      notes?: string;
+    }
+  ): Promise<APIResponse<any>> {
+    try {
+      console.log('☕ 休憩開始API呼び出し:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        `/trips/${tripId}/break/start`,
+        data || {}
+      );
+      
+      console.log('✅ 休憩開始成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 休憩開始エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 休憩終了（2025年12月28日新規追加）
+   * POST /api/v1/trips/:tripId/break/end
+   * 
+   * 【機能概要】
+   * - 休憩を終了
+   * - operation_detailsテーブルにBREAK_ENDレコード追加
+   * - 休憩時間を自動計算
+   * 
+   * 【パラメータ】
+   * @param tripId - 運行記録ID
+   * @param data - 休憩終了データ
+   * @param data.notes - メモ（オプション）
+   * 
+   * 【レスポンス】
+   * - operation_detailsレコード（activityType: BREAK_END）
+   * 
+   * 【使用例】
+   * ```typescript
+   * const result = await apiService.endBreak('trip-123', {
+   *   notes: '休憩終了'
+   * });
+   * ```
+   */
+  async endBreak(
+    tripId: string,
+    data?: {
+      notes?: string;
+    }
+  ): Promise<APIResponse<any>> {
+    try {
+      console.log('⏱️ 休憩終了API呼び出し:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        `/trips/${tripId}/break/end`,
+        data || {}
+      );
+      
+      console.log('✅ 休憩終了成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 休憩終了エラー:', error);
+      throw error;
+    }
+  }
+
+  // =============================================================================
+  // 🆕🆕🆕 給油記録API（2025年12月28日追加）
+  // =============================================================================
+
+  /**
+   * 🆕 給油記録保存（2025年12月28日新規追加）
+   * POST /api/v1/trips/:tripId/fuel
+   * 
+   * 【機能概要】
+   * - 給油記録を保存
+   * - operation_detailsテーブルにFUELINGレコード追加
+   * 
+   * 【パラメータ】
+   * @param tripId - 運行記録ID
+   * @param data - 給油記録データ
+   * @param data.fuelAmount - 給油量（リットル）（必須）
+   * @param data.fuelCost - 給油金額（円）（必須）
+   * @param data.fuelStation - 給油所名（オプション）
+   * @param data.notes - メモ（オプション）
+   * 
+   * 【レスポンス】
+   * - operation_detailsレコード（activityType: FUELING）
+   * 
+   * 【使用例】
+   * ```typescript
+   * const result = await apiService.recordFuel('trip-123', {
+   *   fuelAmount: 50.5,
+   *   fuelCost: 8000,
+   *   fuelStation: 'ENEOS ○○店',
+   *   notes: '満タン給油'
+   * });
+   * ```
+   */
+  async recordFuel(
+    tripId: string,
+    data: {
+      fuelAmount: number;
+      fuelCost: number;
+      fuelStation?: string;
+      notes?: string;
+    }
+  ): Promise<APIResponse<any>> {
+    try {
+      console.log('⛽ 給油記録API呼び出し:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        `/trips/${tripId}/fuel`,
+        data
+      );
+      
+      console.log('✅ 給油記録成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 給油記録エラー:', error);
+      throw error;
+    }
+  }
+
+  // =============================================================================
   // GPS位置情報API
   // =============================================================================
 
@@ -1007,53 +1171,35 @@ export { apiService };           // 名前付きエクスポート
 export default apiService;       // デフォルトエクスポート
 
 // =============================================================================
-// 🆕🆕🆕 D5/D6/D7機能追加サマリー（2025年12月7日）
+// 🆕🆕🆕 休憩管理・給油記録API追加サマリー（2025年12月28日）
 // =============================================================================
 
 /**
- * 【D5/D6/D7機能: API実装追加】
+ * 【2025年12月28日追加内容】
  *
  * ✅ 追加メソッド:
- * 1. recordLoadingArrival(tripId, data)
- *    - POST /api/v1/trips/:tripId/loading
- *    - 積込場所到着記録
- *    - GPS座標と到着時刻を記録
+ * 1. startBreak(tripId, data)
+ *    - POST /api/v1/trips/:tripId/break/start
+ *    - 休憩開始記録
+ *    - GPS座標と休憩場所を記録（オプション）
  *
- * 2. recordUnloadingArrival(tripId, data)
- *    - POST /api/v1/trips/:tripId/unloading
- *    - 積降場所到着記録
- *    - GPS座標と到着時刻を記録
+ * 2. endBreak(tripId, data)
+ *    - POST /api/v1/trips/:tripId/break/end
+ *    - 休憩終了記録
+ *    - 休憩時間を自動計算
  *
- * 3. getNearbyLocations(data)
- *    - POST /api/v1/mobile/operations/nearby-locations
- *    - 近隣地点検索（積込/積降場所）
- *    - 距離順ソート済みリスト取得
+ * 3. recordFuel(tripId, data)
+ *    - POST /api/v1/trips/:tripId/fuel
+ *    - 給油記録保存
+ *    - 給油量・金額・給油所名を記録
  *
- * 4. createQuickLocation(data)
- *    - POST /api/v1/mobile/locations/quick
- *    - 新規地点登録（クイック登録）
- *    - 近隣地点が見つからない場合の新規登録
- *
- * ✅ 追加型定義:
- * - RecordLoadingArrivalRequest: 積込記録リクエスト型
- * - RecordUnloadingArrivalRequest: 積降記録リクエスト型
- * - ActivityRecordResponse: 積込・積降記録レスポンス型
- *
- * 🔄 既存機能との関係:
- * - recordAction()メソッドは既存のまま保持
- * - getNearbyLocations()メソッドと連携して使用
- * - 既存のすべてのメソッドとコメントを完全保持（100%）
+ * ✅ 既存機能との関係:
+ * - recordLoadingArrival()メソッドは既存のまま保持
+ * - recordUnloadingArrival()メソッドは既存のまま保持
+ * - すべての既存メソッドとコメントを100%保持
  *
  * 📱 使用フロー:
- * 1. getNearbyLocations() で近隣地点を検索
- * 2. 検索結果0件の場合 → LocationRegistrationDialog表示
- * 3. createQuickLocation() で新規地点登録
- * 4. 登録成功 → locationId取得
- * 5. recordLoadingArrival() または recordUnloadingArrival() を呼び出し
- * 6. GPS座標と到着時刻が自動記録される
- *
- * 🎯 実装計画書準拠:
- * - 既存コードとコメントを100%保持
- * - 新機能のみを追加
- * - デバッグログを強化
+ * 1. 休憩開始ボタンクリック → startBreak() 呼び出し
+ * 2. 休憩終了ボタンクリック → endBreak() 呼び出し
+ * 3. 給油記録保存ボタンクリック → recordFuel() 呼び出し
  */

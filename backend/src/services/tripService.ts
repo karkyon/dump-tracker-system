@@ -913,267 +913,51 @@ class TripService {
     tripId: string,
     activityData: CreateTripDetailRequest
   ): Promise<ApiResponse<OperationDetailResponseDTO>> {
-    // ================================================================
-    // 🔥🔥🔥 超詳細ログ開始マーカー 🔥🔥🔥
-    // ================================================================
-    logger.info('📦📦📦 ============================================');
-    logger.info('📦📦📦 [addActivity] 作業追加メソッド開始！！！');
-    logger.info('📦📦📦 ============================================');
-    logger.info('📦 [STEP 1] メソッド呼び出し', {
-      tripId,
-      timestamp: new Date().toISOString(),
-      メソッド名: 'TripService.addActivity'
-    });
-
-    logger.info('📦 [STEP 2] 入力パラメータ詳細', {
-      tripId,
-      activityData: {
-        locationId: activityData.locationId,
-        itemId: activityData.itemId,
-        quantity: activityData.quantity,
-        activityType: activityData.activityType,
-        startTime: activityData.startTime,
-        endTime: activityData.endTime,
-        notes: activityData.notes
-      },
-      入力データ型: typeof activityData,
-      locationId存在: !!activityData.locationId,
-      itemId存在: !!activityData.itemId,
-      itemId値: activityData.itemId || 'NULL',
-      quantity値: activityData.quantity !== undefined ? activityData.quantity : 'undefined',
-      timestamp: new Date().toISOString()
-    });
-
     try {
-      logger.info('📦 [STEP 3] try ブロック開始');
-
-      // ================================================================
-      // バリデーション: 運行記録の存在確認
-      // ================================================================
-      logger.info('📦 [STEP 4] 運行記録の存在確認開始', { tripId });
+      logger.info('作業追加開始', { tripId, activityData });
 
       const operation = await this.operationService.findByKey(tripId);
-
-      logger.info('📦 [STEP 5] 運行記録検索結果', {
-        tripId,
-        found: !!operation,
-        operationId: operation?.id,
-        status: operation?.status,
-        vehicleId: operation?.vehicleId,
-        driverId: operation?.driverId,
-        timestamp: new Date().toISOString()
-      });
-
       if (!operation) {
-        logger.error('📦❌ [STEP 6] 運行記録が見つかりません', { tripId });
         throw new NotFoundError('運行が見つかりません');
       }
-      logger.info('📦✅ [STEP 7] 運行記録の存在確認成功', { tripId });
-
-      // ================================================================
-      // バリデーション: 運行ステータス確認
-      // ================================================================
-      logger.info('📦 [STEP 8] 運行ステータス確認', {
-        tripId,
-        currentStatus: operation.status,
-        expectedStatus: 'IN_PROGRESS',
-        statusMatch: operation.status === 'IN_PROGRESS'
-      });
 
       if (operation.status !== 'IN_PROGRESS') {
-        logger.error('📦❌ [STEP 9] 運行が進行中ではありません', {
-          tripId,
-          currentStatus: operation.status,
-          expectedStatus: 'IN_PROGRESS'
-        });
         throw new ConflictError('進行中の運行ではありません');
       }
-      logger.info('📦✅ [STEP 10] 運行ステータス確認成功（IN_PROGRESS）');
 
-      // ================================================================
-      // sequence_number 自動計算処理
-      // ================================================================
-      logger.info('📦 [STEP 11] sequence_number 計算処理開始', { tripId });
-      logger.info('📦 [STEP 12] 既存 operation_details 検索開始', {
-        tripId,
-        検索条件: {
-          where: { operationId: tripId },
-          orderBy: { sequenceNumber: 'desc' },
-          take: 1
-        }
-      });
-
+      // 🔧 追加: sequenceNumber自動計算
       const existingDetails = await this.operationDetailService.findMany({
         where: { operationId: tripId },
         orderBy: { sequenceNumber: 'desc' },
         take: 1
       });
 
-      logger.info('📦 [STEP 13] 既存 operation_details 検索結果', {
-        tripId,
-        existingCount: existingDetails?.length ?? 0,
-        existingDetails: existingDetails?.map(d => ({
-          id: d.id,
-          sequenceNumber: d.sequenceNumber,
-          activityType: d.activityType,
-          createdAt: d.createdAt
-        })) ?? []
-      });
-
       const maxSequenceNumber = existingDetails?.[0]?.sequenceNumber ?? 0;
       const nextSequenceNumber = maxSequenceNumber + 1;
 
-      logger.info('📦 [STEP 14] sequence_number 計算完了', {
+      logger.info('sequenceNumber計算完了', {
         tripId,
-        既存レコード数: existingDetails?.length ?? 0,
-        最大sequence_number: maxSequenceNumber,
-        新規sequence_number: nextSequenceNumber,
-        計算式: `${maxSequenceNumber} + 1 = ${nextSequenceNumber}`,
-        timestamp: new Date().toISOString()
+        existingCount: existingDetails?.length ?? 0,
+        maxSequenceNumber,
+        nextSequenceNumber
       });
 
-      // ================================================================
-      // OperationDetailCreateDTO データ構築
-      // ================================================================
-      logger.info('📦 [STEP 15] OperationDetailCreateDTO データ構築開始');
-
-      // itemId の処理ロジック
-      const processedItemId = activityData.itemId && activityData.itemId.trim() !== ''
-        ? activityData.itemId
-        : undefined;
-
-      logger.info('📦 [STEP 16] itemId 処理詳細', {
-        元のitemId: activityData.itemId,
-        元のitemId型: typeof activityData.itemId,
-        trimされたitemId: activityData.itemId?.trim(),
-        空文字チェック: activityData.itemId?.trim() === '',
-        最終itemId: processedItemId,
-        itemId設定値: processedItemId ? `'${processedItemId}'` : 'undefined (NULL)',
-        条件分岐: processedItemId ? 'itemIdを設定' : 'itemIdをundefinedに設定'
-      });
-
-      // quantity の処理ロジック
-      const processedQuantity = activityData.quantity !== undefined
-        ? activityData.quantity
-        : 0;
-
-      logger.info('📦 [STEP 17] quantity 処理詳細', {
-        元のquantity: activityData.quantity,
-        元のquantity型: typeof activityData.quantity,
-        undefinedチェック: activityData.quantity === undefined,
-        最終quantity: processedQuantity,
-        quantity設定値: processedQuantity,
-        条件分岐: activityData.quantity !== undefined ? 'そのまま使用' : 'デフォルト0を設定'
-      });
-
-      // DTO構築
+      // ✅ 修正: OperationDetailCreateDTO型に完全対応 + locationId空文字列対応
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
-        locationId: activityData.locationId,
-        itemId: processedItemId,
+        locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,  // ✅ 空文字列→undefined
+        itemId: activityData.itemId && activityData.itemId.trim() !== '' ? activityData.itemId : undefined,
         sequenceNumber: nextSequenceNumber,
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
-        quantityTons: processedQuantity,
+        quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
         notes: activityData.notes || ''
       };
 
-      logger.info('📦 [STEP 18] OperationDetailCreateDTO 構築完了', {
-        detailData: {
-          operationId: detailData.operationId,
-          locationId: detailData.locationId,
-          itemId: detailData.itemId || 'undefined (NULL)',
-          sequenceNumber: detailData.sequenceNumber,
-          activityType: detailData.activityType,
-          actualStartTime: detailData.actualStartTime,
-          actualEndTime: detailData.actualEndTime,
-          quantityTons: detailData.quantityTons,
-          notes: detailData.notes || '(空文字列)'
-        },
-        フィールド数: Object.keys(detailData).length,
-        NULL設定フィールド: {
-          itemId: !detailData.itemId,
-          actualEndTime: !detailData.actualEndTime,
-          notes: !detailData.notes
-        },
-        timestamp: new Date().toISOString()
-      });
-
-      // ================================================================
-      // Prisma INSERT 実行
-      // ================================================================
-      logger.info('📦 [STEP 19] Prisma operation_details INSERT 実行開始', {
-        tripId,
-        テーブル名: 'operation_details',
-        実行SQL概要: 'INSERT INTO operation_details (...) VALUES (...)',
-        データ: detailData
-      });
-
-      logger.info('📦 [STEP 20] operationDetailService.create() 呼び出し直前', {
-        timestamp: new Date().toISOString(),
-        データ確認: 'すべてのフィールドが正しく設定されています'
-      });
-
       const detail = await this.operationDetailService.create(detailData);
 
-      logger.info('📦 [STEP 21] Prisma INSERT 実行完了！', {
-        成功: true,
-        作成されたレコード: {
-          id: detail.id,
-          operationId: detail.operationId,
-          sequenceNumber: detail.sequenceNumber,
-          activityType: detail.activityType,
-          locationId: detail.locationId,
-          itemId: detail.itemId || 'NULL',
-          actualStartTime: detail.actualStartTime,
-          actualEndTime: detail.actualEndTime || 'NULL',
-          quantityTons: detail.quantityTons,
-          notes: detail.notes || '(空)',
-          createdAt: detail.createdAt
-        },
-        timestamp: new Date().toISOString()
-      });
-
-      // ================================================================
-      // GPS座標・時刻情報の詳細ログ
-      // ================================================================
-      logger.info('📦 [STEP 22] GPS座標・時刻情報詳細ログ', {
-        レコードID: detail.id,
-        GPS関連情報: {
-          actualStartTime: detail.actualStartTime,
-          actualStartTimeISO: detail.actualStartTime?.toISOString(),
-          actualEndTime: detail.actualEndTime || 'NULL',
-          actualEndTimeISO: detail.actualEndTime?.toISOString() || 'NULL'
-        },
-        場所情報: {
-          locationId: detail.locationId,
-          location取得: 'locations テーブルから取得可能'
-        },
-        品目情報: {
-          itemId: detail.itemId || 'NULL',
-          item取得: detail.itemId ? 'items テーブルから取得可能' : '品目なし'
-        },
-        timestamp: new Date().toISOString()
-      });
-
-      // ================================================================
-      // 最終確認ログ
-      // ================================================================
-      logger.info('📦 [STEP 23] operation_details レコード作成完全成功', {
-        tripId,
-        detailId: detail.id,
-        sequenceNumber: nextSequenceNumber,
-        activityType: activityData.activityType,
-        処理時刻: new Date().toISOString(),
-        次回sequence_number予測: nextSequenceNumber + 1
-      });
-
-      logger.info('📦✅✅✅ [STEP 24] 作業追加処理 完全成功！！！');
-
-      logger.info('📦📦📦 ============================================');
-      logger.info('📦📦📦 [addActivity] 作業追加メソッド終了（成功）');
-      logger.info('📦📦📦 ============================================');
+      logger.info('作業追加完了', { tripId, detailId: detail.id, sequenceNumber: nextSequenceNumber });
 
       return {
         success: true,
@@ -1182,34 +966,7 @@ class TripService {
       };
 
     } catch (error) {
-      // ================================================================
-      // エラー発生時の超詳細ログ
-      // ================================================================
-      logger.error('📦❌❌❌ ============================================');
-      logger.error('📦❌ [ERROR] 作業追加エラー発生！！！');
-      logger.error('📦❌❌❌ ============================================');
-      logger.error('📦❌ エラー詳細', {
-        tripId,
-        activityData,
-        error: error instanceof Error ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        } : String(error),
-        発生箇所: 'TripService.addActivity',
-        timestamp: new Date().toISOString()
-      });
-
-      logger.error('📦❌ 入力データ詳細（エラー時）', {
-        tripId,
-        locationId: activityData.locationId,
-        itemId: activityData.itemId,
-        activityType: activityData.activityType,
-        quantity: activityData.quantity,
-        startTime: activityData.startTime,
-        endTime: activityData.endTime
-      });
-
+      logger.error('作業追加エラー', { error, tripId, activityData });
       throw error;
     }
   }
@@ -1224,29 +981,25 @@ class TripService {
     try {
       logger.info('給油記録追加開始', { tripId, fuelData });
 
-      const operation = await this.operationService.findByKey(tripId);
-      if (!operation) {
-        throw new NotFoundError('運行が見つかりません');
-      }
-
-      const detailData: any = {
-        operations: {
-          connect: { id: tripId }
-        },
+      // 🔧 CreateTripDetailRequest形式に変換
+      const activityData: CreateTripDetailRequest = {
         activityType: 'FUELING' as ActivityType,
-        actualStartTime: fuelData.timestamp,
-        actualEndTime: fuelData.timestamp,
-        quantity: new Decimal(fuelData.fuelAmount),
+        locationId: '' as any,  // ✅ 空文字列（as any でTypeScriptエラー回避）
+        itemId: '' as any,      // ✅ 空文字列（as any でTypeScriptエラー回避）
+        startTime: fuelData.timestamp || new Date(),
+        endTime: fuelData.timestamp || new Date(),
+        quantity: fuelData.fuelAmount,  // 給油量をquantityとして記録
         notes: `給油: ${fuelData.fuelAmount}L, 費用: ¥${fuelData.fuelCost}${fuelData.location ? `, 場所: ${fuelData.location}` : ''}${fuelData.notes ? `, ${fuelData.notes}` : ''}`
       };
 
-      const detail = await this.operationDetailService.create(detailData);
+      // ✅ addActivityメソッドを使用（sequenceNumber自動計算）
+      const result = await this.addActivity(tripId, activityData);
 
-      logger.info('給油記録追加完了', { tripId, detailId: detail.id });
+      logger.info('給油記録追加完了', { tripId, detailId: result.data?.id });
 
       return {
         success: true,
-        data: detail,
+        data: result.data,
         message: '給油記録を追加しました'
       };
 

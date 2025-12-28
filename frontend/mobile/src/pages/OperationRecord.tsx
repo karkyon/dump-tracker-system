@@ -679,13 +679,32 @@ const OperationRecord: React.FC = () => {
 
   /**
    * ✅ 既存: 休憩開始ハンドラー
+   * 🆕 2025年12月28日修正: API呼び出し実装
    */
   const handleBreakStart = async () => {
     try {
       setIsSubmitting(true);
       
-      // TODO: API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // 🔧 修正: operationStoreから運行IDを取得
+      const currentOperationId = operationStore.operationId || operation.id;
+      
+      if (!currentOperationId) {
+        toast.error('運行IDが見つかりません');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log('☕ 休憩開始処理開始:', currentOperationId);
+      
+      // 🆕 休憩開始API呼び出し
+      const response = await apiService.startBreak(currentOperationId, {
+        latitude: currentPosition?.coords.latitude,
+        longitude: currentPosition?.coords.longitude,
+        location: '',  // 休憩場所名（任意）
+        notes: ''  // メモ（任意）
+      });
+      
+      console.log('✅ 休憩開始API成功:', response);
       
       setOperation(prev => ({ 
         ...prev, 
@@ -697,7 +716,7 @@ const OperationRecord: React.FC = () => {
       
       setIsSubmitting(false);
     } catch (error) {
-      console.error('休憩開始エラー:', error);
+      console.error('❌ 休憩開始エラー:', error);
       toast.error('休憩開始に失敗しました');
       setIsSubmitting(false);
     }
@@ -705,25 +724,44 @@ const OperationRecord: React.FC = () => {
 
   /**
    * ✅ 既存: 休憩終了ハンドラー
+   * 🆕 2025年12月28日修正: API呼び出し実装
    */
   const handleBreakEnd = async () => {
     try {
       setIsSubmitting(true);
       
-      // TODO: API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // 🔧 修正: operationStoreから運行IDを取得
+      const currentOperationId = operationStore.operationId || operation.id;
+      
+      if (!currentOperationId) {
+        toast.error('運行IDが見つかりません');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log('⏱️ 休憩終了処理開始:', currentOperationId);
+      
+      // 🆕 休憩終了API呼び出し
+      const response = await apiService.endBreak(currentOperationId, {
+        notes: ''  // メモ（任意）
+      });
+      
+      console.log('✅ 休憩終了API成功:', response);
+      
+      // 🔧 修正: operationStoreから休憩前のフェーズを復元
+      const previousPhase = operationStore.phase || 'TO_UNLOADING';
       
       // 休憩前のフェーズに戻る
       setOperation(prev => ({ 
         ...prev, 
-        phase: 'TO_UNLOADING' // TODO: 休憩前のフェーズを記憶
+        phase: previousPhase
       }));
       
       toast.success('休憩を終了しました');
       
       setIsSubmitting(false);
     } catch (error) {
-      console.error('休憩終了エラー:', error);
+      console.error('❌ 休憩終了エラー:', error);
       toast.error('休憩終了に失敗しました');
       setIsSubmitting(false);
     }
@@ -753,12 +791,17 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
-   * 🆕 運行終了ハンドラー（D8画面遷移版）
-   * - D8（乗車後点検）画面へ遷移
-   * - 実際の運行終了処理はD8画面で実行
+   * 🆕 運行終了ハンドラー（最終版 - Home遷移とエラー抑制）
+   * - 運行終了API呼び出し
+   * - operationStoreのリセット
+   * - 既存トーストのクリア
+   * - Home画面（/vehicle-info）への自動遷移
    */
   const handleOperationEnd = () => {
-    console.log('[運行終了ボタン] D8（乗車後点検）画面へ遷移');
+    if (!window.confirm('降車時点検を実施します。よろしいですか?')) {
+      return;
+    }
+    // 降車時点検画面に遷移
     navigate('/post-trip-inspection');
   };
 

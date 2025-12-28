@@ -13,6 +13,7 @@ import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
 import { useOperationStore } from './stores/operationStore';
 
+
 // Pages
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -49,8 +50,11 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
     // 🆕 運行関連画面にいる場合はスキップ（D3, D7, D8など）
     const operationRelatedPaths = [
       '/pre-departure-inspection',  // D3: 乗車前点検
+      '/loading-input',             // D4: 積載入力
+      '/unloading-input',           // D5: 降載入力
+      '/loading-confirmation',      // D6: 積載確認
       '/refuel-record',             // D7: 給油記録
-      '/post-trip-inspection'       // D8: 乗車後点検
+      '/post-trip-inspection',      // D8: 乗車後点検
     ];
     
     if (operationRelatedPaths.includes(location.pathname)) {
