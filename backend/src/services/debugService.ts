@@ -147,12 +147,12 @@ export class DebugService {
           actualStartTime: true,
           actualEndTime: true,
           status: true,
-          vehicle: {
+          vehicles: {
             select: {
               plateNumber: true,
             },
           },
-          driver: {
+          usersOperationsDriverIdTousers: {
             select: {
               name: true,
             },
@@ -174,8 +174,8 @@ export class DebugService {
           startTime: op.actualStartTime,
           endTime: op.actualEndTime,
           status: op.status,
-          vehiclePlateNumber: op.vehicle?.plateNumber,
-          driverName: op.driver?.name,
+          vehiclePlateNumber: op.vehicles?.plateNumber,
+          driverName: op.usersOperationsDriverIdTousers?.name,
         })),
         count: operations.length,
       };

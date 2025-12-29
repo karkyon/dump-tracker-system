@@ -18,8 +18,10 @@ import {
   Download,
   Settings,
   LucideIcon,
+  Bug,  // ✅ デバッグアイコン追加,
 } from 'lucide-react';
 import { NAVIGATION_ITEMS } from '../../utils/constants';
+import { useAuthStore } from '../../store/authStore';  // ✅ 認証ストア追加
 
 interface SidebarProps {
   isOpen: boolean;
@@ -38,15 +40,29 @@ const iconMap: Record<string, LucideIcon> = {
   Navigation: Navigation,
   Download: Download,
   Settings: Settings,
+  Bug: Bug,  // ✅ デバッグアイコン追加,
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  // ✅ ユーザー情報取得（adminOnlyフィルタリング用）
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
+
   const handleNavClick = () => {
     // モバイルでナビゲーション時にサイドバーを閉じる
     if (window.innerWidth < 1024) {
       onClose();
     }
   };
+
+  // ✅ adminOnly フィルタリング
+  const filteredItems = NAVIGATION_ITEMS.filter((item) => {
+    // adminOnly が true の場合、管理者のみ表示
+    if ((item as any).adminOnly) {
+      return isAdmin;
+    }
+    return true;
+  });
 
   return (
     <>
@@ -85,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
           {/* ナビゲーションメニュー */}
           <nav className="flex-1 px-2 py-4 bg-gray-800 space-y-1 overflow-y-auto">
-            {NAVIGATION_ITEMS.map((item) => {
+            {filteredItems.map((item) => {
               // ✅ constants.ts の icon 文字列から実際のアイコンコンポーネントを取得
               const Icon = iconMap[item.icon];
               

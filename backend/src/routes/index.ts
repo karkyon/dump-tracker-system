@@ -691,6 +691,23 @@ locationTrackingRoutes.forEach(route => {
 });
 
 // =====================================
+// デバッグルート登録（管理者専用）
+// =====================================
+const debugRoutes = [
+  {
+    name: 'debugRoutes',
+    path: '/debug',
+    priority: 'normal' as const,
+    requireAuth: false,  // ルート内で認証（requireAdmin使用）
+    description: 'デバッグ・診断API（管理者専用）'
+  }
+];
+
+debugRoutes.forEach(route => {
+  safeImportAndRegisterRoute(route.name, route.path, router, route);
+});
+
+// =====================================
 // モバイル専用API登録（統合版）
 // =====================================
 

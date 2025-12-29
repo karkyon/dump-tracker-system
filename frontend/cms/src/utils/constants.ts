@@ -81,7 +81,15 @@ export const NAVIGATION_ITEMS = [
     name: 'システム設定',
     path: '/settings',
     icon: 'Settings'
-  }
+  },
+  // デバッグメニュー（管理者専用）
+  {
+    id: 'debug',
+    name: '運行・点検デバッグ',
+    path: '/debug/operations',
+    icon: 'Bug',
+    adminOnly: true  // 管理者のみ表示
+  },
 ] as const;
 
 // ステータス定義

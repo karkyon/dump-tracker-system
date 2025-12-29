@@ -1,4 +1,4 @@
-// frontend/src/App.tsx - 完全修正版: 既存機能保持 + Layout統合
+// frontend/cms/src/App.tsx - 完全修正版: 既存機能保持 + Layout統合 + OperationDebugルート追加
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -19,6 +19,7 @@ import OperationRecords from './pages/OperationRecords';
 import GPSMonitoring from './pages/GPSMonitoring';
 import ReportOutput from './pages/ReportOutput';
 import SystemSettings from './pages/SystemSettings';
+import OperationDebug from './pages/OperationDebug';
 
 // エラーバウンダリコンポーネント
 class ErrorBoundary extends React.Component<
@@ -250,6 +251,9 @@ const App: React.FC = () => {
               
               {/* 帳票出力 */}
               <Route path="reports" element={<ReportOutput />} />
+              
+              {/* デバッグルート追加（管理者専用） */}
+              <Route path="debug/operations" element={<OperationDebug />} />
               
               {/* システム設定 */}
               <Route path="settings" element={<SystemSettings />} />
