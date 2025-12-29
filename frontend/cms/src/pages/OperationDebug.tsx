@@ -1,8 +1,8 @@
 // =====================================
 // frontend/cms/src/pages/OperationDebug.tsx
-// 運行・点検デバッグ画面 - 完全修正版
+// 運行・点検デバッグ画面 - 最終修正版
 // 作成日: 2025年12月29日
-// 修正日: 2025年12月29日 - トークンキー修正
+// 修正日: 2025年12月29日 - APIパス修正 (/api/v1/debug)
 // 目的: 運行履歴の詳細データをデバッグ確認する管理者専用画面
 // =====================================
 
@@ -97,8 +97,8 @@ const OperationDebug: React.FC = () => {
   const fetchRecentOperations = async () => {
     try {
       setIsLoadingRecent(true);
-      const token = localStorage.getItem('auth_token'); // ✅ 修正: 正しいキー名
-      const response = await fetch('/api/debug/operations/recent?limit=20', {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/v1/debug/operations/recent?limit=20', {  // ✅ 修正: /api/v1/ 追加
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -131,8 +131,8 @@ const OperationDebug: React.FC = () => {
       setInspectionItems([]);
       setOperationDetails([]);
 
-      const token = localStorage.getItem('auth_token'); // ✅ 修正: 正しいキー名
-      const response = await fetch(`/api/debug/operations/${opId}/full`, {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`/api/v1/debug/operations/${opId}/full`, {  // ✅ 修正: /api/v1/ 追加
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
