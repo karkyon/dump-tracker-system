@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { 
   Search, FileText, CheckCircle, XCircle, AlertCircle, 
-  ChevronDown, ChevronUp, MapPin, Clock, Fuel, Coffee,
-  Truck, Navigation, Package
+  ChevronDown, ChevronUp, MapPin, Clock,
+  Package
 } from 'lucide-react';
 import { debugAPI } from '../utils/api';
 import { apiClient } from '../utils/api';  // ✅ 追加
