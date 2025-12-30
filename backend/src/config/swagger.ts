@@ -550,6 +550,10 @@ const swaggerOptions: swaggerJsdoc.Options = {
         description: '現場統合・GPS・リアルタイム管理API 🆕'
       },
       {
+        name: '🔍 デバッグAPI (Debug API)',
+        description: '開発・診断専用API（管理者のみ） - 運行履歴・点検記録の詳細デバッグ情報取得'
+      },
+      {
         name: '⚡ システム管理 (System Management)',
         description: 'ヘルスチェック・監視・システム統計API'
       }

@@ -355,13 +355,13 @@ export class ExpressApp {
       this.registerIndividualRoutes();
     }
 
-    // 🔍 デバッグAPIルート（管理者専用）
+    // 🎯 デバッグAPIルート（管理者専用）
     try {
       const debugRoutes = require('./routes/debugRoutes').default || require('./routes/debugRoutes');
-      this.app.use('/api/debug', debugRoutes);
-      logger.info('✅ デバッグAPIルート登録完了');
+      this.app.use('/api/v1/debug', debugRoutes);
+      logger.info('✅ デバッグAPIルート登録完了: /api/v1/debug');
     } catch (error) {
-      logger.warn('⚠️ デバッグルート読み込み失敗（オプション機能）', error);
+      logger.error('❌ デバッグルート読み込み失敗', error);
     }
 
     // 🎯 モバイルAPI統合

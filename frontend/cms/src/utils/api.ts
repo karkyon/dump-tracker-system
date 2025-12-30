@@ -742,5 +742,43 @@ export const reportAPI = {
   }
 };
 
+// ===================================
+// デバッグAPI（管理者専用）
+// ===================================
+
+export const debugAPI = {
+  /**
+   * 最近の運行ID一覧取得
+   */
+  async getRecentOperations(params?: { limit?: number }): Promise<ApiResponse<any>> {
+    console.log('[Debug API] Get recent operations', params);
+    return apiClient.get('/debug/operations/recent', { params });
+  },
+
+  /**
+   * 点検項目詳細取得
+   */
+  async getInspectionItems(operationId: string): Promise<ApiResponse<any>> {
+    console.log('[Debug API] Get inspection items', { operationId });
+    return apiClient.get(`/debug/operations/${operationId}/inspection-items`);
+  },
+
+  /**
+   * 運行・点検統合詳細取得
+   */
+  async getOperationDetail(operationId: string): Promise<ApiResponse<any>> {
+    console.log('[Debug API] Get operation detail', { operationId });
+    return apiClient.get(`/debug/operations/${operationId}/detail`);
+  },
+
+  /**
+   * 運行履歴完全デバッグ情報取得
+   */
+  async getOperationDebugInfo(operationId: string): Promise<ApiResponse<any>> {
+    console.log('[Debug API] Get operation debug info', { operationId });
+    return apiClient.get(`/debug/operations/${operationId}/full`);
+  }
+};
+
 // デフォルトエクスポート
 export default api;

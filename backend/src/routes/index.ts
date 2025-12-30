@@ -269,7 +269,7 @@ logger.info('🔧🔧🔧 [DEBUG-routes/index] Router初期化完了', {
  * API基本情報エンドポイント
  * GET /api/v1/
  */
-router.get('/', asyncHandler(async (req: Request, res: Response) => {
+router.get('/health', asyncHandler(async (req: Request, res: Response) => {
   const healthStatus = getErrorHealthStatus();
   const errorStats = getErrorStatistics();
 
