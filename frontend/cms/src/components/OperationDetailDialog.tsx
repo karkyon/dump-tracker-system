@@ -1,9 +1,6 @@
-// ✅✅✅ 運行記録詳細ダイアログ - 完全版（仕様書A7準拠）
+// ✅✅✅ 運行記録詳細ダイアログ - OperationDebugと表示スタイル完全統一版
 // 基本情報・運行情報・場所情報・タイムライン・GPSルート・点検項目管理を完全実装
-// 🔧 修正: 欠けているState定義を追加（inspectionsLoading, inspectionsError）
-// 🔧 修正: Inspection型をInspectionRecordに統一
-// ✅ NEW: タイムライン統合機能追加 - 運行詳細と点検記録を時系列で統合表示
-// ✅ NEW: 点検記録詳細情報の表示追加 - GPS位置、天候、温度、結果詳細等
+// ✅ 修正: OperationDebug.tsxと完全に同じ表示スタイルに統一
 import React, { useEffect, useState } from 'react';
 import { 
   User, Truck, MapPin, Package, Clock,
@@ -52,7 +49,9 @@ interface OperationActivity {
   id: string;
   operationId: string;
   sequenceNumber: number;
-  activityType: 'LOADING' | 'UNLOADING' | 'FUELING' | 'BREAK' | 'MAINTENANCE';
+  activityType: 'LOADING' | 'UNLOADING' | 'FUELING' | 'REFUELING' | 'BREAK' | 'MAINTENANCE' | 
+                'BREAK_START' | 'BREAK_END' | 'TRIP_START' | 'TRIP_END' | 
+                'TRANSPORTING' | 'WAITING' | 'PRE_INSPECTION' | 'POST_INSPECTION' | 'OTHER';
   locationId: string;
   itemId: string;
   plannedTime: string | null;
@@ -87,7 +86,6 @@ interface GpsRecord {
 
 /**
  * 点検記録のインターフェース
- * ✅ NEW: 詳細情報フィールドを追加
  */
 interface InspectionRecord {
   id: string;
@@ -99,7 +97,7 @@ interface InspectionRecord {
   completedAt: string | null;
   overallResult: 'PASS' | 'FAIL' | 'WARNING';
   
-  // ✅ NEW: 詳細情報フィールド
+  // 詳細情報フィールド
   latitude?: number;
   longitude?: number;
   locationName?: string;
@@ -108,7 +106,7 @@ interface InspectionRecord {
   overallNotes?: string;
   defectsFound?: number;
   
-  // ✅ NEW: 関連データ
+  // 関連データ
   vehicles?: {
     plateNumber: string;
     model: string;
@@ -134,7 +132,7 @@ interface InspectionRecord {
 }
 
 /**
- * ✅ NEW: タイムラインイベントの統合型定義
+ * タイムラインイベントの統合型定義
  */
 interface TimelineEvent {
   id: string;
@@ -154,15 +152,8 @@ interface OperationDetailDialogProps {
  * 運行記録詳細ダイアログコンポーネント
  * 
  * @description
- * 仕様書A7「運行記録 > 詳細画面詳細画面（ダイアログ）」に準拠した完全実装
- * 
- * 表示内容:
- * - 基本情報（運行番号、運転手、車両、ステータスなど）
- * - 運行情報（開始・終了時刻、走行距離、燃料消費など）
- * - 場所情報（積込場所、積下場所の一覧）
- * - 運行タイムライン（積込・積下の時系列表示）✅ NEW: 点検イベント統合
- * - GPSルート（Google Maps統合）
- * - 点検項目管理（運行前後の点検記録）✅ NEW: 詳細情報表示
+ * 仕様書A7「運行記録 > 詳細画面（ダイアログ）」に準拠した完全実装
+ * OperationDebug.tsxと完全に同じ表示スタイルに統一
  */
 const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   operationId,
@@ -183,7 +174,6 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const [gpsRecords, setGpsRecords] = useState<GpsRecord[]>([]);
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
   
-  // 🔧 修正: 欠けていたState定義を追加
   const [inspectionsLoading, setInspectionsLoading] = useState(false);
   const [inspectionsError, setInspectionsError] = useState<string | null>(null);
 
@@ -275,8 +265,6 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     try {
       console.log('[OperationDetailDialog] Fetching GPS records:', operationId);
       
-      // GPS記録はoperationIdまたはvehicleIdで取得可能
-      // まずはoperationIdで試行
       const response = await apiClient.get('/gps/locations', {
         params: {
           operationId: operationId,
@@ -315,7 +303,6 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
   /**
    * 点検記録を取得
-   * 🔧 修正: Inspection型をInspectionRecordに統一
    */
   const fetchInspections = async () => {
     console.log('🔍 [Debug] fetchInspections開始', { operationId });
@@ -323,7 +310,6 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     try {
       setInspectionsLoading(true);
       
-      // ✅ 修正: operationIdを直接使用
       console.log('🔍 [Debug] operationId使用', { operationId });
       
       if (!operationId) {
@@ -332,10 +318,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         return;
       }
 
-      // ✅ 正しい: operationIdでフィルタ
       const response: any = await apiClient.get('/inspections', {
         params: { 
-          operationId: operationId,  // ✅ operationIdを使用
+          operationId: operationId,
           page: 1, 
           limit: 100 
         }
@@ -348,7 +333,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         dataKeys: response?.data ? Object.keys(response.data) : []
       });
 
-      // レスポンス処理 - 🔧 Inspection型をInspectionRecordに修正
+      // レスポンス処理
       const responseData: any = response.data;
       let inspectionsData: InspectionRecord[];
       
@@ -425,11 +410,11 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   }, [operation]);
 
   // ===================================================================
-  // ✅ NEW: タイムライン統合ヘルパー関数
+  // タイムライン統合ヘルパー関数
   // ===================================================================
 
   /**
-   * ✅ NEW: 運行詳細と点検記録を統合したタイムラインイベントを生成
+   * 運行詳細と点検記録を統合したタイムラインイベントを生成
    */
   const getTimelineEvents = (): TimelineEvent[] => {
     const events: TimelineEvent[] = [];
@@ -479,7 +464,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   };
 
   // ===================================================================
-  // ヘルパー関数
+  // ヘルパー関数 - ✅ OperationDebugと完全統一
   // ===================================================================
   
   /**
@@ -502,26 +487,29 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   };
 
   /**
-   * 作業種別のラベルとアイコンを取得
+   * ✅ 作業種別の情報取得 - OperationDebugと完全統一（Lucideアイコン使用）
    */
   const getActivityTypeInfo = (activityType: string) => {
-    const typeConfig = {
-      LOADING: { label: '積込', icon: '🚛', className: 'bg-indigo-100 text-indigo-800' },
-      UNLOADING: { label: '積降', icon: '🚛', className: 'bg-purple-100 text-purple-800' },
-      FUELING: { label: '給油', icon: '⛽', className: 'bg-orange-100 text-orange-800' },
-      BREAK: { label: '休憩', icon: '☕', className: 'bg-yellow-100 text-yellow-800' },
-      BREAK_START: { label: '休憩開始', icon: '☕', className: 'bg-yellow-100 text-yellow-800' },
-      BREAK_END: { label: '休憩終了', icon: '☕', className: 'bg-amber-100 text-amber-800' },
-      MAINTENANCE: { label: 'メンテナンス', icon: '🔧', className: 'bg-red-100 text-red-800' },
-      TRANSPORTING: { label: '運搬中', icon: '🧭', className: 'bg-cyan-100 text-cyan-800' },
-      WAITING: { label: '待機', icon: '🕐', className: 'bg-gray-100 text-gray-800' },
-      TRIP_START: { label: '運行開始', icon: '▶️', className: 'bg-green-100 text-green-800' },
-      TRIP_END: { label: '運行終了', icon: '⏹️', className: 'bg-red-100 text-red-800' }
+    const typeConfig: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
+      LOADING: { label: '積込', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
+      UNLOADING: { label: '積降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
+      REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
+      BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-yellow-100 text-yellow-800' },
+      BREAK_START: { label: '休憩開始', icon: <Coffee className="w-5 h-5" />, className: 'bg-yellow-100 text-yellow-800' },
+      BREAK_END: { label: '休憩終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-amber-100 text-amber-800' },
+      MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
+      TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
+      WAITING: { label: '待機', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      TRIP_START: { label: '運行開始', icon: <Play className="w-5 h-5" />, className: 'bg-green-100 text-green-800' },
+      TRIP_END: { label: '運行終了', icon: <Square className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
+      PRE_INSPECTION: { label: '運行前点検', icon: <ClipboardCheck className="w-5 h-5" />, className: 'bg-blue-100 text-blue-800' },
+      POST_INSPECTION: { label: '運行後点検', icon: <ClipboardCheck className="w-5 h-5" />, className: 'bg-emerald-100 text-emerald-800' }
     };
 
-    return typeConfig[activityType as keyof typeof typeConfig] || {
+    return typeConfig[activityType] || {
       label: activityType,
-      icon: '📌',
+      icon: <MapPin className="w-5 h-5" />,
       className: 'bg-gray-100 text-gray-800'
     };
   };
@@ -545,30 +533,51 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   };
 
   /**
-   * ✅ NEW: 点検種別のラベルとアイコンを取得
+   * 点検種別の情報取得 - OperationDebugと完全統一（Lucideアイコン使用）
    */
   const getInspectionTypeInfo = (inspectionType: string) => {
-    const typeConfig = {
+    const typeConfig: Record<string, { label: string; icon: React.ReactNode; className: string; description: string }> = {
       PRE_TRIP: { 
         label: '運行前点検', 
-        icon: '🔍', 
+        icon: <ClipboardCheck className="w-5 h-5" />, 
         className: 'bg-blue-100 text-blue-800',
         description: '運行開始前の車両点検'
       },
       POST_TRIP: { 
         label: '運行後点検', 
-        icon: '✅', 
-        className: 'bg-green-100 text-green-800',
+        icon: <ClipboardCheck className="w-5 h-5" />, 
+        className: 'bg-emerald-100 text-emerald-800',
         description: '運行終了後の車両点検'
       }
     };
 
-    return typeConfig[inspectionType as keyof typeof typeConfig] || {
+    return typeConfig[inspectionType] || {
       label: inspectionType,
-      icon: '📋',
+      icon: <CheckCircle className="w-5 h-5" />,
       className: 'bg-gray-100 text-gray-800',
       description: '点検'
     };
+  };
+
+  /**
+   * ✅ 時刻フォーマット - OperationDebugと統一
+   */
+  const formatTime = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleString('ja-JP', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+
+  /**
+   * ✅ GPS座標フォーマット - OperationDebugと統一
+   */
+  const formatGps = (lat: number, lng: number) => {
+    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   };
 
   // ===================================================================
@@ -775,12 +784,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                 </div>
               )}
 
-              {/* ✅ NEW: 運行タイムラインタブ - 点検イベント統合版 */}
+              {/* ✅ 運行タイムラインタブ - OperationDebugと完全統一 */}
               {activeTab === 'timeline' && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <Clock className="w-5 h-5 text-gray-600" />
-                    運行タイムライン ({getTimelineEvents().length}件)
+                    運行タイムライン（統合版） ({getTimelineEvents().length}件)
                   </h3>
                   
                   {getTimelineEvents().length === 0 ? (
@@ -812,18 +821,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-2">
                                     <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
-                                      <span>{typeInfo.icon}</span>
+                                      {typeInfo.icon}
                                       {typeInfo.label}
                                     </span>
                                     {activity.actualStartTime && (
                                       <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                                        {new Date(activity.actualStartTime).toLocaleString('ja-JP', {
-                                          month: '2-digit',
-                                          day: '2-digit',
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                          second: '2-digit'
-                                        })}
+                                        {formatTime(activity.actualStartTime)}
                                       </span>
                                     )}
                                   </div>
@@ -837,7 +840,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                           <p className="font-medium text-gray-900">{activity.locations.name}</p>
                                           <p className="text-gray-500 text-xs">{activity.locations.address}</p>
                                           <p className="text-gray-400 text-xs">
-                                            GPS: {activity.locations.latitude.toFixed(6)}, {activity.locations.longitude.toFixed(6)}
+                                            GPS: {formatGps(activity.locations.latitude, activity.locations.longitude)}
                                           </p>
                                         </div>
                                       </div>
@@ -849,7 +852,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                         <div>
                                           <p className="font-medium text-gray-900">品目: {activity.items.name}</p>
-                                          {activity.quantityTons !== undefined && activity.quantityTons > 0 && (
+                                          {activity.quantityTons !== undefined && activity.quantityTons !== null && activity.quantityTons > 0 && (
                                             <p className="text-gray-500 text-xs">{activity.quantityTons} {activity.items.unit}</p>
                                           )}
                                         </div>
@@ -869,7 +872,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           );
                         }
                         
-                        // ✅ 点検イベントの場合（次のセクションに続く）
+                        // ✅ 点検イベントの場合 - OperationDebugと統一
                         else if (event.type === 'inspection') {
                           const inspection = event.data as InspectionRecord;
                           const typeInfo = getInspectionTypeInfo(inspection.inspectionType);
@@ -891,7 +894,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
                                       <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
-                                        <span>{typeInfo.icon}</span>
+                                        {typeInfo.icon}
                                         {typeInfo.label}
                                       </span>
                                       {inspection.overallResult && getInspectionResultBadge(inspection.overallResult)}
@@ -943,7 +946,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         )}
                                         {inspection.latitude && inspection.longitude && (
                                           <p className="text-xs text-gray-500">
-                                            GPS: {inspection.latitude.toFixed(6)}, {inspection.longitude.toFixed(6)}
+                                            GPS: {formatGps(inspection.latitude, inspection.longitude)}
                                           </p>
                                         )}
                                       </div>
@@ -1076,7 +1079,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     {new Date(record.recordedAt).toLocaleString('ja-JP')}
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    {record.latitude.toFixed(6)}, {record.longitude.toFixed(6)}
+                                    {formatGps(record.latitude, record.longitude)}
                                   </p>
                                 </div>
                               </div>
@@ -1099,12 +1102,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                 </div>
               )}
 
-              {/* ✅ NEW: 点検項目タブ - 詳細情報表示版 */}
+              {/* ✅ 点検項目タブ - OperationDebugと統一（詳細表示版） */}
               {activeTab === 'inspection' && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <CheckCircle className="w-5 h-5 text-gray-600" />
-                    点検項目 ({inspections.length}件)
+                    点検項目詳細 ({inspections.length}件)
                   </h3>
                   
                   {inspectionsLoading ? (
@@ -1137,8 +1140,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             <div className="flex items-start justify-between mb-4">
                               <div>
                                 <div className="flex items-center gap-2 mb-2">
-                                  <span className={`px-3 py-1 text-sm font-semibold rounded ${typeInfo.className}`}>
-                                    {typeInfo.icon} {typeInfo.label}
+                                  <span className={`px-3 py-1 text-sm font-semibold rounded inline-flex items-center gap-2 ${typeInfo.className}`}>
+                                    {typeInfo.icon}
+                                    {typeInfo.label}
                                   </span>
                                   {inspection.overallResult && getInspectionResultBadge(inspection.overallResult)}
                                 </div>
@@ -1155,7 +1159,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               </span>
                             </div>
                             
-                            {/* ✅ NEW: 詳細情報グリッド */}
+                            {/* 詳細情報グリッド */}
                             <div className="grid grid-cols-2 gap-4 mb-4">
                               {/* 時刻情報 */}
                               {inspection.startedAt && (
@@ -1194,7 +1198,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   <p className="text-xs text-gray-500 mb-1">GPS座標</p>
                                   <p className="text-sm font-medium flex items-center gap-2">
                                     <Navigation className="w-4 h-4 text-gray-400" />
-                                    {inspection.latitude.toFixed(6)}, {inspection.longitude.toFixed(6)}
+                                    {formatGps(inspection.latitude, inspection.longitude)}
                                   </p>
                                 </div>
                               )}
@@ -1245,7 +1249,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               )}
                             </div>
 
-                            {/* ✅ NEW: 不具合情報 */}
+                            {/* 不具合情報 */}
                             {inspection.defectsFound !== undefined && inspection.defectsFound > 0 && (
                               <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-4">
                                 <div className="flex items-center gap-2">
@@ -1257,7 +1261,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               </div>
                             )}
 
-                            {/* ✅ NEW: 備考 */}
+                            {/* 備考 */}
                             {inspection.overallNotes && (
                               <div className="bg-gray-50 rounded p-3 mb-4">
                                 <p className="text-xs text-gray-500 mb-1">備考</p>
@@ -1265,7 +1269,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               </div>
                             )}
 
-                            {/* ✅ NEW: 点検項目結果の詳細 */}
+                            {/* 点検項目結果の詳細 */}
                             {inspection.inspectionItemResults && inspection.inspectionItemResults.length > 0 && (
                               <div className="border-t pt-4">
                                 <div className="flex items-center justify-between mb-3">
