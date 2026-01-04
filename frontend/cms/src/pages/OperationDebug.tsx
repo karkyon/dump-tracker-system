@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { 
   Search, FileText, CheckCircle, XCircle, AlertCircle, 
-  ChevronDown, ChevronUp, MapPin, Clock,
-  Package
+  ChevronDown, ChevronUp, MapPin, Clock, Fuel, Coffee,
+  Truck, Navigation, Package, Play, Square, ClipboardCheck
 } from 'lucide-react';
 import { debugAPI } from '../utils/api';
-import { apiClient } from '../utils/api';  // ✅ 追加
+import { apiClient } from '../utils/api';
 
 // ===================================
 // 型定義
@@ -72,31 +72,41 @@ interface OperationDetail {
   };
 }
 
-// ✅ 運行工程の型定義（既存のOperationDetailDialogから）
-interface OperationActivity {
+// ✅ 統合タイムラインイベント型（バックエンドと一致）
+interface TimelineEvent {
   id: string;
-  operationId: string;
   sequenceNumber: number;
-  activityType: string;
-  locationId: string | null;
-  itemId: string | null;
-  plannedTime: string | null;
-  actualStartTime: string | null;
-  actualEndTime: string | null;
-  quantityTons: number;
-  notes: string | null;
-  locations?: {
+  eventType: 'TRIP_START' | 'TRIP_END' | 'PRE_INSPECTION' | 'POST_INSPECTION' | 
+             'LOADING' | 'UNLOADING' | 'TRANSPORTING' | 'WAITING' | 
+             'MAINTENANCE' | 'REFUELING' | 'FUELING' | 
+             'BREAK' | 'BREAK_START' | 'BREAK_END' | 'OTHER';
+  timestamp: string | null;
+  location?: {
     id: string;
     name: string;
     address: string;
     latitude: number;
     longitude: number;
-  };
+  } | null;
+  gpsLocation?: {
+    latitude: number;
+    longitude: number;
+    recordedAt: string;
+  } | null;
+  notes?: string | null;
+  quantityTons?: number;
   items?: {
     id: string;
     name: string;
     unit: string;
-  };
+  } | null;
+  inspectionDetails?: {
+    inspectionRecordId: string;
+    status: string;
+    totalItems: number;
+    passedItems: number;
+    failedItems: number;
+  } | null;
 }
 
 // ===================================
@@ -109,7 +119,7 @@ const OperationDebug: React.FC = () => {
   const [recentOperations, setRecentOperations] = useState<OperationListItem[]>([]);
   const [inspectionItems, setInspectionItems] = useState<InspectionItemDetail[]>([]);
   const [operationDetails, setOperationDetails] = useState<OperationDetail | null>(null);
-  const [operationActivities, setOperationActivities] = useState<OperationActivity[]>([]);  // ✅ 追加
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   
@@ -123,9 +133,6 @@ const OperationDebug: React.FC = () => {
   // API呼び出し
   // =====================================
 
-  /**
-   * 最近の運行一覧取得
-   */
   const fetchRecentOperations = async () => {
     try {
       setIsLoadingRecent(true);
@@ -160,11 +167,12 @@ const OperationDebug: React.FC = () => {
   };
 
   /**
-   * ✅ 運行工程（Activities）を取得
+   * ✅ 統合タイムライン取得（バックエンドの拡張APIを使用）
+   * ✅ 修正: 3層ネスト対応（response.data.data.data）
    */
-  const fetchOperationActivities = async (opId: string) => {
+  const fetchIntegratedTimeline = async (opId: string) => {
     try {
-      console.log('[OperationDebug] Fetching operation activities:', opId);
+      console.log('[OperationDebug] Fetching integrated timeline:', opId);
       
       const response = await apiClient.get('/operation-details', {
         params: {
@@ -174,35 +182,63 @@ const OperationDebug: React.FC = () => {
         }
       });
       
-      console.log('[OperationDebug] Activities response:', response);
+      console.log('[OperationDebug] Timeline response:', response);
       
       if (response.success && response.data) {
-        let activitiesData: OperationActivity[] = [];
-        const data: any = response.data;
+        let eventsData: TimelineEvent[] = [];
+        let operationData: OperationDetail | null = null;
         
-        if (data.data?.data && Array.isArray(data.data.data)) {
-          activitiesData = data.data.data;
-        } else if (data.data && Array.isArray(data.data)) {
-          activitiesData = data.data;
-        } else if (Array.isArray(data)) {
-          activitiesData = data;
+        // ✅ 修正: 3層ネスト対応（response.data.data.data）
+        const outerData: any = response.data;
+        const innerData: any = outerData.data || outerData;
+        
+        // イベントデータ抽出（複数パターン対応）
+        if (innerData.data && Array.isArray(innerData.data)) {
+          // パターン1: response.data.data.data (最も深いネスト)
+          eventsData = innerData.data;
+          console.log('[OperationDebug] ✅ Pattern 1: innerData.data (3-level nesting)');
+        } else if (Array.isArray(innerData)) {
+          // パターン2: response.data.data が配列
+          eventsData = innerData;
+          console.log('[OperationDebug] ✅ Pattern 2: innerData is array');
+        } else if (outerData.data && Array.isArray(outerData.data)) {
+          // パターン3: response.data.data (2-level nesting)
+          eventsData = outerData.data;
+          console.log('[OperationDebug] ✅ Pattern 3: outerData.data');
+        } else if (Array.isArray(outerData)) {
+          // パターン4: response.data が配列
+          eventsData = outerData;
+          console.log('[OperationDebug] ✅ Pattern 4: outerData is array');
         }
         
-        // シーケンス番号でソート
-        activitiesData.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+        // 運行情報抽出（複数パターン対応）
+        if (innerData.operation) {
+          operationData = innerData.operation;
+        } else if (outerData.operation) {
+          operationData = outerData.operation;
+        }
         
-        setOperationActivities(activitiesData);
-        console.log('[OperationDebug] Activities loaded:', activitiesData.length);
+        console.log('[OperationDebug] 📊 Extracted data:', {
+          eventsCount: eventsData.length,
+          eventTypes: eventsData.length > 0 ? Array.from(new Set(eventsData.map(e => e.eventType))) : [],
+          hasOperation: !!operationData
+        });
+        
+        setTimelineEvents(eventsData);
+        if (operationData) {
+          setOperationDetails(operationData);
+        }
+        
+        console.log('[OperationDebug] Timeline loaded:', {
+          eventsCount: eventsData.length,
+          eventTypes: eventsData.length > 0 ? Array.from(new Set(eventsData.map(e => e.eventType))) : []
+        });
       }
     } catch (err) {
-      console.error('[OperationDebug] Error fetching activities:', err);
-      // エラーは致命的ではないので、空配列のまま継続
+      console.error('[OperationDebug] Error fetching timeline:', err);
     }
   };
 
-  /**
-   * 運行履歴詳細取得
-   */
   const fetchOperationDebugInfo = async (opId: string) => {
     if (!opId.trim()) {
       toast.error('運行IDを入力してください');
@@ -213,7 +249,7 @@ const OperationDebug: React.FC = () => {
       setIsLoading(true);
       setInspectionItems([]);
       setOperationDetails(null);
-      setOperationActivities([]);  // ✅ リセット
+      setTimelineEvents([]);
 
       console.log('[OperationDebug] Fetching debug info for:', opId);
 
@@ -235,8 +271,8 @@ const OperationDebug: React.FC = () => {
           setOperationDetails(details);
         }
         
-        // ✅ 運行工程を取得
-        await fetchOperationActivities(opId);
+        // ✅ 統合タイムライン取得
+        await fetchIntegratedTimeline(opId);
         
         toast.success(`デバッグ情報を取得しました（点検項目: ${items.length}件）`);
       } else {
@@ -250,10 +286,6 @@ const OperationDebug: React.FC = () => {
     }
   };
 
-  // =====================================
-  // イベントハンドラ
-  // =====================================
-
   const handleSearch = () => {
     fetchOperationDebugInfo(operationId);
   };
@@ -263,17 +295,13 @@ const OperationDebug: React.FC = () => {
     fetchOperationDebugInfo(opId);
   };
 
-  // =====================================
-  // useEffect
-  // =====================================
-
   useEffect(() => {
     fetchRecentOperations();
   }, []);
 
   // =====================================
-  // レンダリング用ヘルパー（既存のOperationDetailDialogから）
-  // =====================================
+  // レンダリング用ヘルパー
+  // ===================================== 
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { color: string; text: string }> = {
@@ -303,12 +331,15 @@ const OperationDebug: React.FC = () => {
     );
   };
 
+  /**
+   * ✅ 点検種別バッジ（運行前=青、運行後=緑）
+   */
   const getInspectionTypeBadge = (type: string) => {
     const typeConfig: Record<string, { color: string; text: string }> = {
       PRE_OPERATION: { color: 'bg-blue-100 text-blue-800', text: '運行前点検' },
-      POST_OPERATION: { color: 'bg-purple-100 text-purple-800', text: '運行後点検' },
+      POST_OPERATION: { color: 'bg-emerald-100 text-emerald-800', text: '運行後点検' },
       PRE_TRIP: { color: 'bg-blue-100 text-blue-800', text: '運行前点検' },
-      POST_TRIP: { color: 'bg-purple-100 text-purple-800', text: '運行後点検' },
+      POST_TRIP: { color: 'bg-emerald-100 text-emerald-800', text: '運行後点検' },
       PERIODIC: { color: 'bg-yellow-100 text-yellow-800', text: '定期点検' },
     };
 
@@ -322,22 +353,28 @@ const OperationDebug: React.FC = () => {
   };
 
   /**
-   * ✅ 運行工程タイプの情報取得（既存のOperationDetailDialogから）
+   * ✅ イベントタイプの情報取得（全タイプ対応）
    */
-  const getActivityTypeInfo = (activityType: string) => {
-    const typeConfig: Record<string, { label: string; icon: string; className: string }> = {
-      LOADING: { label: '積込開始', icon: '📦', className: 'bg-blue-100 text-blue-800' },
-      UNLOADING: { label: '積込予定・配送', icon: '🚚', className: 'bg-green-100 text-green-800' },
-      TRANSPORTING: { label: '運搬中', icon: '🚛', className: 'bg-purple-100 text-purple-800' },
-      REFUELING: { label: '給油', icon: '⛽', className: 'bg-orange-100 text-orange-800' },
-      BREAK: { label: '休憩', icon: '☕', className: 'bg-yellow-100 text-yellow-800' },
-      BREAK_START: { label: '休憩開始', icon: '🟢', className: 'bg-yellow-100 text-yellow-800' },
-      BREAK_END: { label: '休憩終了', icon: '🔴', className: 'bg-gray-100 text-gray-800' },
-      WAITING: { label: '待機', icon: '⏰', className: 'bg-gray-100 text-gray-800' },
-      MAINTENANCE: { label: 'メンテナンス', icon: '🔧', className: 'bg-red-100 text-red-800' },
+  const getEventTypeInfo = (eventType: string) => {
+    const typeConfig: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
+      TRIP_START: { label: '運行開始', icon: <Play className="w-5 h-5" />, className: 'bg-green-100 text-green-800' },
+      TRIP_END: { label: '運行終了', icon: <Square className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
+      PRE_INSPECTION: { label: '運行前点検', icon: <ClipboardCheck className="w-5 h-5" />, className: 'bg-blue-100 text-blue-800' },
+      POST_INSPECTION: { label: '運行後点検', icon: <ClipboardCheck className="w-5 h-5" />, className: 'bg-emerald-100 text-emerald-800' },
+      LOADING: { label: '積込', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
+      UNLOADING: { label: '積降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
+      REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
+      FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
+      BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-yellow-100 text-yellow-800' },
+      BREAK_START: { label: '休憩開始', icon: <Coffee className="w-5 h-5" />, className: 'bg-yellow-100 text-yellow-800' },
+      BREAK_END: { label: '休憩終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-amber-100 text-amber-800' },
+      WAITING: { label: '待機', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
+      OTHER: { label: 'その他', icon: <MapPin className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
     };
 
-    return typeConfig[activityType] || { label: activityType, icon: '📍', className: 'bg-gray-100 text-gray-800' };
+    return typeConfig[eventType] || { label: eventType, icon: <MapPin className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' };
   };
 
   const formatTime = (dateString: string | null) => {
@@ -347,7 +384,12 @@ const OperationDebug: React.FC = () => {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit'
     });
+  };
+
+  const formatGps = (lat: number, lng: number) => {
+    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   };
 
   // =====================================
@@ -532,14 +574,14 @@ const OperationDebug: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ 運行工程タイムライン（既存のOperationDetailDialogから移植） */}
-      {operationActivities.length > 0 && (
+      {/* ✅ 統合運行タイムライン */}
+      {timelineEvents.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
               <Clock className="w-5 h-5 text-gray-600" />
-              <h2 className="text-lg font-semibold text-gray-900">運行タイムライン</h2>
-              <span className="text-sm text-gray-500">({operationActivities.length}件)</span>
+              <h2 className="text-lg font-semibold text-gray-900">運行タイムライン（統合版）</h2>
+              <span className="text-sm text-gray-500">({timelineEvents.length}件)</span>
             </div>
             <button
               onClick={() => setShowOperationTimeline(!showOperationTimeline)}
@@ -555,66 +597,102 @@ const OperationDebug: React.FC = () => {
 
           {showOperationTimeline && (
             <div className="space-y-3">
-              {operationActivities.map((activity) => {
-                const typeInfo = getActivityTypeInfo(activity.activityType);
+              {timelineEvents.map((event) => {
+                const typeInfo = getEventTypeInfo(event.eventType);
                 return (
                   <div
-                    key={activity.id}
+                    key={event.id}
                     className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start gap-4">
                       {/* シーケンス番号 */}
                       <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                         <span className="text-sm font-semibold text-blue-600">
-                          {activity.sequenceNumber}
+                          {event.sequenceNumber}
                         </span>
                       </div>
 
                       {/* 詳細情報 */}
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded ${typeInfo.className}`}>
-                            {typeInfo.icon} {typeInfo.label}
+                          <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
+                            {typeInfo.icon}
+                            {typeInfo.label}
                           </span>
-                          {activity.actualStartTime && (
-                            <span className="text-sm text-gray-500">
-                              {new Date(activity.actualStartTime).toLocaleTimeString('ja-JP', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                          {event.timestamp && (
+                            <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
+                              {formatTime(event.timestamp)}
                             </span>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="grid grid-cols-1 gap-3 text-sm">
                           {/* 場所情報 */}
-                          {activity.locations && (
+                          {event.location && (
                             <div className="flex items-start gap-2">
                               <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                               <div>
-                                <p className="font-medium">{activity.locations.name}</p>
-                                <p className="text-gray-500 text-xs">{activity.locations.address}</p>
+                                <p className="font-medium text-gray-900">{event.location.name}</p>
+                                <p className="text-gray-500 text-xs">{event.location.address}</p>
+                                <p className="text-gray-400 text-xs">
+                                  GPS: {formatGps(event.location.latitude, event.location.longitude)}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* GPS位置情報（場所IDがない場合） */}
+                          {!event.location && event.gpsLocation && (
+                            <div className="flex items-start gap-2">
+                              <Navigation className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="text-gray-700 font-medium">
+                                  GPS座標: {formatGps(event.gpsLocation.latitude, event.gpsLocation.longitude)}
+                                </p>
+                                <p className="text-gray-400 text-xs">
+                                  記録時刻: {formatTime(event.gpsLocation.recordedAt)}
+                                </p>
                               </div>
                             </div>
                           )}
 
                           {/* 品目情報 */}
-                          {activity.items && (
+                          {event.items && (
                             <div className="flex items-center gap-2">
                               <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <div>
-                                <p className="font-medium">品目: {activity.items.name}</p>
-                                {activity.quantityTons > 0 && (
-                                  <p className="text-gray-500 text-xs">{activity.quantityTons} {activity.items.unit}</p>
+                                <p className="font-medium text-gray-900">品目: {event.items.name}</p>
+                                {event.quantityTons !== undefined && event.quantityTons > 0 && (
+                                  <p className="text-gray-500 text-xs">{event.quantityTons} {event.items.unit}</p>
                                 )}
                               </div>
                             </div>
                           )}
 
+                          {/* 点検詳細 */}
+                          {event.inspectionDetails && (
+                            <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div>
+                                  <span className="text-gray-600">点検項目:</span>
+                                  <span className="ml-1 font-semibold">{event.inspectionDetails.totalItems}件</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">合格:</span>
+                                  <span className="ml-1 font-semibold text-green-600">{event.inspectionDetails.passedItems}件</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">不合格:</span>
+                                  <span className="ml-1 font-semibold text-red-600">{event.inspectionDetails.failedItems}件</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {/* 備考 */}
-                          {activity.notes && (
-                            <div className="col-span-2 text-gray-600">
-                              {activity.notes}
+                          {event.notes && (
+                            <div className="text-gray-600 italic">
+                              {event.notes}
                             </div>
                           )}
                         </div>
@@ -693,7 +771,7 @@ const OperationDebug: React.FC = () => {
             {showRawData && (
               <div className="mt-4 border rounded-lg p-4 bg-gray-50">
                 <pre className="text-xs text-gray-700 overflow-auto max-h-96">
-                  {JSON.stringify({ operation: operationDetails, activities: operationActivities, inspections: inspectionItems }, null, 2)}
+                  {JSON.stringify({ operation: operationDetails, timeline: timelineEvents, inspections: inspectionItems }, null, 2)}
                 </pre>
               </div>
             )}

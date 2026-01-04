@@ -246,22 +246,28 @@ model Notification {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model OperationDetail {
-  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  operationId     String    @map("operation_id") @db.Uuid
-  sequenceNumber  Int       @map("sequence_number")
-  activityType    String    @map("activity_type") @db.VarChar(20)
-  locationId      String?   @map("location_id") @db.Uuid // ✅ オプショナルに変更
-  itemId          String?   @map("item_id") @db.Uuid  // ✅ オプショナルに変更
-  plannedTime     DateTime? @map("planned_time") @db.Timestamptz(6)
-  actualStartTime DateTime? @map("actual_start_time") @db.Timestamptz(6)
-  actualEndTime   DateTime? @map("actual_end_time") @db.Timestamptz(6)
-  quantityTons    Decimal   @map("quantity_tons") @db.Decimal(8, 2)
-  notes           String?
-  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
-  items           Item?     @relation(fields: [itemId], references: [id], onDelete: NoAction, onUpdate: NoAction)  // ✅ オプショナルに変更
-  locations       Location? @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction) // ✅ オプショナルに変更
-  operations      Operation @relation(fields: [operationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  operationId       String    @map("operation_id") @db.Uuid
+  sequenceNumber    Int       @map("sequence_number")
+  activityType      String    @map("activity_type") @db.VarChar(20)
+  locationId        String?   @map("location_id") @db.Uuid
+  itemId            String?   @map("item_id") @db.Uuid
+  plannedTime       DateTime? @map("planned_time") @db.Timestamptz(6)
+  actualStartTime   DateTime? @map("actual_start_time") @db.Timestamptz(6)
+  actualEndTime     DateTime? @map("actual_end_time") @db.Timestamptz(6)
+  quantityTons      Decimal   @map("quantity_tons") @db.Decimal(8, 2)
+  notes             String?
+  // 🆕🆕🆕 GPS位置情報フィールド（必須要件）- すべてのイベントでGPS記録
+  latitude          Decimal?  @db.Decimal(10, 8)
+  longitude         Decimal?  @db.Decimal(11, 8)
+  altitude          Decimal?  @db.Decimal(8, 2)
+  gpsAccuracyMeters Decimal?  @map("gps_accuracy_meters") @db.Decimal(5, 2)
+  gpsRecordedAt     DateTime? @map("gps_recorded_at") @db.Timestamptz(6)
+  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  items             Item?     @relation(fields: [itemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations         Location? @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operations        Operation @relation(fields: [operationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([operationId, sequenceNumber])
   @@index([activityType], map: "idx_operation_details_activity")
@@ -292,9 +298,9 @@ model Operation {
   weatherCondition                String?            @map("weather_condition") @db.VarChar(50)
   roadCondition                   String?            @map("road_condition") @db.VarChar(100)
   startOdometer                   Decimal?           @map("start_odometer") @db.Decimal(8, 2)
-  endOdometer                     Decimal?           @map("end_odometer") @db.Decimal(8, 2)     // 🆕 追加
+  endOdometer                     Decimal?           @map("end_odometer") @db.Decimal(8, 2)
   startFuelLevel                  Decimal?           @map("start_fuel_level") @db.Decimal(8, 2)
-  endFuelLevel                    Decimal?           @map("end_fuel_level") @db.Decimal(8, 2)   // 🆕 追加
+  endFuelLevel                    Decimal?           @map("end_fuel_level") @db.Decimal(8, 2)
   gpsLogs                         GpsLog[]
   inspectionRecords               InspectionRecord[]
   operationDetails                OperationDetail[]
@@ -576,14 +582,18 @@ enum ItemType {
 }
 
 enum ActivityType {
-  LOADING
-  UNLOADING
-  TRANSPORTING
-  WAITING
-  MAINTENANCE
-  REFUELING
-  BREAK
-  OTHER
+  LOADING           // 積込
+  UNLOADING         // 積降
+  TRANSPORTING      // 運搬中
+  WAITING           // 待機
+  MAINTENANCE       // メンテナンス
+  REFUELING         // 給油
+  BREAK             // 休憩
+  OTHER             // その他
+  TRIP_START        // 運行開始
+  TRIP_END          // 運行終了
+  PRE_INSPECTION    // 運行前点検
+  POST_INSPECTION   // 運行後点検
 
   @@map("activity_type")
 }

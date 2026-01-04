@@ -8,8 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { 
   User, Truck, MapPin, Package, Clock,
   Navigation, CheckCircle, AlertCircle, TrendingUp, Edit,
-  // ✅ NEW: タイムライン表示用の追加アイコン
-  Thermometer, Cloud
+  Thermometer, Cloud, Coffee, Fuel, Play, Square, ClipboardCheck
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
@@ -507,11 +506,17 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
    */
   const getActivityTypeInfo = (activityType: string) => {
     const typeConfig = {
-      LOADING: { label: '積込開始', icon: '📦', className: 'bg-blue-100 text-blue-800' },
-      UNLOADING: { label: '積込予定・配送', icon: '🚚', className: 'bg-green-100 text-green-800' },
+      LOADING: { label: '積込', icon: '🚛', className: 'bg-indigo-100 text-indigo-800' },
+      UNLOADING: { label: '積降', icon: '🚛', className: 'bg-purple-100 text-purple-800' },
       FUELING: { label: '給油', icon: '⛽', className: 'bg-orange-100 text-orange-800' },
-      BREAK: { label: '休憩', icon: '☕', className: 'bg-gray-100 text-gray-800' },
-      MAINTENANCE: { label: 'メンテナンス', icon: '🔧', className: 'bg-purple-100 text-purple-800' }
+      BREAK: { label: '休憩', icon: '☕', className: 'bg-yellow-100 text-yellow-800' },
+      BREAK_START: { label: '休憩開始', icon: '☕', className: 'bg-yellow-100 text-yellow-800' },
+      BREAK_END: { label: '休憩終了', icon: '☕', className: 'bg-amber-100 text-amber-800' },
+      MAINTENANCE: { label: 'メンテナンス', icon: '🔧', className: 'bg-red-100 text-red-800' },
+      TRANSPORTING: { label: '運搬中', icon: '🧭', className: 'bg-cyan-100 text-cyan-800' },
+      WAITING: { label: '待機', icon: '🕐', className: 'bg-gray-100 text-gray-800' },
+      TRIP_START: { label: '運行開始', icon: '▶️', className: 'bg-green-100 text-green-800' },
+      TRIP_END: { label: '運行終了', icon: '⏹️', className: 'bg-red-100 text-red-800' }
     };
 
     return typeConfig[activityType as keyof typeof typeConfig] || {
@@ -785,7 +790,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                   ) : (
                     <div className="space-y-3">
                       {getTimelineEvents().map((event) => {
-                        // 運行詳細イベントの場合
+                        // ✅ 運行詳細イベントの場合
                         if (event.type === 'activity') {
                           const activity = event.data as OperationActivity;
                           const typeInfo = getActivityTypeInfo(activity.activityType);
@@ -806,47 +811,57 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 {/* 詳細情報 */}
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <span className={`px-2 py-1 text-xs font-semibold rounded ${typeInfo.className}`}>
-                                      {typeInfo.icon} {typeInfo.label}
+                                    <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
+                                      <span>{typeInfo.icon}</span>
+                                      {typeInfo.label}
                                     </span>
                                     {activity.actualStartTime && (
-                                      <span className="text-sm text-gray-500">
-                                        {new Date(activity.actualStartTime).toLocaleTimeString('ja-JP', {
+                                      <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
+                                        {new Date(activity.actualStartTime).toLocaleString('ja-JP', {
+                                          month: '2-digit',
+                                          day: '2-digit',
                                           hour: '2-digit',
-                                          minute: '2-digit'
+                                          minute: '2-digit',
+                                          second: '2-digit'
                                         })}
                                       </span>
                                     )}
                                   </div>
 
-                                  <div className="grid grid-cols-2 gap-3 text-sm">
+                                  <div className="grid grid-cols-1 gap-3 text-sm">
+                                    {/* 場所情報 */}
                                     {activity.locations && (
                                       <div className="flex items-start gap-2">
                                         <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                                         <div>
-                                          <p className="font-medium">{activity.locations.name}</p>
+                                          <p className="font-medium text-gray-900">{activity.locations.name}</p>
                                           <p className="text-gray-500 text-xs">{activity.locations.address}</p>
+                                          <p className="text-gray-400 text-xs">
+                                            GPS: {activity.locations.latitude.toFixed(6)}, {activity.locations.longitude.toFixed(6)}
+                                          </p>
                                         </div>
                                       </div>
                                     )}
 
+                                    {/* 品目情報 */}
                                     {activity.items && (
                                       <div className="flex items-center gap-2">
                                         <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                         <div>
-                                          <p className="font-medium">{activity.items.name}</p>
-                                          {activity.quantityTons && (
-                                            <p className="text-gray-500 text-xs">
-                                              {activity.quantityTons} {activity.items.unit || 't'}
-                                            </p>
+                                          <p className="font-medium text-gray-900">品目: {activity.items.name}</p>
+                                          {activity.quantityTons !== undefined && activity.quantityTons > 0 && (
+                                            <p className="text-gray-500 text-xs">{activity.quantityTons} {activity.items.unit}</p>
                                           )}
                                         </div>
                                       </div>
                                     )}
                                   </div>
 
+                                  {/* 備考 */}
                                   {activity.notes && (
-                                    <p className="mt-2 text-sm text-gray-600 italic">{activity.notes}</p>
+                                    <div className="text-gray-600 italic mt-2">
+                                      {activity.notes}
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -854,7 +869,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           );
                         }
                         
-                        // ✅ NEW: 点検イベントの場合
+                        // ✅ 点検イベントの場合（次のセクションに続く）
                         else if (event.type === 'inspection') {
                           const inspection = event.data as InspectionRecord;
                           const typeInfo = getInspectionTypeInfo(inspection.inspectionType);
@@ -875,8 +890,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   {/* ヘッダー */}
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                      <span className={`px-2 py-1 text-xs font-semibold rounded ${typeInfo.className}`}>
-                                        {typeInfo.icon} {typeInfo.label}
+                                      <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
+                                        <span>{typeInfo.icon}</span>
+                                        {typeInfo.label}
                                       </span>
                                       {inspection.overallResult && getInspectionResultBadge(inspection.overallResult)}
                                       <span className={`px-2 py-1 text-xs font-semibold rounded ${
@@ -885,13 +901,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         'bg-gray-100 text-gray-800'
                                       }`}>
                                         {inspection.status === 'COMPLETED' ? '完了' :
-                                         inspection.status === 'IN_PROGRESS' ? '実施中' :
-                                         inspection.status === 'PENDING' ? '待機中' : 'キャンセル'}
+                                        inspection.status === 'IN_PROGRESS' ? '実施中' :
+                                        inspection.status === 'PENDING' ? '待機中' : 'キャンセル'}
                                       </span>
                                     </div>
                                   </div>
 
-                                  {/* ✅ NEW: 時刻情報 */}
+                                  {/* 時刻情報 */}
                                   <div className="grid grid-cols-2 gap-3 text-sm mb-2">
                                     {inspection.startedAt && (
                                       <div className="flex items-center gap-2">
@@ -917,7 +933,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     )}
                                   </div>
 
-                                  {/* ✅ NEW: 位置情報 */}
+                                  {/* 位置情報 */}
                                   {(inspection.locationName || (inspection.latitude && inspection.longitude)) && (
                                     <div className="flex items-start gap-2 mb-2">
                                       <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
@@ -934,7 +950,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     </div>
                                   )}
 
-                                  {/* ✅ NEW: 天候・温度情報 */}
+                                  {/* 天候・温度情報 */}
                                   {(inspection.weatherCondition || inspection.temperature) && (
                                     <div className="flex items-center gap-4 mb-2 text-sm">
                                       {inspection.weatherCondition && (
@@ -952,7 +968,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     </div>
                                   )}
 
-                                  {/* ✅ NEW: 不具合数 */}
+                                  {/* 不具合数 */}
                                   {inspection.defectsFound !== undefined && inspection.defectsFound > 0 && (
                                     <div className="flex items-center gap-2 mb-2">
                                       <AlertCircle className="w-4 h-4 text-orange-500" />
@@ -962,14 +978,14 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     </div>
                                   )}
 
-                                  {/* ✅ NEW: 備考 */}
+                                  {/* 備考 */}
                                   {inspection.overallNotes && (
                                     <p className="mt-2 text-sm text-gray-600 italic bg-white bg-opacity-50 p-2 rounded">
                                       {inspection.overallNotes}
                                     </p>
                                   )}
 
-                                  {/* ✅ NEW: 点検項目結果サマリー */}
+                                  {/* 点検項目結果サマリー */}
                                   {inspection.inspectionItemResults && inspection.inspectionItemResults.length > 0 && (
                                     <div className="mt-3 pt-3 border-t border-indigo-200">
                                       <p className="text-xs text-gray-500 mb-2">
