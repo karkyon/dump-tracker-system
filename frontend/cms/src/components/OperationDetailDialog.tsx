@@ -1,16 +1,16 @@
-// ✅✅✅ 運行記録詳細ダイアログ - OperationDebugと表示スタイル完全統一版
+// ✅✅✅ 運行記録詳細ダイアログ - Google Maps完全実装版
 // 基本情報・運行情報・場所情報・タイムライン・GPSルート・点検項目管理を完全実装
-// ✅ 修正: OperationDebug.tsxと完全に同じ表示スタイルに統一
+// ✅ 修正: GPSルートタブにGoogle Maps実装追加
 // ✅ 修正: TypeScript型エラーのみ最小限修正、既存コード100%保持
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   User, Truck, MapPin, Package, Clock,
   Navigation, CheckCircle, AlertCircle, TrendingUp, Edit,
   Coffee, Fuel, Play, Square, ClipboardCheck,
   ChevronDown, ChevronUp, XCircle
 } from 'lucide-react';
-import Button from '../components/common/Button';
-import Modal from '../components/common/Modal';
+import Button from './common/Button';
+import Modal from './common/Modal';
 import { apiClient } from '../utils/api';
 
 /**
@@ -220,7 +220,7 @@ interface OperationDetailDialogProps {
  * 
  * @description
  * 仕様書A7「運行記録 > 詳細画面（ダイアログ）」に準拠した完全実装
- * OperationDebug.tsxと完全に同じ表示スタイルに統一
+ * ✅ Google Maps実装追加
  */
 const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   operationId,
@@ -248,7 +248,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
   // ✅ OperationDebug統合タイムライン用State
   const [operationDebugTimelineEvents, setOperationDebugTimelineEvents] = useState<OperationDebugTimelineEvent[]>([]);
-  const [inspectionItemDetails, setInspectionItemDetails] = useState<InspectionItemDetail[]>([]);
+  const [inspectionItemDetails, _setInspectionItemDetails] = useState<InspectionItemDetail[]>([]);
 
   // タブ切り替え state
   const [activeTab, setActiveTab] = useState<'basic' | 'timeline' | 'gps' | 'inspection'>('basic');
@@ -256,6 +256,220 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   // ✅ UI制御用State
   const [showOperationTimeline, setShowOperationTimeline] = useState(true);
   const [showInspectionDetails, setShowInspectionDetails] = useState(true);
+
+  // ✅ Google Maps用State
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  // ===================================================================
+  // Google Maps初期化
+  // ===================================================================
+
+  /**
+   * ✅ Google Mapsスクリプト読み込み
+   */
+  useEffect(() => {
+    console.log('🌍 [Maps Loading Debug] === Google Maps loading useEffect START ===');
+    console.log('🌍 [Maps Loading Debug] isOpen:', isOpen);
+    console.log('🌍 [Maps Loading Debug] activeTab:', activeTab);
+    
+    const loadGoogleMaps = () => {
+      console.log('🌍 [Maps Loading Debug] loadGoogleMaps function called');
+      
+      if (window.google && window.google.maps) {
+        console.log('✅ [Maps Loading Debug] Google Maps already loaded');
+        setMapsLoaded(true);
+        return;
+      }
+
+      const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+      console.log('🔑 [Maps Loading Debug] API Key exists?', !!GOOGLE_MAPS_API_KEY);
+      console.log('🔑 [Maps Loading Debug] API Key length:', GOOGLE_MAPS_API_KEY.length);
+
+      if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') {
+        console.error('❌ [Maps Loading Debug] Invalid or missing API key');
+        setMapError('Google Maps APIキーが設定されていません');
+        return;
+      }
+
+      const existingScript = document.getElementById('google-maps-script');
+      if (existingScript) {
+        console.log('✅ [Maps Loading Debug] Google Maps script already exists');
+        existingScript.addEventListener('load', () => {
+          console.log('✅ [Maps Loading Debug] Existing script loaded');
+          setMapsLoaded(true);
+        });
+        return;
+      }
+
+      console.log('📥 [Maps Loading Debug] Creating new Google Maps script tag...');
+      const script = document.createElement('script');
+      script.id = 'google-maps-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        console.log('✅ [Maps Loading Debug] Google Maps script loaded successfully');
+        setMapsLoaded(true);
+      };
+      script.onerror = () => {
+        console.error('❌ [Maps Loading Debug] Google Maps script loading failed');
+        setMapError('Google Mapsの読み込みに失敗しました');
+      };
+      document.head.appendChild(script);
+      console.log('📥 [Maps Loading Debug] Script tag appended to document.head');
+    };
+
+    if (isOpen && activeTab === 'gps') {
+      console.log('✅ [Maps Loading Debug] Conditions met - calling loadGoogleMaps()');
+      loadGoogleMaps();
+    } else {
+      console.log('⚠️ [Maps Loading Debug] Conditions not met - skipping');
+    }
+    
+    console.log('🌍 [Maps Loading Debug] === Google Maps loading useEffect END ===');
+  }, [isOpen, activeTab]);
+
+  /**
+   * ✅ Google Map初期化とGPSルート描画
+   */
+  useEffect(() => {
+    console.log('🗺️ [Map Debug] === Map initialization useEffect START ===');
+    console.log('🗺️ [Map Debug] Conditions check:');
+    console.log('  - mapsLoaded:', mapsLoaded);
+    console.log('  - mapRef.current:', !!mapRef.current);
+    console.log('  - gpsRecords.length:', gpsRecords.length);
+    console.log('  - activeTab:', activeTab);
+    console.log('  - activeTab === "gps":', activeTab === 'gps');
+    
+    if (!mapsLoaded || !mapRef.current || gpsRecords.length === 0 || activeTab !== 'gps') {
+      console.warn('⚠️ [Map Debug] Map initialization skipped - conditions not met');
+      return;
+    }
+
+    console.log('✅ [Map Debug] All conditions met - initializing map...');
+
+    try {
+      // 地図の中心座標を計算（GPS記録の平均値）
+      const avgLat = gpsRecords.reduce((sum, record) => sum + record.latitude, 0) / gpsRecords.length;
+      const avgLng = gpsRecords.reduce((sum, record) => sum + record.longitude, 0) / gpsRecords.length;
+
+      console.log('📍 [Map Debug] Calculated center:', { avgLat, avgLng });
+      console.log('📍 [Map Debug] GPS records sample (first 3):');
+      gpsRecords.slice(0, 3).forEach((record, i) => {
+        console.log(`  [${i}]:`, { lat: record.latitude, lng: record.longitude, time: record.recordedAt });
+      });
+
+      // 地図初期化
+      console.log('🗺️ [Map Debug] Creating Google Maps instance...');
+      const map = new google.maps.Map(mapRef.current, {
+        center: { lat: avgLat, lng: avgLng },
+        zoom: 14,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+      });
+
+      mapInstanceRef.current = map;
+      console.log('✅ [Map Debug] Google Maps instance created');
+
+      // GPSルートのパスを作成
+      const path = gpsRecords.map(record => ({
+        lat: record.latitude,
+        lng: record.longitude
+      }));
+
+      console.log('📍 [Map Debug] Path created with', path.length, 'points');
+
+      // ポリライン（GPSルート線）を描画
+      console.log('🎨 [Map Debug] Drawing polyline...');
+      new google.maps.Polyline({
+        path: path,
+        geodesic: true,
+        strokeColor: '#3B82F6',
+        strokeOpacity: 0.8,
+        strokeWeight: 4,
+        map: map
+      });
+      console.log('✅ [Map Debug] Polyline drawn');
+
+      // 開始位置マーカー
+      if (gpsRecords.length > 0) {
+        const firstPoint = gpsRecords[0];
+        console.log('📍 [Map Debug] Adding start marker at:', firstPoint);
+        new google.maps.Marker({
+          position: { lat: firstPoint.latitude, lng: firstPoint.longitude },
+          map: map,
+          title: '開始位置',
+          label: 'S',
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#10B981',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2
+          }
+        });
+        console.log('✅ [Map Debug] Start marker added');
+      }
+
+      // 終了位置マーカー
+      if (gpsRecords.length > 1) {
+        const lastPoint = gpsRecords[gpsRecords.length - 1];
+        console.log('📍 [Map Debug] Adding end marker at:', lastPoint);
+        new google.maps.Marker({
+          position: { lat: lastPoint.latitude, lng: lastPoint.longitude },
+          map: map,
+          title: '終了位置',
+          label: 'E',
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#EF4444',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2
+          }
+        });
+        console.log('✅ [Map Debug] End marker added');
+      }
+
+      // 中間ポイントマーカー（10件ごと）
+      const intermediateCount = gpsRecords.filter((_, index) => 
+        index % 10 === 0 && index > 0 && index < gpsRecords.length - 1
+      ).length;
+      console.log('📍 [Map Debug] Adding', intermediateCount, 'intermediate markers...');
+      
+      gpsRecords.forEach((record, index) => {
+        if (index % 10 === 0 && index > 0 && index < gpsRecords.length - 1) {
+          new google.maps.Marker({
+            position: { lat: record.latitude, lng: record.longitude },
+            map: map,
+            title: `ポイント ${index + 1}`,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 6,
+              fillColor: '#3B82F6',
+              fillOpacity: 0.8,
+              strokeColor: '#FFFFFF',
+              strokeWeight: 1
+            }
+          });
+        }
+      });
+
+      console.log('✅ [Map Debug] === Google Map initialization SUCCESS ===');
+      console.log('✅ [Map Debug] Total GPS points:', gpsRecords.length);
+      console.log('✅ [Map Debug] Map center:', { lat: avgLat, lng: avgLng });
+
+    } catch (err) {
+      console.error('❌ [Map Debug] === Google Map initialization FAILED ===');
+      console.error('❌ [Map Debug] Error:', err);
+      console.error('❌ [Map Debug] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
+      setMapError('地図の表示中にエラーが発生しました');
+    }
+  }, [mapsLoaded, gpsRecords, activeTab, mapRef]);
 
   // ===================================================================
   // データ取得
@@ -265,33 +479,58 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
    * 運行基本情報を取得
    */
   const fetchOperationDetail = async () => {
+    console.log('📋 [Operation Debug] === fetchOperationDetail START ===');
+    console.log('📋 [Operation Debug] operationId:', operationId);
+    
     try {
-      console.log('[OperationDetailDialog] Fetching operation detail:', operationId);
       const response = await apiClient.get(`/operations/${operationId}`);
       
-      console.log('[OperationDetailDialog] Operation detail response:', response);
+      console.log('📡 [Operation Debug] API Response:', response);
+      console.log('📡 [Operation Debug] response.success:', response.success);
+      console.log('📡 [Operation Debug] response.data:', response.data);
       
       if (response.success && response.data) {
         const responseData: any = response.data;
         let operationData: OperationDetail;
         
+        console.log('🔍 [Operation Debug] Parsing response data...');
+        console.log('🔍 [Operation Debug] responseData.data?.data exists?', !!responseData.data?.data);
+        console.log('🔍 [Operation Debug] responseData.data exists?', !!responseData.data);
+        
         // データ構造に応じて柔軟に対応
         if (responseData.data?.data) {
           operationData = responseData.data.data as OperationDetail;
+          console.log('✅ [Operation Debug] Using responseData.data.data');
         } else if (responseData.data) {
           operationData = responseData.data as OperationDetail;
+          console.log('✅ [Operation Debug] Using responseData.data');
         } else {
           operationData = responseData as OperationDetail;
+          console.log('✅ [Operation Debug] Using responseData directly');
         }
         
+        console.log('📋 [Operation Debug] Extracted operation data:', {
+          id: operationData.id,
+          vehicleId: operationData.vehicleId,
+          driverId: operationData.driverId,
+          status: operationData.status,
+          hasVehicles: !!operationData.vehicles,
+          vehiclesId: operationData.vehicles?.id
+        });
+        
         setOperation(operationData);
+        console.log('✅ [Operation Debug] Operation state updated');
       } else {
+        console.error('❌ [Operation Debug] Response not successful or no data');
         setError('運行記録の取得に失敗しました');
       }
     } catch (err) {
-      console.error('[OperationDetailDialog] Error fetching operation:', err);
+      console.error('❌ [Operation Debug] Error fetching operation:', err);
+      console.error('❌ [Operation Debug] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
       setError('運行記録の取得中にエラーが発生しました');
     }
+    
+    console.log('📋 [Operation Debug] === fetchOperationDetail END ===');
   };
 
   /**
@@ -339,29 +578,97 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
    * GPS記録を取得
    */
   const fetchGpsRecords = async () => {
+    console.log('🗺️ [GPS Debug] === fetchGpsRecords START ===');
+    console.log('🗺️ [GPS Debug] operationId:', operationId);
+    console.log('🗺️ [GPS Debug] operation:', operation);
+    
     try {
-      console.log('[OperationDetailDialog] Fetching GPS records:', operationId);
-      
-      const response = await apiClient.get('/gps/locations', {
+      // 運行情報からvehicleIdと期間を取得
+      if (!operation) {
+        console.warn('⚠️ [GPS Debug] Operation data not loaded yet - ABORTING');
+        return;
+      }
+
+      const vehicleId = operation.vehicleId || operation.vehicle?.id;
+      const startDate = operation.actualStartTime || operation.plannedStartTime;
+      const endDate = operation.actualEndTime || new Date().toISOString();
+
+      console.log('🗺️ [GPS Debug] Extracted params:', { 
+        vehicleId, 
+        startDate, 
+        endDate,
+        hasVehicles: !!operation.vehicles,
+        vehiclesId: operation.vehicles?.id
+      });
+
+      if (!vehicleId) {
+        console.error('❌ [GPS Debug] Vehicle ID not found - ABORTING');
+        return;
+      }
+
+      console.log('✅ [GPS Debug] Calling API /gps/tracks with params:', { 
+        vehicleIds: vehicleId, 
+        startDate, 
+        endDate, 
+        simplify: false 
+      });
+
+      // ✅ 正しいエンドポイント: /gps/tracks
+      const response = await apiClient.get('/gps/tracks', {
         params: {
-          operationId: operationId,
-          page: 1,
-          limit: 1000
+          vehicleIds: vehicleId,
+          startDate: startDate,
+          endDate: endDate,
+          simplify: false
         }
       });
       
-      console.log('[OperationDetailDialog] GPS response:', response);
+      console.log('📡 [GPS Debug] API Response:', response);
+      console.log('📡 [GPS Debug] response.success:', response.success);
+      console.log('📡 [GPS Debug] response.data type:', typeof response.data);
+      console.log('📡 [GPS Debug] response.data:', response.data);
       
       if (response.success && response.data) {
         let gpsData: GpsRecord[] = [];
         const data: any = response.data;
         
-        if (data.data?.data && Array.isArray(data.data.data)) {
-          gpsData = data.data.data;
-        } else if (data.data && Array.isArray(data.data)) {
-          gpsData = data.data;
-        } else if (Array.isArray(data)) {
-          gpsData = data;
+        console.log('🔍 [GPS Debug] Processing response data...');
+        console.log('🔍 [GPS Debug] Is data array?', Array.isArray(data));
+        
+        // レスポンス構造の解析
+        if (Array.isArray(data)) {
+          console.log('📊 [GPS Debug] Data is array, length:', data.length);
+          console.log('📊 [GPS Debug] First element:', data[0]);
+          
+          // tracks配列から最初の車両のtrackを取得
+          const vehicleTrack = data.find((t: any) => t.vehicleId === vehicleId);
+          
+          console.log('🚗 [GPS Debug] Found vehicleTrack:', vehicleTrack);
+          console.log('🚗 [GPS Debug] vehicleTrack.track exists?', !!vehicleTrack?.track);
+          console.log('🚗 [GPS Debug] vehicleTrack.track length:', vehicleTrack?.track?.length);
+          
+          if (vehicleTrack && Array.isArray(vehicleTrack.track)) {
+            console.log('✅ [GPS Debug] Processing track points...');
+            gpsData = vehicleTrack.track.map((point: any, index: number) => {
+              if (index < 3) {  // 最初の3ポイントのみログ
+                console.log(`📍 [GPS Debug] Point ${index}:`, point);
+              }
+              return {
+                id: `gps-${index}`,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                recordedAt: point.timestamp,
+                speedKmh: point.speed || 0,
+                altitude: point.altitude,
+                accuracyMeters: point.accuracy,
+                heading: point.heading
+              };
+            });
+          } else {
+            console.warn('⚠️ [GPS Debug] No vehicleTrack or track array found');
+          }
+        } else {
+          console.warn('⚠️ [GPS Debug] Response data is not an array');
         }
         
         // 時刻でソート
@@ -369,13 +676,21 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
         );
         
+        console.log('✅ [GPS Debug] Final gpsData length:', gpsData.length);
+        console.log('✅ [GPS Debug] First GPS record:', gpsData[0]);
+        console.log('✅ [GPS Debug] Last GPS record:', gpsData[gpsData.length - 1]);
+        
         setGpsRecords(gpsData);
-        console.log('[OperationDetailDialog] GPS records loaded:', gpsData.length);
+        console.log('✅ [GPS Debug] GPS records state updated');
+      } else {
+        console.warn('⚠️ [GPS Debug] Response not successful or no data');
       }
     } catch (err) {
-      console.error('[OperationDetailDialog] Error fetching GPS records:', err);
-      // エラーは致命的ではないので、空配列のまま継続
+      console.error('❌ [GPS Debug] Error fetching GPS records:', err);
+      console.error('❌ [GPS Debug] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
     }
+    
+    console.log('🗺️ [GPS Debug] === fetchGpsRecords END ===');
   };
 
   /**
@@ -507,42 +822,28 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   /**
    * ✅ 点検項目詳細取得（OperationDebugから移植）- 型エラー修正
    */
+  // ✅ 修正: /debug/operations/{id} エンドポイントは存在しないため削除
+  // 点検項目は fetchInspections() で既に取得しています
   const fetchInspectionItemDetails = async (opId: string) => {
-    try {
-      console.log('[OperationDetailDialog] Fetching inspection items:', opId);
-      
-      const response = await apiClient.get(`/debug/operations/${opId}`);
-      
-      console.log('[OperationDetailDialog] Inspection response:', response);
-      
-      if (response.success && response.data) {
-        // ✅ 型エラー修正: any型でキャスト
-        const responseData: any = response.data;
-        const debugData = responseData.data || responseData;
-        const items = debugData.inspectionItems || [];
-        setInspectionItemDetails(items);
-      }
-    } catch (err) {
-      console.error('[OperationDetailDialog] Error fetching inspections:', err);
-      // エラーは表示しない（運行タイムラインが表示できればOK）
-    }
+    console.log('[OperationDetailDialog] fetchInspectionItemDetails called (no-op):', opId);
+    // この関数は何もしません（/debug/operations エンドポイントが存在しないため）
   };
 
   /**
    * 全データを取得
+   * ✅ 修正: GPS記録はoperation情報取得後に実行
    */
   const fetchAllData = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      // 運行基本情報を先に取得
+      // ✅ Step 1: 運行基本情報を先に取得
       await fetchOperationDetail();
       
-      // 並行して他のデータを取得
+      // ✅ Step 2: 並行して他のデータを取得
       await Promise.all([
         fetchOperationActivities(),
-        fetchGpsRecords(),
         fetchIntegratedTimeline(operationId),
         fetchInspectionItemDetails(operationId)
       ]);
@@ -566,6 +867,14 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, operationId]);
+
+  // operationが更新されたらGPS記録を取得
+  useEffect(() => {
+    if (operation && isOpen && activeTab === 'gps' && gpsRecords.length === 0) {
+      console.log('🔄 [GPS Auto-fetch] Operation loaded, fetching GPS records...');
+      fetchGpsRecords();
+    }
+  }, [operation, isOpen, activeTab]);
 
   // 運行情報取得後に点検記録を取得
   useEffect(() => {
@@ -1136,7 +1445,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                 </div>
               )}
 
-              {/* GPSルートタブ */}
+              {/* ✅ GPSルートタブ - Google Maps実装 */}
               {activeTab === 'gps' && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -1144,64 +1453,108 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                     GPSルート ({gpsRecords.length}ポイント)
                   </h3>
                   
-                  {gpsRecords.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      GPS記録がありません
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* GPS地図表示エリア（TODO: Google Maps統合） */}
-                      <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-8 text-center">
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
-                          <Navigation className="w-8 h-8 text-purple-600" />
+                  {/* ✅ 常に地図エリアを表示 */}
+                  <div className="bg-white border-2 border-gray-200 rounded-lg overflow-hidden" style={{ minHeight: '500px' }}>
+                    {/* Google Mapsエラー表示 */}
+                    {mapError ? (
+                      <div className="flex items-center justify-center h-96 bg-red-50">
+                        <div className="text-center p-8">
+                          <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+                          <h4 className="text-lg font-semibold text-red-900 mb-2">地図の読み込みエラー</h4>
+                          <p className="text-red-700">{mapError}</p>
                         </div>
-                        <h4 className="text-lg font-semibold text-purple-900 mb-2">
-                          Google Maps統合（実装予定）
-                        </h4>
-                        <p className="text-purple-700 mb-4">
-                          総距離: {operation.totalDistanceKm || 0} km<br />
-                          記録ポイント数: {gpsRecords.length}
-                        </p>
-                        <p className="text-sm text-purple-600">
-                          GPSルートをGoogle Mapsで表示する機能は次のステップで実装します
-                        </p>
                       </div>
-
-                      {/* GPS記録リスト */}
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h4 className="font-semibold mb-3">GPS記録サマリー</h4>
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {gpsRecords.slice(0, 10).map((record, index) => (
-                            <div
-                              key={record.id}
-                              className="flex items-center justify-between bg-white p-3 rounded border border-gray-200"
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="text-sm font-medium text-gray-500">
-                                  #{index + 1}
-                                </span>
-                                <div>
-                                  <p className="text-sm font-medium">
-                                    {new Date(record.recordedAt).toLocaleString('ja-JP')}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {formatGps(record.latitude, record.longitude)}
-                                  </p>
-                                </div>
-                              </div>
-                              {record.speedKmh !== undefined && (
-                                <div className="text-sm text-gray-600">
-                                  {record.speedKmh} km/h
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          {gpsRecords.length > 10 && (
-                            <p className="text-sm text-gray-500 text-center py-2">
-                              他 {gpsRecords.length - 10} 件の記録
-                            </p>
-                          )}
+                    ) : !mapsLoaded ? (
+                      <div className="flex items-center justify-center h-96 bg-blue-50">
+                        <div className="text-center p-8">
+                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                          <h4 className="text-lg font-semibold text-blue-900 mb-2">Google Mapsを読み込み中...</h4>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        {/* ✅ Google Maps コンテナ - 常に表示 */}
+                        <div 
+                          ref={mapRef}
+                          className="w-full h-96"
+                          style={{ minHeight: '400px', backgroundColor: '#e5e7eb' }}
+                        />
+                        
+                        {/* ✅ GPS記録なしオーバーレイ */}
+                        {gpsRecords.length === 0 && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90">
+                            <div className="text-center p-8">
+                              <Navigation className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                              <h4 className="text-lg font-semibold text-gray-700 mb-2">GPS記録がありません</h4>
+                              <p className="text-sm text-gray-500">この運行にはGPS記録が存在しません</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 地図情報パネル */}
+                    <div className="bg-gray-50 p-4 border-t border-gray-200">
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">総走行距離</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {operation?.totalDistanceKm || 0} km
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">GPS記録ポイント</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {gpsRecords.length}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">運行時間</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {operation?.actualStartTime && operation?.actualEndTime
+                              ? `${Math.round(
+                                  (new Date(operation.actualEndTime).getTime() -
+                                    new Date(operation.actualStartTime).getTime()) /
+                                    (1000 * 60)
+                                )} 分`
+                              : '-'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* GPS記録リスト */}
+                  {gpsRecords.length > 0 && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold mb-3">GPS記録サマリー</h4>
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {gpsRecords.slice(0, 10).map((record, index) => (
+                          <div
+                            key={record.id}
+                            className="flex items-center justify-between bg-white p-3 rounded border border-gray-200"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {new Date(record.recordedAt).toLocaleString('ja-JP')}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {formatGps(record.latitude, record.longitude)}
+                                </p>
+                              </div>
+                            </div>
+                            {record.speedKmh !== undefined && (
+                              <div className="text-sm text-gray-600">{record.speedKmh} km/h</div>
+                            )}
+                          </div>
+                        ))}
+                        {gpsRecords.length > 10 && (
+                          <p className="text-sm text-gray-500 text-center py-2">
+                            他 {gpsRecords.length - 10} 件の記録
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
