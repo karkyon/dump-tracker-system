@@ -589,7 +589,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         return;
       }
 
-      const vehicleId = operation.vehicleId || operation.vehicle?.id;
+      const vehicleId = operation.vehicleId || operation.vehicles?.id;
       const startDate = operation.actualStartTime || operation.plannedStartTime;
       const endDate = operation.actualEndTime || new Date().toISOString();
 
