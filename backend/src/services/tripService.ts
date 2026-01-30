@@ -67,7 +67,12 @@ import type {
   TripStatus,
   TripWithDetails,
   UpdateTripRequest,
-  VehicleOperationStatus
+  VehicleOperationStatus,
+  // 🆕 新規追加: 積降開始・完了型定義
+  StartLoadingRequest,
+  CompleteLoadingRequest,
+  StartUnloadingRequest,
+  CompleteUnloadingRequest
 } from '../types/trip';
 
 import type { UserRole } from '../types';
@@ -967,6 +972,353 @@ class TripService {
 
     } catch (error) {
       logger.error('作業追加エラー', { error, tripId, activityData });
+      throw error;
+    }
+  }
+
+
+  // =====================================
+  // 🆕🆕🆕 積降開始・完了メソッド（2025年1月29日追加）
+  // =====================================
+
+  /**
+   * 🆕 積込開始
+   * 積込場所への到着を記録し、積込作業を開始
+   *
+   * @param tripId - 運行ID
+   * @param data - 積込開始データ（locationId, GPS座標など）
+   * @returns 作成されたoperation_detailレコード
+   */
+  async startLoading(
+    tripId: string,
+    data: StartLoadingRequest
+  ): Promise<ApiResponse<OperationDetailResponseDTO>> {
+    try {
+      logger.info('🚛 [startLoading] 積込開始処理開始', { tripId, data });
+
+      // 運行の存在確認
+      const operation = await this.operationService.findByKey(tripId);
+      if (!operation) {
+        throw new NotFoundError('運行が見つかりません');
+      }
+
+      if (operation.status !== 'IN_PROGRESS') {
+        throw new ConflictError('進行中の運行ではありません');
+      }
+
+      // 次のsequenceNumber取得
+      const existingDetails = await this.operationDetailService.findMany({
+        where: { operationId: tripId },
+        orderBy: { sequenceNumber: 'desc' },
+        take: 1
+      });
+
+      const maxSequenceNumber = existingDetails?.[0]?.sequenceNumber ?? 0;
+      const nextSequenceNumber = maxSequenceNumber + 1;
+
+      logger.info('🚛 [startLoading] sequenceNumber計算完了', {
+        maxSequenceNumber,
+        nextSequenceNumber
+      });
+
+      // operation_detail作成（actualEndTime は null）
+      const detailData: OperationDetailCreateDTO = {
+        operationId: tripId,
+        locationId: data.locationId,
+        itemId: undefined,  // 積込開始時点では品目未確定
+        sequenceNumber: nextSequenceNumber,
+        activityType: 'LOADING' as ActivityType,
+        actualStartTime: data.startTime || new Date(),
+        actualEndTime: undefined,  // 🔥 重要: 開始時は null
+        quantityTons: 0,  // 積込開始時点では数量0
+        notes: data.notes || '積込開始'
+      };
+
+      logger.info('🚛 [startLoading] operation_detail作成開始', { detailData });
+
+      const detail = await this.operationDetailService.create(detailData);
+
+      logger.info('🚛✅ [startLoading] 積込開始完了', {
+        tripId,
+        detailId: detail.id,
+        sequenceNumber: nextSequenceNumber
+      });
+
+      // GPS記録（オプション）
+      if (data.latitude && data.longitude) {
+        logger.info('🚛 [startLoading] GPS記録開始', {
+          latitude: data.latitude,
+          longitude: data.longitude
+        });
+
+        await this.recordGpsLocation(tripId, {
+          latitude: new Decimal(data.latitude),
+          longitude: new Decimal(data.longitude),
+          altitude: 0,
+          speedKmh: 0,
+          heading: 0,
+          accuracyMeters: data.accuracy ? new Decimal(data.accuracy) : new Decimal(10),
+          recordedAt: data.startTime || new Date()
+        } as any);
+
+        logger.info('🚛✅ [startLoading] GPS記録完了');
+      }
+
+      return {
+        success: true,
+        data: detail,
+        message: '積込を開始しました'
+      };
+
+    } catch (error) {
+      logger.error('🚛❌ [startLoading] エラー発生', { error, tripId, data });
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 積込完了
+   * 積込作業を完了し、品目と数量を記録
+   *
+   * @param tripId - 運行ID
+   * @param data - 積込完了データ（itemId, quantity など）
+   * @returns 更新されたoperation_detailレコード
+   */
+  async completeLoading(
+    tripId: string,
+    data: CompleteLoadingRequest
+  ): Promise<ApiResponse<OperationDetailResponseDTO>> {
+    try {
+      logger.info('🚛 [completeLoading] 積込完了処理開始', { tripId, data });
+
+      // 運行の存在確認
+      const operation = await this.operationService.findByKey(tripId);
+      if (!operation) {
+        throw new NotFoundError('運行が見つかりません');
+      }
+
+      // 最新の積込開始レコードを取得（actualEndTime が null のもの）
+      const existingDetails = await this.operationDetailService.findMany({
+        where: {
+          operationId: tripId,
+          activityType: 'LOADING',
+          actualEndTime: null
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      });
+
+      if (!existingDetails || existingDetails.length === 0) {
+        throw new NotFoundError('先に積込を開始してください', 'operation_detail');
+      }
+
+      const loadingDetail = existingDetails[0];
+      if (!loadingDetail) {
+        throw new NotFoundError('積込開始レコードが見つかりません');
+      }
+
+      logger.info('🚛 [completeLoading] 積込開始レコード取得完了', {
+        detailId: loadingDetail.id,
+        sequenceNumber: loadingDetail.sequenceNumber
+      });
+
+      // operation_detail更新（actualEndTime, itemId, quantityTons を設定）
+      const updatedDetail = await this.operationDetailService.update(
+        { id: loadingDetail.id },
+        {
+          actualEndTime: data.endTime || new Date(),
+          itemId: data.itemId || undefined,
+          quantityTons: data.quantity !== undefined ? data.quantity : loadingDetail.quantityTons,
+          notes: data.notes || loadingDetail.notes
+        }
+      );
+
+      logger.info('🚛✅ [completeLoading] 積込完了', {
+        tripId,
+        detailId: updatedDetail.id,
+        itemId: updatedDetail.itemId,
+        quantityTons: updatedDetail.quantityTons
+      });
+
+      return {
+        success: true,
+        data: updatedDetail,
+        message: '積込が完了しました'
+      };
+
+    } catch (error) {
+      logger.error('🚛❌ [completeLoading] エラー発生', { error, tripId, data });
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 積降開始
+   * 積降場所への到着を記録し、積降作業を開始
+   *
+   * @param tripId - 運行ID
+   * @param data - 積降開始データ（locationId, GPS座標など）
+   * @returns 作成されたoperation_detailレコード
+   */
+  async startUnloading(
+    tripId: string,
+    data: StartUnloadingRequest
+  ): Promise<ApiResponse<OperationDetailResponseDTO>> {
+    try {
+      logger.info('📦 [startUnloading] 積降開始処理開始', { tripId, data });
+
+      // 運行の存在確認
+      const operation = await this.operationService.findByKey(tripId);
+      if (!operation) {
+        throw new NotFoundError('運行が見つかりません');
+      }
+
+      if (operation.status !== 'IN_PROGRESS') {
+        throw new ConflictError('進行中の運行ではありません');
+      }
+
+      // 次のsequenceNumber取得
+      const existingDetails = await this.operationDetailService.findMany({
+        where: { operationId: tripId },
+        orderBy: { sequenceNumber: 'desc' },
+        take: 1
+      });
+
+      const maxSequenceNumber = existingDetails?.[0]?.sequenceNumber ?? 0;
+      const nextSequenceNumber = maxSequenceNumber + 1;
+
+      logger.info('📦 [startUnloading] sequenceNumber計算完了', {
+        maxSequenceNumber,
+        nextSequenceNumber
+      });
+
+      // operation_detail作成（actualEndTime は null）
+      const detailData: OperationDetailCreateDTO = {
+        operationId: tripId,
+        locationId: data.locationId,
+        itemId: undefined,  // 積降開始時点では品目未確定
+        sequenceNumber: nextSequenceNumber,
+        activityType: 'UNLOADING' as ActivityType,
+        actualStartTime: data.startTime || new Date(),
+        actualEndTime: undefined,  // 🔥 重要: 開始時は null
+        quantityTons: 0,  // 積降開始時点では数量0
+        notes: data.notes || '積降開始'
+      };
+
+      logger.info('📦 [startUnloading] operation_detail作成開始', { detailData });
+
+      const detail = await this.operationDetailService.create(detailData);
+
+      logger.info('📦✅ [startUnloading] 積降開始完了', {
+        tripId,
+        detailId: detail.id,
+        sequenceNumber: nextSequenceNumber
+      });
+
+      // GPS記録（オプション）
+      if (data.latitude && data.longitude) {
+        logger.info('📦 [startUnloading] GPS記録開始', {
+          latitude: data.latitude,
+          longitude: data.longitude
+        });
+
+        await this.recordGpsLocation(tripId, {
+          latitude: new Decimal(data.latitude),
+          longitude: new Decimal(data.longitude),
+          altitude: 0,
+          speedKmh: 0,
+          heading: 0,
+          accuracyMeters: data.accuracy ? new Decimal(data.accuracy) : new Decimal(10),
+          recordedAt: data.startTime || new Date()
+        } as any);
+
+        logger.info('📦✅ [startUnloading] GPS記録完了');
+      }
+
+      return {
+        success: true,
+        data: detail,
+        message: '積降を開始しました'
+      };
+
+    } catch (error) {
+      logger.error('📦❌ [startUnloading] エラー発生', { error, tripId, data });
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 積降完了
+   * 積降作業を完了し、品目と数量を記録
+   *
+   * @param tripId - 運行ID
+   * @param data - 積降完了データ（itemId, quantity など）
+   * @returns 更新されたoperation_detailレコード
+   */
+  async completeUnloading(
+    tripId: string,
+    data: CompleteUnloadingRequest
+  ): Promise<ApiResponse<OperationDetailResponseDTO>> {
+    try {
+      logger.info('📦 [completeUnloading] 積降完了処理開始', { tripId, data });
+
+      // 運行の存在確認
+      const operation = await this.operationService.findByKey(tripId);
+      if (!operation) {
+        throw new NotFoundError('運行が見つかりません');
+      }
+
+      // 最新の積降開始レコードを取得（actualEndTime が null のもの）
+      const existingDetails = await this.operationDetailService.findMany({
+        where: {
+          operationId: tripId,
+          activityType: 'UNLOADING',
+          actualEndTime: null
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      });
+
+      if (!existingDetails || existingDetails.length === 0) {
+        throw new NotFoundError('先に積降を開始してください', 'operation_detail');
+      }
+
+      const unloadingDetail = existingDetails[0];
+      if (!unloadingDetail) {
+        throw new NotFoundError('積降開始レコードが見つかりません');
+      }
+
+      logger.info('📦 [completeUnloading] 積降開始レコード取得完了', {
+        detailId: unloadingDetail.id,
+        sequenceNumber: unloadingDetail.sequenceNumber
+      });
+
+      // operation_detail更新（actualEndTime, itemId, quantityTons を設定）
+      const updatedDetail = await this.operationDetailService.update(
+        { id: unloadingDetail.id },
+        {
+          actualEndTime: data.endTime || new Date(),
+          itemId: data.itemId || undefined,
+          quantityTons: data.quantity !== undefined ? data.quantity : unloadingDetail.quantityTons,
+          notes: data.notes || unloadingDetail.notes
+        }
+      );
+
+      logger.info('📦✅ [completeUnloading] 積降完了', {
+        tripId,
+        detailId: updatedDetail.id,
+        itemId: updatedDetail.itemId,
+        quantityTons: updatedDetail.quantityTons
+      });
+
+      return {
+        success: true,
+        data: updatedDetail,
+        message: '積降が完了しました'
+      };
+
+    } catch (error) {
+      logger.error('📦❌ [completeUnloading] エラー発生', { error, tripId, data });
       throw error;
     }
   }

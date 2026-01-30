@@ -28,10 +28,15 @@ import { NextFunction, Request, RequestHandler, Response, Router } from 'express
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateId, validatePaginationQuery } from '../middleware/validation';
 import logger from '../utils/logger';
+import { asyncHandler } from '../utils/asyncHandler';
 
 // 🎯 完成済みcontrollers層との密連携
 import { UserRole } from '@prisma/client';
 import { getMobileController } from '../controllers/mobileController';
+import { getTripController } from '../controllers/tripController';
+
+// 🎯 型定義インポート
+import type { AuthenticatedRequest } from '../types/auth';
 
 // =====================================
 // ルーター初期化
@@ -748,6 +753,286 @@ router.post('/operations/nearby-locations',
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.getNearbyLocations
 );
+// =====================================
+// mobileRoutes.ts への追加コード
+// 既存のルート定義の後に追加してください
+// 🆕 モバイル専用: 積込・積降の開始/完了エンドポイント
+// 既存エンドポイントは100%保持
+// =====================================
+
+/**
+ * @swagger
+ * /mobile/trips/{id}/loading/start:
+ *   post:
+ *     summary: 🆕 モバイル: 積込開始
+ *     description: |
+ *       モバイルアプリから積込場所への到着を記録し、積込作業を開始します。
+ *
+ *       **モバイル専用機能:**
+ *       - 自動GPS座標取得
+ *       - オフライン対応（後で同期）
+ *       - シンプルなレスポンス形式
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - locationId
+ *             properties:
+ *               locationId:
+ *                 type: string
+ *                 description: 積込場所ID
+ *               latitude:
+ *                 type: number
+ *                 description: 緯度
+ *               longitude:
+ *                 type: number
+ *                 description: 経度
+ *               accuracy:
+ *                 type: number
+ *                 description: GPS精度
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       201:
+ *         description: 積込開始成功
+ */
+router.post('/trips/:id/loading/start',
+  logRequest('POST /mobile/trips/:id/loading/start'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  validateId,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const startData = req.body;
+
+    logger.info('📱 モバイル: 積込開始', { tripId: id, userId: req.user?.userId });
+
+    // getTripController() を使用
+    const tripController = getTripController();
+
+    // 既存のハンドラーを呼び出し
+    await tripController.startLoadingHandler(req, res);
+  })
+);
+
+/**
+ * @swagger
+ * /mobile/trips/{id}/loading/complete:
+ *   post:
+ *     summary: 🆕 モバイル: 積込完了
+ *     description: |
+ *       モバイルアプリから積込作業を完了します。
+ *
+ *       **モバイル専用機能:**
+ *       - 品目選択UI対応
+ *       - 数量入力サポート
+ *       - オフライン対応
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               itemId:
+ *                 type: string
+ *                 description: 品目ID
+ *               quantity:
+ *                 type: number
+ *                 description: 積載量
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       200:
+ *         description: 積込完了成功
+ */
+router.post('/trips/:id/loading/complete',
+  logRequest('POST /mobile/trips/:id/loading/complete'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  validateId,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const completeData = req.body;
+
+    logger.info('📱 モバイル: 積込完了', { tripId: id, userId: req.user?.userId });
+
+    // getTripController() を使用
+    const tripController = getTripController();
+
+    // 既存のハンドラーを呼び出し
+    await tripController.completeLoadingHandler(req, res);
+  })
+);
+
+/**
+ * @swagger
+ * /mobile/trips/{id}/unloading/start:
+ *   post:
+ *     summary: 🆕 モバイル: 積降開始
+ *     description: |
+ *       モバイルアプリから積降場所への到着を記録し、積降作業を開始します。
+ *
+ *       **モバイル専用機能:**
+ *       - 自動GPS座標取得
+ *       - 運行時間一時停止
+ *       - オフライン対応
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - locationId
+ *             properties:
+ *               locationId:
+ *                 type: string
+ *                 description: 積降場所ID
+ *               latitude:
+ *                 type: number
+ *                 description: 緯度
+ *               longitude:
+ *                 type: number
+ *                 description: 経度
+ *               accuracy:
+ *                 type: number
+ *                 description: GPS精度
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       201:
+ *         description: 積降開始成功
+ */
+router.post('/trips/:id/unloading/start',
+  logRequest('POST /mobile/trips/:id/unloading/start'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  validateId,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const startData = req.body;
+
+    logger.info('📱 モバイル: 積降開始', { tripId: id, userId: req.user?.userId });
+
+    // getTripController() を使用
+    const tripController = getTripController();
+
+    // 既存のハンドラーを呼び出し
+    await tripController.startUnloadingHandler(req, res);
+  })
+);
+
+/**
+ * @swagger
+ * /mobile/trips/{id}/unloading/complete:
+ *   post:
+ *     summary: 🆕 モバイル: 積降完了
+ *     description: |
+ *       モバイルアプリから積降作業を完了します。
+ *
+ *       **モバイル専用機能:**
+ *       - 品目選択UI対応
+ *       - 数量入力サポート
+ *       - 運行時間再開
+ *       - 次の積込場所へ自動遷移
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               itemId:
+ *                 type: string
+ *                 description: 品目ID
+ *               quantity:
+ *                 type: number
+ *                 description: 積載量
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       200:
+ *         description: 積降完了成功
+ */
+router.post('/trips/:id/unloading/complete',
+  logRequest('POST /mobile/trips/:id/unloading/complete'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  validateId,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const completeData = req.body;
+
+    logger.info('📱 モバイル: 積降完了', { tripId: id, userId: req.user?.userId });
+
+    // getTripController() を使用
+    const tripController = getTripController();
+
+    // 既存のハンドラーを呼び出し
+    await tripController.completeUnloadingHandler(req, res);
+  })
+);
+
+logger.info('✅ Mobile TripRoutes 新規エンドポイント追加完了', {
+  newEndpoints: [
+    'POST /mobile/trips/:id/loading/start',
+    'POST /mobile/trips/:id/loading/complete',
+    'POST /mobile/trips/:id/unloading/start',
+    'POST /mobile/trips/:id/unloading/complete'
+  ]
+});
 
 // =====================================
 // 📍 モバイルGPS・位置管理エンドポイント

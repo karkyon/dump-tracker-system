@@ -5,6 +5,7 @@
 // 作成日時: Tue Sep 16 10:05:28 AM JST 2025
 // 最終更新: Mon Oct 13 14:30:00 JST 2025 - 重複export修正・VehicleStatus enum修正
 // 🆕 D5/D6機能追加: 2025年12月2日 - AddActivityRequest型にGPS座標フィールド追加
+// 🆕🆕🆕 積降開始・完了機能追加: 2025年1月29日 - Start/Complete型定義追加
 // アーキテクチャ指針準拠版 - Phase 1-A対応
 // =====================================
 
@@ -314,6 +315,80 @@ export interface GPSHistoryResponse {
     maxSpeed: number;
     duration: number;
   };
+}
+
+// =====================================
+// 🆕🆕🆕 積降開始・完了型定義（2025年1月29日追加）
+// =====================================
+
+/**
+ * 積込開始リクエスト
+ * POST /trips/:id/loading/start
+ *
+ * 処理内容:
+ * - 積込場所への到着を記録
+ * - actualStartTime を設定
+ * - locationId, GPS座標を記録
+ * - actualEndTime は null のまま（完了時に設定）
+ */
+export interface StartLoadingRequest {
+  locationId: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  startTime?: Date;
+  notes?: string;
+}
+
+/**
+ * 積込完了リクエスト
+ * POST /trips/:id/loading/complete
+ *
+ * 処理内容:
+ * - 最新の積込開始レコードを取得
+ * - actualEndTime を設定
+ * - itemId, quantity を更新
+ */
+export interface CompleteLoadingRequest {
+  itemId?: string;
+  quantity?: number;
+  endTime?: Date;
+  notes?: string;
+}
+
+/**
+ * 積降開始リクエスト
+ * POST /trips/:id/unloading/start
+ *
+ * 処理内容:
+ * - 積降場所への到着を記録
+ * - actualStartTime を設定
+ * - locationId, GPS座標を記録
+ * - actualEndTime は null のまま（完了時に設定）
+ */
+export interface StartUnloadingRequest {
+  locationId: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  startTime?: Date;
+  notes?: string;
+}
+
+/**
+ * 積降完了リクエスト
+ * POST /trips/:id/unloading/complete
+ *
+ * 処理内容:
+ * - 最新の積降開始レコードを取得
+ * - actualEndTime を設定
+ * - itemId, quantity を更新
+ */
+export interface CompleteUnloadingRequest {
+  itemId?: string;
+  quantity?: number;
+  endTime?: Date;
+  notes?: string;
 }
 
 // =====================================

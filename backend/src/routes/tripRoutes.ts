@@ -34,6 +34,9 @@ import {
 } from '../middleware/auth';
 import logger from '../utils/logger';
 
+// 🎯 UserRoleインポート（🆕 追加）
+import { UserRole } from '@prisma/client';
+
 // 🎯 コントローラーの統合活用（全機能実装済み）
 import { getTripController } from '../controllers/tripController';
 
@@ -836,6 +839,306 @@ router.post(
   requireRole(['DRIVER', 'MANAGER', 'ADMIN']),
   tripController.addUnloadingRecord
 );
+// =====================================
+// tripRoutes.ts への追加コード
+// 既存のルート定義の後に追加してください
+// 🆕 積込・積降の開始/完了エンドポイント
+// 既存の14エンドポイントは100%保持
+// =====================================
+
+// =====================================
+// 🆕 積込・積降の開始/完了エンドポイント（4エンドポイント追加）
+// =====================================
+
+/**
+ * @swagger
+ * /trips/{id}/loading/start:
+ *   post:
+ *     summary: 🆕 積込開始
+ *     description: |
+ *       積込場所への到着を記録し、積込作業を開始します。
+ *
+ *       **処理内容:**
+ *       - 積込開始時刻を記録
+ *       - GPS座標を記録（オプション）
+ *       - 運行時間は継続（停止しない）
+ *
+ *       **次のステップ:**
+ *       - 積込完了時に POST /trips/{id}/loading/complete を呼び出す
+ *     tags:
+ *       - 📋 運行記録管理 (Trip Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 運行ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - locationId
+ *             properties:
+ *               locationId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: 積込場所ID
+ *               latitude:
+ *                 type: number
+ *                 format: double
+ *                 description: 緯度（GPS座標）
+ *               longitude:
+ *                 type: number
+ *                 format: double
+ *                 description: 経度（GPS座標）
+ *               accuracy:
+ *                 type: number
+ *                 description: GPS精度（メートル）
+ *               startTime:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 開始時刻（未指定の場合は現在時刻）
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       201:
+ *         description: 積込開始成功
+ *       400:
+ *         description: バリデーションエラー
+ *       404:
+ *         description: 運行が見つかりません
+ */
+router.post('/:id/loading/start',
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  tripController.startLoadingHandler
+);
+
+/**
+ * @swagger
+ * /trips/{id}/loading/complete:
+ *   post:
+ *     summary: 🆕 積込完了
+ *     description: |
+ *       積込作業を完了します。
+ *
+ *       **処理内容:**
+ *       - 積込完了時刻を記録
+ *       - 品目・数量を記録
+ *       - 運行時間を再開
+ *       - フェーズを「積降場所へ移動中」に更新
+ *
+ *       **前提条件:**
+ *       - POST /trips/{id}/loading/start が実行済みであること
+ *     tags:
+ *       - 📋 運行記録管理 (Trip Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 運行ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               itemId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: 品目ID（オプション）
+ *               quantity:
+ *                 type: number
+ *                 format: double
+ *                 description: 積載量（トン）
+ *               endTime:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 完了時刻（未指定の場合は現在時刻）
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       200:
+ *         description: 積込完了成功
+ *       400:
+ *         description: バリデーションエラー
+ *       404:
+ *         description: 積込開始レコードが見つかりません
+ */
+router.post('/:id/loading/complete',
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  tripController.completeLoadingHandler
+);
+
+/**
+ * @swagger
+ * /trips/{id}/unloading/start:
+ *   post:
+ *     summary: 🆕 積降開始
+ *     description: |
+ *       積降場所への到着を記録し、積降作業を開始します。
+ *
+ *       **処理内容:**
+ *       - 積降開始時刻を記録
+ *       - GPS座標を記録（オプション）
+ *       - 運行時間を一時停止
+ *
+ *       **次のステップ:**
+ *       - 積降完了時に POST /trips/{id}/unloading/complete を呼び出す
+ *     tags:
+ *       - 📋 運行記録管理 (Trip Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 運行ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - locationId
+ *             properties:
+ *               locationId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: 積降場所ID
+ *               latitude:
+ *                 type: number
+ *                 format: double
+ *                 description: 緯度（GPS座標）
+ *               longitude:
+ *                 type: number
+ *                 format: double
+ *                 description: 経度（GPS座標）
+ *               accuracy:
+ *                 type: number
+ *                 description: GPS精度（メートル）
+ *               startTime:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 開始時刻（未指定の場合は現在時刻）
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       201:
+ *         description: 積降開始成功
+ *       400:
+ *         description: バリデーションエラー
+ *       404:
+ *         description: 運行が見つかりません
+ */
+router.post('/:id/unloading/start',
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  tripController.startUnloadingHandler
+);
+
+/**
+ * @swagger
+ * /trips/{id}/unloading/complete:
+ *   post:
+ *     summary: 🆕 積降完了
+ *     description: |
+ *       積降作業を完了します。
+ *
+ *       **処理内容:**
+ *       - 積降完了時刻を記録
+ *       - 品目・数量を記録
+ *       - 運行時間を再開
+ *       - フェーズを「次の積込場所へ移動中」に更新
+ *
+ *       **前提条件:**
+ *       - POST /trips/{id}/unloading/start が実行済みであること
+ *     tags:
+ *       - 📋 運行記録管理 (Trip Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 運行ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               itemId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: 品目ID（オプション）
+ *               quantity:
+ *                 type: number
+ *                 format: double
+ *                 description: 積載量（トン）
+ *               endTime:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 完了時刻（未指定の場合は現在時刻）
+ *               notes:
+ *                 type: string
+ *                 description: 備考
+ *     responses:
+ *       200:
+ *         description: 積降完了成功
+ *       400:
+ *         description: バリデーションエラー
+ *       404:
+ *         description: 積降開始レコードが見つかりません
+ */
+router.post('/:id/unloading/complete',
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  tripController.completeUnloadingHandler
+);
+
+// =====================================
+// 🔧 既存エンドポイント: 14エンドポイント（100%保持）
+// 🆕 新規エンドポイント: 4エンドポイント追加
+// 合計: 18エンドポイント
+// =====================================
+
+logger.info('✅ TripRoutes設定完了', {
+  totalEndpoints: 18,
+  existingEndpoints: 14,
+  newEndpoints: 4,
+  newEndpointList: [
+    'POST /trips/:id/loading/start',
+    'POST /trips/:id/loading/complete',
+    'POST /trips/:id/unloading/start',
+    'POST /trips/:id/unloading/complete'
+  ]
+});
 
 // =====================================
 // 🆕🆕🆕 休憩管理エンドポイント（2025年12月28日追加）

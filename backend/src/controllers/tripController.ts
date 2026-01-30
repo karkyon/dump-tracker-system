@@ -39,7 +39,12 @@ import type {
   GpsLocationUpdate,
   TripFilter,
   TripWithDetails,
-  UpdateTripRequest
+  UpdateTripRequest,
+  // 🆕 新規追加: 積降開始・完了型定義
+  StartLoadingRequest,
+  CompleteLoadingRequest,
+  StartUnloadingRequest,
+  CompleteUnloadingRequest
 } from '../types/trip';
 
 import type {
@@ -1096,6 +1101,224 @@ export class TripController {
         const errResponse = errorResponse('積下記録の追加に失敗しました', 500, 'ADD_UNLOADING_RECORD_ERROR');
         res.status(500).json(errResponse);
       }
+    }
+  });
+
+  /**
+   * 🆕 積込開始
+   * POST /trips/:id/loading/start
+   */
+  public startLoadingHandler = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    logger.info('🚛🚛🚛 ============================================');
+    logger.info('🚛🚛🚛 [startLoadingHandler] 積込開始API開始！！！');
+    logger.info('🚛🚛🚛 ============================================');
+    logger.info('🚛 [API-STEP 1] APIリクエスト受信', {
+      method: 'POST',
+      endpoint: `/trips/${req.params.id}/loading/start`,
+      timestamp: new Date().toISOString(),
+      userId: req.user?.userId,
+      userRole: req.user?.role
+    });
+
+    try {
+      const { id } = req.params;
+      const startData: StartLoadingRequest = req.body;
+
+      logger.info('🚛 [API-STEP 2] パラメータ取得完了', {
+        tripId: id,
+        locationId: startData.locationId,
+        hasGPS: !!(startData.latitude && startData.longitude)
+      });
+
+      // バリデーション: tripId
+      if (!id) {
+        throw new ValidationError('運行記録IDは必須です', 'id');
+      }
+
+      // バリデーション: locationId
+      if (!startData.locationId) {
+        throw new ValidationError('場所IDは必須です', 'locationId');
+      }
+
+      logger.info('🚛 [API-STEP 3] サービス層呼び出し開始');
+
+      const result = await this.tripService.startLoading(id, startData);
+
+      logger.info('🚛✅ [API-STEP 4] 積込開始完了', {
+        detailId: result.data?.id,
+        tripId: id
+      });
+
+      const response = successResponse(result.data, result.message || '積込を開始しました');
+      res.status(201).json(response);
+
+    } catch (error) {
+      logger.error('🚛❌ 積込開始エラー', {
+        error: error instanceof Error ? error.message : String(error),
+        tripId: req.params.id
+      });
+      throw error;
+    }
+  });
+
+  /**
+   * 🆕 積込完了
+   * POST /trips/:id/loading/complete
+   */
+  public completeLoadingHandler = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    logger.info('🚛🚛🚛 ============================================');
+    logger.info('🚛🚛🚛 [completeLoadingHandler] 積込完了API開始！！！');
+    logger.info('🚛🚛🚛 ============================================');
+    logger.info('🚛 [API-STEP 1] APIリクエスト受信', {
+      method: 'POST',
+      endpoint: `/trips/${req.params.id}/loading/complete`,
+      timestamp: new Date().toISOString(),
+      userId: req.user?.userId,
+      userRole: req.user?.role
+    });
+
+    try {
+      const { id } = req.params;
+      const completeData: CompleteLoadingRequest = req.body;
+
+      logger.info('🚛 [API-STEP 2] パラメータ取得完了', {
+        tripId: id,
+        itemId: completeData.itemId,
+        quantity: completeData.quantity
+      });
+
+      // バリデーション: tripId
+      if (!id) {
+        throw new ValidationError('運行記録IDは必須です', 'id');
+      }
+
+      logger.info('🚛 [API-STEP 3] サービス層呼び出し開始');
+
+      const result = await this.tripService.completeLoading(id, completeData);
+
+      logger.info('🚛✅ [API-STEP 4] 積込完了', {
+        detailId: result.data?.id,
+        tripId: id
+      });
+
+      const response = successResponse(result.data, result.message || '積込が完了しました');
+      res.status(200).json(response);
+
+    } catch (error) {
+      logger.error('🚛❌ 積込完了エラー', {
+        error: error instanceof Error ? error.message : String(error),
+        tripId: req.params.id
+      });
+      throw error;
+    }
+  });
+
+  /**
+   * 🆕 積降開始
+   * POST /trips/:id/unloading/start
+   */
+  public startUnloadingHandler = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    logger.info('📦📦📦 ============================================');
+    logger.info('📦📦📦 [startUnloadingHandler] 積降開始API開始！！！');
+    logger.info('📦📦📦 ============================================');
+    logger.info('📦 [API-STEP 1] APIリクエスト受信', {
+      method: 'POST',
+      endpoint: `/trips/${req.params.id}/unloading/start`,
+      timestamp: new Date().toISOString(),
+      userId: req.user?.userId,
+      userRole: req.user?.role
+    });
+
+    try {
+      const { id } = req.params;
+      const startData: StartUnloadingRequest = req.body;
+
+      logger.info('📦 [API-STEP 2] パラメータ取得完了', {
+        tripId: id,
+        locationId: startData.locationId,
+        hasGPS: !!(startData.latitude && startData.longitude)
+      });
+
+      // バリデーション: tripId
+      if (!id) {
+        throw new ValidationError('運行記録IDは必須です', 'id');
+      }
+
+      // バリデーション: locationId
+      if (!startData.locationId) {
+        throw new ValidationError('場所IDは必須です', 'locationId');
+      }
+
+      logger.info('📦 [API-STEP 3] サービス層呼び出し開始');
+
+      const result = await this.tripService.startUnloading(id, startData);
+
+      logger.info('📦✅ [API-STEP 4] 積降開始完了', {
+        detailId: result.data?.id,
+        tripId: id
+      });
+
+      const response = successResponse(result.data, result.message || '積降を開始しました');
+      res.status(201).json(response);
+
+    } catch (error) {
+      logger.error('📦❌ 積降開始エラー', {
+        error: error instanceof Error ? error.message : String(error),
+        tripId: req.params.id
+      });
+      throw error;
+    }
+  });
+
+  /**
+   * 🆕 積降完了
+   * POST /trips/:id/unloading/complete
+   */
+  public completeUnloadingHandler = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    logger.info('📦📦📦 ============================================');
+    logger.info('📦📦📦 [completeUnloadingHandler] 積降完了API開始！！！');
+    logger.info('📦📦📦 ============================================');
+    logger.info('📦 [API-STEP 1] APIリクエスト受信', {
+      method: 'POST',
+      endpoint: `/trips/${req.params.id}/unloading/complete`,
+      timestamp: new Date().toISOString(),
+      userId: req.user?.userId,
+      userRole: req.user?.role
+    });
+
+    try {
+      const { id } = req.params;
+      const completeData: CompleteUnloadingRequest = req.body;
+
+      logger.info('📦 [API-STEP 2] パラメータ取得完了', {
+        tripId: id,
+        itemId: completeData.itemId,
+        quantity: completeData.quantity
+      });
+
+      // バリデーション: tripId
+      if (!id) {
+        throw new ValidationError('運行記録IDは必須です', 'id');
+      }
+
+      logger.info('📦 [API-STEP 3] サービス層呼び出し開始');
+
+      const result = await this.tripService.completeUnloading(id, completeData);
+
+      logger.info('📦✅ [API-STEP 4] 積降完了', {
+        detailId: result.data?.id,
+        tripId: id
+      });
+
+      const response = successResponse(result.data, result.message || '積降が完了しました');
+      res.status(200).json(response);
+
+    } catch (error) {
+      logger.error('📦❌ 積降完了エラー', {
+        error: error instanceof Error ? error.message : String(error),
+        tripId: req.params.id
+      });
+      throw error;
     }
   });
 
