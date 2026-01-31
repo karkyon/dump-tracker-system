@@ -597,6 +597,26 @@ class TripService {
         statistics
       });
 
+      // GPS記録（オプション）
+      if (request.latitude && request.longitude) {
+        logger.info('🏁 [endTrip] GPS記録開始', {
+          latitude: request.latitude,
+          longitude: request.longitude
+        });
+
+        await this.recordGpsLocation(tripId, {
+          latitude: Number(request.latitude),
+          longitude: Number(request.longitude),
+          altitude: 0,
+          speedKmh: 0,
+          heading: 0,
+          accuracyMeters: request.accuracy ? Number(request.accuracy) : 10,
+          recordedAt: request.endTime || new Date()
+        });
+
+        logger.info('🏁✅ [endTrip] GPS記録完了');
+      }
+
       return {
         success: true,
         data: tripOperation,

@@ -122,6 +122,9 @@ export interface CreateFuelRecordRequest {
   fuelAmount: number;
   fuelCost: number;
   location?: string;
+  latitude?: number;      // 🆕 追加
+  longitude?: number;     // 🆕 追加
+  accuracy?: number;      // 🆕 追加
   timestamp: Date;
   notes?: string;
 }
@@ -352,6 +355,9 @@ export interface StartLoadingRequest {
 export interface CompleteLoadingRequest {
   itemId?: string;
   quantity?: number;
+  latitude?: number;      // 🆕 追加
+  longitude?: number;     // 🆕 追加
+  accuracy?: number;      // 🆕 追加
   endTime?: Date;
   notes?: string;
 }
@@ -387,6 +393,9 @@ export interface StartUnloadingRequest {
 export interface CompleteUnloadingRequest {
   itemId?: string;
   quantity?: number;
+  latitude?: number;      // 🆕 追加
+  longitude?: number;     // 🆕 追加
+  accuracy?: number;      // 🆕 追加
   endTime?: Date;
   notes?: string;
 }
