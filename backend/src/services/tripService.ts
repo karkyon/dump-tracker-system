@@ -1044,25 +1044,25 @@ class TripService {
         sequenceNumber: nextSequenceNumber
       });
 
-      // GPS記録（オプション）
-      if (data.latitude && data.longitude) {
-        logger.info('🚛 [startLoading] GPS記録開始', {
-          latitude: data.latitude,
-          longitude: data.longitude
-        });
+        // GPS記録（オプション）
+        if (data.latitude && data.longitude) {
+          logger.info('🚛 [startLoading] GPS記録開始', {
+            latitude: data.latitude,
+            longitude: data.longitude
+          });
 
-        await this.recordGpsLocation(tripId, {
-          latitude: new Decimal(data.latitude),
-          longitude: new Decimal(data.longitude),
-          altitude: 0,
-          speedKmh: 0,
-          heading: 0,
-          accuracyMeters: data.accuracy ? new Decimal(data.accuracy) : new Decimal(10),
-          recordedAt: data.startTime || new Date()
-        } as any);
+          await this.recordGpsLocation(tripId, {
+            latitude: Number(data.latitude),
+            longitude: Number(data.longitude),
+            altitude: 0,
+            speedKmh: 0,
+            heading: 0,
+            accuracyMeters: data.accuracy ? Number(data.accuracy) : 10,
+            recordedAt: data.startTime || new Date()
+          });
 
-        logger.info('🚛✅ [startLoading] GPS記録完了');
-      }
+          logger.info('🚛✅ [startLoading] GPS記録完了');
+        }
 
       return {
         success: true,
@@ -1141,6 +1141,26 @@ class TripService {
         itemId: updatedDetail.itemId,
         quantityTons: updatedDetail.quantityTons
       });
+
+      // GPS記録（オプション）
+      if (data.latitude && data.longitude) {
+        logger.info('🚛 [completeLoading] GPS記録開始', {
+          latitude: data.latitude,
+          longitude: data.longitude
+        });
+
+        await this.recordGpsLocation(tripId, {
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
+          altitude: 0,
+          speedKmh: 0,
+          heading: 0,
+          accuracyMeters: data.accuracy ? Number(data.accuracy) : 10,
+          recordedAt: data.endTime || new Date()
+        });
+
+        logger.info('🚛✅ [completeLoading] GPS記録完了');
+      }
 
       return {
         success: true,
@@ -1225,14 +1245,14 @@ class TripService {
         });
 
         await this.recordGpsLocation(tripId, {
-          latitude: new Decimal(data.latitude),
-          longitude: new Decimal(data.longitude),
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
           altitude: 0,
           speedKmh: 0,
           heading: 0,
-          accuracyMeters: data.accuracy ? new Decimal(data.accuracy) : new Decimal(10),
+          accuracyMeters: data.accuracy ? Number(data.accuracy) : 10,
           recordedAt: data.startTime || new Date()
-        } as any);
+        });
 
         logger.info('📦✅ [startUnloading] GPS記録完了');
       }
@@ -1315,6 +1335,26 @@ class TripService {
         quantityTons: updatedDetail.quantityTons
       });
 
+      // GPS記録（オプション）
+      if (data.latitude && data.longitude) {
+        logger.info('📦 [completeUnloading] GPS記録開始', {
+          latitude: data.latitude,
+          longitude: data.longitude
+        });
+
+        await this.recordGpsLocation(tripId, {
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
+          altitude: 0,
+          speedKmh: 0,
+          heading: 0,
+          accuracyMeters: data.accuracy ? Number(data.accuracy) : 10,
+          recordedAt: data.endTime || new Date()
+        });
+
+        logger.info('📦✅ [completeUnloading] GPS記録完了');
+      }
+
       return {
         success: true,
         data: updatedDetail,
@@ -1352,6 +1392,26 @@ class TripService {
       const result = await this.addActivity(tripId, activityData);
 
       logger.info('給油記録追加完了', { tripId, detailId: result.data?.id });
+
+      // GPS記録（オプション）
+      if (fuelData.latitude && fuelData.longitude) {
+        logger.info('⛽ [addFuelRecord] GPS記録開始', {
+          latitude: fuelData.latitude,
+          longitude: fuelData.longitude
+        });
+
+        await this.recordGpsLocation(tripId, {
+          latitude: Number(fuelData.latitude),
+          longitude: Number(fuelData.longitude),
+          altitude: 0,
+          speedKmh: 0,
+          heading: 0,
+          accuracyMeters: fuelData.accuracy ? Number(fuelData.accuracy) : 10,
+          recordedAt: fuelData.timestamp || new Date()
+        });
+
+        logger.info('⛽✅ [addFuelRecord] GPS記録完了');
+      }
 
       return {
         success: true,
@@ -1398,14 +1458,14 @@ class TripService {
       }
 
       await this.recordGpsLocation(tripId, {
-        latitude: parseFloat(String(locationUpdate.latitude)),      // String → Float変換
-        longitude: parseFloat(String(locationUpdate.longitude)),    // String → Float変換
-        altitude: locationUpdate.altitude ? new Decimal(locationUpdate.altitude) : undefined,
-        speedKmh: locationUpdate.speedKmh ? new Decimal(locationUpdate.speedKmh) : undefined,
-        heading: locationUpdate.heading ? new Decimal(locationUpdate.heading) : undefined,
-        accuracyMeters: locationUpdate.accuracyMeters ? new Decimal(locationUpdate.accuracyMeters) : undefined,
+        latitude: Number(locationUpdate.latitude),
+        longitude: Number(locationUpdate.longitude),
+        altitude: locationUpdate.altitude ? Number(locationUpdate.altitude) : undefined,
+        speedKmh: locationUpdate.speedKmh ? Number(locationUpdate.speedKmh) : undefined,
+        heading: locationUpdate.heading ? Number(locationUpdate.heading) : undefined,
+        accuracyMeters: locationUpdate.accuracyMeters ? Number(locationUpdate.accuracyMeters) : undefined,
         recordedAt: locationUpdate.timestamp || new Date()
-      } as any);
+      });
 
       logger.info('GPS位置更新完了', { tripId });
 
