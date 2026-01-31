@@ -1124,12 +1124,14 @@ class TripService {
 
       // operation_detail更新（actualEndTime, itemId, quantityTons を設定）
       const updatedDetail = await this.operationDetailService.update(
-        { id: loadingDetail.id },
+        loadingDetail.id,
         {
           actualEndTime: data.endTime || new Date(),
           itemId: data.itemId || undefined,
-          quantityTons: data.quantity !== undefined ? data.quantity : loadingDetail.quantityTons,
-          notes: data.notes || loadingDetail.notes
+          quantityTons: data.quantity !== undefined
+            ? data.quantity
+            : Number(loadingDetail.quantityTons),  // ✅ Decimal → number 変換
+          notes: data.notes || loadingDetail.notes || undefined  // ✅ null → undefined 変換
         }
       );
 
@@ -1295,12 +1297,14 @@ class TripService {
 
       // operation_detail更新（actualEndTime, itemId, quantityTons を設定）
       const updatedDetail = await this.operationDetailService.update(
-        { id: unloadingDetail.id },
+        unloadingDetail.id,
         {
           actualEndTime: data.endTime || new Date(),
           itemId: data.itemId || undefined,
-          quantityTons: data.quantity !== undefined ? data.quantity : unloadingDetail.quantityTons,
-          notes: data.notes || unloadingDetail.notes
+          quantityTons: data.quantity !== undefined
+            ? data.quantity
+            : Number(unloadingDetail.quantityTons),  // ✅ Decimal → number 変換
+          notes: data.notes || unloadingDetail.notes || undefined  // ✅ null → undefined 変換
         }
       );
 

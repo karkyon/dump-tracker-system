@@ -764,7 +764,7 @@ router.post('/operations/nearby-locations',
  * @swagger
  * /mobile/trips/{id}/loading/start:
  *   post:
- *     summary: 🆕 モバイル: 積込開始
+ *     summary: 🆕 モバイル | 積込開始
  *     description: |
  *       モバイルアプリから積込場所への到着を記録し、積込作業を開始します。
  *
@@ -816,25 +816,14 @@ router.post('/trips/:id/loading/start',
   authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   validateId,
-  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const startData = req.body;
-
-    logger.info('📱 モバイル: 積込開始', { tripId: id, userId: req.user?.userId });
-
-    // getTripController() を使用
-    const tripController = getTripController();
-
-    // 既存のハンドラーを呼び出し
-    await tripController.startLoadingHandler(req, res);
-  })
+  getTripController().startLoadingHandler  // ✅ 直接参照
 );
 
 /**
  * @swagger
  * /mobile/trips/{id}/loading/complete:
  *   post:
- *     summary: 🆕 モバイル: 積込完了
+ *     summary: 🆕 モバイル | 積込完了
  *     description: |
  *       モバイルアプリから積込作業を完了します。
  *
@@ -878,25 +867,14 @@ router.post('/trips/:id/loading/complete',
   authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   validateId,
-  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const completeData = req.body;
-
-    logger.info('📱 モバイル: 積込完了', { tripId: id, userId: req.user?.userId });
-
-    // getTripController() を使用
-    const tripController = getTripController();
-
-    // 既存のハンドラーを呼び出し
-    await tripController.completeLoadingHandler(req, res);
-  })
+  getTripController().completeLoadingHandler  // ✅ 直接参照
 );
 
 /**
  * @swagger
  * /mobile/trips/{id}/unloading/start:
  *   post:
- *     summary: 🆕 モバイル: 積降開始
+ *     summary: 🆕 モバイル | 積降開始
  *     description: |
  *       モバイルアプリから積降場所への到着を記録し、積降作業を開始します。
  *
@@ -948,25 +926,14 @@ router.post('/trips/:id/unloading/start',
   authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   validateId,
-  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const startData = req.body;
-
-    logger.info('📱 モバイル: 積降開始', { tripId: id, userId: req.user?.userId });
-
-    // getTripController() を使用
-    const tripController = getTripController();
-
-    // 既存のハンドラーを呼び出し
-    await tripController.startUnloadingHandler(req, res);
-  })
+  getTripController().startUnloadingHandler  // ✅ 直接参照
 );
 
 /**
  * @swagger
  * /mobile/trips/{id}/unloading/complete:
  *   post:
- *     summary: 🆕 モバイル: 積降完了
+ *     summary: 🆕 モバイル | 積降完了
  *     description: |
  *       モバイルアプリから積降作業を完了します。
  *
@@ -1011,18 +978,7 @@ router.post('/trips/:id/unloading/complete',
   authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   validateId,
-  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const completeData = req.body;
-
-    logger.info('📱 モバイル: 積降完了', { tripId: id, userId: req.user?.userId });
-
-    // getTripController() を使用
-    const tripController = getTripController();
-
-    // 既存のハンドラーを呼び出し
-    await tripController.completeUnloadingHandler(req, res);
-  })
+  getTripController().completeUnloadingHandler  // ✅ 直接参照
 );
 
 logger.info('✅ Mobile TripRoutes 新規エンドポイント追加完了', {
