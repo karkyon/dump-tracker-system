@@ -28,7 +28,14 @@ import { useOperationStore } from '../stores/operationStore';
 import { useAuthStore } from '../stores/authStore';
 
 // 運行状態の型定義
-type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
+type OperationPhase = 
+  | 'TO_LOADING' 
+  | 'AT_LOADING' 
+  | 'TO_UNLOADING' 
+  | 'AT_UNLOADING' 
+  | 'UNLOADING_IN_PROGRESS'  // 🆕 追加: 積降作業中
+  | 'BREAK' 
+  | 'REFUEL';
 
 interface OperationState {
   id: string | null;
@@ -347,7 +354,6 @@ const OperationRecord: React.FC = () => {
       return;
     }
 
-    // 🔧 修正: operationStoreから運行IDを取得
     const currentOperationId = operationStore.operationId;
     
     console.log('🔍 運行ID確認:', {
@@ -379,14 +385,14 @@ const OperationRecord: React.FC = () => {
         type: dialogType,
         locationId: selectedLocation.location.id,
         locationName: selectedLocation.location.name,
-        operationId: currentOperationId // 🔧 修正: 実際の運行IDを使用
+        operationId: currentOperationId
       });
 
       if (dialogType === 'LOADING') {
-        // 🆕 新API使用: 積込場所到着記録
+        // 積込場所到着記録（旧API使用）
         console.log('🚛 積込場所到着記録API呼び出し開始');
         
-        await apiService.recordLoadingArrival(currentOperationId, { // 🔧 修正
+        await apiService.recordLoadingArrival(currentOperationId, {
           locationId: selectedLocation.location.id,
           latitude: currentPosition.coords.latitude,
           longitude: currentPosition.coords.longitude,
@@ -405,41 +411,42 @@ const OperationRecord: React.FC = () => {
 
         toast.success(`積込場所「${selectedLocation.location.name}」に到着しました`);
         
-        // 🆕 D5積込場所入力画面へ遷移
+        // D5積込場所入力画面へ遷移
         console.log('📍 次: D5積込場所入力画面へ遷移');
         navigate('/loading-input', {
           state: {
             locationId: selectedLocation.location.id,
             locationName: selectedLocation.location.name,
-            clientName: selectedLocation.location.contactPerson || '担当者未登録',  // contactPersonを使用
+            clientName: selectedLocation.location.contactPerson || '担当者未登録',
             address: selectedLocation.location.address
           }
         });
       } else {
-        // 🆕 新API使用: 積降場所到着記録
-        console.log('🚛 積降場所到着記録API呼び出し開始');
+        // 🔧 修正: 積降場所選択後は画面遷移せず地図表示のまま
+        console.log('📦 積降場所選択 - 地図画面のまま');
         
-        await apiService.recordUnloadingArrival(currentOperationId, { // 🔧 修正
-          locationId: selectedLocation.location.id,
-          latitude: currentPosition.coords.latitude,
-          longitude: currentPosition.coords.longitude,
-          accuracy: currentPosition.coords.accuracy,
-          arrivalTime: new Date()
-        });
-        
-        console.log('✅ 積降場所到着記録完了');
-        
-        // 状態更新
+        // 状態更新のみ（API呼び出しなし）
         setOperation(prev => ({
           ...prev,
           phase: 'AT_UNLOADING',
           unloadingLocation: selectedLocation.location.name
         }));
 
-        toast.success(`積降場所「${selectedLocation.location.name}」に到着しました`);
+        // operationStoreにも保存
+        operationStore.setUnloadingLocation(selectedLocation.location.name);
+        operationStore.setPhase('AT_UNLOADING');
         
-        // TODO: 積降場所到着画面へ遷移
-        console.log('📍 次: 積降場所到着画面へ遷移');
+        // 地図を保持したまま、地点情報を保存
+        (window as any).selectedUnloadingLocation = {
+          id: selectedLocation.location.id,
+          name: selectedLocation.location.name,
+          latitude: currentPosition.coords.latitude,
+          longitude: currentPosition.coords.longitude,
+          accuracy: currentPosition.coords.accuracy
+        };
+
+        toast.success(`積降場所「${selectedLocation.location.name}」を選択しました`);
+        console.log('📍 次: 積降開始ボタンをクリックしてください');
       }
 
       setIsSubmitting(false);
@@ -640,38 +647,105 @@ const OperationRecord: React.FC = () => {
   /**
    * ✅ 既存: 積降開始ハンドラー
    */
-  const handleUnloadingStart = async () => {
-    try {
-      setIsSubmitting(true);
-      
-      // TODO: API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      toast.success('積降を開始しました');
-      
+ const handleUnloadingStart = async () => {
+  try {
+    setIsSubmitting(true);
+    
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません');
       setIsSubmitting(false);
-    } catch (error) {
-      console.error('積降開始エラー:', error);
-      toast.error('積降開始に失敗しました');
-      setIsSubmitting(false);
+      return;
     }
-  };
+
+    // 保存された地点情報を取得
+    const selectedLocation = (window as any).selectedUnloadingLocation;
+    if (!selectedLocation) {
+      toast.error('積降場所が選択されていません');
+      setIsSubmitting(false);
+      return;
+    }
+
+    console.log('📦 積降開始API呼び出し:', {
+      tripId: currentOperationId,
+      locationId: selectedLocation.id,
+      position: {
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude
+      }
+    });
+
+    // 🆕 新API呼び出し: 積降開始
+    await apiService.startUnloadingAtLocation(currentOperationId, {
+      locationId: selectedLocation.id,
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
+      accuracy: selectedLocation.accuracy,
+      startTime: new Date()
+    });
+
+    console.log('✅ 積降開始完了');
+
+    // フェーズ更新: UNLOADING_IN_PROGRESS
+    setOperation(prev => ({
+      ...prev,
+      phase: 'UNLOADING_IN_PROGRESS'
+    }));
+    operationStore.setPhase('UNLOADING_IN_PROGRESS');
+
+    toast.success('積降を開始しました');
+    setIsSubmitting(false);
+
+  } catch (error) {
+    console.error('❌ 積降開始エラー:', error);
+    toast.error('積降開始に失敗しました');
+    setIsSubmitting(false);
+  }
+};
 
   /**
    * ✅ 既存: 積降完了ハンドラー
    */
   const handleUnloadingComplete = async () => {
+    // 確認ダイアログ
+    const confirmed = window.confirm('積降を完了しますか？');
+    if (!confirmed) return;
+
     try {
       setIsSubmitting(true);
       
-      // TODO: API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      toast.success('積降が完了しました');
-      
+      const currentOperationId = operationStore.operationId;
+      if (!currentOperationId) {
+        toast.error('運行IDが見つかりません');
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log('📦 積降完了API呼び出し:', {
+        tripId: currentOperationId
+      });
+
+      // 🆕 新API呼び出し: 積降完了
+      // itemIdは積込品目を使用（バックエンドで自動設定）
+      await apiService.completeUnloadingAtLocation(currentOperationId, {
+        endTime: new Date(),
+        notes: '積降完了'
+      });
+
+      console.log('✅ 積降完了');
+
+      // フェーズ更新: TO_LOADING（次の積込場所へ移動）
+      setOperation(prev => ({
+        ...prev,
+        phase: 'TO_LOADING'
+      }));
+      operationStore.setPhase('TO_LOADING');
+
+      toast.success('積降が完了しました。次の積込場所へ移動してください。');
       setIsSubmitting(false);
+
     } catch (error) {
-      console.error('積降完了エラー:', error);
+      console.error('❌ 積降完了エラー:', error);
       toast.error('積降完了に失敗しました');
       setIsSubmitting(false);
     }
@@ -894,6 +968,7 @@ const OperationRecord: React.FC = () => {
         );
 
       case 'AT_UNLOADING':
+        // 積降開始ボタンのみ表示
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
@@ -912,6 +987,13 @@ const OperationRecord: React.FC = () => {
             >
               🚛 積降開始
             </button>
+          </div>
+        );
+
+      case 'UNLOADING_IN_PROGRESS':
+        // 積降完了ボタンのみ表示
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
               onClick={handleUnloadingComplete}
               disabled={isSubmitting}
@@ -1187,6 +1269,7 @@ function getPhaseLabel(phase: OperationPhase): string {
     case 'AT_LOADING': return '積込場所到着';
     case 'TO_UNLOADING': return '積降場所へ移動中';
     case 'AT_UNLOADING': return '積降場所到着';
+    case 'UNLOADING_IN_PROGRESS': return '積降作業中';
     case 'BREAK': return '休憩中';
     case 'REFUEL': return '給油中';
     default: return '不明';

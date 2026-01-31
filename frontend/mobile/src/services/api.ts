@@ -123,6 +123,50 @@ export interface RecordUnloadingArrivalRequest {
   notes?: string;            // メモ（オプション）
 }
 
+/**
+ * 🆕 積降開始リクエスト
+ */
+export interface StartUnloadingRequest {
+  locationId: string;        // 積降場所ID
+  latitude: number;          // GPS緯度
+  longitude: number;         // GPS経度
+  accuracy?: number;         // GPS測位精度（メートル）
+  startTime?: Date | string; // 開始時刻（省略時は現在時刻）
+  notes?: string;            // メモ（オプション）
+}
+
+/**
+ * 🆕 積降完了リクエスト
+ */
+export interface CompleteUnloadingRequest {
+  itemId?: string;           // 品目ID（省略時は積込品目を使用）
+  quantity?: number;         // 積降量（オプション）
+  endTime?: Date | string;   // 終了時刻（省略時は現在時刻）
+  notes?: string;            // メモ（オプション）
+}
+
+/**
+ * 🆕 積込開始リクエスト
+ */
+export interface StartLoadingRequest {
+  locationId: string;        // 積込場所ID
+  latitude: number;          // GPS緯度
+  longitude: number;         // GPS経度
+  accuracy?: number;         // GPS測位精度（メートル）
+  startTime?: Date | string; // 開始時刻（省略時は現在時刻）
+  notes?: string;            // メモ（オプション）
+}
+
+/**
+ * 🆕 積込完了リクエスト
+ */
+export interface CompleteLoadingRequest {
+  itemId: string;            // 品目ID（必須）
+  quantity?: number;         // 積載量（オプション）
+  endTime?: Date | string;   // 終了時刻（省略時は現在時刻）
+  notes?: string;            // メモ（オプション）
+}
+
 // 🆕 D5/D6機能: 積込・積降記録レスポンス
 export interface ActivityRecordResponse {
   id: string;                // 記録ID
@@ -528,6 +572,137 @@ class APIServiceClass {
       return response.data;
     } catch (error) {
       console.error('❌ 積降記録エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 積降開始
+   * POST /api/v1/trips/:tripId/unloading/start
+   * 
+   * 【使用例】
+   * ```typescript
+   * const result = await apiService.startUnloadingAtLocation('trip-123', {
+   *   locationId: 'loc-789',
+   *   latitude: 35.6895,
+   *   longitude: 139.6917,
+   *   accuracy: 8.2
+   * });
+   * ```
+   * 
+   * @param tripId - 運行記録ID
+   * @param data - 積降開始データ
+   * @returns 積降開始レスポンス
+   */
+  async startUnloadingAtLocation(
+    tripId: string,
+    data: StartUnloadingRequest
+  ): Promise<APIResponse<ActivityRecordResponse>> {
+    try {
+      console.log('📦 積降開始:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
+        `/trips/${tripId}/unloading/start`,
+        data
+      );
+      
+      console.log('✅ 積降開始成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 積降開始エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 積降完了
+   * POST /api/v1/trips/:tripId/unloading/complete
+   * 
+   * 【使用例】
+   * ```typescript
+   * const result = await apiService.completeUnloadingAtLocation('trip-123', {
+   *   itemId: 'item-456',
+   *   quantity: 5.5,
+   *   notes: '積降完了'
+   * });
+   * ```
+   * 
+   * @param tripId - 運行記録ID
+   * @param data - 積降完了データ
+   * @returns 積降完了レスポンス
+   */
+  async completeUnloadingAtLocation(
+    tripId: string,
+    data: CompleteUnloadingRequest
+  ): Promise<APIResponse<ActivityRecordResponse>> {
+    try {
+      console.log('📦 積降完了:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
+        `/trips/${tripId}/unloading/complete`,
+        data
+      );
+      
+      console.log('✅ 積降完了成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 積降完了エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 積込開始
+   * POST /api/v1/trips/:tripId/loading/start
+   * 
+   * @param tripId - 運行記録ID
+   * @param data - 積込開始データ
+   * @returns 積込開始レスポンス
+   */
+  async startLoadingAtLocation(
+    tripId: string,
+    data: StartLoadingRequest
+  ): Promise<APIResponse<ActivityRecordResponse>> {
+    try {
+      console.log('🚛 積込開始:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
+        `/trips/${tripId}/loading/start`,
+        data
+      );
+      
+      console.log('✅ 積込開始成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 積込開始エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 積込完了
+   * POST /api/v1/trips/:tripId/loading/complete
+   * 
+   * @param tripId - 運行記録ID
+   * @param data - 積込完了データ
+   * @returns 積込完了レスポンス
+   */
+  async completeLoadingAtLocation(
+    tripId: string,
+    data: CompleteLoadingRequest
+  ): Promise<APIResponse<ActivityRecordResponse>> {
+    try {
+      console.log('🚛 積込完了:', { tripId, data });
+      
+      const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
+        `/trips/${tripId}/loading/complete`,
+        data
+      );
+      
+      console.log('✅ 積込完了成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 積込完了エラー:', error);
       throw error;
     }
   }

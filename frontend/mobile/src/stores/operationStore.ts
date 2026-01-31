@@ -9,7 +9,14 @@ import { persist } from 'zustand/middleware';
 /**
  * 🆕 運行フェーズ型定義
  */
-export type OperationPhase = 'TO_LOADING' | 'AT_LOADING' | 'TO_UNLOADING' | 'AT_UNLOADING' | 'BREAK' | 'REFUEL';
+export type OperationPhase = 
+  | 'TO_LOADING' 
+  | 'AT_LOADING' 
+  | 'TO_UNLOADING' 
+  | 'AT_UNLOADING' 
+  | 'UNLOADING_IN_PROGRESS'  // 🆕 追加: 積降作業中
+  | 'BREAK' 
+  | 'REFUEL';
 
 /**
  * 運行状態インターフェース

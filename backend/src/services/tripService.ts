@@ -1398,8 +1398,8 @@ class TripService {
       }
 
       await this.recordGpsLocation(tripId, {
-        latitude: new Decimal(locationUpdate.latitude),
-        longitude: new Decimal(locationUpdate.longitude),
+        latitude: parseFloat(String(locationUpdate.latitude)),      // String → Float変換
+        longitude: parseFloat(String(locationUpdate.longitude)),    // String → Float変換
         altitude: locationUpdate.altitude ? new Decimal(locationUpdate.altitude) : undefined,
         speedKmh: locationUpdate.speedKmh ? new Decimal(locationUpdate.speedKmh) : undefined,
         heading: locationUpdate.heading ? new Decimal(locationUpdate.heading) : undefined,
