@@ -172,7 +172,19 @@ class TripService {
       }
       logger.info('✅ [LINE 10] 車両使用可能確認');
 
-      // StartTripOperationRequestへマッピング
+      // ✅ 修正(課題2): チェック後に実際に車両ステータスを IN_USE に更新する
+      logger.info('🚀 [LINE 10-1] 車両ステータスを IN_USE に更新開始');
+      try {
+        await this.updateVehicleStatus(request.vehicleId, 'IN_USE');
+        logger.info('✅ [LINE 10-2] 車両ステータス更新完了: IN_USE');
+      } catch (vehicleStatusUpdateError) {
+        logger.warn('⚠️ [LINE 10-2] 車両ステータス IN_USE 更新に失敗 - 運行開始は続行', {
+          error: vehicleStatusUpdateError instanceof Error ? vehicleStatusUpdateError.message : String(vehicleStatusUpdateError),
+          vehicleId: request.vehicleId
+        });
+      }
+
+      // リクエストマッピング
       logger.info('🚀 [LINE 11] リクエストマッピング開始');
       const startTripRequest: StartTripOperationRequest = {
         vehicleId: request.vehicleId,
@@ -379,7 +391,8 @@ class TripService {
 
           try {
             await this.operationService.delete({ id: tripOperation.id });
-            await this.checkAndUpdateVehicleStatus(request.vehicleId, 'AVAILABLE');
+            // ✅ 修正(課題2②): ロールバックで実際にステータスを更新する
+            await this.updateVehicleStatus(request.vehicleId, 'AVAILABLE');
           } catch (rollbackError) {
             logger.error('ロールバックエラー', { rollbackError });
           }
@@ -411,7 +424,8 @@ class TripService {
       logger.error('運行開始エラー', { error, request });
 
       try {
-        await this.checkAndUpdateVehicleStatus(request.vehicleId, 'AVAILABLE');
+        // ✅ 修正(課題2②): ロールバックで実際にステータスを更新する
+        await this.updateVehicleStatus(request.vehicleId, 'AVAILABLE');
       } catch (rollbackError) {
         logger.error('車両ステータスロールバックエラー', { rollbackError });
       }
@@ -459,6 +473,12 @@ class TripService {
       // ✅ 距離の自動計算
       if (request.endOdometer && operation.startOdometer) {
         updateData.totalDistanceKm = request.endOdometer - Number(operation.startOdometer);
+      }
+
+      // ✅ 修正(課題4): オドメーター未提供の場合、GPS距離をフォールバックとして使用
+      if (!updateData.totalDistanceKm && statistics.totalDistance > 0) {
+        updateData.totalDistanceKm = statistics.totalDistance;
+        logger.info('✅ [endTrip] GPS距離をtotalDistanceKmとして適用', { totalDistance: statistics.totalDistance });
       }
 
       // ✅ 燃料消費量の自動計算
@@ -584,7 +604,14 @@ class TripService {
       logger.info('🚗 車両ステータスを AVAILABLE に戻します', {
         vehicleId: operation.vehicleId
       });
-      await this.updateVehicleStatus(operation.vehicleId, 'AVAILABLE');
+      try {
+        await this.updateVehicleStatus(operation.vehicleId, 'AVAILABLE');
+      } catch (vehicleStatusRestoreError) {
+        logger.warn('⚠️ 車両ステータス AVAILABLE 復元に失敗 - 運行終了記録は続行', {
+          error: vehicleStatusRestoreError instanceof Error ? vehicleStatusRestoreError.message : String(vehicleStatusRestoreError),
+          vehicleId: operation.vehicleId
+        });
+      }
 
       const tripOperation: TripOperationModel = {
         ...updatedOperation,
@@ -1838,7 +1865,7 @@ class TripService {
   ): Promise<TripStatistics> {
     try {
       const gpsLogs = await this.gpsLogService.findMany({
-        where: {},
+        where: { operations: { id: operationId } }, // ✅ 修正(課題3): operation_idでフィルタリング
         orderBy: { recordedAt: 'asc' }
       });
 
@@ -2051,9 +2078,10 @@ class TripService {
 
       const totalDistance = distances.reduce((sum: number, d: number) => sum + d, 0);
 
+      // ✅ 修正(課題5): actualStartTime/actualEndTimeを使用し、ミリ秒→分に変換
       const durations = completedOperations
-        .filter((op: any) => op.startTime && op.endTime)
-        .map((op: any) => new Date(op.endTime).getTime() - new Date(op.startTime).getTime());
+        .filter((op: any) => op.actualStartTime && op.actualEndTime)
+        .map((op: any) => (new Date(op.actualEndTime).getTime() - new Date(op.actualStartTime).getTime()) / (1000 * 60));
 
       const totalDuration = durations.reduce((sum: number, d: number) => sum + d, 0);
 
@@ -2062,8 +2090,9 @@ class TripService {
       ).length;
 
       return {
-        totalTrips: totalDistance,
-        completedTrips: totalDuration,
+        // ✅ 修正(課題5): 正しい値に修正
+        totalTrips: totalOperations,
+        completedTrips: completedOperations.length,
         activeTrips: operations.filter(op => op.status === 'ACTIVE').length,
         cancelledTrips: operations.filter(op => op.status === 'CANCELLED').length,
 
