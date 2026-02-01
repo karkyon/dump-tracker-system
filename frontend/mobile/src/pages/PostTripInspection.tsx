@@ -220,18 +220,40 @@ const PostTripInspection: React.FC = () => {
       // ============================================
       // ✅ 修正: endOdometerとendFuelLevelを送信
       // ============================================
+      // 🆕 GPS座標取得
+      let endPosition: { latitude: number; longitude: number; accuracy?: number } | undefined;
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 5000
+          });
+        });
+        endPosition = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        };
+        console.log('[D8] 📍 GPS座標取得成功:', endPosition);
+      } catch (gpsError) {
+        console.warn('[D8] ⚠️ GPS座標取得失敗（運行終了は続行）:', gpsError);
+      }
+
       console.log('[D8] 🏁 運行終了API呼び出し:', operationId);
       console.log('[D8] 📊 送信データ:', {
         endTime: new Date(),
-        endOdometer,      // ✅ 追加
-        endFuelLevel,     // ✅ 追加
+        endOdometer,
+        endFuelLevel,
+        endPosition,
         notes: notes || ''
       });
 
       const endResponse = await apiService.endOperation(operationId, {
         endTime: new Date(),
-        endOdometer,      // ✅ 追加: 終了走行距離
-        endFuelLevel: endFuelLevel ?? undefined,     // ✅ 追加: 終了燃料レベル（null→undefined変換）
+        endOdometer,
+        endFuelLevel: endFuelLevel ?? undefined,
+        endPosition,             // 🆕 GPS座標送信
         notes: notes || ''
       });
 

@@ -142,6 +142,9 @@ export interface CompleteUnloadingRequest {
   itemId?: string;           // 品目ID（省略時は積込品目を使用）
   quantity?: number;         // 積降量（オプション）
   endTime?: Date | string;   // 終了時刻（省略時は現在時刻）
+  latitude?: number;         // 🆕 GPS緯度
+  longitude?: number;        // 🆕 GPS経度
+  accuracy?: number;         // 🆕 GPS測位精度（メートル）
   notes?: string;            // メモ（オプション）
 }
 
@@ -778,9 +781,6 @@ class APIServiceClass {
    * 【パラメータ】
    * @param tripId - 運行記録ID
    * @param data - 休憩終了データ
-   * @param data.latitude - GPS緯度（オプション）
-   * @param data.longitude - GPS経度（オプション）
-   * @param data.accuracy - GPS測位精度（オプション）
    * @param data.notes - メモ（オプション）
    * 
    * 【レスポンス】
@@ -789,8 +789,6 @@ class APIServiceClass {
    * 【使用例】
    * ```typescript
    * const result = await apiService.endBreak('trip-123', {
-   *   latitude: 35.6812,
-   *   longitude: 139.7671,
    *   notes: '休憩終了'
    * });
    * ```
@@ -798,9 +796,6 @@ class APIServiceClass {
   async endBreak(
     tripId: string,
     data?: {
-      latitude?: number;
-      longitude?: number;
-      accuracy?: number;
       notes?: string;
     }
   ): Promise<APIResponse<any>> {
@@ -859,6 +854,9 @@ class APIServiceClass {
       fuelAmount: number;
       fuelCost?: number;
       fuelStation?: string;
+      latitude?: number;     // 🆕 GPS緯度
+      longitude?: number;    // 🆕 GPS経度
+      accuracy?: number;     // 🆕 GPS測位精度（メートル）
       notes?: string;
     }
   ): Promise<APIResponse<any>> {

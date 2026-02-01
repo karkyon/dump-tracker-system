@@ -389,18 +389,9 @@ const OperationRecord: React.FC = () => {
       });
 
       if (dialogType === 'LOADING') {
-        // 積込場所到着記録（旧API使用）
-        console.log('🚛 積込場所到着記録API呼び出し開始');
-        
-        await apiService.recordLoadingArrival(currentOperationId, {
-          locationId: selectedLocation.location.id,
-          latitude: currentPosition.coords.latitude,
-          longitude: currentPosition.coords.longitude,
-          accuracy: currentPosition.coords.accuracy,
-          arrivalTime: new Date()
-        });
-        
-        console.log('✅ 積込場所到着記録完了');
+        // 🔧 修正: recordLoadingArrival はLoadingConfirmation.tsvで呼び出し。
+        // ここでは状態更新と遷移のみ行う（二重呼び出し修正）
+        console.log('🚛 積込場所選択完了 → LoadingConfirmation画面へ遷移');
         
         // 状態更新
         setOperation(prev => ({
@@ -725,10 +716,13 @@ const OperationRecord: React.FC = () => {
         tripId: currentOperationId
       });
 
+      // 🔧 修正: GPS座標を積降完了記録に追加
       // 🆕 新API呼び出し: 積降完了
-      // itemIdは積込品目を使用（バックエンドで自動設定）
       await apiService.completeUnloadingAtLocation(currentOperationId, {
         endTime: new Date(),
+        latitude: currentPosition?.coords.latitude,
+        longitude: currentPosition?.coords.longitude,
+        accuracy: currentPosition?.coords.accuracy,
         notes: '積降完了'
       });
 
@@ -817,8 +811,6 @@ const OperationRecord: React.FC = () => {
       
       // 🆕 休憩終了API呼び出し
       const response = await apiService.endBreak(currentOperationId, {
-        latitude: currentPosition?.coords.latitude,
-        longitude: currentPosition?.coords.longitude,
         notes: ''  // メモ（任意）
       });
       

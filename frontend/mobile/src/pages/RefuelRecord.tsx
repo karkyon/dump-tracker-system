@@ -88,6 +88,26 @@ const RefuelRecord: React.FC = () => {
       // 金額の数値変換（任意）
       const fuelCostNum = fuelCost ? parseNumberFromComma(fuelCost) : undefined;
 
+      // 🆕 GPS座標取得
+      let gpsCoords: { latitude?: number; longitude?: number; accuracy?: number } = {};
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 5000
+          });
+        });
+        gpsCoords = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        };
+        console.log('📍 GPS座標取得成功:', gpsCoords);
+      } catch (gpsError) {
+        console.warn('⚠️ GPS座標取得失敗（記録は続行）:', gpsError);
+      }
+
       console.log('⛽ 給油記録保存開始:', {
         tripId: currentOperationId,
         fuelAmount: fuelAmountNum,
@@ -101,6 +121,7 @@ const RefuelRecord: React.FC = () => {
         fuelAmount: fuelAmountNum,
         fuelCost: fuelCostNum,
         fuelStation: fuelStation || undefined,
+        ...gpsCoords,          // 🆕 GPS座標追加
         notes: notes || undefined
       });
 
