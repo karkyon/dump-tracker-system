@@ -66,6 +66,7 @@ export interface OperationState {
   // 🆕 フェーズ管理アクション
   setPhase: (phase: OperationPhase) => void;
   savePreviousPhase: (phase: OperationPhase) => void; // 🆕 休憩前フェーズ保存 (2025-12-28)
+  incrementBreakCount: () => void;              // 🔧 休憩回数インクリメント (2026-02-01)
   setLoadingLocation: (location: string) => void;
   setUnloadingLocation: (location: string) => void;
   
@@ -94,6 +95,7 @@ export const useOperationStore = create<OperationState>()(
       
       // 🆕 フェーズ管理初期値
       phase: 'TO_LOADING',
+      breakCount: 0,                           // 🔧 休憩回数（永続化対象）(2026-02-01)
       previousPhase: null, // 🆕 初期状態ではnull (2025-12-28)
       loadingLocation: null,
       unloadingLocation: null,
@@ -171,7 +173,7 @@ export const useOperationStore = create<OperationState>()(
         }, 100);
       },
 
-      // 🆕 フェーズ設定
+      // フェーズ設定
       setPhase: (phase) => {
         console.log('[Operation Store] 🔄 SET PHASE CALLED:', phase);
         console.log('[Operation Store] 📋 Before update - current phase:', get().phase);
@@ -189,7 +191,7 @@ export const useOperationStore = create<OperationState>()(
         }, 100);
       },
 
-      // 🆕 休憩前フェーズ保存 (2025-12-28)
+      // 休憩前フェーズ保存 (2025-12-28)
       savePreviousPhase: (phase) => {
         console.log('[Operation Store] 💾 SAVE PREVIOUS PHASE CALLED:', phase);
         console.log('[Operation Store] 📋 Before save - current previousPhase:', get().previousPhase);
@@ -207,7 +209,14 @@ export const useOperationStore = create<OperationState>()(
         }, 100);
       },
 
-      // 🆕 積込場所設定
+      // 休憩回数インクリメント (2026-02-01)
+      incrementBreakCount: () => {
+        const newCount = get().breakCount + 1;
+        console.log('[Operation Store] ☕ INCREMENT BREAK COUNT:', newCount);
+        set({ breakCount: newCount });
+      },
+
+      // 積込場所設定
       setLoadingLocation: (location) => {
         console.log('[Operation Store] 📍 SET LOADING LOCATION:', location);
         set({ loadingLocation: location });
@@ -246,6 +255,7 @@ export const useOperationStore = create<OperationState>()(
           inspectionCompleted: false,
           inspectionRecordId: null,
           phase: 'TO_LOADING', // 🔧 リセット時も初期フェーズに戻す
+          breakCount: 0,       // 🔧 休憩回数もリセット (2026-02-01)
           previousPhase: null, // 🆕 リセット時にクリア (2025-12-28)
           loadingLocation: null,
           unloadingLocation: null
@@ -260,6 +270,7 @@ export const useOperationStore = create<OperationState>()(
           vehicleId: state.vehicleId,
           status: state.status,
           phase: state.phase, // 🔧 フェーズも保存
+          breakCount: state.breakCount,       // 🔧 休憩回数も永続化 (2026-02-01)
           previousPhase: state.previousPhase // 🆕 休憩前フェーズも保存 (2025-12-28)
         });
         

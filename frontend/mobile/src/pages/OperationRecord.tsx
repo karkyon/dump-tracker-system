@@ -96,7 +96,7 @@ const OperationRecord: React.FC = () => {
     plannedRoute: '',  // 未使用フィールド
     estimatedDistance: 0,  // 未使用フィールド
     estimatedDuration: 0,  // 未使用フィールド
-    breakCount: 0,
+    breakCount: operationStore.breakCount || 0,  // 🔧 storeから復元 (2026-02-01)
     fuelLevel: 80,  // TODO: 車両情報から取得
     notes: ''
   });
@@ -779,7 +779,7 @@ const OperationRecord: React.FC = () => {
         phase: 'BREAK',
         breakCount: prev.breakCount + 1
       }));
-      
+      operationStore.incrementBreakCount();  // 🔧 永続化に反映 (2026-02-01)
       toast.success('休憩を開始しました');
       
       setIsSubmitting(false);
