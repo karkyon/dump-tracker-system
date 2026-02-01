@@ -35,6 +35,7 @@ export interface OperationState {
   
   // 🆕 運行フェーズ管理
   phase: OperationPhase;
+  breakCount: number;                              // 🔧 休憩回数（永続化対象）(2026-02-01)
   previousPhase: OperationPhase | null; // 🆕 休憩前のフェーズを記憶 (2025-12-28)
   loadingLocation: string | null;
   unloadingLocation: string | null;
@@ -287,6 +288,7 @@ export const useOperationStore = create<OperationState>()(
           inspectionRecordId: state.inspectionRecordId,
           // 🆕 フェーズ管理フィールドも永続化
           phase: state.phase,
+          breakCount: state.breakCount,            // 🔧 休憩回数も永続化 (2026-02-01)
           previousPhase: state.previousPhase, // 🆕 休憩前フェーズも永続化 (2025-12-28)
           loadingLocation: state.loadingLocation,
           unloadingLocation: state.unloadingLocation
