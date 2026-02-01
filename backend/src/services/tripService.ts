@@ -605,12 +605,12 @@ class TripService {
         });
 
         await this.recordGpsLocation(tripId, operation.vehicleId, {
-          latitude: Number(request.latitude),
-          longitude: Number(request.longitude),
+          latitude: Number(request.endLocation.latitude),
+          longitude: Number(request.endLocation.longitude),
           altitude: 0,
           speedKmh: 0,
           heading: 0,
-          accuracyMeters: request.accuracy ? Number(request.accuracy) : 10,
+          accuracyMeters: 10,
           recordedAt: request.endTime || new Date()
         });
 
@@ -970,19 +970,14 @@ class TripService {
       // ✅ 修正: OperationDetailCreateDTO型に完全対応 + locationId空文字列対応
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
-        locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,
+        locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,  // ✅ 空文字列→undefined
         itemId: activityData.itemId && activityData.itemId.trim() !== '' ? activityData.itemId : undefined,
         sequenceNumber: nextSequenceNumber,
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
         quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
-        notes: activityData.notes || '',
-        // 🆕 GPS位置情報を直接保存
-        latitude: activityData.latitude,
-        longitude: activityData.longitude,
-        gpsAccuracyMeters: activityData.accuracy,
-        gpsRecordedAt: activityData.latitude ? new Date() : undefined
+        notes: activityData.notes || ''
       };
 
       const detail = await this.operationDetailService.create(detailData);
@@ -1402,6 +1397,12 @@ class TripService {
     try {
       logger.info('給油記録追加開始', { tripId, fuelData });
 
+      // 運行の存在確認
+      const operation = await this.operationService.findByKey(tripId);
+      if (!operation) {
+        throw new NotFoundError('運行が見つかりません');
+      }
+
       // 🔧 CreateTripDetailRequest形式に変換
       const activityData: CreateTripDetailRequest = {
         activityType: 'FUELING' as ActivityType,
@@ -1420,11 +1421,6 @@ class TripService {
 
       // GPS記録（オプション）
       if (fuelData.latitude && fuelData.longitude) {
-        const operation = await this.operationService.findByKey(tripId);
-        if (!operation) {
-          throw new NotFoundError('運行が見つかりません');
-        }
-
         logger.info('⛽ [addFuelRecord] GPS記録開始', {
           latitude: fuelData.latitude,
           longitude: fuelData.longitude
@@ -1813,7 +1809,7 @@ class TripService {
         operations: {
           connect: { id: operationId }
         },
-        vehicles: {                                      // 🆕 追加
+        vehicles: {
           connect: { id: vehicleId }
         },
         latitude: locationData.latitude,
@@ -1827,9 +1823,9 @@ class TripService {
 
       await this.gpsLogService.create(gpsData);
 
-      logger.debug('GPS位置記録完了', { operationId });
+      logger.debug('GPS位置記録完了', { operationId, vehicleId });
     } catch (error) {
-      logger.error('GPS位置記録エラー', { error, operationId });
+      logger.error('GPS位置記録エラー', { error, operationId, vehicleId });
     }
   }
 

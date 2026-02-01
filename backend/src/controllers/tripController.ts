@@ -491,8 +491,8 @@ export class TripController {
       }
 
       // バリデーション
-      if (!fuelData.fuelAmount || !fuelData.fuelCost) {
-        throw new ValidationError('燃料量と燃料費は必須です');
+      if (!fuelData.fuelAmount) {
+        throw new ValidationError('給油量は必須です');
       }
 
       // 既存運行記録の確認
