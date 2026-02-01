@@ -63,13 +63,19 @@ export interface OperationDetailCreateDTO {
   operationId: string;
   sequenceNumber: number;
   activityType: string;
-  locationId?: string;  // 🔧 修正: オプショナルに変更
+  locationId?: string;
   itemId?: string;
   plannedTime?: Date;
   actualStartTime?: Date;
   actualEndTime?: Date;
   quantityTons: number;
   notes?: string;
+  // 🆕 GPS位置情報フィールド
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  gpsAccuracyMeters?: number;
+  gpsRecordedAt?: Date;
 }
 
 export interface OperationDetailUpdateDTO {
@@ -265,6 +271,12 @@ export class OperationDetailService {
         actualEndTime: data.actualEndTime,
         quantityTons: data.quantityTons,
         notes: data.notes,
+        // 🆕 GPS位置情報を直接保存
+        latitude: data.latitude ?? null,
+        longitude: data.longitude ?? null,
+        altitude: data.altitude ?? null,
+        gpsAccuracyMeters: data.gpsAccuracyMeters ?? null,
+        gpsRecordedAt: data.gpsRecordedAt ?? null,
         createdAt: new Date(),
         updatedAt: new Date()
       };

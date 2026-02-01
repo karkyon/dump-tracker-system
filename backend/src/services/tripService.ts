@@ -598,13 +598,13 @@ class TripService {
       });
 
       // GPS記録（オプション）
-      if (request.latitude && request.longitude) {
+      if (request.endLocation?.latitude && request.endLocation?.longitude) {
         logger.info('🏁 [endTrip] GPS記録開始', {
-          latitude: request.latitude,
-          longitude: request.longitude
+          latitude: request.endLocation.latitude,
+          longitude: request.endLocation.longitude
         });
 
-        await this.recordGpsLocation(tripId, {
+        await this.recordGpsLocation(tripId, operation.vehicleId, {
           latitude: Number(request.latitude),
           longitude: Number(request.longitude),
           altitude: 0,
@@ -970,14 +970,19 @@ class TripService {
       // ✅ 修正: OperationDetailCreateDTO型に完全対応 + locationId空文字列対応
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
-        locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,  // ✅ 空文字列→undefined
+        locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,
         itemId: activityData.itemId && activityData.itemId.trim() !== '' ? activityData.itemId : undefined,
         sequenceNumber: nextSequenceNumber,
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
         quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
-        notes: activityData.notes || ''
+        notes: activityData.notes || '',
+        // 🆕 GPS位置情報を直接保存
+        latitude: activityData.latitude,
+        longitude: activityData.longitude,
+        gpsAccuracyMeters: activityData.accuracy,
+        gpsRecordedAt: activityData.latitude ? new Date() : undefined
       };
 
       const detail = await this.operationDetailService.create(detailData);
@@ -1071,7 +1076,7 @@ class TripService {
             longitude: data.longitude
           });
 
-          await this.recordGpsLocation(tripId, {
+          await this.recordGpsLocation(tripId, operation.vehicleId, {
             latitude: Number(data.latitude),
             longitude: Number(data.longitude),
             altitude: 0,
@@ -1169,7 +1174,7 @@ class TripService {
           longitude: data.longitude
         });
 
-        await this.recordGpsLocation(tripId, {
+        await this.recordGpsLocation(tripId, operation.vehicleId, {
           latitude: Number(data.latitude),
           longitude: Number(data.longitude),
           altitude: 0,
@@ -1264,7 +1269,7 @@ class TripService {
           longitude: data.longitude
         });
 
-        await this.recordGpsLocation(tripId, {
+        await this.recordGpsLocation(tripId, operation.vehicleId, {
           latitude: Number(data.latitude),
           longitude: Number(data.longitude),
           altitude: 0,
@@ -1362,7 +1367,7 @@ class TripService {
           longitude: data.longitude
         });
 
-        await this.recordGpsLocation(tripId, {
+        await this.recordGpsLocation(tripId, operation.vehicleId, {
           latitude: Number(data.latitude),
           longitude: Number(data.longitude),
           altitude: 0,
@@ -1415,12 +1420,17 @@ class TripService {
 
       // GPS記録（オプション）
       if (fuelData.latitude && fuelData.longitude) {
+        const operation = await this.operationService.findByKey(tripId);
+        if (!operation) {
+          throw new NotFoundError('運行が見つかりません');
+        }
+
         logger.info('⛽ [addFuelRecord] GPS記録開始', {
           latitude: fuelData.latitude,
           longitude: fuelData.longitude
         });
 
-        await this.recordGpsLocation(tripId, {
+        await this.recordGpsLocation(tripId, operation.vehicleId, {
           latitude: Number(fuelData.latitude),
           longitude: Number(fuelData.longitude),
           altitude: 0,
@@ -1477,7 +1487,7 @@ class TripService {
         throw new ConflictError('進行中の運行ではありません');
       }
 
-      await this.recordGpsLocation(tripId, {
+      await this.recordGpsLocation(tripId, operation.vehicleId, {
         latitude: Number(locationUpdate.latitude),
         longitude: Number(locationUpdate.longitude),
         altitude: locationUpdate.altitude ? Number(locationUpdate.altitude) : undefined,
@@ -1795,12 +1805,16 @@ class TripService {
    */
   private async recordGpsLocation(
     operationId: string,
+    vehicleId: string,
     locationData: Partial<GpsLogCreateInput>
   ): Promise<void> {
     try {
       const gpsData: any = {
         operations: {
           connect: { id: operationId }
+        },
+        vehicles: {                                      // 🆕 追加
+          connect: { id: vehicleId }
         },
         latitude: locationData.latitude,
         longitude: locationData.longitude,

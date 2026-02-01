@@ -703,7 +703,11 @@ export class TripController {
         activityType: 'LOADING',
         startTime: activityData.startTime || new Date(),
         endTime: activityData.endTime,
-        notes: activityData.notes || ''
+        notes: activityData.notes || '',
+        // 🆕 GPS データを operation_details に保存
+        latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
+        longitude: activityData.longitude ? Number(activityData.longitude) : undefined,
+        accuracy: activityData.accuracy ? Number(activityData.accuracy) : undefined
       };
 
       logger.info('🚚 [API-STEP 21] CreateTripDetailRequest 変換完了', {
@@ -986,7 +990,11 @@ export class TripController {
         activityType: 'UNLOADING',
         startTime: activityData.startTime || new Date(),
         endTime: activityData.endTime,
-        notes: activityData.notes || ''
+        notes: activityData.notes || '',
+        // 🆕 GPS データを operation_details に保存
+        latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
+        longitude: activityData.longitude ? Number(activityData.longitude) : undefined,
+        accuracy: activityData.accuracy ? Number(activityData.accuracy) : undefined
       };
 
       logger.info('📦 [API-STEP 21] CreateTripDetailRequest 変換完了', {
@@ -1429,7 +1437,11 @@ export class TripController {
         activityType: 'BREAK_START' as any,  // TODO: ActivityType に BREAK_START 追加
         startTime: new Date(),
         endTime: undefined,
-        notes: `休憩開始${breakData.location ? `: ${breakData.location}` : ''}${breakData.notes ? ` - ${breakData.notes}` : ''}`
+        notes: `休憩開始${breakData.location ? `: ${breakData.location}` : ''}${breakData.notes ? ` - ${breakData.notes}` : ''}`,
+        // 🆕 GPS位置情報を operation_details に保存
+        latitude: breakData.latitude ? Number(breakData.latitude) : undefined,
+        longitude: breakData.longitude ? Number(breakData.longitude) : undefined,
+        accuracy: breakData.accuracy ? Number(breakData.accuracy) : undefined
       };
 
       logger.info('☕ [API-STEP 12] activityInput 構築完了', {
@@ -1604,7 +1616,11 @@ export class TripController {
         activityType: 'BREAK_END' as any,  // TODO: ActivityType に BREAK_END 追加
         startTime: new Date(),
         endTime: new Date(),
-        notes: `休憩終了${breakData.notes ? ` - ${breakData.notes}` : ''}`
+        notes: `休憩終了${breakData.notes ? ` - ${breakData.notes}` : ''}`,
+        // 🆕 GPS位置情報を operation_details に保存
+        latitude: breakData.latitude ? Number(breakData.latitude) : undefined,
+        longitude: breakData.longitude ? Number(breakData.longitude) : undefined,
+        accuracy: breakData.accuracy ? Number(breakData.accuracy) : undefined
       };
 
       logger.info('⏱️ [API-STEP 12] activityInput 構築完了', {

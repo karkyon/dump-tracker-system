@@ -817,6 +817,8 @@ const OperationRecord: React.FC = () => {
       
       // 🆕 休憩終了API呼び出し
       const response = await apiService.endBreak(currentOperationId, {
+        latitude: currentPosition?.coords.latitude,
+        longitude: currentPosition?.coords.longitude,
         notes: ''  // メモ（任意）
       });
       

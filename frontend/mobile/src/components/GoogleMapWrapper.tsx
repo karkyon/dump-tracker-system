@@ -58,12 +58,22 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     console.log('🗺️ GoogleMapWrapper 初期化開始');
 
     if (isGlobalMapInitialized && globalMapInstance) {
-      console.log('♻️ 既存マップを再利用');
-      setIsLoading(false);
-      if (onMapReady) {
-        onMapReady(globalMapInstance, globalMarkerInstance, globalPolylineInstance);
+      const existingDiv = globalMapInstance.getDiv();
+      if (existingDiv && document.contains(existingDiv)) {
+        console.log('♻️ 既存マップを再利用');
+        setIsLoading(false);
+        if (onMapReady) {
+          onMapReady(globalMapInstance, globalMarkerInstance, globalPolylineInstance);
+        }
+        return;
+      } else {
+        // DOMコンテナが削除済み→グローバル全リセットして再初期化に流る
+        console.log('🔄 マップコンテナ消失検出。再初期化');
+        isGlobalMapInitialized = false;
+        globalMapInstance = null;
+        globalMarkerInstance = null;
+        globalPolylineInstance = null;
       }
-      return;
     }
 
     if (initializationInProgress) {

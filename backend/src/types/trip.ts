@@ -42,6 +42,12 @@ export interface OperationDetailCreateDTO {
   actualEndTime?: Date;
   quantityTons: number;
   notes?: string;
+  // 🆕 GPS位置情報フィールド（operation_details テーブルへの直接保存用）
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  gpsAccuracyMeters?: number;
+  gpsRecordedAt?: Date;
 }
 
 // =====================================
@@ -112,6 +118,10 @@ export interface CreateTripDetailRequest {
   startTime: Date;
   endTime?: Date;
   notes?: string;
+  // 🆕 GPS位置情報フィールド（Controller → Service へのパススルー用）
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
 }
 
 // =====================================
@@ -187,13 +197,17 @@ export interface UpdateTripRequestExtended extends Prisma.OperationUpdateInput {
 export interface EndTripRequest {
   endTime: Date;
   endMileage?: number;
-  endOdometer?: number;              // ✅ 追加: 運行終了時走行距離
-  endFuelLevel?: number;             // ✅ 追加: 運行終了時燃料レベル
+  endOdometer?: number;
+  endFuelLevel?: number;
   endLocation?: {
     latitude: number;
     longitude: number;
     address?: string;
   };
+  // 🆕 トップレベルGPSフィールド（他リクエスト型と統一）
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
   fuelConsumed?: number;
   fuelCost?: number;
   notes?: string;

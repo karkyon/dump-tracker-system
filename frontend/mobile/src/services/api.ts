@@ -778,6 +778,9 @@ class APIServiceClass {
    * 【パラメータ】
    * @param tripId - 運行記録ID
    * @param data - 休憩終了データ
+   * @param data.latitude - GPS緯度（オプション）
+   * @param data.longitude - GPS経度（オプション）
+   * @param data.accuracy - GPS測位精度（オプション）
    * @param data.notes - メモ（オプション）
    * 
    * 【レスポンス】
@@ -786,6 +789,8 @@ class APIServiceClass {
    * 【使用例】
    * ```typescript
    * const result = await apiService.endBreak('trip-123', {
+   *   latitude: 35.6812,
+   *   longitude: 139.7671,
    *   notes: '休憩終了'
    * });
    * ```
@@ -793,6 +798,9 @@ class APIServiceClass {
   async endBreak(
     tripId: string,
     data?: {
+      latitude?: number;
+      longitude?: number;
+      accuracy?: number;
       notes?: string;
     }
   ): Promise<APIResponse<any>> {
@@ -849,7 +857,7 @@ class APIServiceClass {
     tripId: string,
     data: {
       fuelAmount: number;
-      fuelCost: number;
+      fuelCost?: number;
       fuelStation?: string;
       notes?: string;
     }
