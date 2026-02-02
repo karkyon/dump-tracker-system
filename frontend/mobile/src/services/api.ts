@@ -749,6 +749,7 @@ class APIServiceClass {
     data?: {
       latitude?: number;
       longitude?: number;
+      accuracy?: number;
       location?: string;
       notes?: string;
     }

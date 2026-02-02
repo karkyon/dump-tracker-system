@@ -768,6 +768,7 @@ const OperationRecord: React.FC = () => {
       const response = await apiService.startBreak(currentOperationId, {
         latitude: currentPosition?.coords.latitude,
         longitude: currentPosition?.coords.longitude,
+        accuracy: currentPosition?.coords.accuracy,  // 🆕 追加
         location: '',  // 休憩場所名（任意）
         notes: ''  // メモ（任意）
       });
