@@ -997,15 +997,25 @@ class TripService {
       // ✅ 修正: OperationDetailCreateDTO型に完全対応 + locationId空文字列対応
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
-        locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,  // ✅ 空文字列→undefined
+        locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,
         itemId: activityData.itemId && activityData.itemId.trim() !== '' ? activityData.itemId : undefined,
         sequenceNumber: nextSequenceNumber,
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
         quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
-        notes: activityData.notes || ''
+        notes: activityData.notes || '',
+        // 🆕 GPS位置情報マッピング
+        latitude: activityData.latitude,
+        longitude: activityData.longitude,
+        gpsAccuracyMeters: activityData.accuracy
       };
+
+      logger.info('🆕 GPS データマッピング確認', {
+        input: { latitude: activityData.latitude, longitude: activityData.longitude, accuracy: activityData.accuracy },
+        output: { latitude: detailData.latitude, longitude: detailData.longitude, gpsAccuracyMeters: detailData.gpsAccuracyMeters },
+        hasGps: detailData.latitude != null && detailData.longitude != null
+      });
 
       const detail = await this.operationDetailService.create(detailData);
 
@@ -1177,8 +1187,13 @@ class TripService {
           itemId: data.itemId || undefined,
           quantityTons: data.quantity !== undefined
             ? data.quantity
-            : Number(loadingDetail.quantityTons),  // ✅ Decimal → number 変換
-          notes: data.notes || loadingDetail.notes || undefined  // ✅ null → undefined 変換
+            : Number(loadingDetail.quantityTons),
+          notes: data.notes || loadingDetail.notes || undefined,
+          // 🆕 GPS座標を operation_details に保存
+          latitude: data.latitude ? Number(data.latitude) : undefined,
+          longitude: data.longitude ? Number(data.longitude) : undefined,
+          gpsAccuracyMeters: data.accuracy ? Number(data.accuracy) : undefined,
+          gpsRecordedAt: data.latitude ? new Date() : undefined
         }
       );
 
@@ -1370,8 +1385,13 @@ class TripService {
           itemId: data.itemId || undefined,
           quantityTons: data.quantity !== undefined
             ? data.quantity
-            : Number(unloadingDetail.quantityTons),  // ✅ Decimal → number 変換
-          notes: data.notes || unloadingDetail.notes || undefined  // ✅ null → undefined 変換
+            : Number(unloadingDetail.quantityTons),
+          notes: data.notes || unloadingDetail.notes || undefined,
+          // 🆕 GPS座標を operation_details に保存
+          latitude: data.latitude ? Number(data.latitude) : undefined,
+          longitude: data.longitude ? Number(data.longitude) : undefined,
+          gpsAccuracyMeters: data.accuracy ? Number(data.accuracy) : undefined,
+          gpsRecordedAt: data.latitude ? new Date() : undefined
         }
       );
 
@@ -1433,12 +1453,16 @@ class TripService {
       // 🔧 CreateTripDetailRequest形式に変換
       const activityData: CreateTripDetailRequest = {
         activityType: 'FUELING' as ActivityType,
-        locationId: '' as any,  // ✅ 空文字列（as any でTypeScriptエラー回避）
-        itemId: '' as any,      // ✅ 空文字列（as any でTypeScriptエラー回避）
+        locationId: '' as any,
+        itemId: '' as any,
         startTime: fuelData.timestamp || new Date(),
         endTime: fuelData.timestamp || new Date(),
-        quantity: fuelData.fuelAmount,  // 給油量をquantityとして記録
-        notes: `給油: ${fuelData.fuelAmount}L, 費用: ¥${fuelData.fuelCost}${fuelData.location ? `, 場所: ${fuelData.location}` : ''}${fuelData.notes ? `, ${fuelData.notes}` : ''}`
+        quantity: fuelData.fuelAmount,
+        notes: `給油: ${fuelData.fuelAmount}L, 費用: ¥${fuelData.fuelCost}${fuelData.location ? `, 場所: ${fuelData.location}` : ''}${fuelData.notes ? `, ${fuelData.notes}` : ''}`,
+        // 🆕 GPS座標を operation_details に保存
+        latitude: fuelData.latitude ? Number(fuelData.latitude) : undefined,
+        longitude: fuelData.longitude ? Number(fuelData.longitude) : undefined,
+        accuracy: fuelData.accuracy ? Number(fuelData.accuracy) : undefined
       };
 
       // ✅ addActivityメソッドを使用（sequenceNumber自動計算）

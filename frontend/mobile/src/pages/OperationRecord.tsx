@@ -811,7 +811,10 @@ const OperationRecord: React.FC = () => {
       
       // 🆕 休憩終了API呼び出し
       const response = await apiService.endBreak(currentOperationId, {
-        notes: ''  // メモ（任意）
+        latitude: currentPosition?.coords.latitude,
+        longitude: currentPosition?.coords.longitude,
+        accuracy: currentPosition?.coords.accuracy,
+        notes: ''
       });
       
       console.log('✅ 休憩終了API成功:', response);

@@ -88,6 +88,12 @@ export interface OperationDetailUpdateDTO {
   actualEndTime?: Date;
   quantityTons?: number;
   notes?: string;
+  // 🆕 GPS位置情報フィールド
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  gpsAccuracyMeters?: number;
+  gpsRecordedAt?: Date;
 }
 
 // =====================================
@@ -276,7 +282,7 @@ export class OperationDetailService {
         longitude: data.longitude ?? null,
         altitude: data.altitude ?? null,
         gpsAccuracyMeters: data.gpsAccuracyMeters ?? null,
-        gpsRecordedAt: data.gpsRecordedAt ?? null,
+        gpsRecordedAt: data.gpsRecordedAt ?? new Date(),
         createdAt: new Date(),
         updatedAt: new Date()
       };

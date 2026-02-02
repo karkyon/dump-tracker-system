@@ -796,6 +796,9 @@ class APIServiceClass {
   async endBreak(
     tripId: string,
     data?: {
+      latitude?: number;
+      longitude?: number;
+      accuracy?: number;
       notes?: string;
     }
   ): Promise<APIResponse<any>> {
