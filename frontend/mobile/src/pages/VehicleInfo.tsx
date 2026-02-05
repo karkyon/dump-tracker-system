@@ -125,7 +125,7 @@ const VehicleInfo: React.FC = () => {
           return {
             id: v.id,  // ✅ UUID形式のIDをそのまま使用
             vehicleNumber: v.plateNumber,  // 車番(ナンバープレート)
-            vehicleType: v.vehicleType,
+            vehicleType: v.vehicleType || v.model || '未設定',  // 🆕 フォールバック追加
             currentMileage: v.currentMileage,
             lastDriver: lastDriver || '未割当',
             lastOperationDate: lastOperationDate || '－'

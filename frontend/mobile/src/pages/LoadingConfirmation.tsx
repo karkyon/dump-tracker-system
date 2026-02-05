@@ -455,7 +455,7 @@ const LoadingConfirmation: React.FC = () => {
                 )}
               </div>
             </div>
-
+            
             {/* 最終確認チェックボックス */}
             <div style={{
               padding: '20px',
@@ -517,6 +517,24 @@ const LoadingConfirmation: React.FC = () => {
               lineHeight: '1.5'
             }}>
               <strong>⚠️ 注意:</strong> 「運行開始」ボタンを押すと、GPS位置と共に積込記録が登録され、積降場所への移動フェーズに移行します。
+            </p>
+
+            {/* 🆕 URLリンク追加 */}
+            <p style={{ margin: '12px 0 0 0', fontSize: '13px', color: '#666' }}>
+              注意: 産業廃棄物マニフェストを登録する場合は、
+              <a 
+                href="https://idp.e-reverse.com/webid/auth/Account/Login"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: '#2196F3',
+                  textDecoration: 'underline',
+                  marginLeft: '4px'
+                }}
+              >
+                こちら
+              </a>
+              からログインしてください。
             </p>
           </div>
         </div>

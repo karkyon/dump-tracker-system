@@ -863,6 +863,37 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
+   * 🆕 新規地点登録ハンドラー
+   * LocationSelectionDialogの「新規登録」ボタンから呼び出される
+   */
+  const handleCreateNewLocation = () => {
+    console.log('🆕 新規地点登録ボタンがクリックされました');
+    
+    // 地点選択ダイアログを閉じる
+    setLocationDialogVisible(false);
+    setLocationCandidates([]);
+    
+    // GPS座標確認
+    if (!currentPosition) {
+      toast.error('GPS座標を取得できません');
+      return;
+    }
+    
+    // 地点タイプを設定（積込 or 積降）
+    const locationType = dialogType === 'LOADING' ? 'PICKUP' : 'DELIVERY';
+    setRegistrationLocationType(locationType);
+    
+    // 🆕 新規登録ダイアログを表示
+    setShowRegistrationDialog(true);
+    
+    console.log('📍 新規地点登録ダイアログを表示:', {
+      locationType,
+      latitude: currentPosition.coords.latitude,
+      longitude: currentPosition.coords.longitude
+    });
+  };
+
+  /**
    * 🆕 運行終了ハンドラー（最終版 - Home遷移とエラー抑制）
    * - 運行終了API呼び出し
    * - operationStoreのリセット
@@ -1154,7 +1185,7 @@ const OperationRecord: React.FC = () => {
         {/* ✅ 既存 + 🆕: フェーズ別ボタン */}
         {getPhaseButtons()}
 
-        {/* ✅ 既存: 共通ボタン */}
+        {/* 共通ボタン */}
         <div style={{ 
           display: 'grid', 
           gridTemplateColumns: '1fr 1fr 1fr', 
@@ -1180,16 +1211,16 @@ const OperationRecord: React.FC = () => {
           
           <button
             onClick={handleRefuel}
-            disabled={isSubmitting}
+            disabled={isSubmitting || operation.phase === 'BREAK'}  // 🆕 休憩中は不活性
             style={{
               padding: '12px',
               fontSize: '14px',
               fontWeight: 'bold',
               color: 'white',
-              background: isSubmitting ? '#ccc' : '#FFC107',
+              background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#FFC107',  // 🆕
               border: 'none',
               borderRadius: '6px',
-              cursor: isSubmitting ? 'not-allowed' : 'pointer'
+              cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'  // 🆕
             }}
           >
             ⛽ 給油
@@ -1212,10 +1243,10 @@ const OperationRecord: React.FC = () => {
           </button>
         </div>
 
-        {/* ✅ 既存: 運行終了ボタン */}
+        {/* 運行終了ボタン */}
         <button
           onClick={handleOperationEnd}
-          disabled={isSubmitting}
+          disabled={isSubmitting || operation.phase === 'BREAK'}  // 🆕 休憩中は不活性
           style={{
             width: '100%',
             marginTop: '12px',
@@ -1223,10 +1254,10 @@ const OperationRecord: React.FC = () => {
             fontSize: '16px',
             fontWeight: 'bold',
             color: 'white',
-            background: isSubmitting ? '#ccc' : '#F44336',
+            background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#F44336',  // 🆕
             border: 'none',
             borderRadius: '8px',
-            cursor: isSubmitting ? 'not-allowed' : 'pointer'
+            cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'  // 🆕
           }}
         >
           🏁 運行終了
@@ -1239,6 +1270,7 @@ const OperationRecord: React.FC = () => {
         visible={locationDialogVisible}
         onSelect={handleLocationSelected}
         onCancel={handleLocationDialogCancel}
+        onCreateNew={handleCreateNewLocation}  // 🆕 ハンドラーを追加
         title={dialogType === 'LOADING' ? '積込場所を選択' : '積降場所を選択'}
       />
 

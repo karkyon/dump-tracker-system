@@ -3,6 +3,7 @@
 // ✅ 複数候補地点の表示
 // ✅ 単一候補時は確認ボタン
 // ✅ 複数候補時は選択リスト
+// ✅ 新規登録ボタン追加対応
 
 import React, { useState, useEffect } from 'react';
 import { NearbyLocationResult } from '../hooks/useNearbyLocationDetection';
@@ -12,6 +13,7 @@ interface LocationSelectionDialogProps {
   visible: boolean;
   onSelect: (location: NearbyLocationResult) => void;
   onCancel: () => void;
+  onCreateNew: () => void;  // 🆕 新規登録ハンドラー
   title: string;
 }
 
@@ -20,6 +22,7 @@ export const LocationSelectionDialog: React.FC<LocationSelectionDialogProps> = (
   visible,
   onSelect,
   onCancel,
+  onCreateNew,  // 🆕 propsから受け取り
   title
 }) => {
   const [selectedLocation, setSelectedLocation] = useState<NearbyLocationResult | null>(
@@ -271,6 +274,25 @@ export const LocationSelectionDialog: React.FC<LocationSelectionDialogProps> = (
             >
               キャンセル
             </button>
+            
+            {/* 🆕 新規登録ボタン */}
+            <button
+              onClick={onCreateNew}
+              style={{
+                flex: 1,
+                padding: '14px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: 'white',
+                background: '#FF9800',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              🆕 新規登録
+            </button>
+
             <button
               onClick={handleConfirm}
               disabled={!selectedLocation}
