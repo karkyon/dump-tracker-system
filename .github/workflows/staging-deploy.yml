@@ -45,15 +45,16 @@ jobs:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/projects/dump-tracker/backend
-            rm -rf dist
-            cp -r /tmp/backend-deploy/dist .
-            cp /tmp/backend-deploy/package*.json .
-            npm ci --production
-            rm -rf /tmp/backend-deploy
-            sudo systemctl restart dump-tracker-backend.service
-            echo "✅ Backend deployed to Staging"
+        script: |
+          cd ~/projects/dump-tracker/backend
+          rm -rf dist
+          cp -r /tmp/backend-deploy/dist .
+          cp /tmp/backend-deploy/package*.json .
+          export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
+          npm ci --production
+          pkill -f "node.*dist/index.js"
+          nohup node dist/index.js > /dev/null 2>&1 &
+          echo "✅ Backend deployed to Staging"
 
       # ===========================
       # Mobile Frontend デプロイ
@@ -67,7 +68,7 @@ jobs:
         run: |
           cat > .env.production << EOF
           VITE_API_BASE_URL=${{ secrets.STAGING_API_URL }}
-          VITE_GOOGLE_MAPS_API_KEY=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY
+          VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
           VITE_APP_ENV=staging
           EOF
       
@@ -115,7 +116,7 @@ jobs:
         run: |
           cat > .env.production << EOF
           VITE_API_BASE_URL=${{ secrets.STAGING_API_URL }}
-          VITE_GOOGLE_MAPS_API_KEY=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY
+          VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
           VITE_APP_ENV=staging
           VITE_GPS_UPDATE_INTERVAL=5000
           VITE_DEBUG=false
