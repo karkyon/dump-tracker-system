@@ -54,14 +54,21 @@ jobs:
             npm ci --production
             rm -rf /tmp/backend-deploy
             
-            echo "⏹️ Stopping existing backend process..."
-            pkill -f "node.*dist/index.js" || true
-            sleep 2
+            # 既存プロセスを安全に停止
+            if pgrep -f "node.*dist/index.js" > /dev/null; then
+              echo "⏹️ Stopping existing backend process..."
+              pkill -f "node.*dist/index.js"
+              sleep 3
+            else
+              echo "ℹ️ No existing backend process found"
+            fi
             
+            # 新しいプロセスを起動
             echo "🚀 Starting new backend process..."
             nohup node dist/index.js >> logs/app.log 2>&1 </dev/null &
             sleep 2
             
+            # 起動確認
             if pgrep -f "node.*dist/index.js" > /dev/null; then
               echo "✅ Backend process started successfully"
               echo "✅ Backend deployed to Staging"
