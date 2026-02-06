@@ -45,16 +45,16 @@ jobs:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-        script: |
-          cd ~/projects/dump-tracker/backend
-          rm -rf dist
-          cp -r /tmp/backend-deploy/dist .
-          cp /tmp/backend-deploy/package*.json .
-          export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
-          npm ci --production
-          pkill -f "node.*dist/index.js"
-          nohup node dist/index.js > /dev/null 2>&1 &
-          echo "✅ Backend deployed to Staging"
+          script: |
+            cd ~/projects/dump-tracker/backend
+            rm -rf dist
+            cp -r /tmp/backend-deploy/dist .
+            cp /tmp/backend-deploy/package*.json .
+            export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
+            npm ci --production
+            pkill -f "node.*dist/index.js"
+            nohup node dist/index.js > /dev/null 2>&1 &
+            echo "✅ Backend deployed to Staging"
 
       # ===========================
       # Mobile Frontend デプロイ
