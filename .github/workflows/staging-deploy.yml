@@ -1,48 +1,50 @@
-name: 🚀 Deploy to Staging Environment
+name: 🧪 Deploy to Staging
 
 on:
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  deploy-staging:
     name: 🚀 Deploy to Staging Environment
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v3
-
+      
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: '20'
 
-      # ==================== Backend ====================
-      - name: 📦 Install Backend Dependencies
+      # ===========================
+      # Backend デプロイ
+      # ===========================
+      - name: 📦 Install backend dependencies
+        working-directory: ./backend
         run: npm ci
-        working-directory: backend
-
-      - name: 🔨 Build Backend
+      
+      - name: 🏗️ Build backend
+        working-directory: ./backend
         run: npm run build
-        working-directory: backend
-
-      - name: 📤 Transfer Backend Files
+      
+      - name: 🚀 Deploy backend to Staging
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
           source: "backend/dist/*,backend/package*.json"
           target: "/tmp/backend-deploy/"
           strip_components: 1
-
-      - name: 🚀 Deploy Backend to Staging
+      
+      - name: 📂 Update backend on Staging
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
           script: |
             cd ~/projects/dump-tracker/backend
             rm -rf dist
@@ -50,58 +52,65 @@ jobs:
             cp /tmp/backend-deploy/package*.json .
             export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
             npm ci --production
+            rm -rf /tmp/backend-deploy
+            
+            echo "⏹️ Stopping existing backend process..."
             pkill -f "node.*dist/index.js" || true
             sleep 2
+            
+            echo "🚀 Starting new backend process..."
             nohup node dist/index.js >> logs/app.log 2>&1 </dev/null &
             sleep 2
+            
             if pgrep -f "node.*dist/index.js" > /dev/null; then
               echo "✅ Backend process started successfully"
+              echo "✅ Backend deployed to Staging"
             else
               echo "❌ Backend process failed to start"
               exit 1
             fi
-            rm -rf /tmp/backend-deploy
-            echo "✅ Backend deployed to Staging"
 
-      # ==================== Mobile ====================
-      - name: 📦 Install Mobile Dependencies
+      # ===========================
+      # Mobile Frontend デプロイ
+      # ===========================
+      - name: 📦 Install mobile dependencies
+        working-directory: ./frontend/mobile
         run: npm ci
-        working-directory: frontend/mobile
-
-      - name: 🔧 Create Mobile Environment File
-        working-directory: frontend/mobile
+      
+      - name: 🔧 Create Staging .env.production for Mobile
+        working-directory: ./frontend/mobile
         run: |
           cat > .env.production << EOF
           VITE_API_BASE_URL=${{ secrets.STAGING_API_URL }}
           VITE_GOOGLE_MAPS_API_KEY=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY
           VITE_APP_ENV=staging
           EOF
-
-      - name: 🔧 Setup Mobile SSL Certificates
-        working-directory: frontend/mobile
+      
+      - name: 🏗️ Build mobile app
+        working-directory: ./frontend/mobile
         run: |
           mkdir -p .cert
           touch .cert/localhost-key.pem
           touch .cert/localhost-cert.pem
           sed -i 's/useRef<number | null>/useRef<any>/g' src/pages/OperationMain.tsx || true
           npm run build
-
-      - name: 📤 Transfer Mobile Files
+      
+      - name: 🚀 Deploy mobile to Staging
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
           source: "frontend/mobile/dist/*"
           target: "/tmp/mobile-deploy/"
           strip_components: 3
-
-      - name: 🚀 Deploy Mobile to Staging
+      
+      - name: 📂 Update mobile on Staging
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
           script: |
             rm -rf ~/projects/dump-tracker/frontend/mobile/dist/*
             cp -r /tmp/mobile-deploy/* ~/projects/dump-tracker/frontend/mobile/dist/
@@ -109,13 +118,15 @@ jobs:
             rm -rf /tmp/mobile-deploy
             echo "✅ Mobile deployed to Staging"
 
-      # ==================== CMS ====================
-      - name: 📦 Install CMS Dependencies
+      # ===========================
+      # CMS Frontend デプロイ
+      # ===========================
+      - name: 📦 Install CMS dependencies
+        working-directory: ./frontend/cms
         run: npm ci
-        working-directory: frontend/cms
-
-      - name: 🔧 Create CMS Environment File
-        working-directory: frontend/cms
+      
+      - name: 🔧 Create Staging .env.production for CMS
+        working-directory: ./frontend/cms
         run: |
           cat > .env.production << EOF
           VITE_API_BASE_URL=${{ secrets.STAGING_API_URL }}
@@ -125,27 +136,27 @@ jobs:
           VITE_DEBUG=false
           VITE_LOG_LEVEL=error
           EOF
-
-      - name: 🔨 Build CMS
+      
+      - name: 🏗️ Build CMS
+        working-directory: ./frontend/cms
         run: npm run build
-        working-directory: frontend/cms
-
-      - name: 📤 Transfer CMS Files
+      
+      - name: 🚀 Deploy CMS to Staging
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
           source: "frontend/cms/dist/*"
           target: "/tmp/cms-deploy/"
           strip_components: 3
-
-      - name: 🚀 Deploy CMS to Staging
+      
+      - name: 📂 Update CMS on Staging
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
           script: |
             rm -rf ~/projects/dump-tracker/frontend/cms/dist/*
             cp -r /tmp/cms-deploy/* ~/projects/dump-tracker/frontend/cms/dist/
@@ -153,8 +164,8 @@ jobs:
             rm -rf /tmp/cms-deploy
             sudo systemctl reload nginx
             echo "✅ CMS deployed to Staging"
-
-      - name: 🎉 Deployment Summary
+      
+      - name: ✅ Deployment Complete
         run: |
           echo "🎉 Staging deployment completed successfully!"
           echo "📱 Mobile: https://dumptracker-s.ddns.net/"
