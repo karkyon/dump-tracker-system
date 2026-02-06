@@ -879,15 +879,14 @@ const OperationRecord: React.FC = () => {
       return;
     }
     
-    // 地点タイプを設定（積込 or 積降）
-    const locationType = dialogType === 'LOADING' ? 'PICKUP' : 'DELIVERY';
-    setRegistrationLocationType(locationType);
+    // 🔧 修正: dialogTypeをそのまま使用（'LOADING' | 'UNLOADING'）
+    setRegistrationLocationType(dialogType);
     
     // 🆕 新規登録ダイアログを表示
     setShowRegistrationDialog(true);
     
     console.log('📍 新規地点登録ダイアログを表示:', {
-      locationType,
+      locationType: dialogType,
       latitude: currentPosition.coords.latitude,
       longitude: currentPosition.coords.longitude
     });
