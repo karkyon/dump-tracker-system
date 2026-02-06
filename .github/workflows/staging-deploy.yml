@@ -45,29 +45,16 @@ jobs:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/projects/dump-tracker/backend
-            rm -rf dist
-            cp -r /tmp/backend-deploy/dist .
-            cp /tmp/backend-deploy/package*.json .
-            export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
-            npm ci --production
-            
-            # 🔧 再起動スクリプトを作成
-            cat > /tmp/restart-backend.sh << 'EOF'
-            #!/bin/bash
-            cd ~/projects/dump-tracker/backend
-            export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
-            pkill -f "node.*dist/index.js" 2>/dev/null || true
-            sleep 2
-            nohup node dist/index.js > /dev/null 2>&1 &
-            echo "✅ Backend restarted"
-            EOF
-            
-            chmod +x /tmp/restart-backend.sh
-            nohup /tmp/restart-backend.sh > /tmp/restart.log 2>&1 &
-            sleep 1
-            echo "✅ Backend deployed to Staging"
+        script: |
+          cd ~/projects/dump-tracker/backend
+          rm -rf dist
+          cp -r /tmp/backend-deploy/dist .
+          cp /tmp/backend-deploy/package*.json .
+          export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
+          npm ci --production
+          pkill -f "node.*dist/index.js"
+          nohup node dist/index.js > /dev/null 2>&1 &
+          echo "✅ Backend deployed to Staging"
 
       # ===========================
       # Mobile Frontend デプロイ
