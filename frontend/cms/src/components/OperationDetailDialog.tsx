@@ -2,7 +2,7 @@
 // 基本情報・運行情報・場所情報・タイムライン・GPSルート・点検項目管理を完全実装
 // ✅ 修正: GPSルートタブにGoogle Maps実装追加
 // ✅ 修正: TypeScript型エラーのみ最小限修正、既存コード100%保持
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { 
   User, Truck, MapPin, Package, Clock,
   Navigation, CheckCircle, AlertCircle, TrendingUp, Edit,
@@ -250,6 +250,20 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const [operationDebugTimelineEvents, setOperationDebugTimelineEvents] = useState<OperationDebugTimelineEvent[]>([]);
   const [inspectionItemDetails, _setInspectionItemDetails] = useState<InspectionItemDetail[]>([]);
 
+    // ✅ タイムラインイベントからGPSポイントを抽出（地図表示用）
+  const timelineGpsPoints = useMemo(() => {
+    return operationDebugTimelineEvents
+      .filter(event => event.gpsLocation != null)
+      .map(event => ({
+        latitude: event.gpsLocation!.latitude,
+        longitude: event.gpsLocation!.longitude,
+        recordedAt: event.gpsLocation!.recordedAt,
+        eventType: event.eventType,
+        sequenceNumber: event.sequenceNumber,
+        notes: event.notes || ''
+      }));
+  }, [operationDebugTimelineEvents]);
+
   // タブ切り替え state
   const [activeTab, setActiveTab] = useState<'basic' | 'timeline' | 'gps' | 'inspection'>('basic');
 
@@ -344,7 +358,19 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     console.log('  - activeTab:', activeTab);
     console.log('  - activeTab === "gps":', activeTab === 'gps');
     
-    if (!mapsLoaded || !mapRef.current || gpsRecords.length === 0 || activeTab !== 'gps') {
+    // ✅ timelineGpsPointsを優先、なければgpsRecordsにフォールバック
+    const activeGpsPoints = timelineGpsPoints.length > 0
+      ? timelineGpsPoints
+      : gpsRecords.map(r => ({
+          latitude: r.latitude,
+          longitude: r.longitude,
+          recordedAt: r.recordedAt,
+          eventType: 'GPS_LOG' as const,
+          sequenceNumber: 0,
+          notes: ''
+        }));
+
+    if (!mapsLoaded || !mapRef.current || activeGpsPoints.length === 0 || activeTab !== 'gps') {
       console.warn('⚠️ [Map Debug] Map initialization skipped - conditions not met');
       return;
     }
@@ -352,6 +378,26 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     console.log('✅ [Map Debug] All conditions met - initializing map...');
 
     try {
+            // ✅ イベントタイプ→日本語ラベルのマッピング
+      const getEventLabel = (eventType: string): { short: string; full: string; color: string } => {
+        const labels: Record<string, { short: string; full: string; color: string }> = {
+          TRIP_START:      { short: 'S',  full: '運行開始',   color: '#10B981' },
+          TRIP_END:        { short: 'E',  full: '運行終了',   color: '#EF4444' },
+          PRE_INSPECTION:  { short: '前', full: '運行前点検', color: '#6366F1' },
+          POST_INSPECTION: { short: '後', full: '運行後点検', color: '#8B5CF6' },
+          LOADING:         { short: '積', full: '積込',       color: '#F59E0B' },
+          UNLOADING:       { short: '降', full: '積降',       color: '#F97316' },
+          BREAK_START:     { short: '休', full: '休憩開始',   color: '#64748B' },
+          BREAK_END:       { short: '再', full: '休憩終了',   color: '#64748B' },
+          FUELING:         { short: '油', full: '給油',       color: '#06B6D4' },
+          REFUELING:       { short: '油', full: '給油',       color: '#06B6D4' },
+          TRANSPORTING:    { short: '運', full: '輸送中',     color: '#3B82F6' },
+          WAITING:         { short: '待', full: '待機中',     color: '#94A3B8' },
+          GPS_LOG:         { short: '●', full: 'GPS記録',    color: '#3B82F6' },
+        };
+        return labels[eventType] || { short: '?', full: eventType, color: '#9CA3AF' };
+      };
+
       // 地図の中心座標を計算（GPS記録の平均値）
       const avgLat = gpsRecords.reduce((sum, record) => sum + record.latitude, 0) / gpsRecords.length;
       const avgLng = gpsRecords.reduce((sum, record) => sum + record.longitude, 0) / gpsRecords.length;
@@ -373,10 +419,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       mapInstanceRef.current = map;
       console.log('✅ [Map Debug] Google Maps instance created');
 
-      // GPSルートのパスを作成
-      const path = gpsRecords.map(record => ({
-        lat: record.latitude,
-        lng: record.longitude
+      // GPSルートのパスを作成（ポリライン）
+      const path = activeGpsPoints.map(point => ({
+        lat: point.latitude,
+        lng: point.longitude
       }));
 
       console.log('📍 [Map Debug] Path created with', path.length, 'points');
@@ -393,83 +439,66 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       });
       console.log('✅ [Map Debug] Polyline drawn');
 
-      // 開始位置マーカー
-      if (gpsRecords.length > 0) {
-        const firstPoint = gpsRecords[0];
-        console.log('📍 [Map Debug] Adding start marker at:', firstPoint);
-        new google.maps.Marker({
-          position: { lat: firstPoint.latitude, lng: firstPoint.longitude },
+      // ✅ イベントごとのマーカーを描画
+      const infoWindow = new google.maps.InfoWindow();
+
+      activeGpsPoints.forEach((point, index) => {
+        const label = getEventLabel(point.eventType);
+        const isFirst = index === 0;
+        const isLast = index === activeGpsPoints.length - 1;
+        const scale = isFirst || isLast ? 12 : 9;
+
+        const marker = new google.maps.Marker({
+          position: { lat: point.latitude, lng: point.longitude },
           map: map,
-          title: '開始位置',
-          label: 'S',
+          title: `${point.sequenceNumber > 0 ? point.sequenceNumber + '. ' : ''}${label.full}`,
+          label: {
+            text: label.short,
+            color: '#FFFFFF',
+            fontSize: '11px',
+            fontWeight: 'bold'
+          },
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: '#10B981',
+            scale: scale,
+            fillColor: label.color,
             fillOpacity: 1,
             strokeColor: '#FFFFFF',
             strokeWeight: 2
           }
         });
-        console.log('✅ [Map Debug] Start marker added');
-      }
 
-      // 終了位置マーカー
-      if (gpsRecords.length > 1) {
-        const lastPoint = gpsRecords[gpsRecords.length - 1];
-        console.log('📍 [Map Debug] Adding end marker at:', lastPoint);
-        new google.maps.Marker({
-          position: { lat: lastPoint.latitude, lng: lastPoint.longitude },
-          map: map,
-          title: '終了位置',
-          label: 'E',
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: '#EF4444',
-            fillOpacity: 1,
-            strokeColor: '#FFFFFF',
-            strokeWeight: 2
-          }
+        // クリックで情報ウィンドウ表示
+        marker.addListener('click', () => {
+          const content = `
+            <div style="padding:8px;min-width:160px;font-family:sans-serif;font-size:12px;">
+              <div style="font-weight:bold;font-size:13px;margin-bottom:4px;color:#1f2937;">
+                ${point.sequenceNumber > 0 ? point.sequenceNumber + '. ' : ''}${label.full}
+              </div>
+              <div style="color:#6b7280;margin-bottom:2px;">
+                📍 ${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}
+              </div>
+              <div style="color:#6b7280;margin-bottom:2px;">
+                🕐 ${new Date(point.recordedAt).toLocaleString('ja-JP')}
+              </div>
+              ${point.notes ? `<div style="color:#374151;margin-top:4px;border-top:1px solid #e5e7eb;padding-top:4px;">${point.notes}</div>` : ''}
+            </div>
+          `;
+          infoWindow.setContent(content);
+          infoWindow.open(map, marker);
         });
-        console.log('✅ [Map Debug] End marker added');
-      }
-
-      // 中間ポイントマーカー（10件ごと）
-      const intermediateCount = gpsRecords.filter((_, index) => 
-        index % 10 === 0 && index > 0 && index < gpsRecords.length - 1
-      ).length;
-      console.log('📍 [Map Debug] Adding', intermediateCount, 'intermediate markers...');
-      
-      gpsRecords.forEach((record, index) => {
-        if (index % 10 === 0 && index > 0 && index < gpsRecords.length - 1) {
-          new google.maps.Marker({
-            position: { lat: record.latitude, lng: record.longitude },
-            map: map,
-            title: `ポイント ${index + 1}`,
-            icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 6,
-              fillColor: '#3B82F6',
-              fillOpacity: 0.8,
-              strokeColor: '#FFFFFF',
-              strokeWeight: 1
-            }
-          });
-        }
       });
 
       console.log('✅ [Map Debug] === Google Map initialization SUCCESS ===');
-      console.log('✅ [Map Debug] Total GPS points:', gpsRecords.length);
+      console.log('✅ [Map Debug] Total GPS points:', activeGpsPoints.length);
       console.log('✅ [Map Debug] Map center:', { lat: avgLat, lng: avgLng });
-
     } catch (err) {
       console.error('❌ [Map Debug] === Google Map initialization FAILED ===');
       console.error('❌ [Map Debug] Error:', err);
       console.error('❌ [Map Debug] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
       setMapError('地図の表示中にエラーが発生しました');
     }
-  }, [mapsLoaded, gpsRecords, activeTab, mapRef]);
+   }, [mapsLoaded, gpsRecords, timelineGpsPoints, activeTab, mapRef]);
 
   // ===================================================================
   // データ取得
@@ -868,13 +897,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, operationId]);
 
-  // operationが更新されたらGPS記録を取得
+  // タイムラインGPSポイントがない場合のみGPS生ログをフォールバック取得
   useEffect(() => {
-    if (operation && isOpen && activeTab === 'gps' && gpsRecords.length === 0) {
-      console.log('🔄 [GPS Auto-fetch] Operation loaded, fetching GPS records...');
+    if (operation && isOpen && activeTab === 'gps' && timelineGpsPoints.length === 0 && gpsRecords.length === 0) {
+      console.log('🔄 [GPS Auto-fetch] No timeline GPS points, fetching raw GPS records as fallback...');
       fetchGpsRecords();
     }
-  }, [operation, isOpen, activeTab]);
+  }, [operation, isOpen, activeTab, timelineGpsPoints.length]);
 
   // 運行情報取得後に点検記録を取得
   useEffect(() => {
@@ -1450,7 +1479,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <Navigation className="w-5 h-5 text-gray-600" />
-                    GPSルート ({gpsRecords.length}ポイント)
+                    GPSルート ({timelineGpsPoints.length > 0 ? timelineGpsPoints.length : gpsRecords.length}ポイント)
                   </h3>
                   
                   {/* ✅ 常に地図エリアを表示 */}
@@ -1481,7 +1510,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         />
                         
                         {/* ✅ GPS記録なしオーバーレイ */}
-                        {gpsRecords.length === 0 && (
+                        {timelineGpsPoints.length === 0 && gpsRecords.length === 0 && (
                           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90">
                             <div className="text-center p-8">
                               <Navigation className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -1505,7 +1534,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         <div>
                           <p className="text-xs text-gray-500 mb-1">GPS記録ポイント</p>
                           <p className="text-lg font-semibold text-gray-900">
-                            {gpsRecords.length}
+                            {timelineGpsPoints.length > 0 ? timelineGpsPoints.length : gpsRecords.length}
                           </p>
                         </div>
                         <div>
