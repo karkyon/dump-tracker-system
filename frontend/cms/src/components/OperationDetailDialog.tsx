@@ -398,15 +398,15 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         return labels[eventType] || { short: '?', full: eventType, color: '#9CA3AF' };
       };
 
-      // 地図の中心座標を計算（GPS記録の平均値）
-      const avgLat = gpsRecords.reduce((sum, record) => sum + record.latitude, 0) / gpsRecords.length;
-      const avgLng = gpsRecords.reduce((sum, record) => sum + record.longitude, 0) / gpsRecords.length;
+    // 地図の中心座標を計算（activeGpsPointsを使用）
+    const avgLat = activeGpsPoints.reduce((sum, p) => sum + p.latitude, 0) / activeGpsPoints.length;
+    const avgLng = activeGpsPoints.reduce((sum, p) => sum + p.longitude, 0) / activeGpsPoints.length;
 
-      console.log('📍 [Map Debug] Calculated center:', { avgLat, avgLng });
-      console.log('📍 [Map Debug] GPS records sample (first 3):');
-      gpsRecords.slice(0, 3).forEach((record, i) => {
-        console.log(`  [${i}]:`, { lat: record.latitude, lng: record.longitude, time: record.recordedAt });
-      });
+    console.log('📍 [Map Debug] Calculated center:', { avgLat, avgLng });
+    console.log('📍 [Map Debug] GPS points sample (first 3):');
+    activeGpsPoints.slice(0, 3).forEach((p, i) => {
+      console.log(`  [${i}]:`, { lat: p.latitude, lng: p.longitude, type: p.eventType });
+    });
 
       // 地図初期化
       console.log('🗺️ [Map Debug] Creating Google Maps instance...');
