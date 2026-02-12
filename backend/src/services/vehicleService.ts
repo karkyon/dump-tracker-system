@@ -536,13 +536,19 @@ class VehicleService {
       // ✅ FIX: Prisma transactionの型修正 (564行目エラー)
       const updatedVehicle = await this.prisma.$transaction(async (tx) => {
         const updateDataPrepared: Prisma.VehicleUpdateInput = {
+          // ✅ FIX: plateNumber を追加（ナンバープレート更新対応）
+          plateNumber: updateData.plateNumber,
           model: updateData.model,
           manufacturer: updateData.manufacturer,
           year: updateData.year,
-          capacityTons: updateData.capacity,
+          // ✅ FIX: capacity / capacityTons 両方に対応
+          // フロントの denormalizeVehicle が capacity を削除して capacityTons を追加するため両方を参照
+          capacityTons: updateData.capacity ?? (updateData as any).capacityTons,
           fuelType: updateData.fuelType,
           status: updateData.status,
-          notes: updateData.notes
+          notes: updateData.notes,
+          // ✅ FIX: currentMileage を追加（走行距離更新対応）
+          currentMileage: updateData.currentMileage,
         };
 
         // ✅ FIX: VIN暗号化削除 (vinフィールド存在しない)
@@ -1147,8 +1153,11 @@ class VehicleService {
     if (!data.model) errors.push('モデル名は必須です');
     if (!data.manufacturer) errors.push('製造元は必須です');
 
-    if (data.plateNumber && !/^[A-Z0-9-]+$/i.test(data.plateNumber)) {
-      errors.push('ナンバープレートの形式が不正です');
+    if (data.plateNumber) {
+      const plateRegex = /^[\u3041-\u3096\u30A0-\u30FF\u4E00-\u9FAFa-zA-Z0-9\s\-]{2,20}$/;
+      if (!plateRegex.test(data.plateNumber)) {
+        errors.push('ナンバープレートの形式が不正です（例: 大阪 500 あ 1234）');
+      }
     }
 
     if (data.year) {
@@ -1175,11 +1184,15 @@ class VehicleService {
     existingVehicle: any
   ): Promise<void> {
     if (updateData.status) {
-      const validTransitions = this.getValidStatusTransitions(existingVehicle.status);
-      if (!validTransitions.includes(updateData.status)) {
-        throw new ValidationError(
-          `無効なステータス遷移: ${existingVehicle.status} → ${updateData.status}`
-        );
+      // ✅ FIX: 同一ステータスの場合はスキップ（変更なしのため遷移バリデーション不要）
+      // 例: INACTIVE → INACTIVE を送信した場合、validTransitions に含まれずエラーになっていた
+      if (updateData.status !== existingVehicle.status) {
+        const validTransitions = this.getValidStatusTransitions(existingVehicle.status);
+        if (!validTransitions.includes(updateData.status)) {
+          throw new ValidationError(
+            `無効なステータス遷移: ${existingVehicle.status} → ${updateData.status}`
+          );
+        }
       }
     }
 
