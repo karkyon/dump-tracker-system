@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Edit2, Trash2, Eye } from 'lucide-react';
 
 interface Column<T> {
   key: keyof T | string;
@@ -223,36 +223,37 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   editLabel = '編集',
   deleteLabel = '削除',
   viewLabel = '詳細',
-  size = 'sm',
 }) => {
-  const buttonClass = size === 'sm' 
-    ? 'px-2 py-1 text-xs' 
-    : 'px-3 py-1.5 text-sm';
-
   return (
-    <div className="flex space-x-2">
+    <div className="flex gap-2">
       {onView && (
         <button
+          type="button"
           onClick={onView}
-          className={`${buttonClass} text-blue-600 hover:text-blue-800 font-medium`}
+          title={viewLabel}
+          className="inline-flex items-center justify-center p-1.5 rounded border border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition-colors"
         >
-          {viewLabel}
+          <Eye className="w-4 h-4" />
         </button>
       )}
       {onEdit && (
         <button
+          type="button"
           onClick={onEdit}
-          className={`${buttonClass} text-indigo-600 hover:text-indigo-800 font-medium`}
+          title={editLabel}
+          className="inline-flex items-center justify-center p-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
         >
-          {editLabel}
+          <Edit2 className="w-4 h-4" />
         </button>
       )}
       {onDelete && (
         <button
+          type="button"
           onClick={onDelete}
-          className={`${buttonClass} text-red-600 hover:text-red-800 font-medium`}
+          title={deleteLabel}
+          className="inline-flex items-center justify-center p-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors"
         >
-          {deleteLabel}
+          <Trash2 className="w-4 h-4" />
         </button>
       )}
     </div>

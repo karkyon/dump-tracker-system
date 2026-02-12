@@ -11,6 +11,7 @@ import { UserRole } from '@prisma/client';
 // 🎯 Phase 1完成基盤の活用
 import { ValidationError } from './errors';
 import { sendValidationError } from './response';
+import { getPasswordConfig } from './crypto';
 
 // =====================================
 // バリデーション結果型
@@ -189,12 +190,9 @@ export function validatePassword(password: string): FieldValidation[] {
     }
 
     // 強いパスワード要件
-    const hasUppercase = /[A-Z]/.test(password);
-    const hasLowercase = /[a-z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const config = getPasswordConfig();
 
-    if (!hasUppercase) {
+    if (config.requireUppercase && !/[A-Z]/.test(password)) {
       errors.push({
         field: 'password',
         message: 'パスワードには大文字を含める必要があります',
@@ -202,7 +200,7 @@ export function validatePassword(password: string): FieldValidation[] {
       });
     }
 
-    if (!hasLowercase) {
+    if (config.requireLowercase && !/[a-z]/.test(password)) {
       errors.push({
         field: 'password',
         message: 'パスワードには小文字を含める必要があります',
@@ -210,7 +208,7 @@ export function validatePassword(password: string): FieldValidation[] {
       });
     }
 
-    if (!hasNumber) {
+    if (config.requireNumbers && !/[0-9]/.test(password)) {
       errors.push({
         field: 'password',
         message: 'パスワードには数字を含める必要があります',
@@ -218,7 +216,7 @@ export function validatePassword(password: string): FieldValidation[] {
       });
     }
 
-    if (!hasSpecialChar) {
+    if (config.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
       errors.push({
         field: 'password',
         message: 'パスワードには特殊文字を含める必要があります',

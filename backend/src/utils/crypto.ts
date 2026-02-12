@@ -193,10 +193,10 @@ export const getPasswordConfig = (): PasswordConfig => ({
   saltRounds: getEnvNumber('BCRYPT_SALT_ROUNDS', 10),
   minLength: 8,
   maxLength: 128,
-  requireUppercase: true,
+  requireUppercase: false,
   requireLowercase: true,
   requireNumbers: true,
-  requireSpecialChars: true
+  requireSpecialChars: false
 });
 
 /**
