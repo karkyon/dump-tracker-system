@@ -122,6 +122,8 @@ export interface CreateUserRequest {
   name?: string;
   role?: UserRole;
   isActive?: boolean;
+  employeeId?: string;
+  phone?: string;
 }
 
 /**
@@ -133,6 +135,8 @@ export interface UpdateUserRequest {
   name?: string;
   role?: UserRole;
   isActive?: boolean;
+  employeeId?: string;
+  phone?: string;
 }
 
 // =====================================

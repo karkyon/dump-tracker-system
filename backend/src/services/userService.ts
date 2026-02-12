@@ -35,6 +35,7 @@ import type {
 import type {
   ChangePasswordRequest,
   RolePermissions,
+  CreateUserRequest,
   UpdateUserRequest,
   UserFilter
 } from '../types/auth';
@@ -48,19 +49,6 @@ import type {
 // =====================================
 // 🧩 サービス専用型定義（既存完全保持）
 // =====================================
-
-// CreateUserRequestを拡張してemployeeIdとphoneを追加
-interface CreateUserRequest {
-  username: string;
-  email: string;
-  password: string;
-  name?: string;
-  role?: UserRole;
-  isActive?: boolean;
-  employeeId?: string;
-  phone?: string;
-}
-
 interface UserStatistics {
   total: number;
   activeCount: number;
@@ -492,6 +480,8 @@ class UserService {
       if (data.name !== undefined) updateData.name = data.name;
       if (data.role !== undefined) updateData.role = data.role;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;
+      if (data.employeeId !== undefined) updateData.employeeId = data.employeeId;
+      if (data.phone !== undefined) updateData.phone = data.phone;
 
       const updatedUser = await this.db.getInstance().user.update({
         where: { id },
@@ -1061,7 +1051,8 @@ export {
 export type { UserService as default };
 
 export type {
-  CreateUserRequest, UserAuditInfo, UserStatistics,
+  UserAuditInfo,
+  UserStatistics,
   UserWithDetails
 };
 
@@ -1089,7 +1080,6 @@ export type {
  * ✅ ValidationResult: valid と isValid の両方をサポート
  * ✅ PasswordValidationResult: errors 配列を正しく処理
  * ✅ getUserService: 重複宣言を解消（関数として定義）
- * ✅ CreateUserRequest: employeeId と phone を追加
  * ✅ passwordHash: 正しくアクセス
  * ✅ DatabaseService.getInstance(): this.db.getInstance() で正しく呼び出し
  * ✅ AppErrorの第3引数: String(error) で文字列化
