@@ -97,7 +97,6 @@ const normalizeVehicle = (vehicle: any): Vehicle => {
 const denormalizeVehicle = (vehicle: Partial<Vehicle>): any => {
   const backendData: any = { ...vehicle };
   
-  // フロントエンド形式 → バックエンド形式へのマッピング
   if (vehicle.vehicleNumber && !vehicle.plateNumber) {
     backendData.plateNumber = vehicle.vehicleNumber;
     delete backendData.vehicleNumber;
@@ -109,8 +108,11 @@ const denormalizeVehicle = (vehicle: Partial<Vehicle>): any => {
   }
   
   if (vehicle.capacity && !vehicle.capacityTons) {
+    // ✅ FIX: capacityTons も追加するが、capacity は削除しない
+    // バックエンドの UpdateVehicleRequest は capacity フィールドを期待する
+    // vehicleService.ts 側で capacityTons: updateData.capacity ?? capacityTons の両方参照に対応
     backendData.capacityTons = vehicle.capacity;
-    delete backendData.capacity;
+    // delete backendData.capacity; ← 削除: これにより updateData.capacity が undefined になっていた
   }
   
   return backendData;
