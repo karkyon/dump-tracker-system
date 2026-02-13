@@ -21,6 +21,20 @@ const SystemSettings: React.FC = () => {
     enableUserActionLogging: true
   });
 
+  // ✅ GPS走行軌跡表示設定（localStorage永続化）
+  const GPS_TRACK_KEY = 'dump_tracker_gps_track_settings';
+  const [gpsTrackSettings, setGpsTrackSettings] = useState<{
+    showTrack: boolean;
+    intervalMinutes: number;
+  }>(() => {
+    try {
+      const raw = localStorage.getItem(GPS_TRACK_KEY);
+      return raw ? JSON.parse(raw) : { showTrack: false, intervalMinutes: 5 };
+    } catch {
+      return { showTrack: false, intervalMinutes: 5 };
+    }
+  });
+
   const tabs = [
     { id: 'general', label: '一般設定', icon: Settings },
     { id: 'logs', label: 'ログ管理', icon: AlertTriangle }
@@ -30,6 +44,9 @@ const SystemSettings: React.FC = () => {
     try {
       // 実際のAPI呼び出しをシミュレート
       await new Promise(resolve => setTimeout(resolve, 1000));
+      // ✅ GPS走行軌跡設定を localStorage に保存
+      localStorage.setItem(GPS_TRACK_KEY, JSON.stringify(gpsTrackSettings));
+      console.log('✅ [SystemSettings] GPS走行軌跡設定を保存:', gpsTrackSettings);
       alert('設定を保存しました');
     } catch (error) {
       alert('設定の保存に失敗しました');
@@ -240,6 +257,72 @@ const SystemSettings: React.FC = () => {
                 <option value="24h">24時間形式</option>
                 <option value="12h">12時間形式</option>
               </select>
+            </div>
+          </div>
+
+          {/* GPS走行軌跡表示設定 */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-base font-medium text-gray-900 mb-4">
+              🗺️ GPS走行軌跡表示設定
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              運行記録詳細のGPSルートタブで、イベントPIN以外の走行軌跡を地図に表示するかどうかを設定します。
+            </p>
+            <div className="space-y-4">
+              {/* ON/OFFトグル */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">走行軌跡を表示する</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    GPSログに基づく走行ルートを地図上に描画します
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGpsTrackSettings(prev => ({ ...prev, showTrack: !prev.showTrack }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    gpsTrackSettings.showTrack ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}
+                  aria-label="走行軌跡表示切替"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      gpsTrackSettings.showTrack ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* インターバル設定（表示ONの場合のみ有効） */}
+              <div className={`p-4 bg-gray-50 rounded-lg border border-gray-200 ${!gpsTrackSettings.showTrack ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  描画インターバル
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                  何分間隔のGPS座標を描画するかを設定します。短いほど詳細になりますが表示が重くなります。
+                </p>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={gpsTrackSettings.intervalMinutes}
+                    onChange={(e) => setGpsTrackSettings(prev => ({
+                      ...prev,
+                      intervalMinutes: Number(e.target.value)
+                    }))}
+                    disabled={!gpsTrackSettings.showTrack}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  >
+                    <option value={1}>1分間隔（最詳細）</option>
+                    <option value={2}>2分間隔</option>
+                    <option value={5}>5分間隔（推奨）</option>
+                    <option value={10}>10分間隔</option>
+                    <option value={15}>15分間隔</option>
+                    <option value={30}>30分間隔（軽量）</option>
+                  </select>
+                  <span className="text-sm text-gray-500">
+                    ごとにGPS点を表示
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 

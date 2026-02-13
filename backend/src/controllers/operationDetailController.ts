@@ -185,28 +185,23 @@ export class OperationDetailController {
       let sequenceCounter = 0;
 
       // 5-1. 運行開始イベント
+      // ✅ 修正: operations テーブルにはGPS列がないため gpsLocation は null
       if (operation.actualStartTime) {
-        const nearestGps = findNearestGPS(gpsLogs, operation.actualStartTime);
         timeline.push({
           id: `trip-start-${operation.id}`,
           sequenceNumber: ++sequenceCounter,
           eventType: 'TRIP_START',
           timestamp: operation.actualStartTime,
-          gpsLocation: nearestGps ? {
-            latitude: Number(nearestGps.latitude),
-            longitude: Number(nearestGps.longitude),
-            recordedAt: nearestGps.recordedAt
-          } : null,
+          gpsLocation: null,
           notes: '運行開始'
         });
       }
 
       // 5-2. 運行前点検イベント
+      // ✅ 修正: inspection_records.latitude/longitude を直接使用
       inspectionRecords
         .filter(ir => ir.inspectionType === 'PRE_TRIP')
         .forEach(inspection => {
-          const nearestGps = findNearestGPS(gpsLogs, inspection.startedAt || inspection.createdAt);
-
           // ✅ 修正: inspectionItemResults の集計
           const totalItems = inspection.inspectionItemResults.length;
           const passedItems = inspection.inspectionItemResults.filter(r => r.isPassed === true).length;
@@ -217,15 +212,11 @@ export class OperationDetailController {
             sequenceNumber: ++sequenceCounter,
             eventType: 'PRE_INSPECTION',
             timestamp: inspection.startedAt || inspection.createdAt,
-            gpsLocation: nearestGps ? {
-              latitude: Number(nearestGps.latitude),
-              longitude: Number(nearestGps.longitude),
-              recordedAt: nearestGps.recordedAt
-            } : (inspection.latitude && inspection.longitude ? {
+            gpsLocation: (inspection.latitude && inspection.longitude) ? {
               latitude: Number(inspection.latitude),
               longitude: Number(inspection.longitude),
               recordedAt: inspection.startedAt || inspection.createdAt
-            } : null),
+            } : null,
             inspectionDetails: {
               inspectionRecordId: inspection.id,
               status: inspection.status,
@@ -238,9 +229,8 @@ export class OperationDetailController {
         });
 
       // 5-3. 運行詳細イベント（積込/積降/給油/休憩など）
+      // ✅ 修正: operation_details.latitude/longitude を直接使用
       operationDetails.forEach(detail => {
-        const nearestGps = findNearestGPS(gpsLogs, detail.actualStartTime || detail.plannedTime);
-
         timeline.push({
           id: detail.id,
           sequenceNumber: ++sequenceCounter,
@@ -253,10 +243,10 @@ export class OperationDetailController {
             latitude: Number(detail.locations.latitude),
             longitude: Number(detail.locations.longitude)
           } : null,
-          gpsLocation: nearestGps ? {
-            latitude: Number(nearestGps.latitude),
-            longitude: Number(nearestGps.longitude),
-            recordedAt: nearestGps.recordedAt
+          gpsLocation: (detail.latitude && detail.longitude) ? {
+            latitude: Number(detail.latitude),
+            longitude: Number(detail.longitude),
+            recordedAt: detail.gpsRecordedAt || detail.actualStartTime || detail.plannedTime || new Date()
           } : null,
           quantityTons: Number(detail.quantityTons) || 0,
           items: detail.items ? {  // ✅ 修正: 正しいリレーション名
@@ -269,11 +259,10 @@ export class OperationDetailController {
       });
 
       // 5-4. 運行後点検イベント
+      // ✅ 修正: inspection_records.latitude/longitude を直接使用
       inspectionRecords
         .filter(ir => ir.inspectionType === 'POST_TRIP')
         .forEach(inspection => {
-          const nearestGps = findNearestGPS(gpsLogs, inspection.startedAt || inspection.createdAt);
-
           // ✅ 修正: inspectionItemResults の集計
           const totalItems = inspection.inspectionItemResults.length;
           const passedItems = inspection.inspectionItemResults.filter(r => r.isPassed === true).length;
@@ -284,15 +273,11 @@ export class OperationDetailController {
             sequenceNumber: ++sequenceCounter,
             eventType: 'POST_INSPECTION',
             timestamp: inspection.startedAt || inspection.createdAt,
-            gpsLocation: nearestGps ? {
-              latitude: Number(nearestGps.latitude),
-              longitude: Number(nearestGps.longitude),
-              recordedAt: nearestGps.recordedAt
-            } : (inspection.latitude && inspection.longitude ? {
+            gpsLocation: (inspection.latitude && inspection.longitude) ? {
               latitude: Number(inspection.latitude),
               longitude: Number(inspection.longitude),
               recordedAt: inspection.startedAt || inspection.createdAt
-            } : null),
+            } : null,
             inspectionDetails: {
               inspectionRecordId: inspection.id,
               status: inspection.status,
@@ -305,18 +290,14 @@ export class OperationDetailController {
         });
 
       // 5-5. 運行終了イベント
+      // ✅ 修正: operations テーブルにはGPS列がないため gpsLocation は null
       if (operation.actualEndTime) {
-        const nearestGps = findNearestGPS(gpsLogs, operation.actualEndTime);
         timeline.push({
           id: `trip-end-${operation.id}`,
           sequenceNumber: ++sequenceCounter,
           eventType: 'TRIP_END',
           timestamp: operation.actualEndTime,
-          gpsLocation: nearestGps ? {
-            latitude: Number(nearestGps.latitude),
-            longitude: Number(nearestGps.longitude),
-            recordedAt: nearestGps.recordedAt
-          } : null,
+          gpsLocation: null,
           notes: '運行終了'
         });
       }
@@ -346,13 +327,21 @@ export class OperationDetailController {
           id: operation.id,
           operationNumber: operation.operationNumber,
           status: operation.status,
-          vehicle: operation.vehicles,  // ✅ 修正: 正しいリレーション名
-          driver: operation.usersOperationsDriverIdTousers,  // ✅ 修正: 正しいリレーション名
+          vehicle: operation.vehicles,
+          driver: operation.usersOperationsDriverIdTousers,
           actualStartTime: operation.actualStartTime,
           actualEndTime: operation.actualEndTime,
           totalDistanceKm: operation.totalDistanceKm,
           notes: operation.notes
-        }
+        },
+        // ✅ 追加: 走行軌跡用GPSログ（イベントPINとは別）
+        // フロントエンドの表示設定（ON/OFF・インターバル）に応じてフィルタリングして使用
+        routeGpsLogs: gpsLogs.map(log => ({
+          latitude: Number(log.latitude),
+          longitude: Number(log.longitude),
+          recordedAt: log.recordedAt,
+          speedKmh: log.speedKmh ? Number(log.speedKmh) : null
+        }))
       };
 
       logger.info('✅ 統合タイムライン返却', {
@@ -603,7 +592,11 @@ export class OperationDetailController {
 
 /**
  * 指定時刻に最も近いGPSログを検索
+ * ✅ 保持（将来のリアルタイム位置表示等で使用する可能性あり）
+ * ⚠️ イベントGPS表示には使用しない
+ *    → イベントGPSは operation_details.latitude/longitude を直接使用すること
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function findNearestGPS(gpsLogs: any[], targetTime: Date | null): any | null {
   if (!targetTime || gpsLogs.length === 0) return null;
 

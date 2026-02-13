@@ -585,7 +585,7 @@ export class InspectionService {
           : existingItem.inspectionType;
 
         const whereCondition: Prisma.InspectionItemWhereInput = {
-          name: data.name,  // ここは確実に string
+          name: data.name,
           inspectionType: inspectionType as InspectionType,
           isActive: true,
           NOT: { id }
@@ -757,6 +757,7 @@ export class InspectionService {
         search,
         sortBy = 'createdAt',
         sortOrder = 'desc',
+        operationId,
         vehicleId,
         inspectorId,
         inspectionType,
@@ -778,6 +779,12 @@ export class InspectionService {
           { overallNotes: { contains: search, mode: 'insensitive' } },
           { locationName: { contains: search, mode: 'insensitive' } }
         ];
+      }
+
+      if (operationId) {
+        where.operationId = Array.isArray(operationId)
+          ? { in: operationId }
+          : operationId;
       }
 
       if (vehicleId) {

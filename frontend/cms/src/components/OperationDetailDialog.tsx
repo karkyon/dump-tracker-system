@@ -250,6 +250,14 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const [operationDebugTimelineEvents, setOperationDebugTimelineEvents] = useState<OperationDebugTimelineEvent[]>([]);
   const [inspectionItemDetails, _setInspectionItemDetails] = useState<InspectionItemDetail[]>([]);
 
+  // ✅ 走行軌跡用GPSログ state（イベントPINとは別）
+  const [routeGpsLogs, setRouteGpsLogs] = useState<Array<{
+    latitude: number;
+    longitude: number;
+    recordedAt: string;
+    speedKmh: number | null;
+  }>>([]);
+
     // ✅ タイムラインイベントからGPSポイントを抽出（地図表示用）
   const timelineGpsPoints = useMemo(() => {
     return operationDebugTimelineEvents
@@ -489,6 +497,64 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         });
       });
 
+      // ✅ 走行軌跡描画（設定ON かつ routeGpsLogs がある場合）
+      try {
+        const rawSettings = localStorage.getItem('dump_tracker_gps_track_settings');
+        const gpsTrackSettings = rawSettings
+          ? JSON.parse(rawSettings)
+          : { showTrack: false, intervalMinutes: 5 };
+
+        if (gpsTrackSettings.showTrack && routeGpsLogs.length > 0) {
+          const intervalMs = (gpsTrackSettings.intervalMinutes || 5) * 60 * 1000;
+
+          // インターバルフィルター: 前のポイントから指定時間以上経過したもののみ残す
+          const filtered: typeof routeGpsLogs = [];
+          let lastTime = 0;
+          for (const log of routeGpsLogs) {
+            const t = new Date(log.recordedAt).getTime();
+            if (filtered.length === 0 || t - lastTime >= intervalMs) {
+              filtered.push(log);
+              lastTime = t;
+            }
+          }
+
+          console.log(`📡 [Map Debug] routeGpsLogs filtered: ${routeGpsLogs.length} → ${filtered.length}件 (interval: ${gpsTrackSettings.intervalMinutes}分)`);
+
+          // 走行軌跡ライン（細い灰色）
+          new google.maps.Polyline({
+            path: filtered.map(p => ({ lat: p.latitude, lng: p.longitude })),
+            geodesic: true,
+            strokeColor: '#6B7280',
+            strokeOpacity: 0.5,
+            strokeWeight: 2,
+            map: map
+          });
+
+          // 走行軌跡ポイント（小さい灰色ドット）
+          filtered.forEach(log => {
+            new google.maps.Marker({
+              position: { lat: log.latitude, lng: log.longitude },
+              map: map,
+              title: `GPS記録: ${new Date(log.recordedAt).toLocaleString('ja-JP')}${log.speedKmh != null ? ` (${log.speedKmh.toFixed(1)} km/h)` : ''}`,
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 4,
+                fillColor: '#6B7280',
+                fillOpacity: 0.6,
+                strokeColor: '#FFFFFF',
+                strokeWeight: 1
+              }
+            });
+          });
+
+          console.log('✅ [Map Debug] 走行軌跡描画完了:', filtered.length, '点');
+        } else {
+          console.log('ℹ️ [Map Debug] 走行軌跡表示OFF or データなし');
+        }
+      } catch (trackErr) {
+        console.warn('⚠️ [Map Debug] 走行軌跡描画エラー（スキップ）:', trackErr);
+      }
+
       console.log('✅ [Map Debug] === Google Map initialization SUCCESS ===');
       console.log('✅ [Map Debug] Total GPS points:', activeGpsPoints.length);
       console.log('✅ [Map Debug] Map center:', { lat: avgLat, lng: avgLng });
@@ -498,7 +564,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       console.error('❌ [Map Debug] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
       setMapError('地図の表示中にエラーが発生しました');
     }
-   }, [mapsLoaded, gpsRecords, timelineGpsPoints, activeTab, mapRef]);
+   }, [mapsLoaded, gpsRecords, timelineGpsPoints, routeGpsLogs, activeTab, mapRef]);
 
   // ===================================================================
   // データ取得
@@ -842,6 +908,11 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         if (operationData && !operation) {
           setOperation(operationData);
         }
+
+        // ✅ routeGpsLogs を抽出してstateにセット
+        const routeLogs = innerData.routeGpsLogs || outerData.routeGpsLogs || [];
+        setRouteGpsLogs(routeLogs);
+        console.log('[OperationDetailDialog] 📡 routeGpsLogs:', routeLogs.length, '件');
       }
     } catch (err) {
       console.error('[OperationDetailDialog] Error fetching timeline:', err);
@@ -891,6 +962,17 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   
   useEffect(() => {
     if (isOpen && operationId) {
+      // ✅ 追加: operationId変更時に全stateをリセット（古いデータの残留防止）
+      setOperation(null);
+      setActivities([]);
+      setGpsRecords([]);
+      setInspections([]);
+      setOperationDebugTimelineEvents([]);
+      setError(null);
+      setActiveTab('basic');  // タブも基本情報に戻す
+      // Google Mapsインスタンスをクリア（次の運行で再初期化させる）
+      mapInstanceRef.current = null;
+
       console.log('[OperationDetailDialog] Dialog opened, fetching data');
       fetchAllData();
     }
