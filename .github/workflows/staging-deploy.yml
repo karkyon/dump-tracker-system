@@ -50,10 +50,9 @@ jobs:
             rm -rf dist
             cp -r /tmp/backend-deploy/dist .
             cp /tmp/backend-deploy/package*.json .
-            export PATH=$HOME/.nvm/versions/node/v20.19.6/bin:$PATH
             npm ci --production
-            pkill -f "node.*dist/index.js"
-            nohup node dist/index.js > /dev/null 2>&1 &
+            rm -rf /tmp/backend-deploy
+            sudo systemctl restart dump-tracker-backend.service
             echo "✅ Backend deployed to Staging"
 
       # ===========================
