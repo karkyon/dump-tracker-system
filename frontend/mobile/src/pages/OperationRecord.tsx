@@ -516,18 +516,11 @@ const OperationRecord: React.FC = () => {
 
       // 登録完了後、登録した地点を使用して到着記録
       if (registrationLocationType === 'LOADING') {
-        console.log('🚛 積込場所到着記録API呼び出し開始');
-        
-        await apiService.recordLoadingArrival(currentOperationId, { // 🔧 修正
-          locationId: registeredLocation.id,
-          latitude: currentPosition.coords.latitude,
-          longitude: currentPosition.coords.longitude,
-          accuracy: currentPosition.coords.accuracy,
-          arrivalTime: new Date()
-        });
-        
-        console.log('✅ 積込場所到着記録完了');
-        
+        console.log('🚛 積込場所登録完了 → LoadingInput画面へ遷移');
+
+        // ✅ 【修正】recordLoadingArrival はLoadingConfirmationで呼ぶため、ここでは呼ばない
+        //    （既存地点選択フローと同じ挙動に統一）
+
         // 状態更新
         setOperation(prev => ({
           ...prev,
@@ -535,36 +528,58 @@ const OperationRecord: React.FC = () => {
           loadingLocation: registeredLocation.name
         }));
 
-        toast.success(`新規地点「${registeredLocation.name}」を登録し、積込場所に到着しました`);
-        
-        // TODO: 積込場所到着画面へ遷移
-        console.log('📍 次: 積込場所到着画面へ遷移');
+        toast.success(`新規地点「${registeredLocation.name}」を登録しました`);
 
-      } else if (registrationLocationType === 'UNLOADING') {
-        console.log('🚛 積降場所到着記録API呼び出し開始');
-        
-        await apiService.recordUnloadingArrival(currentOperationId, { // 🔧 修正
-          locationId: registeredLocation.id,
-          latitude: currentPosition.coords.latitude,
-          longitude: currentPosition.coords.longitude,
-          accuracy: currentPosition.coords.accuracy,
-          arrivalTime: new Date()
+        // ✅ 【修正】LoadingInput画面へ遷移（既存地点選択フローと同じ）
+        setShowRegistrationDialog(false);
+        setRegistrationLocationType(null);
+        navigate('/loading-input', {
+          state: {
+            locationId: registeredLocation.id,
+            locationName: registeredLocation.name,
+            clientName: '',
+            address: registeredLocation.address || ''
+          }
         });
-        
-        console.log('✅ 積降場所到着記録完了');
-        
-        // 状態更新
-        setOperation(prev => ({
-          ...prev,
-          phase: 'AT_UNLOADING',
-          unloadingLocation: registeredLocation.name
-        }));
+        return; // navigate後は後続のsetShowRegistrationDialog等不要
+      } else if (registrationLocationType === 'UNLOADING') {
+          console.log('🚛 積降場所到着記録API呼び出し開始');
+          
+          await apiService.recordUnloadingArrival(currentOperationId, {
+            locationId: registeredLocation.id,
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy,
+            arrivalTime: new Date()
+          });
+          
+          console.log('✅ 積降場所到着記録完了');
+          
+          // 状態更新
+          setOperation(prev => ({
+            ...prev,
+            phase: 'AT_UNLOADING',
+            unloadingLocation: registeredLocation.name
+          }));
 
-        toast.success(`新規地点「${registeredLocation.name}」を登録し、積降場所に到着しました`);
-        
-        // TODO: 積降場所到着画面へ遷移
-        console.log('📍 次: 積降場所到着画面へ遷移');
-      }
+          // operationStoreにも保存
+          operationStore.setUnloadingLocation(registeredLocation.name);
+          operationStore.setPhase('AT_UNLOADING');
+
+          // ✅ 【修正】積降開始ボタンが参照する window.selectedUnloadingLocation を設定
+          //    （新規地点登録フローでは、この設定が抜けていたため「積降場所が選択されていません」エラーが発生していた）
+          (window as any).selectedUnloadingLocation = {
+            id: registeredLocation.id,
+            name: registeredLocation.name,
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy
+          };
+          console.log('✅ window.selectedUnloadingLocation を設定しました:', (window as any).selectedUnloadingLocation);
+
+          toast.success(`新規地点「${registeredLocation.name}」を登録し、積降場所に到着しました`);
+          console.log('📍 次: 積降開始ボタンをクリックしてください');
+        }
 
       // ダイアログを閉じる
       setShowRegistrationDialog(false);
