@@ -6,16 +6,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  Calendar,
   Truck,
   User,
   Clock,
   TrendingUp,
   MapPin,
   Fuel,
-  ChevronRight,
   Package,
-  CheckCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiService } from '../services/api';
@@ -153,7 +150,7 @@ const OperationHistoryDetail: React.FC = () => {
       IN_PROGRESS: { text: '運行中', color: 'bg-blue-100 text-blue-700' },
       CANCELLED: { text: 'キャンセル', color: 'bg-gray-100 text-gray-700' },
     };
-    const config = statusConfig[status] || statusConfig.COMPLETED;
+    const config = statusConfig[status] ?? { text: status, color: 'bg-gray-100 text-gray-700' };
     return (
       <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.color}`}>
         {config.text}
