@@ -1153,6 +1153,11 @@ export class MobileController {
   /**
    * 運行記録詳細取得（D9a: 運行記録詳細画面）
    * GET /api/v1/mobile/operations/:id
+   *
+   * 🔧 2026年3月修正:
+   * - activities の startTime/endTime が '--:--' になる問題を修正
+   * - 原因: PrismaはcamelCase(actualStartTime)で返すが、snake_case(actual_start_time)のみ参照していた
+   * - 修正: camelCase優先でsnake_caseをフォールバックとして参照するよう変更
    */
   public getOperationDetail = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
@@ -1188,22 +1193,68 @@ export class MobileController {
         : 0;
 
       const details = (trip as any).operationDetails || [];
-      const activities = details.map((d: any) => ({
-        id: d.id,
-        activityType: d.activity_type || d.activityType || '',
-        locationName: d.locations?.name || d.location?.name || d.locationName || '',
-        itemName: d.items?.name || d.item?.name || d.itemName || '',
-        quantity: d.quantity_tons ? Number(d.quantity_tons) : (d.quantity ? Number(d.quantity) : 0),
-        unit: 'トン',
-        startTime: d.actual_start_time
-          ? new Date(d.actual_start_time).toISOString()
-          : (d.startTime ? new Date(d.startTime).toISOString() : null),
-        endTime: d.actual_end_time
-          ? new Date(d.actual_end_time).toISOString()
-          : (d.endTime ? new Date(d.endTime).toISOString() : null),
-        notes: d.notes || '',
-        sequenceNumber: d.sequence_number ?? d.sequenceNumber ?? 0,
-      }));
+
+      // ============================================================
+      // 🔧 DEBUG LOG: Prismaから返ってきたoperation_detailsの生データを確認
+      // ============================================================
+      logger.info('🔍 [D9a] operationDetails 生データ確認', {
+        tripId: id,
+        detailsCount: details.length,
+        firstDetailKeys: details.length > 0 ? Object.keys(details[0]) : [],
+        firstDetailRaw: details.length > 0 ? {
+          id: details[0].id,
+          // camelCase確認
+          actualStartTime: details[0].actualStartTime,
+          actualEndTime: details[0].actualEndTime,
+          activityType: details[0].activityType,
+          // snake_case確認
+          actual_start_time: details[0].actual_start_time,
+          actual_end_time: details[0].actual_end_time,
+          activity_type: details[0].activity_type,
+        } : null,
+      });
+      // ============================================================
+
+      const activities = details.map((d: any) => {
+        // ✅ 修正: PrismaはcamelCaseで返す → actualStartTime を優先参照
+        // snake_caseはフォールバックとして残す（念のため）
+        const actStartTime = d.actualStartTime || d.actual_start_time || null;
+        const actEndTime = d.actualEndTime || d.actual_end_time || null;
+
+        // ============================================================
+        // 🔧 DEBUG LOG: 各アクティビティの時刻マッピング確認
+        // ============================================================
+        logger.info('🔍 [D9a] activity 時刻マッピング', {
+          detailId: d.id,
+          activityType: d.activityType || d.activity_type,
+          // 取得した生の値
+          raw_actualStartTime: d.actualStartTime,
+          raw_actual_start_time: d.actual_start_time,
+          raw_actualEndTime: d.actualEndTime,
+          raw_actual_end_time: d.actual_end_time,
+          // マッピング後の値
+          resolved_startTime: actStartTime,
+          resolved_endTime: actEndTime,
+          // ISO変換後
+          iso_startTime: actStartTime ? new Date(actStartTime).toISOString() : null,
+          iso_endTime: actEndTime ? new Date(actEndTime).toISOString() : null,
+        });
+        // ============================================================
+
+        return {
+          id: d.id,
+          activityType: d.activityType || d.activity_type || '',
+          locationName: d.locations?.name || d.location?.name || d.locationName || '',
+          itemName: d.items?.name || d.item?.name || d.itemName || '',
+          quantity: d.quantityTons ? Number(d.quantityTons) : (d.quantity_tons ? Number(d.quantity_tons) : (d.quantity ? Number(d.quantity) : 0)),
+          unit: 'トン',
+          // ✅ 修正: camelCase(actualStartTime)を優先参照
+          startTime: actStartTime ? new Date(actStartTime).toISOString() : null,
+          endTime: actEndTime ? new Date(actEndTime).toISOString() : null,
+          notes: d.notes || '',
+          sequenceNumber: d.sequenceNumber ?? d.sequence_number ?? 0,
+        };
+      });
 
       const loadingCount = activities.filter((a: any) =>
         ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'].includes(a.activityType)
@@ -1213,15 +1264,17 @@ export class MobileController {
       ).length;
 
       const fuelActivities = details.filter((d: any) =>
-        (d.activity_type || d.activityType) === 'FUELING'
+        (d.activityType || d.activity_type) === 'FUELING'
       );
       const fuelRecords = fuelActivities.map((f: any) => ({
         id: f.id,
-        fuelAmount: f.quantity_tons ? Number(f.quantity_tons) : 0,
+        fuelAmount: f.quantityTons ? Number(f.quantityTons) : (f.quantity_tons ? Number(f.quantity_tons) : 0),
         fuelCost: 0,
         mileageAtRefuel: 0,
         stationName: f.locations?.name || f.location?.name || '',
-        recordedAt: f.actual_start_time ? new Date(f.actual_start_time).toISOString() : null,
+        recordedAt: (f.actualStartTime || f.actual_start_time)
+          ? new Date(f.actualStartTime || f.actual_start_time).toISOString()
+          : null,
       }));
 
       const vehicleData = (trip as any).vehicles || (trip as any).vehicle;
@@ -1257,6 +1310,23 @@ export class MobileController {
         fuelRecords,
         notes: (trip as any).notes || '',
       };
+
+      // ============================================================
+      // 🔧 DEBUG LOG: 最終レスポンスのactivities時刻サマリー
+      // ============================================================
+      logger.info('🔍 [D9a] 最終レスポンス activities時刻サマリー', {
+        tripId: id,
+        activitiesCount: activities.length,
+        activitiesSummary: activities.map((a: any) => ({
+          id: a.id,
+          activityType: a.activityType,
+          startTime: a.startTime,
+          endTime: a.endTime,
+          hasStartTime: !!a.startTime,
+          hasEndTime: !!a.endTime,
+        })),
+      });
+      // ============================================================
 
       logger.info('モバイル運行詳細取得', { tripId: id, userId: req.user.userId });
       sendSuccess(res, detailResponse, '運行詳細を取得しました');
@@ -1334,6 +1404,12 @@ export function getMobileController(): MobileController {
  *    → フェーズに応じたlocationTypeマッピング完備
  *    → LocationServiceWrapper完全統合
  *    → 詳細ログ出力実装
+ *
+ * 4. ✅ 【2026年3月修正】getOperationDetail - activities時刻未表示バグ修正
+ *    → 原因: PrismaはcamelCase(actualStartTime)で返すが、
+ *            snake_case(actual_start_time)のみ参照していたため常にnull
+ *    → 修正: camelCase優先でsnake_caseをフォールバックとして参照
+ *    → 追加: DEBUGログで生データ・マッピング結果・最終レスポンスを出力
  *
  * 【既存機能100%保持】
  * ✅ 認証機能（login, getAuthInfo, getCurrentUser）
