@@ -497,6 +497,25 @@ class APIServiceClass {
     }
   }
 
+  /**
+   * 運行記録詳細取得（D9a用）
+   * GET /api/v1/mobile/operations/:id
+   * 
+   * @param operationId - 運行記録ID
+   * @returns 運行詳細情報
+   */
+  async getOperationDetail(operationId: string): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<any>>(
+        `/mobile/operations/${operationId}`
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('[API] 運行詳細取得エラー:', error);
+      throw error;
+    }
+  }
+
   // =============================================================================
   // 🆕🆕🆕 D5/D6機能: 積込・積降記録API
   // =============================================================================

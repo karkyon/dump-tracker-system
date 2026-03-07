@@ -526,6 +526,97 @@ router.post('/operations/:id/end',
   mobileController.endOperation
 );
 
+// =====================================
+// 🆕 運行履歴エンドポイント（D9/D9a）
+// =====================================
+
+/**
+ * @swagger
+ * /mobile/operations:
+ *   get:
+ *     summary: 運行履歴一覧取得（D9）
+ *     description: |
+ *       ログインユーザーの運行履歴一覧を取得します。
+ *       DRIVERロールは自分の記録のみ取得できます。
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [COMPLETED, IN_PROGRESS, CANCELLED]
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: 運行履歴取得成功
+ *       401:
+ *         description: 認証エラー
+ */
+router.get('/operations',
+  logRequest('GET /mobile/operations'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  mobileController.getOperationHistory
+);
+
+/**
+ * @swagger
+ * /mobile/operations/{id}:
+ *   get:
+ *     summary: 運行記録詳細取得（D9a）
+ *     description: |
+ *       指定した運行IDの詳細情報を取得します。
+ *       DRIVERロールは自分の記録のみ参照できます。
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行記録ID
+ *     responses:
+ *       200:
+ *         description: 運行詳細取得成功
+ *       401:
+ *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー
+ *       404:
+ *         description: 運行記録が見つかりません
+ */
+router.get('/operations/:id',
+  logRequest('GET /mobile/operations/:id'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  mobileController.getOperationDetail
+);
+
 /**
  * @swagger
  * /mobile/operations/current:
@@ -1369,6 +1460,8 @@ router.use('*', (req, res) => {
         'GET /mobile/auth/info - モバイル認証情報取得（詳細）',
         'POST /mobile/operations/start - 運行開始',
         'POST /mobile/operations/:id/end - 運行終了',
+        'GET /mobile/operations - 運行履歴一覧取得 (D9)',
+        'GET /mobile/operations/:id - 運行記録詳細取得 (D9a)',
         'GET /mobile/operations/current - 現在運行状況',
         '🆕 POST /mobile/operations/nearby-locations - 近隣地点検知',
         'POST /mobile/gps/log - GPS位置ログ記録',

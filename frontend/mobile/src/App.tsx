@@ -25,6 +25,7 @@ import RefuelRecord from './pages/RefuelRecord';
 import LoadingInput from './pages/LoadingInput';
 import LoadingConfirmation from './pages/LoadingConfirmation';
 import OperationHistory from './pages/OperationHistory';  // 🆕 運行履歴画面
+import OperationHistoryDetail from './pages/OperationHistoryDetail';  // 🆕 D9a: 運行記録詳細画面
 import Settings from './pages/Settings';                  // 🆕 設定画面
 
 // 🆕 運行状態復元コンポーネント
@@ -213,6 +214,16 @@ const App: React.FC = () => {
             }
           />
 
+          {/* 🆕 D9a: 運行記録詳細画面 */}
+          <Route
+            path="/operation-history/:id"
+            element={
+              <ProtectedRoute>
+                <OperationHistoryDetail />
+              </ProtectedRoute>
+            }
+          />
+          
           {/* 🆕 設定画面（D9a） */}
           <Route
             path="/settings"
