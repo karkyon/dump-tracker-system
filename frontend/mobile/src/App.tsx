@@ -23,7 +23,6 @@ import PostTripInspection from './pages/PostTripInspection';  // 🆕 D8: 乗車
 import OperationRecord from './pages/OperationRecord';
 import RefuelRecord from './pages/RefuelRecord';
 import LoadingInput from './pages/LoadingInput';
-import LoadingConfirmation from './pages/LoadingConfirmation';
 import OperationHistory from './pages/OperationHistory';  // 🆕 運行履歴画面
 import OperationHistoryDetail from './pages/OperationHistoryDetail';  // 🆕 D9a: 運行記録詳細画面
 import Settings from './pages/Settings';                  // 🆕 設定画面
@@ -297,11 +296,7 @@ const App: React.FC = () => {
           {/* 積載確認画面 */}
           <Route 
             path="/loading-confirmation" 
-            element={
-              <ProtectedRoute>
-                <LoadingConfirmation />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/loading-input" replace />} 
           />
 
           {/* ✅ デフォルトルート: /home にリダイレクト */}
