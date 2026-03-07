@@ -1072,7 +1072,6 @@ export class MobileController {
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
 
-      // DRIVERロールの場合は自分の履歴のみ
       const driverId = req.user.role === 'DRIVER'
         ? req.user.userId
         : (req.query.driverId as string | undefined);
@@ -1089,34 +1088,41 @@ export class MobileController {
       const tripsResult = await this.tripService.getAllTrips(filter);
       const trips = tripsResult.data || [];
 
-      // モバイル向けにデータを整形
       const historyItems = trips.map((trip: any) => {
-        const startTime = trip.actualStartTime || trip.plannedStartTime;
-        const endTime = trip.actualEndTime || trip.plannedEndTime;
+        const startTime = trip.actual_start_time || trip.actualStartTime
+          || trip.planned_start_time || trip.plannedStartTime;
+        const endTime = trip.actual_end_time || trip.actualEndTime
+          || trip.planned_end_time || trip.plannedEndTime;
         const duration = startTime && endTime
           ? Math.floor((new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000 / 60)
           : 0;
 
-        // operation_details から積込・積降回数をカウント
-        const details = trip.operationDetails || trip.tripDetails || [];
+        const details = trip.operationDetails || trip.operation_details || [];
         const loadingCount = details.filter((d: any) =>
-          d.activityType === 'LOADING' || d.activityType === 'LOADING_START'
+          ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'].includes(d.activity_type || d.activityType || '')
         ).length;
         const unloadingCount = details.filter((d: any) =>
-          d.activityType === 'UNLOADING' || d.activityType === 'UNLOADING_START'
+          ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE'].includes(d.activity_type || d.activityType || '')
         ).length;
+
+        const vehicleData = trip.vehicles || trip.vehicle;
+        const driverData = trip.usersOperationsDriverIdTousers || trip.driver;
 
         return {
           id: trip.id,
           date: startTime ? new Date(startTime).toISOString().split('T')[0] : '',
-          vehicleNumber: trip.vehicle?.registrationNumber || trip.vehicle?.plateNumber || '不明',
-          vehicleType: trip.vehicle?.vehicleType || '',
-          driverName: trip.driver
-            ? `${trip.driver.lastName || ''} ${trip.driver.firstName || ''}`.trim()
-            : req.user!.name || '不明',
+          vehicleNumber: vehicleData?.registration_number || vehicleData?.registrationNumber
+            || vehicleData?.plate_number || vehicleData?.plateNumber || '不明',
+          vehicleType: vehicleData?.vehicle_type || vehicleData?.vehicleType || '',
+          driverName: driverData?.name
+            || `${driverData?.last_name || driverData?.lastName || ''} ${driverData?.first_name || driverData?.firstName || ''}`.trim()
+            || driverData?.username
+            || req.user!.name || '不明',
           startTime: startTime ? new Date(startTime).toTimeString().slice(0, 5) : '',
           endTime: endTime ? new Date(endTime).toTimeString().slice(0, 5) : '',
-          totalDistance: trip.totalDistanceKm ? Number(trip.totalDistanceKm) : 0,
+          totalDistance: trip.total_distance_km
+            ? Number(trip.total_distance_km)
+            : (trip.totalDistanceKm ? Number(trip.totalDistanceKm) : 0),
           totalDuration: duration,
           loadingCount,
           unloadingCount,
@@ -1127,29 +1133,19 @@ export class MobileController {
       const totalItems = tripsResult.pagination?.totalItems || historyItems.length;
       const totalPages = Math.ceil(totalItems / limit);
 
-      logger.info('モバイル運行履歴取得', {
-        driverId,
-        count: historyItems.length,
-        page,
-        limit,
-      });
+      logger.info('モバイル運行履歴取得', { driverId, count: historyItems.length, page, limit });
 
       sendSuccess(res, {
         operations: historyItems,
         pagination: {
-          page,
-          limit,
-          totalItems,
-          totalPages,
+          page, limit, totalItems, totalPages,
           hasNextPage: page < totalPages,
           hasPreviousPage: page > 1,
         },
       }, '運行履歴を取得しました');
 
     } catch (error) {
-      logger.error('モバイル運行履歴取得エラー', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      logger.error('モバイル運行履歴取得エラー', { error: error instanceof Error ? error.message : String(error) });
       sendError(res, '運行履歴の取得に失敗しました', 500, 'OPERATION_HISTORY_ERROR');
     }
   });
@@ -1178,85 +1174,95 @@ export class MobileController {
         return;
       }
 
-      // DRIVERロールは自分の記録のみ参照可能
       if (req.user.role === 'DRIVER' && (trip as any).driver?.id !== req.user.userId) {
         sendError(res, '他の運転手の運行記録は参照できません', 403, 'PERMISSION_DENIED');
         return;
       }
 
-      const startTime = trip.actualStartTime || trip.plannedStartTime;
-      const endTime = trip.actualEndTime || trip.plannedEndTime;
+      const startTime = (trip as any).actual_start_time || (trip as any).actualStartTime
+        || (trip as any).planned_start_time || (trip as any).plannedStartTime;
+      const endTime = (trip as any).actual_end_time || (trip as any).actualEndTime
+        || (trip as any).planned_end_time || (trip as any).plannedEndTime;
       const duration = startTime && endTime
         ? Math.floor((new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000 / 60)
         : 0;
 
-      // アクティビティ一覧を整形
-      const details = (trip as any).operationDetails || (trip as any).tripDetails || [];
+      const details = (trip as any).operationDetails || [];
       const activities = details.map((d: any) => ({
         id: d.id,
-        activityType: d.activityType,
-        locationName: d.location?.name || d.locationName || '',
-        itemName: d.item?.name || d.itemName || '',
-        quantity: d.quantity ? Number(d.quantity) : 0,
-        unit: d.unit || '',
-        startTime: d.startTime ? new Date(d.startTime).toISOString() : null,
-        endTime: d.endTime ? new Date(d.endTime).toISOString() : null,
+        activityType: d.activity_type || d.activityType || '',
+        locationName: d.locations?.name || d.location?.name || d.locationName || '',
+        itemName: d.items?.name || d.item?.name || d.itemName || '',
+        quantity: d.quantity_tons ? Number(d.quantity_tons) : (d.quantity ? Number(d.quantity) : 0),
+        unit: 'トン',
+        startTime: d.actual_start_time
+          ? new Date(d.actual_start_time).toISOString()
+          : (d.startTime ? new Date(d.startTime).toISOString() : null),
+        endTime: d.actual_end_time
+          ? new Date(d.actual_end_time).toISOString()
+          : (d.endTime ? new Date(d.endTime).toISOString() : null),
         notes: d.notes || '',
-        sequenceNumber: d.sequenceNumber || 0,
+        sequenceNumber: d.sequence_number ?? d.sequenceNumber ?? 0,
       }));
 
       const loadingCount = activities.filter((a: any) =>
-        a.activityType === 'LOADING' || a.activityType === 'LOADING_START'
+        ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'].includes(a.activityType)
       ).length;
       const unloadingCount = activities.filter((a: any) =>
-        a.activityType === 'UNLOADING' || a.activityType === 'UNLOADING_START'
+        ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE'].includes(a.activityType)
       ).length;
 
-      // 給油記録
-      const fuelRecords = ((trip as any).fuelRecords || []).map((f: any) => ({
+      const fuelActivities = details.filter((d: any) =>
+        (d.activity_type || d.activityType) === 'FUELING'
+      );
+      const fuelRecords = fuelActivities.map((f: any) => ({
         id: f.id,
-        fuelAmount: f.fuelAmount ? Number(f.fuelAmount) : 0,
-        fuelCost: f.fuelCost ? Number(f.fuelCost) : 0,
-        mileageAtRefuel: f.mileageAtRefuel ? Number(f.mileageAtRefuel) : 0,
-        stationName: f.stationName || '',
-        recordedAt: f.recordedAt ? new Date(f.recordedAt).toISOString() : null,
+        fuelAmount: f.quantity_tons ? Number(f.quantity_tons) : 0,
+        fuelCost: 0,
+        mileageAtRefuel: 0,
+        stationName: f.locations?.name || f.location?.name || '',
+        recordedAt: f.actual_start_time ? new Date(f.actual_start_time).toISOString() : null,
       }));
+
+      const vehicleData = (trip as any).vehicles || (trip as any).vehicle;
+      const driverData = (trip as any).usersOperationsDriverIdTousers || (trip as any).driver;
 
       const detailResponse = {
         id: trip.id,
         date: startTime ? new Date(startTime).toISOString().split('T')[0] : '',
-        status: trip.status,
+        status: (trip as any).status,
         vehicle: {
-          id: (trip as any).vehicle?.id || '',
-          registrationNumber: (trip as any).vehicle?.registrationNumber || (trip as any).vehicle?.plateNumber || '',
-          vehicleType: (trip as any).vehicle?.vehicleType || '',
+          id: vehicleData?.id || '',
+          registrationNumber: vehicleData?.registration_number || vehicleData?.registrationNumber
+            || vehicleData?.plate_number || vehicleData?.plateNumber || '',
+          vehicleType: vehicleData?.vehicle_type || vehicleData?.vehicleType || '',
         },
         driver: {
-          id: (trip as any).driver?.id || '',
-          name: (trip as any).driver
-            ? `${(trip as any).driver.lastName || ''} ${(trip as any).driver.firstName || ''}`.trim()
-            : '',
+          id: driverData?.id || '',
+          name: driverData?.name
+            || `${driverData?.last_name || driverData?.lastName || ''} ${driverData?.first_name || driverData?.firstName || ''}`.trim()
+            || driverData?.username || '',
         },
         startTime: startTime ? new Date(startTime).toISOString() : null,
         endTime: endTime ? new Date(endTime).toISOString() : null,
-        totalDistance: trip.totalDistanceKm ? Number(trip.totalDistanceKm) : 0,
+        totalDistance: (trip as any).total_distance_km
+          ? Number((trip as any).total_distance_km)
+          : ((trip as any).totalDistanceKm ? Number((trip as any).totalDistanceKm) : 0),
         totalDuration: duration,
-        startMileage: (trip as any).startMileage ? Number((trip as any).startMileage) : 0,
-        endMileage: (trip as any).endMileage ? Number((trip as any).endMileage) : 0,
+        startMileage: (trip as any).start_mileage ?? (trip as any).startMileage ?? 0,
+        endMileage: (trip as any).end_mileage ?? (trip as any).endMileage ?? 0,
         loadingCount,
         unloadingCount,
         activities,
         fuelRecords,
-        notes: trip.notes || '',
+        notes: (trip as any).notes || '',
       };
 
       logger.info('モバイル運行詳細取得', { tripId: id, userId: req.user.userId });
       sendSuccess(res, detailResponse, '運行詳細を取得しました');
 
     } catch (error) {
-      logger.error('モバイル運行詳細取得エラー', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      logger.error('モバイル運行詳細取得エラー', { error: error instanceof Error ? error.message : String(error) });
       sendError(res, '運行詳細の取得に失敗しました', 500, 'OPERATION_DETAIL_ERROR');
     }
   });

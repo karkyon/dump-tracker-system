@@ -581,41 +581,6 @@ router.get('/operations',
   mobileController.getOperationHistory
 );
 
-/**
- * @swagger
- * /mobile/operations/{id}:
- *   get:
- *     summary: 運行記録詳細取得（D9a）
- *     description: |
- *       指定した運行IDの詳細情報を取得します。
- *       DRIVERロールは自分の記録のみ参照できます。
- *     tags:
- *       - 📱 モバイル統合 (Mobile Integration)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 運行記録ID
- *     responses:
- *       200:
- *         description: 運行詳細取得成功
- *       401:
- *         description: 認証エラー
- *       403:
- *         description: 権限エラー
- *       404:
- *         description: 運行記録が見つかりません
- */
-router.get('/operations/:id',
-  logRequest('GET /mobile/operations/:id'),
-  authenticateToken(),
-  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
-  mobileController.getOperationDetail
-);
 
 /**
  * @swagger
@@ -664,6 +629,41 @@ router.get('/operations/current',
   authenticateToken(),
   requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
   mobileController.getCurrentOperation
+);
+/**
+ * @swagger
+ * /mobile/operations/{id}:
+ *   get:
+ *     summary: 運行記録詳細取得（D9a）
+ *     description: |
+ *       指定した運行IDの詳細情報を取得します。
+ *       DRIVERロールは自分の記録のみ参照できます。
+ *     tags:
+ *       - 📱 モバイル統合 (Mobile Integration)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行記録ID
+ *     responses:
+ *       200:
+ *         description: 運行詳細取得成功
+ *       401:
+ *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー
+ *       404:
+ *         description: 運行記録が見つかりません
+ */
+router.get('/operations/:id',
+  logRequest('GET /mobile/operations/:id'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  mobileController.getOperationDetail
 );
 
 /**
