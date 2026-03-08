@@ -571,12 +571,9 @@ enum NotificationPriority {
 }
 
 enum ItemType {
-  MATERIAL
-  EQUIPMENT
-  SCRAP
-  TOOL
-  CONSUMABLE
-  SPARE_PART
+  RECYCLED_MATERIAL  // 再生材
+  VIRGIN_MATERIAL    // バージン材
+  WASTE              // 廃棄物
 
   @@map("item_type")
 }

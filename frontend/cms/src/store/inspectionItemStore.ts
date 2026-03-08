@@ -73,7 +73,7 @@ const normalizeInspectionItem = (item: any): InspectionItem => {
     order: item.order ?? 0,
     isRequired: item.isRequired ?? true,
     inputType: item.inputType || item.type || 'CHECKBOX',  // 🐛 修正: type対応
-    category: item.category || 'pre',
+    category: item.category === 'POST_TRIP' ? 'post' : item.category === 'PRE_TRIP' ? 'pre' : (item.category || 'pre'),
   };
 };
 

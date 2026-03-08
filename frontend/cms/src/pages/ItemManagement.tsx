@@ -15,15 +15,16 @@ import { Item } from '../types';
 // =====================================
 
 /** 品目区分の選択肢とラベルマッピング（単一箇所で管理） */
-const ITEM_TYPE_OPTIONS: { value: 'MATERIAL' | 'SCRAP'; label: string }[] = [
-  { value: 'MATERIAL', label: '原料' },
-  { value: 'SCRAP',    label: 'スクラップ' },
+const ITEM_TYPE_OPTIONS: { value: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE'; label: string }[] = [
+  { value: 'RECYCLED_MATERIAL', label: '再生材' },
+  { value: 'VIRGIN_MATERIAL',   label: 'バージン材' },
+  { value: 'WASTE',             label: '廃棄物' },
 ];
 
 /** フォームの初期値（新規作成・保存後リセット共通） */
 const DEFAULT_FORM_DATA = {
   name: '',
-  item_type: 'MATERIAL' as 'MATERIAL' | 'SCRAP',
+  item_type: 'RECYCLED_MATERIAL' as 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE',
   description: '',
   displayOrder: 1,
 };
@@ -84,7 +85,7 @@ const ItemManagement: React.FC = () => {
     setEditingItem(item);
     setFormData({
       name: item.name,
-      item_type: item.item_type ?? 'MATERIAL',
+      item_type: item.item_type ?? 'RECYCLED_MATERIAL',
       description: item.description ?? '',
       displayOrder: item.displayOrder ?? 1,
     });
@@ -215,7 +216,7 @@ const ItemManagement: React.FC = () => {
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  item_type: e.target.value as 'MATERIAL' | 'SCRAP',
+                  item_type: e.target.value as 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE',
                 })
               }
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
