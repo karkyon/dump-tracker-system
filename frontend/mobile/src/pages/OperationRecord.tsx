@@ -119,7 +119,7 @@ const OperationRecord: React.FC = () => {
     isTracking,
     startTracking,
     heading,
-    speed: gpsSpeed,
+    speed: _gpsSpeed,
     totalDistance
   } = useGPS();
 
@@ -923,7 +923,7 @@ const OperationRecord: React.FC = () => {
   };
 
   // =====================================
-  // ✅ 既存: フェーズ別ボタン表示ロジック
+  // フェーズ別ボタン表示ロジック
   // =====================================
 
   const getPhaseButtons = () => {
@@ -935,14 +935,15 @@ const OperationRecord: React.FC = () => {
               onClick={handleLoadingArrival}
               disabled={isSubmitting || !currentPosition}
               style={{
-                padding: '16px',
-                fontSize: '18px',
+                padding: '20px 16px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
                 background: isSubmitting ? '#ccc' : '#2196F3',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                width: '100%'
               }}
             >
               📍 積込場所到着
@@ -957,14 +958,15 @@ const OperationRecord: React.FC = () => {
               onClick={handleLoadingStart}
               disabled={isSubmitting}
               style={{
-                padding: '16px',
-                fontSize: '18px',
+                padding: '20px 16px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
                 background: isSubmitting ? '#ccc' : '#4CAF50',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                width: '100%'
               }}
             >
               🚛 積込開始
@@ -973,14 +975,15 @@ const OperationRecord: React.FC = () => {
               onClick={handleLoadingComplete}
               disabled={isSubmitting}
               style={{
-                padding: '16px',
-                fontSize: '18px',
+                padding: '20px 16px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
                 background: isSubmitting ? '#ccc' : '#FF9800',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                width: '100%'
               }}
             >
               ✅ 積込完了
@@ -995,14 +998,15 @@ const OperationRecord: React.FC = () => {
               onClick={handleUnloadingArrival}
               disabled={isSubmitting || !currentPosition}
               style={{
-                padding: '16px',
-                fontSize: '18px',
+                padding: '20px 16px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
                 background: isSubmitting ? '#ccc' : '#2196F3',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                width: '100%'
               }}
             >
               📍 積降場所到着
@@ -1011,21 +1015,21 @@ const OperationRecord: React.FC = () => {
         );
 
       case 'AT_UNLOADING':
-        // 積降開始ボタンのみ表示
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
               onClick={handleUnloadingStart}
               disabled={isSubmitting}
               style={{
-                padding: '16px',
-                fontSize: '18px',
+                padding: '20px 16px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
                 background: isSubmitting ? '#ccc' : '#4CAF50',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                width: '100%'
               }}
             >
               🚛 積降開始
@@ -1034,21 +1038,21 @@ const OperationRecord: React.FC = () => {
         );
 
       case 'UNLOADING_IN_PROGRESS':
-        // 積降完了ボタンのみ表示
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
               onClick={handleUnloadingComplete}
               disabled={isSubmitting}
               style={{
-                padding: '16px',
-                fontSize: '18px',
+                padding: '20px 16px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
                 background: isSubmitting ? '#ccc' : '#FF9800',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                width: '100%'
               }}
             >
               ✅ 積降完了
@@ -1063,14 +1067,15 @@ const OperationRecord: React.FC = () => {
               onClick={handleBreakEnd}
               disabled={isSubmitting}
               style={{
-                padding: '16px',
-                fontSize: '18px',
+                padding: '20px 16px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
                 background: isSubmitting ? '#ccc' : '#9C27B0',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                width: '100%'
               }}
             >
               ⏱️ 休憩終了
@@ -1084,7 +1089,7 @@ const OperationRecord: React.FC = () => {
   };
 
   // =====================================
-  // ✅ 既存: レンダリング
+  // レンダリング
   // =====================================
 
   return (
@@ -1094,7 +1099,7 @@ const OperationRecord: React.FC = () => {
       height: '100vh',
       background: '#f5f5f5'
     }}>
-      {/* ✅ 既存: ヘッダー */}
+      {/* ヘッダー */}
       <div style={{
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         color: 'white',
@@ -1114,7 +1119,7 @@ const OperationRecord: React.FC = () => {
         </div>
       </div>
 
-      {/* ✅ 既存: ステータスバー */}
+      {/* ステータスバー */}
       <div style={{
         background: 'white',
         padding: '16px',
@@ -1134,17 +1139,23 @@ const OperationRecord: React.FC = () => {
             {(totalDistance || 0).toFixed(1)} km
           </span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontSize: '14px', color: '#666' }}>現在速度</span>
-          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#FF5722' }}>
-            {(gpsSpeed || 0).toFixed(0)} km/h
-          </span>
-        </div>
       </div>
 
-      {/* ✅ 既存: マップ表示 */}
+      {/* フェーズバナー */}
+      <div style={{
+        background: getPhaseColor(operation.phase),
+        color: 'white',
+        padding: '10px 16px',
+        textAlign: 'center',
+        fontSize: '16px',
+        fontWeight: 'bold',
+        letterSpacing: '0.5px',
+        flexShrink: 0,
+      }}>
+        現在のフェーズ: {getPhaseLabel(operation.phase)}
+     </div>
       {showMap && (
-        <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ height: '35vh', position: 'relative', flexShrink: 0 }}>
           <GoogleMapWrapper onMapReady={() => setIsMapReady(true)} />
           
           {/* ✅ 既存: 方位インジケーター */}
@@ -1156,7 +1167,7 @@ const OperationRecord: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ 既存: 詳細情報パネル */}
+      {/* 詳細情報パネル */}
       {showDetails && (
         <div style={{
           background: 'white',
@@ -1177,7 +1188,7 @@ const OperationRecord: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ 既存: コントロールパネル */}
+      {/* コントロールパネル */}
       <div style={{
         background: 'white',
         padding: '16px',
@@ -1186,17 +1197,8 @@ const OperationRecord: React.FC = () => {
         position: 'relative',
         zIndex: 1000
       }}>
-        {/* ✅ 既存: フェーズ表示 */}
-        <div style={{
-          fontSize: '14px',
-          color: '#666',
-          marginBottom: '12px',
-          textAlign: 'center'
-        }}>
-          現在のフェーズ: <strong>{getPhaseLabel(operation.phase)}</strong>
-        </div>
 
-        {/* ✅ 既存 + 🆕: フェーズ別ボタン */}
+        {/* フェーズ別ボタン */}
         {getPhaseButtons()}
 
         {/* 共通ボタン */}
@@ -1210,13 +1212,13 @@ const OperationRecord: React.FC = () => {
             onClick={handleBreakStart}
             disabled={isSubmitting || operation.phase === 'BREAK'}
             style={{
-              padding: '12px',
-              fontSize: '14px',
+              padding: '20px 12px',
+              fontSize: '16px',
               fontWeight: 'bold',
               color: 'white',
               background: operation.phase === 'BREAK' ? '#ccc' : '#9C27B0',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '10px',
               cursor: operation.phase === 'BREAK' ? 'not-allowed' : 'pointer'
             }}
           >
@@ -1225,16 +1227,16 @@ const OperationRecord: React.FC = () => {
           
           <button
             onClick={handleRefuel}
-            disabled={isSubmitting || operation.phase === 'BREAK'}  // 🆕 休憩中は不活性
+            disabled={isSubmitting || operation.phase === 'BREAK'}
             style={{
-              padding: '12px',
-              fontSize: '14px',
+              padding: '20px 12px',
+              fontSize: '16px',
               fontWeight: 'bold',
               color: 'white',
-              background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#FFC107',  // 🆕
+              background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#FFC107',
               border: 'none',
-              borderRadius: '6px',
-              cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'  // 🆕
+              borderRadius: '10px',
+              cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'
             }}
           >
             ⛽ 給油
@@ -1243,13 +1245,13 @@ const OperationRecord: React.FC = () => {
           <button
             onClick={() => setShowDetails(!showDetails)}
             style={{
-              padding: '12px',
-              fontSize: '14px',
+              padding: '20px 12px',
+              fontSize: '16px',
               fontWeight: 'bold',
               color: 'white',
               background: '#607D8B',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '10px',
               cursor: 'pointer'
             }}
           >
@@ -1260,18 +1262,18 @@ const OperationRecord: React.FC = () => {
         {/* 運行終了ボタン */}
         <button
           onClick={handleOperationEnd}
-          disabled={isSubmitting || operation.phase === 'BREAK'}  // 🆕 休憩中は不活性
+          disabled={isSubmitting || operation.phase === 'BREAK'}
           style={{
             width: '100%',
             marginTop: '12px',
-            padding: '14px',
-            fontSize: '16px',
+            padding: '20px',
+            fontSize: '18px',
             fontWeight: 'bold',
             color: 'white',
-            background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#F44336',  // 🆕
+            background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#F44336',
             border: 'none',
-            borderRadius: '8px',
-            cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'  // 🆕
+            borderRadius: '10px',
+            cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'
           }}
         >
           🏁 運行終了
@@ -1319,6 +1321,18 @@ function getPhaseLabel(phase: OperationPhase): string {
     default: return '不明';
   }
 }
+
+// 🆕 フェーズカラー取得
+const getPhaseColor = (phase: string): string => {
+  switch (phase) {
+    case 'TO_LOADING':    return '#2196F3';
+    case 'AT_LOADING':    return '#4CAF50';
+    case 'TO_UNLOADING':  return '#4CAF50';
+    case 'AT_UNLOADING':  return '#FF9800';
+    case 'BREAK':         return '#9C27B0';
+    default:              return '#607D8B';
+  }
+};
 
 export default OperationRecord;
 
