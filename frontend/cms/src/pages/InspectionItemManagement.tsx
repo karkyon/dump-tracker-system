@@ -247,19 +247,28 @@ const InspectionItemManagement: React.FC = () => {
       toast.error('入力内容を確認してください');
       return;
     }
-
     try {
       const success = await updateItem(selectedItemForEdit.id, {
         name: formData.name,
         description: formData.description || undefined,
-        inputType: formData.inputType,  // 🐛 修正3: type → inputType, TEXT値使用
+        inputType: formData.inputType,
         category: formData.category,
         order: formData.order,
         isRequired: formData.isRequired,
         isActive: formData.isActive,
       });
-
       if (success) {
+        // 同じ種別（PRE/POST）のアイテムをorder順に並べ直してRenumber
+        const sameTypeItems = items
+          .filter((i) => i.category === selectedItemForEdit.category)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        // 更新対象を新しいorderで差し替えてからRenumber
+        const merged = sameTypeItems.map((i) =>
+          i.id === selectedItemForEdit.id ? { ...i, order: formData.order } : i
+        );
+        merged.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const renumbered = merged.map((i, idx) => ({ id: i.id, order: idx + 1 }));
+        await updateOrder(renumbered);
         toast.success('点検項目を更新しました');
         handleCloseModals();
       } else {
@@ -340,22 +349,25 @@ const InspectionItemManagement: React.FC = () => {
       render: (_: any, item: InspectionItem, index: number) => (
         <div className="flex items-center gap-1">
           <span>{item.order ?? index + 1}</span>
-          <div className="flex flex-col">
-            <button
-              onClick={() => handleMoveUp(item, index)}
-              disabled={index === 0}
-              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronUp className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => handleMoveDown(item, index)}
-              disabled={index === filteredAndSortedItems.length - 1}
-              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronDown className="w-3 h-3" />
-            </button>
-          </div>
+          {/* ALLフィルタ時は順序ボタン非表示 */}
+          {categoryFilter !== 'all' && (
+            <div className="flex flex-col">
+              <button
+                onClick={() => handleMoveUp(item, index)}
+                disabled={index === 0}
+                className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronUp className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => handleMoveDown(item, index)}
+                disabled={index === filteredAndSortedItems.length - 1}
+                className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
       ),
     },

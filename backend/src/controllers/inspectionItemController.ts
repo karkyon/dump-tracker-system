@@ -371,6 +371,29 @@ class InspectionItemController {
       return sendError(res, '点検項目の削除に失敗しました', 500);
     }
   });
+
+  public updateOrder = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const updates = req.body.items as Array<{ id: string; order: number }>;
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return sendError(res, "updates配列が必要です", 400);
+      }
+      const db = (this.inspectionService as any).prisma;
+      await Promise.all(
+        updates.map(({ id, order }) =>
+          db.inspectionItem.update({
+            where: { id },
+            data: { displayOrder: order }
+          })
+        )
+      );
+      logger.info("✅ [InspectionItemController] 順序更新成功", { count: updates.length });
+      return sendSuccess(res, { updated: updates.length }, "表示順序を更新しました");
+    } catch (error) {
+      logger.error("❌ [InspectionItemController] 順序更新エラー:", error);
+      return sendError(res, "順序更新に失敗しました", 500);
+    }
+  });
 }
 
 // =====================================
@@ -390,7 +413,8 @@ export const {
   getInspectionItemById,
   createInspectionItem,
   updateInspectionItem,
-  deleteInspectionItem
+  deleteInspectionItem,
+  updateOrder
 } = inspectionItemController;
 
 // クラスエクスポート

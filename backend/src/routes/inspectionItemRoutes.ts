@@ -31,7 +31,8 @@ import {
   getInspectionItemById,
   createInspectionItem,
   updateInspectionItem,
-  deleteInspectionItem
+  deleteInspectionItem,
+  updateOrder
 } from '../controllers/inspectionItemController';
 
 // 型定義
@@ -476,11 +477,16 @@ router.put(
  */
 router.delete(
   '/:id',
-  // ✅ 修正: validateId を削除（controller 内で UUID 検証）
   requireAdmin,
   deleteInspectionItem
 );
 
+// 表示順序一括更新
+router.post(
+  '/update-order',
+  requireAdmin,
+  updateOrder
+);
 // =====================================
 // 📤 エクスポート・統合完了確認
 // =====================================

@@ -70,10 +70,10 @@ const normalizeInspectionItem = (item: any): InspectionItem => {
     ...item,
     // 現時点では変換不要だが、拡張性のために関数を用意
     // order のデフォルト値を設定
-    order: item.order ?? 0,
+    order: item.displayOrder ?? item.order ?? 0,
     isRequired: item.isRequired ?? true,
     inputType: item.inputType || item.type || 'CHECKBOX',  // 🐛 修正: type対応
-    category: item.category === 'POST_TRIP' ? 'post' : item.category === 'PRE_TRIP' ? 'pre' : (item.category || 'pre'),
+    category: item.inspectionType === 'POST_TRIP' ? 'post' : item.inspectionType === 'PRE_TRIP' ? 'pre' : (item.category || 'pre'),
   };
 };
 
