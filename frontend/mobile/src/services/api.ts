@@ -1233,7 +1233,31 @@ class APIServiceClass {
       throw error;
     }
   }
+// =============================================================================
+  // ✅ 追加: 品目一覧取得API
+  // =============================================================================
 
+  /**
+   * 品目一覧取得
+   * GET /api/v1/items
+   */
+  async getItems(params?: {
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<any>>(
+        '/items',
+        { params: { isActive: true, limit: 100, ...params } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get items error:', error);
+      throw error;
+    }
+  }
+  
   // =============================================================================
   // ✅ 追加: 点検項目管理API
   // =============================================================================
