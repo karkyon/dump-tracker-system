@@ -52,6 +52,12 @@ import type {
   ReportTemplate
 } from '../types';
 
+import path from 'path';
+import {
+  generateDailyReportPDF, DailyReportData, OperationData,
+  InspectionData, ReportSummary, REPORTS_OUTPUT_DIR, ensureReportDirectory
+} from './pdfReportGenerator';
+
 // 🎯 完成済みサービス層との統合連携（3層統合管理システム活用）
 import type { VehicleService } from './vehicleService';
 import type { InspectionService } from './inspectionService';
@@ -1032,35 +1038,67 @@ class ReportService {
   // =====================================
 
   /**
-   * レポート生成処理（非同期）
+   * レポート生成処理（非同期） - 実PDF生成版
+   *
+   * 変更点:
+   * - 旧: setTimeout で5秒後に COMPLETED にするだけ（スタブ）
+   * - 新: DBから実データを取得し、pdfkitでPDFを実際に生成
    */
   private processReportGeneration(reportId: string): void {
-    // 実際の実装では、非同期ジョブキュー（BullMQ等）を使用
-    setTimeout(async () => {
+    setImmediate(async () => {
       try {
+        // ステータスを PROCESSING に更新
         await this.db.report.update({
           where: { id: reportId },
-          data: {
-            status: ReportGenerationStatus.PROCESSING
-          }
+          data: { status: ReportGenerationStatus.PROCESSING }
         });
 
-        // レポート生成ロジック（簡易版）
-        // 実際の実装では、データ集計・PDF生成等を実施
+        // レポートのパラメータを取得
+        const report = await this.db.report.findUnique({
+          where: { id: reportId },
+          include: { user: true }
+        });
 
+        if (!report) {
+          throw new Error(`レポートが見つかりません: ${reportId}`);
+        }
+
+        logger.info('[Report] レポート生成処理開始', {
+          reportId,
+          reportType: report.reportType,
+          format: report.format
+        });
+
+        let filePath: string;
+        let fileSize: number;
+
+        // レポート種別に応じた生成処理
+        switch (report.reportType) {
+          case 'DAILY_OPERATION':
+            ({ filePath, fileSize } = await this.generateDailyOperationPDF(report));
+            break;
+
+          // 他の種別は将来実装（今は簡易レスポンス）
+          default:
+            ({ filePath, fileSize } = await this.generatePlaceholderPDF(report));
+            break;
+        }
+
+        // COMPLETED に更新
         await this.db.report.update({
           where: { id: reportId },
           data: {
             status: ReportGenerationStatus.COMPLETED,
             generatedAt: new Date(),
-            filePath: `/reports/${reportId}.pdf`,
-            fileSize: 1024 * 100 // 100KB（サンプル）
+            filePath,
+            fileSize
           }
         });
 
-        logger.info('レポート生成完了', { reportId });
+        logger.info('[Report] レポート生成完了', { reportId, filePath, fileSize });
+
       } catch (error) {
-        logger.error('レポート生成失敗', { error, reportId });
+        logger.error('[Report] レポート生成失敗', { error, reportId });
         await this.db.report.update({
           where: { id: reportId },
           data: {
@@ -1069,7 +1107,222 @@ class ReportService {
           }
         });
       }
-    }, 5000); // 5秒後に完了（実際は非同期ジョブキューを使用）
+    });
+  }
+
+  /**
+   * 日次運行報告書PDF生成
+   * DBから当日の運行データを取得してPDFを生成する
+   */
+  private async generateDailyOperationPDF(
+    report: any
+  ): Promise<{ filePath: string; fileSize: number }> {
+    const params = report.parameters as any;
+
+    // 対象日の日付範囲を設定
+    const targetDate = params?.date
+      ? new Date(params.date)
+      : (report.startDate ? new Date(report.startDate) : new Date());
+
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    logger.info('[Report] 日次レポート対象日', {
+      targetDate: targetDate.toISOString(),
+      startOfDay: startOfDay.toISOString(),
+      endOfDay: endOfDay.toISOString(),
+      driverId: params?.driverId,
+      vehicleId: params?.vehicleId
+    });
+
+    // 運行記録を取得
+    const whereClause: any = {
+      OR: [
+        {
+          actual_start_time: {
+            gte: startOfDay,
+            lte: endOfDay,
+          }
+        },
+        {
+          planned_start_time: {
+            gte: startOfDay,
+            lte: endOfDay,
+          }
+        }
+      ]
+    };
+
+    // オプションフィルタ
+    if (params?.driverId) {
+      whereClause.driver_id = params.driverId;
+    }
+    if (params?.vehicleId) {
+      whereClause.vehicle_id = params.vehicleId;
+    }
+
+    const operations = await (this.db as any).operations.findMany({
+      where: whereClause,
+      include: {
+        users_operations_driver_idTousers: {
+          select: { id: true, name: true, employee_id: true }
+        },
+        vehicles: {
+          select: {
+            id: true,
+            plate_number: true,
+            model: true,
+            manufacturer: true
+          }
+        },
+        operation_details: {
+          include: {
+            locations: { select: { id: true, name: true } },
+            items: { select: { id: true, name: true } }
+          },
+          orderBy: { sequence_number: 'asc' }
+        },
+        inspection_records: {
+          where: {
+            inspection_type: { in: ['PRE_TRIP', 'POST_TRIP'] }
+          },
+          orderBy: { created_at: 'asc' }
+        }
+      },
+      orderBy: [
+        { actual_start_time: 'asc' },
+        { planned_start_time: 'asc' }
+      ]
+    });
+
+    logger.info(`[Report] 運行記録 ${operations.length}件 取得完了`);
+
+    // データを DailyReportData 形式に変換
+    const operationDataList: OperationData[] = operations.map((op: any) => {
+      const preInspection = op.inspection_records?.find(
+        (ir: any) => ir.inspection_type === 'PRE_TRIP'
+      );
+      const postInspection = op.inspection_records?.find(
+        (ir: any) => ir.inspection_type === 'POST_TRIP'
+      );
+
+      const details = (op.operation_details || []).map((d: any) => ({
+        sequenceNumber: d.sequence_number ?? 0,
+        activityType: d.activity_type ?? '',
+        locationName: d.locations?.name ?? null,
+        itemName: d.items?.name ?? null,
+        quantityTons: d.quantity_tons ? Number(d.quantity_tons) : 0,
+        startTime: d.actual_start_time ? new Date(d.actual_start_time) : null,
+        endTime: d.actual_end_time ? new Date(d.actual_end_time) : null,
+        notes: d.notes ?? null,
+      }));
+
+      const toInspData = (ir: any): InspectionData | null => {
+        if (!ir) return null;
+        return {
+          inspectionType: ir.inspection_type,
+          overallResult: ir.overall_result,
+          defectsFound: ir.defects_found ?? 0,
+          completedAt: ir.completed_at ? new Date(ir.completed_at) : null,
+          notes: ir.overall_notes ?? null,
+        };
+      };
+
+      return {
+        operationNumber: op.operation_number ?? '',
+        driverName: op.users_operations_driver_idTousers?.name ?? '不明',
+        vehiclePlateNumber: op.vehicles?.plate_number ?? '不明',
+        vehicleModel: op.vehicles?.model ?? '',
+        startTime: op.actual_start_time ? new Date(op.actual_start_time) : null,
+        endTime: op.actual_end_time ? new Date(op.actual_end_time) : null,
+        totalDistanceKm: op.total_distance_km ? Number(op.total_distance_km) : null,
+        fuelConsumedLiters: op.fuel_consumed_liters ? Number(op.fuel_consumed_liters) : null,
+        fuelCostYen: op.fuel_cost_yen ? Number(op.fuel_cost_yen) : null,
+        weatherCondition: op.weather_condition ?? null,
+        roadCondition: op.road_condition ?? null,
+        status: op.status ?? 'PLANNING',
+        details,
+        preInspection: toInspData(preInspection),
+        postInspection: toInspData(postInspection),
+        notes: op.notes ?? null,
+      } as OperationData;
+    });
+
+    // サマリー集計
+    const completedOps = operationDataList.filter(
+      op => op.status === 'COMPLETED'
+    );
+    const summary: ReportSummary = {
+      totalOperations: operationDataList.length,
+      completedOperations: completedOps.length,
+      totalDistanceKm: operationDataList.reduce(
+        (sum, op) => sum + (op.totalDistanceKm ?? 0), 0
+      ),
+      totalFuelLiters: operationDataList.reduce(
+        (sum, op) => sum + (op.fuelConsumedLiters ?? 0), 0
+      ),
+      totalFuelCostYen: operationDataList.reduce(
+        (sum, op) => sum + (op.fuelCostYen ?? 0), 0
+      ),
+      totalQuantityTons: operationDataList.reduce(
+        (sum, op) => op.details.reduce((s, d) => s + d.quantityTons, sum), 0
+      ),
+    };
+
+    const reportDate = targetDate.toISOString().split('T')[0];
+
+    const dailyData: DailyReportData = {
+      reportDate,
+      companyName: 'ダンプ運行記録システム',
+      operations: operationDataList,
+      summary,
+    };
+
+    // 出力ファイルパス
+    ensureReportDirectory();
+    const fileName = `daily_report_${reportDate}_${report.id}.pdf`;
+    const outputPath = path.join(REPORTS_OUTPUT_DIR, fileName);
+
+    // PDF生成実行
+    const fileSize = await generateDailyReportPDF(dailyData, outputPath);
+
+    return {
+      filePath: outputPath,
+      fileSize,
+    };
+  }
+
+  /**
+   * プレースホルダーPDF（未実装の種別向け）
+   */
+  private async generatePlaceholderPDF(
+    report: any
+  ): Promise<{ filePath: string; fileSize: number }> {
+    const PDFDocument = require('pdfkit');
+    const fs = require('fs');
+    const pathModule = require('path');
+
+    ensureReportDirectory();
+    const fileName = `report_${report.id}.pdf`;
+    const outputPath = pathModule.join(REPORTS_OUTPUT_DIR, fileName);
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4' });
+      const writeStream = fs.createWriteStream(outputPath);
+      doc.pipe(writeStream);
+      doc.fontSize(14).text(`${report.title}`, 40, 40);
+      doc.fontSize(10).text(`生成日時: ${new Date().toLocaleString('ja-JP')}`, 40, 70);
+      doc.text('このレポート種別は現在実装中です。', 40, 100);
+      doc.end();
+      writeStream.on('finish', () => {
+        const stats = fs.statSync(outputPath);
+        resolve({ filePath: outputPath, fileSize: stats.size });
+      });
+      writeStream.on('error', reject);
+    });
   }
 }
 

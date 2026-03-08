@@ -29,6 +29,9 @@ import {
 
 import logger from '../utils/logger';
 
+import fs from 'fs';
+import path from 'path';
+
 // 🎯 types/からの統一型定義インポート(整合性確保)
 import type {
   AuthenticatedRequest,
