@@ -1164,7 +1164,7 @@ class ReportService {
       whereClause.vehicle_id = params.vehicleId;
     }
 
-    const operations = await (this.db as any).operations.findMany({
+    const operations = await (this.db as any).operation.findMany({
       where: whereClause,
       include: {
         users_operations_driver_idTousers: {
@@ -1272,7 +1272,7 @@ class ReportService {
       ),
     };
 
-    const reportDate = targetDate.toISOString().split('T')[0];
+    const reportDate = (targetDate ?? new Date()).toISOString().split('T')[0] ?? '';
 
     const dailyData: DailyReportData = {
       reportDate,
