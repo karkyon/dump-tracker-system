@@ -54,8 +54,13 @@ import type {
 
 import path from 'path';
 import {
-  generateDailyReportPDF, DailyReportData, OperationData,
-  InspectionData, ReportSummary, REPORTS_OUTPUT_DIR, ensureReportDirectory
+  generateDailyDriverReportPDF,
+  type DailyDriverReportData,
+  type TripCycleRow,
+  type InspCheckItem,
+  // 後方互換用（generatePlaceholderPDF で使用）
+  REPORTS_OUTPUT_DIR,
+  ensureReportDirectory
 } from './pdfReportGenerator';
 
 // 🎯 完成済みサービス層との統合連携（3層統合管理システム活用）
@@ -94,6 +99,266 @@ import type { ItemService } from './itemService';
  * - 企業レベル統合ダッシュボード・KPI・改善提案
  * - 循環依存完全解消・疎結合アーキテクチャ確立
  */
+
+// =====================================
+// 曜日変換
+// =====================================
+function getDayOfWeek(date: Date): string {
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  return (days[date.getDay()] ?? '') + '曜';
+}
+
+// =====================================
+// 時刻フォーマット（HH:MM）
+// =====================================
+function formatTime(date: Date | null | undefined): string {
+  if (!date) return '';
+  const d = new Date(date);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// =====================================
+// 数値フォーマット
+// =====================================
+function fmtNum(val: any, decimals = 1): string {
+  if (val == null) return '';
+  const n = Number(val);
+  if (isNaN(n)) return '';
+  return n % 1 === 0 ? String(n) : n.toFixed(decimals);
+}
+
+// =====================================
+// 点検項目名の正規化（マッチング用）
+// =====================================
+function normalizeInspName(s: string): string {
+  return s
+    .replace(/[・、。\s　]/g, '')
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .toLowerCase();
+}
+
+// =====================================
+// 帳票固定点検項目定義
+// =====================================
+const FIXED_INSP_LEFT = [
+  'エンジンオイル・冷却水',
+  'タイヤの磨耗・き裂',
+  '各作動油の漏れ',
+  '後退時警報機、ワイパー',
+  '各計器の動き',
+  'ステアリング廻り',
+];
+
+const FIXED_INSP_MIDDLE = [
+  'No.プレート・車検証',
+  '速度表示装置',
+  'クラッチ・ペダルの遊び操作具合',
+  'ブレーキのきき具合',
+  '後写鏡・反射鏡',
+  'ライト・方向指示器の作動',
+];
+
+const FIXED_INSP_RIGHT = [
+  'ディスクホイールの取付状況',
+];
+
+// マッチング用キーワード（順序は FIXED_INSP_* と同じ）
+const INSP_LEFT_KEYWORDS = [
+  ['エンジンオイル', '冷却水', 'engine'],
+  ['タイヤ', 'tyre', 'tire', '磨耗', '摩耗', 'き裂', '亀裂'],
+  ['作動油', '漏れ', 'oil'],
+  ['警報', 'ワイパー', 'wiper', 'back'],
+  ['計器', 'meter', 'gauge'],
+  ['ステアリング', 'steering'],
+];
+
+const INSP_MIDDLE_KEYWORDS = [
+  ['プレート', 'ナンバー', '車検証', 'number'],
+  ['速度', 'speedometer', 'speed'],
+  ['クラッチ', 'ペダル', 'clutch'],
+  ['ブレーキ', 'brake'],
+  ['後写鏡', '反射鏡', 'mirror', 'バックミラー'],
+  ['ライト', '方向指示', 'light', 'turn'],
+];
+
+const INSP_RIGHT_KEYWORDS = [
+  ['ディスク', 'ホイール', 'wheel', 'disk'],
+];
+
+/**
+ * 点検結果リストから特定の項目を検索してマッチングする
+ */
+interface RawInspResult {
+  name: string;
+  preResult: string | null;
+  postResult: string | null;
+  measure: string | null;
+}
+
+function matchInspItem(
+  fixedName: string,
+  keywords: string[],
+  results: RawInspResult[]
+): { pre: string; post: string; measure: string } {
+  const empty = { pre: '', post: '', measure: '' };
+
+  // 1. 正規化した完全一致
+  const normFixed = normalizeInspName(fixedName);
+  let found = results.find(r => normalizeInspName(r.name) === normFixed);
+
+  // 2. キーワードマッチ
+  if (!found) {
+    found = results.find(r => {
+      const normName = normalizeInspName(r.name);
+      return keywords.some(kw => normName.includes(normalizeInspName(kw)));
+    });
+  }
+
+  if (!found) return empty;
+
+  return {
+    pre: found.preResult ?? '',
+    post: found.postResult ?? '',
+    measure: found.measure ?? '',
+  };
+}
+
+/**
+ * inspection_item_results を { 項目名 → PRE/POST 結果 } の形式に変換
+ *
+ * DB から取得した inspection_records (PRE_TRIP / POST_TRIP) の
+ * inspectionItemResults を flat に展開して返す
+ */
+function buildInspResultMap(inspectionRecords: any[]): RawInspResult[] {
+  const map = new Map<string, RawInspResult>();
+
+  for (const record of inspectionRecords) {
+    const isPre = record.inspection_type === 'PRE_TRIP' || record.inspectionType === 'PRE_TRIP';
+    const isPost = record.inspection_type === 'POST_TRIP' || record.inspectionType === 'POST_TRIP';
+
+    const itemResults = record.inspection_item_results ?? record.inspectionItemResults ?? [];
+
+    for (const ir of itemResults) {
+      const item = ir.inspection_items ?? ir.inspectionItems ?? ir.inspectionItem;
+      if (!item?.name) continue;
+
+      const name: string = item.name;
+      const isPassed: boolean | null = ir.is_passed ?? ir.isPassed ?? null;
+      const resultStr = isPassed === true ? 'レ' : isPassed === false ? '×' : '';
+      const measureNote: string = ir.notes ?? '';
+
+      if (!map.has(name)) {
+        map.set(name, { name, preResult: null, postResult: null, measure: '' });
+      }
+
+      const entry = map.get(name)!;
+      if (isPre && !entry.preResult) entry.preResult = resultStr;
+      if (isPost && !entry.postResult) entry.postResult = resultStr;
+      if (measureNote && !entry.measure) entry.measure = measureNote;
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+/**
+ * operation_details から TripCycleRow の配列を生成する
+ * LOADING/UNLOADING をペアリングして1サイクル = 1行とする
+ */
+function buildTripCycles(operationDetailsList: any[][]): any[] {
+  // 全運行の全detailsを統合してシーケンス順にソート
+  const allDetails: any[] = [];
+  for (const details of operationDetailsList) {
+    allDetails.push(...details);
+  }
+  allDetails.sort((a, b) => {
+    const sa = a.sequence_number ?? a.sequenceNumber ?? 0;
+    const sb = b.sequence_number ?? b.sequenceNumber ?? 0;
+    return sa - sb;
+  });
+
+  const LOADING_TYPES = ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'];
+  const UNLOADING_TYPES = ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE'];
+
+  interface CycleAccumulator {
+    contractorName: string;
+    loadingLocation: string;
+    unloadingLocation: string;
+    itemName: string;
+    vehicleCount: number;
+    quantityTons: number;
+    loadingCondition: string;
+    loadingStartTime: string;
+    loadingEndTime: string;
+    hasLoading: boolean;
+    hasUnloading: boolean;
+  }
+
+  const cycles: CycleAccumulator[] = [];
+  let current: CycleAccumulator | null = null;
+
+  for (const d of allDetails) {
+    const actType: string = d.activity_type ?? d.activityType ?? '';
+    const locationName: string = d.locations?.name ?? d.location?.name ?? '';
+    const itemName: string = d.items?.name ?? d.item?.name ?? '';
+    const qty: number = d.quantity_tons != null ? Number(d.quantity_tons) : (d.quantityTons != null ? Number(d.quantityTons) : 0);
+    const startT: string = formatTime(d.actual_start_time ?? d.actualStartTime);
+    const endT: string = formatTime(d.actual_end_time ?? d.actualEndTime);
+    const notes: string = d.notes ?? '';
+
+    if (LOADING_TYPES.includes(actType)) {
+      if (current && !current.hasUnloading) {
+        // 前のローディングが未完了なら閉じる
+        cycles.push(current);
+      }
+      current = {
+        contractorName: '',
+        loadingLocation: locationName,
+        unloadingLocation: '',
+        itemName,
+        vehicleCount: 1,
+        quantityTons: qty,
+        loadingCondition: notes,
+        loadingStartTime: startT,
+        loadingEndTime: endT,
+        hasLoading: true,
+        hasUnloading: false,
+      };
+    } else if (UNLOADING_TYPES.includes(actType)) {
+      if (current && current.hasLoading) {
+        current.unloadingLocation = locationName;
+        current.hasUnloading = true;
+        // 荷降ろし時のトン数があれば上書き
+        if (qty > 0 && current.quantityTons === 0) current.quantityTons = qty;
+        cycles.push(current);
+        current = null;
+      } else {
+        // ローディングなしでアンローディングが来た場合
+        cycles.push({
+          contractorName: '',
+          loadingLocation: '',
+          unloadingLocation: locationName,
+          itemName,
+          vehicleCount: 1,
+          quantityTons: qty,
+          loadingCondition: '',
+          loadingStartTime: '',
+          loadingEndTime: '',
+          hasLoading: false,
+          hasUnloading: true,
+        });
+      }
+    }
+  }
+
+  // 未閉じのサイクルを追加
+  if (current) {
+    cycles.push(current);
+  }
+
+  return cycles;
+}
+
 class ReportService {
   private readonly db: PrismaClient;
   private vehicleService?: VehicleService;
@@ -383,7 +648,9 @@ class ReportService {
       const skip = (page - 1) * limit;
 
       // フィルタ条件構築
-      const whereClause: any = {};
+      const whereClause: any = {
+        NOT: { status: ReportGenerationStatus.CANCELLED }
+      };
 
       // ドライバーの場合、自分のレポートのみ
       if (requesterRole === UserRole.DRIVER) {
@@ -912,11 +1179,8 @@ class ReportService {
         throw new AuthorizationError('このレポートを削除する権限がありません');
       }
 
-      await this.db.report.update({
-        where: { id: reportId },
-        data: {
-          status: ReportGenerationStatus.CANCELLED
-        }
+      await this.db.report.delete({
+        where: { id: reportId }
       });
 
       logger.info('レポート削除完了', { reportId, requesterId });
@@ -1115,184 +1379,182 @@ class ReportService {
    * DBから当日の運行データを取得してPDFを生成する
    */
   private async generateDailyOperationPDF(
+    this: any,
     report: any
   ): Promise<{ filePath: string; fileSize: number }> {
     const params = report.parameters as any;
 
-    // 対象日の日付範囲を設定
     const targetDate = params?.date
       ? new Date(params.date)
       : (report.startDate ? new Date(report.startDate) : new Date());
 
     const startOfDay = new Date(targetDate);
     startOfDay.setHours(0, 0, 0, 0);
-
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    logger.info('[Report] 日次レポート対象日', {
-      targetDate: targetDate.toISOString(),
-      startOfDay: startOfDay.toISOString(),
-      endOfDay: endOfDay.toISOString(),
-      driverId: params?.driverId,
-      vehicleId: params?.vehicleId
-    });
-
-    // 運行記録を取得
+    // ===== DB クエリ =====
     const whereClause: any = {
       OR: [
-        {
-          actual_start_time: {
-            gte: startOfDay,
-            lte: endOfDay,
-          }
-        },
-        {
-          planned_start_time: {
-            gte: startOfDay,
-            lte: endOfDay,
-          }
-        }
-      ]
+        { actualStartTime: { gte: startOfDay, lte: endOfDay } },
+        { plannedStartTime: { gte: startOfDay, lte: endOfDay } },
+      ],
     };
-
-    // オプションフィルタ
-    if (params?.driverId) {
-      whereClause.driver_id = params.driverId;
-    }
-    if (params?.vehicleId) {
-      whereClause.vehicle_id = params.vehicleId;
-    }
+    if (params?.driverId) whereClause.driverId = params.driverId;
+    if (params?.vehicleId) whereClause.vehicleId = params.vehicleId;
 
     const operations = await (this.db as any).operation.findMany({
       where: whereClause,
       include: {
-        users_operations_driver_idTousers: {
-          select: { id: true, name: true, employee_id: true }
+        // 運転手
+        usersOperationsDriverIdTousers: {
+          select: { id: true, name: true, employeeId: true },
         },
+        // 車両
         vehicles: {
           select: {
             id: true,
-            plate_number: true,
+            plateNumber: true,
             model: true,
-            manufacturer: true
-          }
+            manufacturer: true,
+          },
         },
-        operation_details: {
+        // 運行詳細（積込・積降・給油など）
+        operationDetails: {
           include: {
             locations: { select: { id: true, name: true } },
-            items: { select: { id: true, name: true } }
+            items: { select: { id: true, name: true } },
           },
-          orderBy: { sequence_number: 'asc' }
+          orderBy: { sequenceNumber: 'asc' },
         },
-        inspection_records: {
+        // 点検記録（PRE_TRIP / POST_TRIP）＋ 点検項目結果
+        inspectionRecords: {
           where: {
-            inspection_type: { in: ['PRE_TRIP', 'POST_TRIP'] }
+            inspectionType: { in: ['PRE_TRIP', 'POST_TRIP'] },
           },
-          orderBy: { created_at: 'asc' }
-        }
+          include: {
+            inspectionItemResults: {
+              include: {
+                inspectionItems: {
+                  select: { id: true, name: true, category: true },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: [
-        { actual_start_time: 'asc' },
-        { planned_start_time: 'asc' }
-      ]
+        { actualStartTime: 'asc' },
+        { plannedStartTime: 'asc' },
+      ],
     });
 
-    logger.info(`[Report] 運行記録 ${operations.length}件 取得完了`);
+    // ===== データ変換 =====
 
-    // データを DailyReportData 形式に変換
-    const operationDataList: OperationData[] = operations.map((op: any) => {
-      const preInspection = op.inspection_records?.find(
-        (ir: any) => ir.inspection_type === 'PRE_TRIP'
-      );
-      const postInspection = op.inspection_records?.find(
-        (ir: any) => ir.inspection_type === 'POST_TRIP'
-      );
+    // 代表ドライバー・車両（最初のoperationから）
+    const firstOp = operations[0];
+    const driverName: string = firstOp?.usersOperationsDriverIdTousers?.name ?? '未入力';
+    const vehiclePlate: string = firstOp?.vehicles?.plateNumber ?? '未入力';
 
-      const details = (op.operation_details || []).map((d: any) => ({
-        sequenceNumber: d.sequence_number ?? 0,
-        activityType: d.activity_type ?? '',
-        locationName: d.locations?.name ?? null,
-        itemName: d.items?.name ?? null,
-        quantityTons: d.quantity_tons ? Number(d.quantity_tons) : 0,
-        startTime: d.actual_start_time ? new Date(d.actual_start_time) : null,
-        endTime: d.actual_end_time ? new Date(d.actual_end_time) : null,
-        notes: d.notes ?? null,
-      }));
+    // オドメーター（最初の開始〜最後の終了）
+    const startOdo = firstOp?.startOdometer != null ? fmtNum(firstOp.startOdometer, 0) : '';
+    const lastOp = operations[operations.length - 1];
+    const endOdo = lastOp?.endOdometer != null ? fmtNum(lastOp.endOdometer, 0) : '';
 
-      const toInspData = (ir: any): InspectionData | null => {
-        if (!ir) return null;
-        return {
-          inspectionType: ir.inspection_type,
-          overallResult: ir.overall_result,
-          defectsFound: ir.defects_found ?? 0,
-          completedAt: ir.completed_at ? new Date(ir.completed_at) : null,
-          notes: ir.overall_notes ?? null,
-        };
-      };
+    // 運行詳細から TripCycleRow 構築
+    const allDetailsList = operations.map((op: any) => op.operationDetails ?? []);
+    const cycles = buildTripCycles(allDetailsList);
 
-      return {
-        operationNumber: op.operation_number ?? '',
-        driverName: op.users_operations_driver_idTousers?.name ?? '不明',
-        vehiclePlateNumber: op.vehicles?.plate_number ?? '不明',
-        vehicleModel: op.vehicles?.model ?? '',
-        startTime: op.actual_start_time ? new Date(op.actual_start_time) : null,
-        endTime: op.actual_end_time ? new Date(op.actual_end_time) : null,
-        totalDistanceKm: op.total_distance_km ? Number(op.total_distance_km) : null,
-        fuelConsumedLiters: op.fuel_consumed_liters ? Number(op.fuel_consumed_liters) : null,
-        fuelCostYen: op.fuel_cost_yen ? Number(op.fuel_cost_yen) : null,
-        weatherCondition: op.weather_condition ?? null,
-        roadCondition: op.road_condition ?? null,
-        status: op.status ?? 'PLANNING',
-        details,
-        preInspection: toInspData(preInspection),
-        postInspection: toInspData(postInspection),
-        notes: op.notes ?? null,
-      } as OperationData;
+    // 給油データ（FUELING activity_type から取得）
+    let fuelLiters = '';
+    let fuelOdometerKm = '';
+    for (const op of operations) {
+      for (const d of (op.operationDetails ?? [])) {
+        const at = d.activityType ?? '';
+        if (at === 'FUELING' || at === 'FUEL') {
+          if (!fuelLiters && d.quantityTons) {
+            fuelLiters = fmtNum(d.quantityTons, 1);
+          }
+      if (!fuelOdometerKm && d.actualStartTime) {
+            // 給油時のオドメーターはstartOdometerで代替
+          }
+        }
+      }
+      // operation.fuelConsumedLiters があればそちらを使う
+      if (!fuelLiters && op.fuelConsumedLiters) {
+        fuelLiters = fmtNum(op.fuelConsumedLiters, 1);
+      }
+    }
+
+    // 全inspection_records を統合
+    const allInspRecords: any[] = [];
+    for (const op of operations) {
+      allInspRecords.push(...(op.inspectionRecords ?? []));
+    }
+
+    // 点検結果マップを構築
+    const inspResults = buildInspResultMap(allInspRecords);
+
+    // 固定点検項目リストへマッピング
+    const leftItems = FIXED_INSP_LEFT.map((name, i) => {
+      const matched = matchInspItem(name, INSP_LEFT_KEYWORDS[i] ?? [], inspResults);
+      return { name, preResult: matched.pre, postResult: matched.post, measure: matched.measure };
     });
 
-    // サマリー集計
-    const completedOps = operationDataList.filter(
-      op => op.status === 'COMPLETED'
+    const middleItems = FIXED_INSP_MIDDLE.map((name, i) => {
+      const matched = matchInspItem(name, INSP_MIDDLE_KEYWORDS[i] ?? [], inspResults);
+      return { name, preResult: matched.pre, postResult: matched.post, measure: matched.measure };
+    });
+
+    const rightItems = FIXED_INSP_RIGHT.map((name, i) => {
+      const matched = matchInspItem(name, INSP_RIGHT_KEYWORDS[i] ?? [], inspResults);
+      return { name, preResult: matched.pre, postResult: matched.post, measure: matched.measure };
+    });
+
+    // 帳票データ組み立て
+    const dailyDriverData: any /* DailyDriverReportData */ = {
+      reportDate: targetDate.toISOString().split('T')[0] ?? '',
+      dayOfWeek: getDayOfWeek(targetDate),
+      driverName,
+      vehiclePlateNumber: vehiclePlate,
+      startOdometer: startOdo,
+      endOdometer: endOdo,
+      trips: cycles.slice(0, 6).map((c: any) => ({
+        contractorName: c.contractorName,
+        loadingLocation: c.loadingLocation,
+        unloadingLocation: c.unloadingLocation,
+        itemName: c.itemName,
+        vehicleCount: c.vehicleCount,
+        quantityTons: c.quantityTons > 0 ? parseFloat(fmtNum(c.quantityTons, 2)) : 0,
+        loadingCondition: c.loadingCondition,
+        loadingStartTime: c.loadingStartTime,
+        loadingEndTime: c.loadingEndTime,
+      })),
+      fuelLiters,
+      fuelOdometerKm,
+      oilLiters: '',
+      hasGrease: false,
+      hasPuncture: false,
+      hasTireWear: false,
+      leftInspItems: leftItems,
+      middleInspItems: middleItems,
+      rightInspItems: rightItems,
+      remarks: '',
+    };
+
+    // ===== PDF 生成 =====
+    // ensureReportDirectory と generateDailyDriverReportPDF はインポートが必要
+    const fileName = `daily_report_${dailyDriverData.reportDate}_${report.id}.pdf`;
+    const outputPath = require('path').join(
+      require('process').cwd(),
+      'generated_reports',
+      fileName
     );
-    const summary: ReportSummary = {
-      totalOperations: operationDataList.length,
-      completedOperations: completedOps.length,
-      totalDistanceKm: operationDataList.reduce(
-        (sum, op) => sum + (op.totalDistanceKm ?? 0), 0
-      ),
-      totalFuelLiters: operationDataList.reduce(
-        (sum, op) => sum + (op.fuelConsumedLiters ?? 0), 0
-      ),
-      totalFuelCostYen: operationDataList.reduce(
-        (sum, op) => sum + (op.fuelCostYen ?? 0), 0
-      ),
-      totalQuantityTons: operationDataList.reduce(
-        (sum, op) => op.details.reduce((s, d) => s + d.quantityTons, sum), 0
-      ),
-    };
 
-    const reportDate = (targetDate ?? new Date()).toISOString().split('T')[0] ?? '';
+    const fileSize = await generateDailyDriverReportPDF(dailyDriverData, outputPath);
 
-    const dailyData: DailyReportData = {
-      reportDate,
-      companyName: 'ダンプ運行記録システム',
-      operations: operationDataList,
-      summary,
-    };
-
-    // 出力ファイルパス
-    ensureReportDirectory();
-    const fileName = `daily_report_${reportDate}_${report.id}.pdf`;
-    const outputPath = path.join(REPORTS_OUTPUT_DIR, fileName);
-
-    // PDF生成実行
-    const fileSize = await generateDailyReportPDF(dailyData, outputPath);
-
-    return {
-      filePath: outputPath,
-      fileSize,
-    };
+    return { filePath: outputPath, fileSize };
   }
 
   /**
