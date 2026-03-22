@@ -36,12 +36,26 @@
  *  - レスポンシブデザインを考慮して、モバイルデバイスでも操作しやすいUIを提供することで、幅広いユーザーに対応する
  *  - コードはTypeScriptで型安全に実装し、将来の拡張や保守がしやすいように構成することで、プロジェクトの品質と安定性を向上させる
  *  - コメントでコードの意図や重要なポイントを明確化し、他の開発者が理解しやすいようにすることで、チームでの協力とコードの保守性を高める
+ *  - APIクライアント関数はエラーハンドリングを強化し、APIからのエラーを適切に処理してユーザーにフィードバックする
+ *  - ポーリングの実装では、一定回数以上のポーリング失敗でタイムアウトとみなし、ユーザーに通知する
+ *  - ダウンロード機能は認証付きで安全に実装し、ファイル名も適切に設定してユーザーがわかりやすいようにする
+ *  - 生成中のレポートはリアルタイムでステータスが更新されるように実装し、ユーザーが現在の状況を把握しやすいようにする
+ *  - 生成履歴は最新の20件を表示し、将来的にはページネーションやフィルタリング機能も考慮する
+ *  - コードはモジュール化して、APIクライアント関数やステータスバッジコンポーネントなどを分割して実装し、コードの再利用性と保守性を高める
+ *  - ユーザーが操作する際の確認ダイアログや成功/失敗のフィードバックを適切に実装し、ユーザーエクスペリエンスを向上させる
+ *  - エラーが発生した場合はユーザーにわかりやすいメッセージを表示し、必要に応じて詳細なエラー情報も提供することで、ユーザーが問題を理解しやすくする
+ *  - レスポンシブデザインを考慮して、モバイルデバイスでも操作しやすいUIを提供することで、幅広いユーザーに対応する
+ *
+ * 🆕 P4-08: 貨物自動車運送事業実績報告書セクション追加
+ *  - 年度選択（4月始まり・5年分）
+ *  - 集計プレビュー（データ充足チェック表示）
+ *  - PDF生成・生成履歴からダウンロード
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Download, FileText, Calendar, RefreshCw, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
-import Button from '../components/common/Button';
+import { Download, FileText, Calendar, RefreshCw, CheckCircle, XCircle, Clock, Trash2, BarChart3 } from 'lucide-react';
 import Input from '../components/common/Input';
+import type { DataAvailabilityCheck, AnnualTransportPreview } from '../types';
 
 // =====================================
 // 型定義
@@ -88,6 +102,13 @@ const API_BASE = (() => {
 const POLLING_INTERVAL_MS = 2000; // 2秒ごとにポーリング
 const MAX_POLLING_COUNT = 60;     // 最大2分間ポーリング
 
+// 🆕 P4-08: 年度選択肢（現在の年度から5年分・4月始まり）
+const FISCAL_YEARS_OPTIONS = (() => {
+  const now = new Date();
+  const curr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return Array.from({ length: 5 }, (_, i) => curr - i);
+})();
+
 // =====================================
 // ユーティリティ
 // =====================================
@@ -122,6 +143,7 @@ function getReportTypeLabel(type: string): string {
     DAILY_OPERATION: '日次運行報告書',
     MONTHLY_OPERATION: '月次運行報告書',
     ANNUAL_OPERATION: '輸送実績報告書',
+    ANNUAL_TRANSPORT_REPORT: '貨物自動車運送事業実績報告書',
     VEHICLE_UTILIZATION: '車両稼働レポート',
     INSPECTION_SUMMARY: '点検サマリー',
     COMPREHENSIVE_DASHBOARD: '総合ダッシュボード',
@@ -195,7 +217,6 @@ async function apiDeleteReport(reportId: string): Promise<void> {
 }
 
 function downloadReport(reportId: string, title: string): void {
-  const token = getAuthToken();
   // 認証付きダウンロード: フォーム送信方式でBearerトークンをヘッダに設定するため、
   // fetch + blob で取得してリンククリック
   const fileName = `${title || 'report'}.pdf`;
@@ -221,6 +242,39 @@ function downloadReport(reportId: string, title: string): void {
       console.error('ダウンロードエラー:', err);
       alert(`ダウンロードに失敗しました: ${err.message}`);
     });
+}
+
+// 🆕 P4-08: 実績報告書 集計プレビュー取得
+async function apiPreviewAnnualTransport(fiscalYear: number): Promise<AnnualTransportPreview> {
+  const res = await fetch(`${API_BASE}/reports/annual-transport/preview/${fiscalYear}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'APIエラー' }));
+    throw new Error(err.message || `プレビュー取得エラー: ${res.status}`);
+  }
+  return (await res.json()).data;
+}
+
+// 🆕 P4-08: 実績報告書 PDF生成
+async function apiGenerateAnnualTransport(
+  fiscalYear: number
+): Promise<{ reportId: string; status: ReportStatus; title: string }> {
+  const res = await fetch(`${API_BASE}/reports/annual-transport`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ fiscalYear, format: 'PDF' }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'APIエラー' }));
+    throw new Error(err.message || `生成エラー: ${res.status}`);
+  }
+  const json = await res.json();
+  return {
+    reportId: json.data?.reportId,
+    status:   json.data?.status   || 'PENDING',
+    title:    json.data?.title    || `貨物自動車運送事業実績報告書 ${fiscalYear}年度`,
+  };
 }
 
 // =====================================
@@ -260,6 +314,22 @@ const StatusBadge: React.FC<{ status: ReportStatus }> = ({ status }) => {
   );
 };
 
+// 🆕 P4-08: データ充足チェックバッジ
+const AvailabilityBadge: React.FC<{ status: 'ok' | 'warn' | 'error'; label: string }> = ({ status, label }) => {
+  const config = {
+    ok:    { icon: '✓', color: 'text-green-600' },
+    warn:  { icon: '△', color: 'text-amber-500' },
+    error: { icon: '✕', color: 'text-red-500'   },
+  };
+  const c = config[status];
+  return (
+    <div className="flex items-center gap-1 text-xs">
+      <span className={`font-bold ${c.color}`}>{c.icon}</span>
+      <span className="text-gray-700">{label}</span>
+    </div>
+  );
+};
+
 // =====================================
 // メインコンポーネント
 // =====================================
@@ -289,6 +359,15 @@ const ReportOutput: React.FC = () => {
   const pollingCountRef = useRef<Record<string, number>>({});
 
   // =====================================
+  // 🆕 P4-08: 実績報告書 state
+  // =====================================
+  const [annualFiscalYear, setAnnualFiscalYear] = useState<number>(FISCAL_YEARS_OPTIONS[0]!);
+  const [annualPreview, setAnnualPreview]           = useState<AnnualTransportPreview | null>(null);
+  const [annualPreviewLoading, setAnnualPreviewLoading] = useState(false);
+  const [annualGenerating, setAnnualGenerating]     = useState(false);
+  const [annualError, setAnnualError]               = useState<string | null>(null);
+
+  // =====================================
   // レポート一覧取得
   // =====================================
 
@@ -315,7 +394,7 @@ const ReportOutput: React.FC = () => {
   // =====================================
 
   const startPolling = useCallback(
-    (reportId: string, title: string) => {
+    (reportId: string, _title: string) => {
       pollingCountRef.current[reportId] = 0;
 
       const poll = async () => {
@@ -336,7 +415,7 @@ const ReportOutput: React.FC = () => {
         pollingCountRef.current[reportId] = count + 1;
 
         try {
-          const { status, errorMessage } = await apiGetReportStatus(reportId);
+          const { status } = await apiGetReportStatus(reportId);
 
           setGeneratingReports((prev) =>
             prev.map((r) =>
@@ -405,6 +484,49 @@ const ReportOutput: React.FC = () => {
       setReports((prev) => prev.filter((r) => r.id !== reportId));
     } catch (err) {
       alert('削除に失敗しました');
+    }
+  };
+
+  // =====================================
+  // 🆕 P4-08: 実績報告書 ハンドラ
+  // =====================================
+
+  /** 集計プレビュー取得 */
+  const handlePreviewAnnualTransport = async () => {
+    setAnnualPreviewLoading(true);
+    setAnnualError(null);
+    setAnnualPreview(null);
+    try {
+      const data = await apiPreviewAnnualTransport(annualFiscalYear);
+      setAnnualPreview(data);
+    } catch (err: any) {
+      setAnnualError(err.message || 'プレビューの取得に失敗しました');
+    } finally {
+      setAnnualPreviewLoading(false);
+    }
+  };
+
+  /** PDF生成 */
+  const handleGenerateAnnualTransport = async () => {
+    setAnnualGenerating(true);
+    setAnnualError(null);
+    try {
+      const result = await apiGenerateAnnualTransport(annualFiscalYear);
+
+      const newGenerating: GeneratingReport = {
+        reportId: result.reportId,
+        title:    result.title,
+        status:   result.status || 'PENDING',
+        polling:  true,
+      };
+      setGeneratingReports((prev) => [newGenerating, ...prev]);
+      startPolling(result.reportId, result.title);
+
+      alert(`実績報告書の生成を開始しました。\n完了後に生成履歴（下部）からダウンロードできます。`);
+    } catch (err: any) {
+      setAnnualError(err.message || 'PDF生成に失敗しました');
+    } finally {
+      setAnnualGenerating(false);
     }
   };
 
@@ -566,6 +688,195 @@ const ReportOutput: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* =====================================
+          🆕 P4-08: 貨物自動車運送事業実績報告書セクション
+          貨物自動車運送事業報告規則 第4号様式（A4縦）
+      ===================================== */}
+      <div className="bg-white shadow rounded-lg p-6 border-l-4 border-green-500">
+        {/* セクションヘッダー */}
+        <div className="flex items-center mb-5">
+          <div className="bg-green-100 p-2 rounded-lg mr-3">
+            <BarChart3 className="w-6 h-6 text-green-600" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-medium text-gray-900">
+                貨物自動車運送事業実績報告書
+              </h2>
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">
+                NEW
+              </span>
+            </div>
+            <p className="text-sm text-gray-500">
+              貨物自動車運送事業報告規則 第4号様式（A4縦）— 地方運輸局長あて提出用
+            </p>
+          </div>
+        </div>
+
+        {/* 入力エリア */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+          {/* 対象年度 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              対象年度 <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={annualFiscalYear}
+              onChange={(e) => {
+                setAnnualFiscalYear(Number(e.target.value));
+                setAnnualPreview(null);  // 年度変更でプレビューリセット
+              }}
+              className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+            >
+              {FISCAL_YEARS_OPTIONS.map((y) => (
+                <option key={y} value={y}>
+                  {y}年度（{y}/4/1〜{y + 1}/3/31）
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 出力形式（PDF固定） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">出力形式</label>
+            <div className="flex items-center h-9 mt-0.5">
+              <span className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-1.5">
+                PDF（A4縦・第4号様式）
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 集計プレビュー表示 */}
+        {annualPreview && (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-4 mb-4">
+            <p className="text-xs font-medium text-gray-600 mb-3 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3 text-green-500" />
+              データ充足状況（{annualFiscalYear}年度）
+            </p>
+
+            {/* データ充足チェックグリッド */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+              {([
+                { key: 'vehicleDays',      label: '延実在・実働車両数' },
+                { key: 'totalDistance',    label: '走行キロ' },
+                { key: 'loadedDistance',   label: '実車キロ' },
+                { key: 'transportTons',    label: '輸送トン数' },
+                { key: 'revenue',          label: '営業収入' },
+                { key: 'regionAssigned',   label: '管轄区域' },
+                { key: 'accidentRecords',  label: '事故件数' },
+                { key: 'businessSettings', label: '事業者情報' },
+              ] as { key: keyof DataAvailabilityCheck; label: string }[]).map(({ key, label }) => {
+                const status = annualPreview.availability?.[key] as 'ok' | 'warn' | 'error';
+                return (
+                  <AvailabilityBadge key={key} status={status} label={label} />
+                );
+              })}
+            </div>
+
+            {/* 警告メッセージ */}
+            {annualPreview.availability?.unassignedRegionCount > 0 && (
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 flex items-center justify-between">
+                <span>
+                  管轄区域未設定の車両が {annualPreview.availability.unassignedRegionCount} 台あります
+                </span>
+                <a
+                  href="/vehicles"
+                  className="text-blue-600 underline ml-2 hover:text-blue-800"
+                >
+                  車両マスタで設定する →
+                </a>
+              </div>
+            )}
+            {annualPreview.availability?.missingLoadedDistanceCount > 0 && (
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 mt-1">
+                実車キロ未入力の運行が {annualPreview.availability.missingLoadedDistanceCount} 件あります（運行記録から入力）
+              </div>
+            )}
+            {annualPreview.availability?.missingRevenueCount > 0 && (
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 mt-1">
+                営業収入未入力の運行が {annualPreview.availability.missingRevenueCount} 件あります（運行記録から入力）
+              </div>
+            )}
+            {!annualPreview.businessSettings?.companyName && (
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 mt-1 flex items-center justify-between">
+                <span>事業者情報が未設定です。PDF印字に必要な情報が不足します</span>
+                <a
+                  href="/settings"
+                  className="text-blue-600 underline ml-2 hover:text-blue-800"
+                >
+                  システム設定で入力する →
+                </a>
+              </div>
+            )}
+
+            {/* 概況サマリー */}
+            {annualPreview.overview && (
+              <div className="mt-3 flex gap-4 text-xs text-gray-600">
+                <span>車両数: <strong>{annualPreview.overview.vehicleCount}</strong> 台</span>
+                <span>従業員数: <strong>{annualPreview.overview.employeeCount}</strong> 人</span>
+                <span>運転者数: <strong>{annualPreview.overview.driverCount}</strong> 人</span>
+                {annualPreview.total && (
+                  <span>
+                    輸送トン数合計: <strong>{annualPreview.total.transportTons.toLocaleString()}</strong> トン
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* エラー表示 */}
+        {annualError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600 flex items-center gap-2">
+            <XCircle className="w-4 h-4 flex-shrink-0" />
+            {annualError}
+          </div>
+        )}
+
+        {/* ボタンエリア */}
+        <div className="flex justify-end gap-3">
+          {/* 集計プレビューボタン */}
+          <button
+            onClick={handlePreviewAnnualTransport}
+            disabled={annualPreviewLoading || annualGenerating}
+            className="flex items-center gap-2 px-4 py-2 text-sm border border-green-500 text-green-600 font-medium rounded-md hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {annualPreviewLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                取得中...
+              </>
+            ) : (
+              <>
+                <BarChart3 className="w-4 h-4" />
+                集計プレビュー
+              </>
+            )}
+          </button>
+
+          {/* PDF生成ボタン */}
+          <button
+            onClick={handleGenerateAnnualTransport}
+            disabled={annualGenerating || annualPreviewLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {annualGenerating ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                生成中...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                PDF生成・ダウンロード
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+      {/* ===================================== END P4-08 ===================================== */}
 
       {/* 生成履歴 */}
       <div className="bg-white shadow rounded-lg">

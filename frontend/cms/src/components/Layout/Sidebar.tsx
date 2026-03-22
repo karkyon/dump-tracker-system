@@ -18,7 +18,8 @@ import {
   Download,
   Settings,
   LucideIcon,
-  Bug,  // ✅ デバッグアイコン追加,
+  Bug,
+  AlertTriangle,
 } from 'lucide-react';
 import { NAVIGATION_ITEMS } from '../../utils/constants';
 import { useAuthStore } from '../../store/authStore';  // ✅ 認証ストア追加
@@ -40,13 +41,14 @@ const iconMap: Record<string, LucideIcon> = {
   Navigation: Navigation,
   Download: Download,
   Settings: Settings,
-  Bug: Bug,  // ✅ デバッグアイコン追加,
+  Bug: Bug,
+  AlertTriangle: AlertTriangle,
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // ✅ ユーザー情報取得（adminOnlyフィルタリング用）
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const handleNavClick = () => {
     // モバイルでナビゲーション時にサイドバーを閉じる

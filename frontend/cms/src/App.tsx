@@ -20,6 +20,7 @@ import GPSMonitoring from './pages/GPSMonitoring';
 import ReportOutput from './pages/ReportOutput';
 import SystemSettings from './pages/SystemSettings';
 import OperationDebug from './pages/OperationDebug';
+import AccidentRecordManagement from './pages/AccidentRecordManagement';
 
 // エラーバウンダリコンポーネント
 class ErrorBoundary extends React.Component<
@@ -252,6 +253,9 @@ const App: React.FC = () => {
               {/* 帳票出力 */}
               <Route path="reports" element={<ReportOutput />} />
               
+              {/* 🆕 P4-07: 事故記録管理 */}
+              <Route path="accident-records" element={<AccidentRecordManagement />} />
+
               {/* デバッグルート追加（管理者専用） */}
               <Route path="debug/operations" element={<OperationDebug />} />
               

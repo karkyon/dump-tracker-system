@@ -59,14 +59,29 @@ const BUSINESS_TYPE_OPTIONS: { value: string; label: string }[] = [
 
 const SystemSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('general');
-  const [generalSettings, setGeneralSettings] = useState({
-    companyName: 'ダンプ運送株式会社',
-    systemName: 'ダンプ運行記録システム',
-    timezone: 'Asia/Tokyo',
-    language: 'ja',
-    dateFormat: 'YYYY/MM/DD',
-    timeFormat: '24h'
-  });
+const GENERAL_SETTINGS_KEY = 'dump_tracker_general_settings';
+const [generalSettings, setGeneralSettings] = useState(() => {
+  try {
+    const raw = localStorage.getItem(GENERAL_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : {
+      companyName: 'ダンプ運送株式会社',
+      systemName: 'ダンプ運行記録システム',
+      timezone: 'Asia/Tokyo',
+      language: 'ja',
+      dateFormat: 'YYYY/MM/DD',
+      timeFormat: '24h'
+    };
+  } catch {
+    return {
+      companyName: 'ダンプ運送株式会社',
+      systemName: 'ダンプ運行記録システム',
+      timezone: 'Asia/Tokyo',
+      language: 'ja',
+      dateFormat: 'YYYY/MM/DD',
+      timeFormat: '24h'
+    };
+  }
+});
 
   const [logSettings, setLogSettings] = useState({
     retentionDays: 365,
@@ -177,12 +192,16 @@ const SystemSettings: React.FC = () => {
     { id: 'logs',     label: 'ログ管理',   icon: AlertTriangle },
   ];
 
+  const GENERAL_SETTINGS_KEY = 'dump_tracker_general_settings';
+
   const handleSaveGeneralSettings = async () => {
     try {
-      // 実際のAPI呼び出しをシミュレート
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // ✅ GPS走行軌跡設定を localStorage に保存
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // 一般設定を保存
+      localStorage.setItem(GENERAL_SETTINGS_KEY, JSON.stringify(generalSettings));
+      // GPS走行軌跡設定を保存
       localStorage.setItem(GPS_TRACK_KEY, JSON.stringify(gpsTrackSettings));
+      console.log('✅ [SystemSettings] 一般設定を保存:', generalSettings);
       console.log('✅ [SystemSettings] GPS走行軌跡設定を保存:', gpsTrackSettings);
       alert('設定を保存しました');
     } catch (error) {

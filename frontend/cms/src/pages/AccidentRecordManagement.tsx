@@ -12,7 +12,41 @@ import type {
   TransportRegion,
 } from '../types';
 import { TRANSPORT_REGION_LABELS } from '../types';
-import { accidentRecordAPI } from '../utils/api';
+import { API_BASE_URL } from '../utils/constants';
+
+// =====================================
+// 🆕 事故記録API（インライン実装）
+// =====================================
+const _API = API_BASE_URL;
+const _headers = (): Record<string, string> => {
+  const token = localStorage.getItem('auth_token');
+  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+};
+const accidentRecordAPI = {
+  async getAll(fiscalYear?: number, accidentType?: string) {
+    const p = new URLSearchParams();
+    if (fiscalYear) p.set('fiscalYear', String(fiscalYear));
+    if (accidentType) p.set('accidentType', accidentType);
+    const res = await fetch(`${_API}/accident-records?${p}`, { headers: _headers() });
+    if (!res.ok) throw new Error(`取得エラー: ${res.status}`);
+    const json = await res.json();
+    return { data: json.data?.data ?? [], total: json.data?.total ?? 0, summary: json.data?.summary };
+  },
+  async create(data: Partial<import('../types').AccidentRecord>) {
+    const res = await fetch(`${_API}/accident-records`, { method: 'POST', headers: _headers(), body: JSON.stringify(data) });
+    if (!res.ok) { const e = await res.json().catch(() => ({ message: 'APIエラー' })); throw new Error(e.message); }
+    return (await res.json()).data;
+  },
+  async update(id: string, data: Partial<import('../types').AccidentRecord>) {
+    const res = await fetch(`${_API}/accident-records/${id}`, { method: 'PUT', headers: _headers(), body: JSON.stringify(data) });
+    if (!res.ok) { const e = await res.json().catch(() => ({ message: 'APIエラー' })); throw new Error(e.message); }
+    return (await res.json()).data;
+  },
+  async remove(id: string) {
+    const res = await fetch(`${_API}/accident-records/${id}`, { method: 'DELETE', headers: _headers() });
+    if (!res.ok) throw new Error(`削除エラー: ${res.status}`);
+  },
+};
 
 // =====================================
 // 定数
@@ -378,9 +412,10 @@ const AccidentRecordManagement: React.FC = () => {
                   </label>
                   <input
                     type="number" min="0"
-                    className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="..."
                     value={form.casualties ?? 0}
-                    onChange={e => setForm({ ...form, casualties: Number(e.target.value) })}
+                    onChange={e => setForm({ ...form, casualties: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    onFocus={e => e.target.select()}
                   />
                 </div>
 
@@ -391,9 +426,10 @@ const AccidentRecordManagement: React.FC = () => {
                   </label>
                   <input
                     type="number" min="0"
-                    className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="..."
                     value={form.injuries ?? 0}
-                    onChange={e => setForm({ ...form, injuries: Number(e.target.value) })}
+                    onChange={e => setForm({ ...form, injuries: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    onFocus={e => e.target.select()}
                   />
                 </div>
 

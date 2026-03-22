@@ -35,8 +35,8 @@ const TOTAL_H = 20;   // 全国計行
 
 // 列幅（CONTENT_W = 539.28 を7列に配分）
 const COL_REGION = 62;
-const COL_NUM    = Math.floor((CONTENT_W - COL_REGION) / 6);  // ≈79
-const COL_LAST   = CONTENT_W - COL_REGION - COL_NUM * 5;       // 残り
+const COL_NUM    = Math.floor((CONTENT_W - COL_REGION) / 7);  // ≈68
+const COL_LAST   = CONTENT_W - COL_REGION - COL_NUM * 6;      // 残り（≈69pt）
 
 // =====================================
 // フォント検索（pdfReportGenerator.ts と同じロジック）
