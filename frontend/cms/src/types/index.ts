@@ -5,6 +5,7 @@
 // 3. Location型をバックエンドAPIレスポンスに完全対応
 // 4. フィールド名を統一: name, locationType, latitude, longitude
 // 既存機能: すべての型定義を完全保持
+// 🆕 P4-01: 実績報告書機能用型定義を追加（2026-03-17）
 
 // =====================================
 // 認証関連
@@ -35,6 +36,7 @@ export interface LoginCredentials {
 // =====================================
 // 車両関連
 // ✅ 修正: バックエンドとフロントエンドの両方に対応できるよう完全統一
+// 🆕 P4-03: region（管轄区域）フィールドを追加
 // =====================================
 export interface Vehicle {
   id: string;
@@ -61,6 +63,9 @@ export interface Vehicle {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+
+  // 🆕 P4-03: 管轄区域（地方運輸局）実績報告書の地域別集計に使用
+  region?: TransportRegion | null;
 }
 
 // =====================================
@@ -336,4 +341,148 @@ export interface OperationState {
   setPage: (page: number) => void;
   clearError: () => void;
   clearSelectedOperation: () => void;
+}
+
+// =====================================
+// 🆕 P4-01: 貨物自動車運送事業実績報告書 機能用型定義
+// （貨物自動車運送事業報告規則 第4号様式 対応）
+// =====================================
+
+/**
+ * 地方運輸局管轄区域
+ * 実績報告書の地域別輸送実績集計に使用する10区分
+ */
+export type TransportRegion =
+  | 'HOKKAIDO'
+  | 'TOHOKU'
+  | 'HOKURIKU'
+  | 'KANTO'
+  | 'CHUBU'
+  | 'KINKI'
+  | 'CHUGOKU'
+  | 'SHIKOKU'
+  | 'KYUSHU'
+  | 'OKINAWA';
+
+/**
+ * 地方運輸局ラベルマップ（日本語表示用）
+ * 帳票の行ラベル・フォーム選択肢に使用
+ */
+export const TRANSPORT_REGION_LABELS: Record<TransportRegion, string> = {
+  HOKKAIDO: '北海道',
+  TOHOKU:   '東北',
+  HOKURIKU: '北陸信越',
+  KANTO:    '関東',
+  CHUBU:    '中部',
+  KINKI:    '近畿',
+  CHUGOKU:  '中国',
+  SHIKOKU:  '四国',
+  KYUSHU:   '九州',
+  OKINAWA:  '沖縄',
+};
+
+/**
+ * 事故種別
+ * - TRAFFIC: 交通事故（道路交通法第72条第1項）
+ * - SERIOUS: 重大事故（自動車事故報告規則第2条）
+ */
+export type AccidentType = 'TRAFFIC' | 'SERIOUS';
+
+/**
+ * 事故記録（accident_records テーブル対応）
+ * 実績報告書の事故件数欄に使用
+ */
+export interface AccidentRecord {
+  id: string;
+  accidentDate: string;
+  accidentType: AccidentType;
+  vehicleId: string | null;
+  driverId: string | null;
+  operationId: string | null;
+  casualties: number;   // 死者数
+  injuries: number;     // 負傷者数
+  region: TransportRegion | null;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // リレーション（include 時）
+  vehicles?: { id: string; plateNumber: string; model: string } | null;
+  users?:    { id: string; name: string } | null;
+}
+
+/** 事故記録 年度別サマリー（APIレスポンス） */
+export interface AccidentRecordSummary {
+  fiscalYear: number;
+  trafficAccidents: number;
+  seriousAccidents: number;
+  totalCasualties: number;
+  totalInjuries: number;
+}
+
+/**
+ * 貨物運送事業者情報（transport_business_settings テーブル対応）
+ * 実績報告書ヘッダーの印字用データ（全体で1レコード運用）
+ */
+export interface TransportBusinessSettings {
+  id?: string;
+  businessNumber: string;       // 事業者番号（国交省発行）
+  companyName: string;          // 事業者名（会社名）
+  address: string;              // 住所
+  representativeName: string;   // 代表者名（役職及び氏名）
+  phoneNumber: string;          // 電話番号
+  submissionTarget: string;     // 提出先（例: 中国運輸局長）
+  businessTypes: string[];      // 事業内容（最大3項目）
+}
+
+/** 実績報告書 地域別輸送実績データ（帳票1行分） */
+export interface RegionTransportData {
+  region: TransportRegion;
+  regionLabel: string;
+  vehicleDaysTotal: number;     // 延実在車両数（日車）
+  vehicleDaysWorked: number;    // 延実働車両数（日車）
+  totalDistanceKm: number;      // 走行キロ（km）
+  loadedDistanceKm: number;     // 実車キロ（km）
+  transportTons: number;        // 輸送トン数 実運送（トン）
+  contractTons: number;         // 輸送トン数 利用運送（トン）
+  revenueThousandYen: number;   // 営業収入（千円）
+}
+
+/** 実績報告書 データ充足チェック結果（プレビュー表示用） */
+export interface DataAvailabilityCheck {
+  vehicleDays:      'ok' | 'warn' | 'error';
+  totalDistance:    'ok' | 'warn' | 'error';
+  loadedDistance:   'ok' | 'warn' | 'error';
+  transportTons:    'ok' | 'warn' | 'error';
+  revenue:          'ok' | 'warn' | 'error';
+  regionAssigned:   'ok' | 'warn' | 'error';
+  accidentRecords:  'ok';
+  businessSettings: 'ok' | 'warn' | 'error';
+  unassignedRegionCount: number;       // 管轄区域未設定の車両台数
+  missingLoadedDistanceCount: number;  // 実車キロ未入力の運行件数
+  missingRevenueCount: number;         // 営業収入未入力の運行件数
+}
+
+/**
+ * 実績報告書 集計プレビューデータ
+ * GET /api/v1/reports/annual-transport/preview/:fiscalYear のレスポンス
+ */
+export interface AnnualTransportPreview {
+  fiscalYear: number;
+  fiscalYearStart: string;  // 'YYYY-04-01'
+  fiscalYearEnd: string;    // 'YYYY+1-03-31'
+  overview: {
+    vehicleCount: number;   // 事業用自動車数
+    employeeCount: number;  // 従業員数
+    driverCount: number;    // 運転者数
+  };
+  byRegion: RegionTransportData[];
+  total: Omit<RegionTransportData, 'region' | 'regionLabel'>;
+  accidents: {
+    trafficAccidents: number;
+    seriousAccidents: number;
+    casualties: number;
+    injuries: number;
+  };
+  businessSettings: TransportBusinessSettings | null;
+  availability: DataAvailabilityCheck;
 }

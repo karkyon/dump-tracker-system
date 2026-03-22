@@ -10,6 +10,8 @@ import Pagination from '../components/common/Pagination';
 import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate, formatNumber, debounce } from '../utils/helpers';
+import type { TransportRegion } from '../types';
+import { TRANSPORT_REGION_LABELS } from '../types';
 
 const VehicleManagement: React.FC = () => {
   const {
@@ -34,6 +36,7 @@ const VehicleManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   // フォームデータ
+  // 🆕 P4-03: region（管轄区域）フィールドを追加
   const [formData, setFormData] = useState({
     plateNumber: '',
     model: '',
@@ -44,6 +47,7 @@ const VehicleManagement: React.FC = () => {
     currentMileage: 0,
     status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE',
     notes: '',
+    region: '' as TransportRegion | '',  // 🆕 P4-03: 管轄区域（地方運輸局）
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -63,6 +67,12 @@ const VehicleManagement: React.FC = () => {
     { value: '日野', label: '日野' },
     { value: '三菱ふそう', label: '三菱ふそう' },
     { value: 'UDトラックス', label: 'UDトラックス' },
+  ];
+
+  // 🆕 P4-03: 管轄区域（地方運輸局）のオプション
+  const regionOptions = [
+    { value: '', label: '選択してください（任意）' },
+    ...Object.entries(TRANSPORT_REGION_LABELS).map(([value, label]) => ({ value, label })),
   ];
 
   // ✅ FIX: 前回値を保存するrefを使用（無限ループ防止）
@@ -167,6 +177,19 @@ const VehicleManagement: React.FC = () => {
         />
       ),
     },
+    // 🆕 P4-03: 管轄区域列をテーブルに追加
+    {
+      key: 'region',
+      header: '管轄区域',
+      render: (value: TransportRegion | null | undefined) =>
+        value ? (
+          <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+            {TRANSPORT_REGION_LABELS[value] ?? value}
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">未設定</span>
+        ),
+    },
     {
       key: 'createdAt',
       header: '登録日',
@@ -217,6 +240,7 @@ const VehicleManagement: React.FC = () => {
   };
 
   // フォームをリセット
+  // 🆕 P4-03: region を初期化に含める
   const resetForm = () => {
     setFormData({
       plateNumber: '',
@@ -228,6 +252,7 @@ const VehicleManagement: React.FC = () => {
       currentMileage: 0,
       status: 'ACTIVE',
       notes: '',
+      region: '',  // 🆕 P4-03
     });
     setFormErrors({});
   };
@@ -239,6 +264,7 @@ const VehicleManagement: React.FC = () => {
   };
 
   // 編集
+  // 🆕 P4-03: region を setFormData に含める
   const handleEdit = (vehicle: Vehicle) => {
     setSelectedVehicleId(vehicle.id);
     setFormData({
@@ -251,6 +277,7 @@ const VehicleManagement: React.FC = () => {
       currentMileage: vehicle.currentMileage || 0,
       status: vehicle.status,
       notes: vehicle.notes || '',
+      region: (vehicle.region as TransportRegion) || '',  // 🆕 P4-03
     });
     setShowEditModal(true);
   };
@@ -262,10 +289,15 @@ const VehicleManagement: React.FC = () => {
   };
 
   // 作成処理
+  // 🆕 P4-03: region を payload に含める（空文字は null に変換）
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
 
-    const success = await createVehicle(formData);
+    const payload = {
+      ...formData,
+      region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
+    };
+    const success = await createVehicle(payload);
 
     if (success) {
       toast.success('車両を登録しました');
@@ -275,10 +307,15 @@ const VehicleManagement: React.FC = () => {
   };
 
   // 更新処理
+  // 🆕 P4-03: region を payload に含める（空文字は null に変換）
   const handleSubmitEdit = async () => {
     if (!validateForm() || !selectedVehicleId) return;
 
-    const success = await updateVehicle(selectedVehicleId, formData);
+    const payload = {
+      ...formData,
+      region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
+    };
+    const success = await updateVehicle(selectedVehicleId, payload);
 
     if (success) {
       toast.success('車両情報を更新しました');
@@ -488,6 +525,24 @@ const VehicleManagement: React.FC = () => {
             required
           />
 
+          {/* 🆕 P4-03: 管轄区域フィールド（新規作成モーダル） */}
+          <div className="md:col-span-2">
+            <Select
+              label="管轄区域（地方運輸局）"
+              options={regionOptions}
+              value={formData.region}
+              onChange={(e) => setFormData({ ...formData, region: e.target.value as TransportRegion | '' })}
+            />
+            {!formData.region && (
+              <p className="mt-1 text-xs text-amber-600">
+                ※ 未設定の場合、実績報告書生成時に警告が表示されます
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              実績報告書の地域別集計に使用します（任意）
+            </p>
+          </div>
+
           <div className="md:col-span-2">
             <Input
               label="備考"
@@ -597,6 +652,24 @@ const VehicleManagement: React.FC = () => {
             onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
             required
           />
+
+          {/* 🆕 P4-03: 管轄区域フィールド（編集モーダル） */}
+          <div className="md:col-span-2">
+            <Select
+              label="管轄区域（地方運輸局）"
+              options={regionOptions}
+              value={formData.region}
+              onChange={(e) => setFormData({ ...formData, region: e.target.value as TransportRegion | '' })}
+            />
+            {!formData.region && (
+              <p className="mt-1 text-xs text-amber-600">
+                ※ 未設定の場合、実績報告書生成時に警告が表示されます
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              実績報告書の地域別集計に使用します（任意）
+            </p>
+          </div>
 
           <div className="md:col-span-2">
             <Input

@@ -3,6 +3,7 @@
 // - path を '/cargo-types' → '/items' に修正
 // - Sidebar.tsx からインポートされるように設計
 // 既存機能: すべての定数・設定を100%保持
+// 🆕 P4-07: 事故記録管理ナビ項目を追加（2026-03-17）
 
 /// <reference types="vite/client" />
 
@@ -75,6 +76,18 @@ export const NAVIGATION_ITEMS = [
     name: '帳票出力',
     path: '/reports',
     icon: 'Download'
+  },
+  // =====================================
+  // 🆕 P4-07: 事故記録管理
+  // 帳票出力の直後に配置（実績報告書の事故件数欄用）
+  // ADMIN / MANAGER のみ表示（adminOnly フラグで Sidebar が制御）
+  // =====================================
+  {
+    id: 'accident-records',
+    name: '事故記録管理',
+    path: '/accident-records',
+    icon: 'AlertTriangle',
+    adminOnly: true,   // ADMIN / MANAGER のみ表示
   },
   {
     id: 'settings',

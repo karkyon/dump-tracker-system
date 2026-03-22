@@ -624,12 +624,35 @@ const businessRoutes = [
     requireAuth: false,  // ルート内で認証（mobile方式に統一）
     description: '点検記録管理（トランザクション）'
   },
+  // =====================================
+  //
+  // =====================================
   {
     name: 'reportRoutes',
     path: '/reports',
     priority: 'normal' as const,
     requireAuth: false,
     description: 'レポート・分析'
+  },
+  // =====================================
+  // 🆕 P2-07: 事故記録管理ルート（実績報告書 事故件数欄用）
+  // =====================================
+  {
+    name: 'accidentRecordRoutes',
+    path: '/accident-records',
+    priority: 'normal' as const,
+    requireAuth: false,
+    description: '事故記録管理（実績報告書用）'
+  },
+  // =====================================
+  // 🆕 P2-07: 貨物運送事業者設定ルート（実績報告書ヘッダー用）
+  // =====================================
+  {
+    name: 'transportBusinessSettingsRoutes',
+    path: '/settings/transport-business',
+    priority: 'normal' as const,
+    requireAuth: false,
+    description: '貨物運送事業者情報設定'
   }
 ];
 
