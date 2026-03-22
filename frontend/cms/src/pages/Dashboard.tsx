@@ -108,6 +108,9 @@ const Dashboard: React.FC = () => {
           }).length;
 
           // 最近5件を整形
+          // ✅ 修正: バックエンドのPrismaリレーション名に対応
+          // - ドライバー: usersOperationsDriverIdTousers (Prisma関係名)
+          // - 車両: vehicles (Prisma関係名)
           opList.slice(0, 5).forEach((op: any) => {
             const startTime = op.actualStartTime ?? op.plannedStartTime ?? op.createdAt;
             const endTime   = op.actualEndTime   ?? op.plannedEndTime;
@@ -118,13 +121,36 @@ const Dashboard: React.FC = () => {
               const minutes = Math.floor((diffMs % 3600000) / 60000);
               operationTime = hours > 0 ? `${hours}時間${minutes}分` : `${minutes}分`;
             }
+
+            // ✅ 修正: Prismaリレーション名 → フロントエンド互換名 → フォールバック の優先順位で取得
+            const driverName =
+              op.usersOperationsDriverIdTousers?.name    // Prismaリレーション (name カラム)
+              ?? op.usersOperationsDriverIdTousers?.username  // Prismaリレーション (username カラム)
+              ?? op.driver?.name                          // ネスト driver オブジェクト
+              ?? op.driver?.username                      // ネスト driver オブジェクト (username)
+              ?? op.driverName                            // フラットフィールド
+              ?? '未割当';
+
+            const vehicleNumber =
+              op.vehicles?.plateNumber                   // Prismaリレーション (vehicles = 複数形)
+              ?? op.vehicle?.plateNumber                 // ネスト vehicle オブジェクト
+              ?? op.vehicleNumber                        // フラットフィールド
+              ?? op.plateNumber                          // フラットフィールド
+              ?? '不明';
+
             recentOps.push({
               id: op.id,
               date: startTime
-                ? new Date(startTime).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                ? new Date(startTime).toLocaleString('ja-JP', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
                 : '-',
-              driverName:    op.driver?.name ?? op.driver?.username ?? op.driverName ?? '不明',
-              vehicleNumber: op.vehicle?.plateNumber ?? op.vehicleNumber ?? '不明',
+              driverName,
+              vehicleNumber,
               status: op.status === 'IN_PROGRESS' ? 'ongoing'
                     : op.status === 'COMPLETED'   ? 'completed'
                     : op.status ?? 'unknown',
