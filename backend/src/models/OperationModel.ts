@@ -110,6 +110,8 @@ export interface TripOperationModel {
   fuelCostYen: Prisma.Decimal | null;
   weatherCondition: string | null;
   roadCondition: string | null;
+  loadedDistanceKm?: number | null;    // 実車キロ（積載状態での走行距離 km）
+  revenueYen?: number | null;           // 営業収入（円）
   notes: string | null;
   createdBy: string | null;
   createdAt: Date | null;

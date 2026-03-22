@@ -2,7 +2,14 @@
 // backend/src/services/pdfReportGenerator.ts
 // 運転日報車両点検 PDF生成 - 帳票デザイン完全準拠版
 // A4横向き・帳票フォーマット出力
-// 最終更新: 2026-03-10
+// 修正: 2026-03-11 (修正指示A〜G全対応)
+//   A: キロ始/終セル幅均等化
+//   B: 業者名列幅2倍（82→164pt）
+//   C: 空行積降場所の「—」削除
+//   D: 積み込み時間を2行×3列構造（積込始/終/時間 + 積降始/終/時間）
+//   E: 給油セクション下の空白行削除（1行化）
+//   F: 署名欄を正方形デザイン
+//   G: 点検行高さ半分（30→15pt）、措置列幅2倍（34→56pt）
 // =====================================
 
 import PDFDocument from 'pdfkit';
@@ -26,31 +33,36 @@ const CONTENT_W = PAGE_W - MARGIN_L * 2;  // 811.89
 // セクション高さ定義
 const TITLE_H = 22;
 const HEADER_H = 26;
-const COL_HEADER_H = 16;
-const OP_ROW_H = 34;        // 運行記録行
+const COL_HEADER_H = 24;     // D対応: 2行ヘッダーのため高さ増加 (旧:16)
+const OP_ROW_H = 34;         // 運行記録行（変更なし、2サブ行 each=17pt）
 const OP_ROWS = 6;
-const FUEL_H = 52;
+const FUEL_H = 50;           // E/F対応: 1行化 + 正方形署名欄の高さ（旧:52）
 const INSP_HEADER_H = 16;
-const INSP_ROW_H = 30;      // 点検行
+const INSP_ROW_H = 15;       // G対応: 半分に縮小（旧:30）
 const INSP_ROWS = 6;
 const LEGEND_H = 14;
 
 // 運行表カラム幅
-const COL_CONTRACTOR = 82;   // 業者名
-const COL_LOADING = 128;     // 積込場所
-const COL_UNLOADING = 128;   // 積降場所
-const COL_ITEM = 62;         // 品名
-const COL_COUNT = 32;        // 台数
-const COL_TONS = 38;         // トン数
-const COL_CONDITION = 38;    // 積付状況
-const COL_TIME = CONTENT_W - COL_CONTRACTOR - COL_LOADING - COL_UNLOADING - COL_ITEM - COL_COUNT - COL_TONS - COL_CONDITION; // 積み込み時間
+const COL_CONTRACTOR = 164;  // B対応: 2倍に拡大（旧:82）
+const COL_LOADING = 128;     // 積込場所（変更なし）
+const COL_UNLOADING = 128;   // 積降場所（変更なし）
+const COL_ITEM = 62;         // 品名（変更なし）
+const COL_COUNT = 32;        // 台数（変更なし）
+const COL_TONS = 38;         // トン数（変更なし）
+const COL_CONDITION = 38;    // 積付状況（変更なし）
+// D対応: 積み込み時間列（残り幅 = 約221pt, 3等分 ≈ 73.6pt/sub-col）
+const COL_TIME = CONTENT_W - COL_CONTRACTOR - COL_LOADING - COL_UNLOADING
+               - COL_ITEM - COL_COUNT - COL_TONS - COL_CONDITION;
 
 // 点検表（3列）
-const INSP_GROUP_W = Math.floor(CONTENT_W / 3);     // 約270
-const INSP_ITEM_W = INSP_GROUP_W - 28 - 28 - 34;   // 項目名幅
-const INSP_PRE_W = 28;   // 乗車前
-const INSP_POST_W = 28;  // 乗車後
-const INSP_ACT_W = 34;   // 措置
+const INSP_GROUP_W = Math.floor(CONTENT_W / 3);   // ≈ 270
+const INSP_PRE_W = 28;    // 乗車前（変更なし）
+const INSP_POST_W = 28;   // 乗車後（変更なし）
+const INSP_ACT_W = 56;    // G対応: 措置列幅2倍（旧:34, PRE/POST=28の2倍）
+const INSP_ITEM_W = INSP_GROUP_W - INSP_PRE_W - INSP_POST_W - INSP_ACT_W;  // 点検項目名幅
+
+// F対応: 署名欄の正方形サイズ（FUEL_H × FUEL_H）
+const SIGN_CELL_W = FUEL_H;  // = 50pt（正方形）
 
 // =====================================
 // データ型定義
@@ -58,15 +70,21 @@ const INSP_ACT_W = 34;   // 措置
 
 /** 1運行サイクル（積込→積降）の記録 */
 export interface TripCycleRow {
-  contractorName: string;      // 業者名
-  loadingLocation: string;     // 積込場所
-  unloadingLocation: string;   // 積降場所
-  itemName: string;            // 品名
-  vehicleCount: number;        // 台数
-  quantityTons: number;        // トン数
-  loadingCondition: string;    // 積付状況
-  loadingStartTime: string;    // 積み込み時間 開始
-  loadingEndTime: string;      // 積み込み時間 終了
+  contractorName: string;       // 業者名
+  loadingLocation: string;      // 積込場所
+  unloadingLocation: string;    // 積降場所
+  itemName: string;             // 品名
+  vehicleCount: number;         // 台数
+  quantityTons: number;         // トン数
+  loadingCondition: string;     // 積付状況
+  // D対応: 積込時間（3フィールド）
+  loadingStartTime: string;     // 積込開始時刻 hh:mm (A-1)
+  loadingEndTime: string;       // 積込終了時刻 hh:mm (A-2)
+  loadingDuration: string;      // 積込所要時間 hh時間mm分 (A-3)
+  // D対応: 積降時間（3フィールド）
+  unloadingStartTime: string;   // 積降開始時刻 hh:mm (A-4)
+  unloadingEndTime: string;     // 積降終了時刻 hh:mm (A-5)
+  unloadingDuration: string;    // 積降所要時間 hh時間mm分 (A-6)
 }
 
 /** 点検チェック1項目 */
@@ -79,23 +97,23 @@ export interface InspCheckItem {
 
 /** 帳票全体データ */
 export interface DailyDriverReportData {
-  reportDate: string;            // YYYY-MM-DD
-  dayOfWeek: string;             // 曜日
-  driverName: string;            // 氏名
-  vehiclePlateNumber: string;    // 車番
-  startOdometer: string;         // キロ 始
-  endOdometer: string;           // キロ 終
-  trips: TripCycleRow[];         // 運行記録（最大6行）
-  fuelLiters: string;            // 給油量 (L)
-  fuelOdometerKm: string;        // 給油時キロ (km)
-  oilLiters: string;             // オイル (L)
-  hasGrease: boolean;            // グリス
-  hasPuncture: boolean;          // パンク
-  hasTireWear: boolean;          // タイヤ偏磨耗
-  leftInspItems: InspCheckItem[];    // 点検左列
-  middleInspItems: InspCheckItem[];  // 点検中列
-  rightInspItems: InspCheckItem[];   // 点検右列（1項目）
-  remarks: string;               // 備考
+  reportDate: string;             // YYYY-MM-DD
+  dayOfWeek: string;              // 曜日
+  driverName: string;             // 氏名
+  vehiclePlateNumber: string;     // 車番
+  startOdometer: string;          // キロ 始
+  endOdometer: string;            // キロ 終
+  trips: TripCycleRow[];          // 運行記録（最大6行）
+  fuelLiters: string;             // 給油量 (L)
+  fuelOdometerKm: string;         // 給油時キロ (km)
+  oilLiters: string;              // オイル (L)
+  hasGrease: boolean;             // グリス
+  hasPuncture: boolean;           // パンク
+  hasTireWear: boolean;           // タイヤ偏磨耗
+  leftInspItems: InspCheckItem[];   // 点検左列
+  middleInspItems: InspCheckItem[]; // 点検中列
+  rightInspItems: InspCheckItem[];  // 点検右列（1項目）
+  remarks: string;                // 備考
 }
 
 // =====================================
@@ -105,7 +123,6 @@ export interface DailyDriverReportData {
 export function ensureReportDirectory(): void {
   if (!fs.existsSync(REPORTS_OUTPUT_DIR)) {
     fs.mkdirSync(REPORTS_OUTPUT_DIR, { recursive: true });
-    logger.info(`[PDF] レポート出力ディレクトリを作成: ${REPORTS_OUTPUT_DIR}`);
   }
 }
 
@@ -146,13 +163,7 @@ function formatDate(dateStr: string): { year: string; month: string; day: string
   }
 }
 
-// =====================================
-// 描画ヘルパー
-// =====================================
-
-/**
- * セル描画（枠線 + テキスト）
- */
+/** セルを描画するユーティリティ */
 function cell(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -261,10 +272,10 @@ function drawTitle(
   y: number,
   w: number,
   h: number,
-  font: string
+  fontB: string
 ): void {
   doc.rect(x, y, w, h).strokeColor('#000000').lineWidth(1).stroke();
-  doc.font(font).fontSize(13).fillColor('#000000');
+  doc.font(fontB).fontSize(13).fillColor('#000000');
   const ty = y + (h - 13 * 1.3) / 2;
   doc.text('運　転　日　報　車　両　点　検', x, ty, {
     width: w,
@@ -274,7 +285,10 @@ function drawTitle(
   });
 }
 
-/** ヘッダー行（日付・氏名・車番・キロ） */
+/**
+ * ヘッダー行（日付・氏名・車番・キロ）
+ * [A修正] 始と終のセルを均等幅にする
+ */
 function drawHeaderRow(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -287,85 +301,61 @@ function drawHeaderRow(
 ): void {
   const { year, month, day } = formatDate(data.reportDate);
 
-  // 枠
+  // 外枠
   doc.rect(x, y, w, h).strokeColor('#000000').lineWidth(0.5).stroke();
 
-  // 年月日エリア（左から）
   let cx = x;
+  const fLbl = { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' };
+  const fVal = { font: fontN, fontSize: 8 };
 
   // 年
-  const yearW = 55;
-  cell(doc, cx, y, yearW, h, '年', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' });
-  cx += yearW;
-
-  // 年の値
-  const yearValW = 35;
-  cell(doc, cx, y, yearValW, h, year, { font: fontN, fontSize: 8 });
-  cx += yearValW;
+  const yearLblW = 55; cell(doc, cx, y, yearLblW, h, '年', fLbl); cx += yearLblW;
+  const yearValW = 35; cell(doc, cx, y, yearValW, h, year, fVal); cx += yearValW;
 
   // 月
-  const monthW = 30;
-  cell(doc, cx, y, monthW, h, '月', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' });
-  cx += monthW;
-
-  const monthValW = 28;
-  cell(doc, cx, y, monthValW, h, month, { font: fontN, fontSize: 8 });
-  cx += monthValW;
+  const monthLblW = 30; cell(doc, cx, y, monthLblW, h, '月', fLbl); cx += monthLblW;
+  const monthValW = 28; cell(doc, cx, y, monthValW, h, month, fVal); cx += monthValW;
 
   // 日
-  const dayW = 28;
-  cell(doc, cx, y, dayW, h, '日', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' });
-  cx += dayW;
-
-  const dayValW = 28;
-  cell(doc, cx, y, dayValW, h, day, { font: fontN, fontSize: 8 });
-  cx += dayValW;
+  const dayLblW = 28; cell(doc, cx, y, dayLblW, h, '日', fLbl); cx += dayLblW;
+  const dayValW = 28; cell(doc, cx, y, dayValW, h, day, fVal); cx += dayValW;
 
   // 曜日
-  const dowW = 30;
-  cell(doc, cx, y, dowW, h, '曜日', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' });
-  cx += dowW;
-
-  const dowValW = 28;
-  cell(doc, cx, y, dowValW, h, data.dayOfWeek, { font: fontN, fontSize: 8 });
-  cx += dowValW;
+  const dowLblW = 30; cell(doc, cx, y, dowLblW, h, '曜日', fLbl); cx += dowLblW;
+  const dowValW = 28; cell(doc, cx, y, dowValW, h, data.dayOfWeek, fVal); cx += dowValW;
 
   // 氏名
-  const nameW = 35;
-  cell(doc, cx, y, nameW, h, '氏名', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' });
-  cx += nameW;
-
-  const nameValW = 90;
-  cell(doc, cx, y, nameValW, h, data.driverName, { font: fontN, fontSize: 8 });
-  cx += nameValW;
+  const nameLblW = 35; cell(doc, cx, y, nameLblW, h, '氏名', fLbl); cx += nameLblW;
+  const nameValW = 90; cell(doc, cx, y, nameValW, h, data.driverName, fVal); cx += nameValW;
 
   // 車番
-  const plateW = 32;
-  cell(doc, cx, y, plateW, h, '車番', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' });
-  cx += plateW;
+  const plateLblW = 32; cell(doc, cx, y, plateLblW, h, '車番', fLbl); cx += plateLblW;
+  const plateValW = 80; cell(doc, cx, y, plateValW, h, data.vehiclePlateNumber, fVal); cx += plateValW;
 
-  const plateValW = 80;
-  cell(doc, cx, y, plateValW, h, data.vehiclePlateNumber, { font: fontN, fontSize: 8 });
-  cx += plateValW;
+  // キロ ラベル
+  const kmLblW = 30; cell(doc, cx, y, kmLblW, h, 'キロ', fLbl); cx += kmLblW;
 
-  // キロ
-  const kmLabelW = 30;
-  cell(doc, cx, y, kmLabelW, h, 'キロ', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' });
-  cx += kmLabelW;
+  // [A修正] 始と終のセル幅を均等化（残り幅の1/2ずつ）
+  const kiloRemaining = x + w - cx;
+  const kiloHalfW = Math.floor(kiloRemaining / 2);
+  const kiloEndW = kiloRemaining - kiloHalfW;
 
-  // 始
-  const kiloStartW = 30;
-  cell(doc, cx, y, kiloStartW, h / 2, '始', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg: '#F0F0F0' });
-  cell(doc, cx, y + h / 2, kiloStartW, h / 2, data.startOdometer, { font: fontN, fontSize: 7 });
-  cx += kiloStartW;
+  // 始（上段ラベル / 下段値）
+  cell(doc, cx, y,          kiloHalfW, h / 2, '始', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg: '#F0F0F0' });
+  cell(doc, cx, y + h / 2,  kiloHalfW, h / 2, data.startOdometer, { font: fontN, fontSize: 7 });
+  cx += kiloHalfW;
 
-  // 終
-  const kiloEndW = x + w - cx;
-  cell(doc, cx, y, kiloEndW, h / 2, '終', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg: '#F0F0F0' });
-  cell(doc, cx, y + h / 2, kiloEndW, h / 2, data.endOdometer, { font: fontN, fontSize: 7 });
+  // 終（上段ラベル / 下段値）
+  cell(doc, cx, y,          kiloEndW,  h / 2, '終', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg: '#F0F0F0' });
+  cell(doc, cx, y + h / 2,  kiloEndW,  h / 2, data.endOdometer, { font: fontN, fontSize: 7 });
 }
 
-/** 運行記録テーブルのカラムヘッダー */
+/**
+ * 運行記録テーブルのカラムヘッダー
+ * [D修正] 積み込み時間を2行×3列ヘッダーに変更
+ *         上行: 積込時間 | 積降時間
+ *         下行: 始|終|時間 | 始|終|時間
+ */
 function drawOperationColHeaders(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -375,26 +365,51 @@ function drawOperationColHeaders(
 ): void {
   const bg = '#E8E8E8';
   const f8 = { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg };
+  const f6 = { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg };
 
   let cx = x;
-  // 業者名（縦書き調）
+  // [B対応] COL_CONTRACTOR=164で自動反映
   cell(doc, cx, y, COL_CONTRACTOR, h, '業者名', f8); cx += COL_CONTRACTOR;
-  cell(doc, cx, y, COL_LOADING, h, '積込場所', f8); cx += COL_LOADING;
-  cell(doc, cx, y, COL_UNLOADING, h, '積降場所', f8); cx += COL_UNLOADING;
-  cell(doc, cx, y, COL_ITEM, h, '品名', f8); cx += COL_ITEM;
-  cell(doc, cx, y, COL_COUNT, h, '台数', f8); cx += COL_COUNT;
-  cell(doc, cx, y, COL_TONS, h, 'トン数', f8); cx += COL_TONS;
-  cell(doc, cx, y, COL_CONDITION, h, '積付状況', f8); cx += COL_CONDITION;
-  // 積み込み時間は右端まで
-  const timeW = x + CONTENT_W - cx;
-  // 積み込み時間ヘッダー（2分割: 始/終）
-  const timeHalfW = timeW / 2;
-  cell(doc, cx, y, timeW, h / 2, '積 み 込 み 時 間', f8);
-  cell(doc, cx, y + h / 2, timeHalfW, h / 2, '始', f8);
-  cell(doc, cx + timeHalfW, y + h / 2, timeHalfW, h / 2, '終', f8);
+  cell(doc, cx, y, COL_LOADING,    h, '積込場所', f8); cx += COL_LOADING;
+  cell(doc, cx, y, COL_UNLOADING,  h, '積降場所', f8); cx += COL_UNLOADING;
+  cell(doc, cx, y, COL_ITEM,       h, '品名', f8); cx += COL_ITEM;
+  cell(doc, cx, y, COL_COUNT,      h, '台数', f8); cx += COL_COUNT;
+  cell(doc, cx, y, COL_TONS,       h, 'トン数', f8); cx += COL_TONS;
+  cell(doc, cx, y, COL_CONDITION,  h, '積付状況', f8); cx += COL_CONDITION;
+
+  // [D修正] 積み込み時間列: 2行×3列ヘッダー
+  // COL_TIME を左半分(積込)と右半分(積降)に分割
+  const halfTimeW = Math.floor(COL_TIME / 2);
+  const remTimeW = COL_TIME - halfTimeW;
+  const subH = h / 2;  // 各サブ行の高さ
+
+  // 上段ラベル: 積込時間 | 積降時間
+  cell(doc, cx,            y, halfTimeW, subH, '積 込 時 間', f8);
+  cell(doc, cx + halfTimeW, y, remTimeW,  subH, '積 降 時 間', f8);
+
+  // 下段: 3サブ列ラベル（積込側）
+  const sub1W = Math.floor(halfTimeW / 3);
+  const sub2W = Math.floor(halfTimeW / 3);
+  const sub3W = halfTimeW - sub1W - sub2W;
+  cell(doc, cx,            y + subH, sub1W, subH, '始', f6);
+  cell(doc, cx + sub1W,    y + subH, sub2W, subH, '終', f6);
+  cell(doc, cx + sub1W + sub2W, y + subH, sub3W, subH, '時間', f6);
+
+  // 下段: 3サブ列ラベル（積降側）
+  const sub4W = Math.floor(remTimeW / 3);
+  const sub5W = Math.floor(remTimeW / 3);
+  const sub6W = remTimeW - sub4W - sub5W;
+  cell(doc, cx + halfTimeW,           y + subH, sub4W, subH, '始', f6);
+  cell(doc, cx + halfTimeW + sub4W,   y + subH, sub5W, subH, '終', f6);
+  cell(doc, cx + halfTimeW + sub4W + sub5W, y + subH, sub6W, subH, '時間', f6);
 }
 
-/** 運行記録6行 */
+/**
+ * 運行記録6行
+ * [B対応] COL_CONTRACTOR定数変更で自動反映
+ * [C修正] 空行の積降場所の「—」を削除してブランク
+ * [D修正] 時間セルを2行×3列構造（積込始/終/時間 + 積降始/終/時間）
+ */
 function drawOperationRows(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -403,6 +418,18 @@ function drawOperationRows(
   fontN: string
 ): void {
   const fOpt = { font: fontN, fontSize: 7, align: 'center' as const };
+  const fSmall = { font: fontN, fontSize: 6, align: 'center' as const };
+
+  // 時間列のサブ幅計算（D対応）
+  const halfTimeW = Math.floor(COL_TIME / 2);
+  const remTimeW = COL_TIME - halfTimeW;
+  const sub1W = Math.floor(halfTimeW / 3);
+  const sub2W = Math.floor(halfTimeW / 3);
+  const sub3W = halfTimeW - sub1W - sub2W;
+  const sub4W = Math.floor(remTimeW / 3);
+  const sub5W = Math.floor(remTimeW / 3);
+  const sub6W = remTimeW - sub4W - sub5W;
+  const subRowH = OP_ROW_H / 2;
 
   for (let i = 0; i < OP_ROWS; i++) {
     const ry = y + i * OP_ROW_H;
@@ -410,38 +437,63 @@ function drawOperationRows(
     let cx = x;
 
     if (trip) {
-      cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, trip.contractorName, { ...fOpt, align: 'left', pad: 3 }); cx += COL_CONTRACTOR;
-      cell(doc, cx, ry, COL_LOADING, OP_ROW_H, trip.loadingLocation, { ...fOpt, align: 'left', pad: 3 }); cx += COL_LOADING;
-      cell(doc, cx, ry, COL_UNLOADING, OP_ROW_H, trip.unloadingLocation, { ...fOpt, align: 'left', pad: 3 }); cx += COL_UNLOADING;
-      cell(doc, cx, ry, COL_ITEM, OP_ROW_H, trip.itemName, { ...fOpt, align: 'center' }); cx += COL_ITEM;
-      cell(doc, cx, ry, COL_COUNT, OP_ROW_H, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
-      cell(doc, cx, ry, COL_TONS, OP_ROW_H, trip.quantityTons > 0 ? String(trip.quantityTons) : '', fOpt); cx += COL_TONS;
-      cell(doc, cx, ry, COL_CONDITION, OP_ROW_H, trip.loadingCondition, fOpt); cx += COL_CONDITION;
+      // データあり行
+      cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, trip.contractorName,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_CONTRACTOR;
+      cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, trip.loadingLocation,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_LOADING;
+      // [C対応] データあり行は積降場所をそのまま表示
+      cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, trip.unloadingLocation, { ...fOpt, align: 'left', pad: 3 }); cx += COL_UNLOADING;
+      cell(doc, cx, ry, COL_ITEM,       OP_ROW_H, trip.itemName,          fOpt); cx += COL_ITEM;
+      cell(doc, cx, ry, COL_COUNT,      OP_ROW_H, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
+      cell(doc, cx, ry, COL_TONS,       OP_ROW_H, trip.quantityTons > 0 ? String(trip.quantityTons) : '',  fOpt); cx += COL_TONS;
+      cell(doc, cx, ry, COL_CONDITION,  OP_ROW_H, trip.loadingCondition,  fOpt); cx += COL_CONDITION;
 
-      // 積み込み時間
-      const timeW = x + CONTENT_W - cx;
-      const timeHalfW = timeW / 2;
-      cell(doc, cx, ry, timeHalfW, OP_ROW_H, trip.loadingStartTime, fOpt);
-      cell(doc, cx + timeHalfW, ry, timeHalfW, OP_ROW_H, trip.loadingEndTime, fOpt);
+      // [D修正] 積込時間 上サブ行（始|終|時間）
+      cell(doc, cx,          ry,          sub1W, subRowH, trip.loadingStartTime,  fSmall);
+      cell(doc, cx + sub1W,  ry,          sub2W, subRowH, trip.loadingEndTime,    fSmall);
+      cell(doc, cx + sub1W + sub2W, ry,   sub3W, subRowH, trip.loadingDuration,   fSmall);
+
+      // [D修正] 積降時間 下サブ行（始|終|時間）
+      cell(doc, cx + halfTimeW,           ry,          sub4W, subRowH, trip.unloadingStartTime,  fSmall);
+      cell(doc, cx + halfTimeW + sub4W,   ry,          sub5W, subRowH, trip.unloadingEndTime,    fSmall);
+      cell(doc, cx + halfTimeW + sub4W + sub5W, ry,    sub6W, subRowH, trip.unloadingDuration,   fSmall);
+
+      // 積込時間の下半分と積降時間の上半分の区切り線（視覚的分離）
+      // ※上下サブ行の罫線は cell() で自動描画済み
+
     } else {
-      // 空行
+      // [C修正] 空行: 積降場所は「—」なしのブランク
       cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, ''); cx += COL_CONTRACTOR;
-      cell(doc, cx, ry, COL_LOADING, OP_ROW_H, ''); cx += COL_LOADING;
-      // 積降場所に「—」区切り
-      cell(doc, cx, ry, COL_UNLOADING, OP_ROW_H, '—', { font: fontN, fontSize: 8 }); cx += COL_UNLOADING;
-      cell(doc, cx, ry, COL_ITEM, OP_ROW_H, ''); cx += COL_ITEM;
-      cell(doc, cx, ry, COL_COUNT, OP_ROW_H, ''); cx += COL_COUNT;
-      cell(doc, cx, ry, COL_TONS, OP_ROW_H, ''); cx += COL_TONS;
-      cell(doc, cx, ry, COL_CONDITION, OP_ROW_H, ''); cx += COL_CONDITION;
-      const timeW = x + CONTENT_W - cx;
-      const timeHalfW = timeW / 2;
-      cell(doc, cx, ry, timeHalfW, OP_ROW_H, '');
-      cell(doc, cx + timeHalfW, ry, timeHalfW, OP_ROW_H, '');
+      cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, ''); cx += COL_LOADING;
+      cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, ''); cx += COL_UNLOADING;  // [C修正] '—'→''
+      cell(doc, cx, ry, COL_ITEM,       OP_ROW_H, ''); cx += COL_ITEM;
+      cell(doc, cx, ry, COL_COUNT,      OP_ROW_H, ''); cx += COL_COUNT;
+      cell(doc, cx, ry, COL_TONS,       OP_ROW_H, ''); cx += COL_TONS;
+      cell(doc, cx, ry, COL_CONDITION,  OP_ROW_H, ''); cx += COL_CONDITION;
+
+      // [D修正] 空行の時間セル（6サブセル）
+      cell(doc, cx,          ry,      sub1W, subRowH, '');
+      cell(doc, cx + sub1W,  ry,      sub2W, subRowH, '');
+      cell(doc, cx + sub1W + sub2W, ry, sub3W, subRowH, '');
+      cell(doc, cx + halfTimeW,        ry, sub4W, subRowH, '');
+      cell(doc, cx + halfTimeW + sub4W, ry, sub5W, subRowH, '');
+      cell(doc, cx + halfTimeW + sub4W + sub5W, ry, sub6W, subRowH, '');
+
+      // 積込と積降の空白下サブ行
+      cell(doc, cx,          ry + subRowH, sub1W, subRowH, '');
+      cell(doc, cx + sub1W,  ry + subRowH, sub2W, subRowH, '');
+      cell(doc, cx + sub1W + sub2W, ry + subRowH, sub3W, subRowH, '');
+      cell(doc, cx + halfTimeW,        ry + subRowH, sub4W, subRowH, '');
+      cell(doc, cx + halfTimeW + sub4W, ry + subRowH, sub5W, subRowH, '');
+      cell(doc, cx + halfTimeW + sub4W + sub5W, ry + subRowH, sub6W, subRowH, '');
     }
   }
 }
 
-/** 給油・署名セクション */
+/**
+ * 給油・署名セクション
+ * [E修正] 下段空白行を削除（1行のみ: rowH = FUEL_H）
+ * [F修正] 署名欄を正方形デザイン（幅=高さ=FUEL_H=50pt）
+ */
 function drawFuelSection(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -451,97 +503,83 @@ function drawFuelSection(
   fontN: string,
   fontB: string
 ): void {
+  const rowH = FUEL_H;  // [E修正] 1行のみ（旧: 2行 = FUEL_H/2 × 2）
   const bg = '#E8E8E8';
   const fLabel = { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg };
-  const fVal = { font: fontN, fontSize: 8 };
+  const fVal   = { font: fontN, fontSize: 8 };
 
-  // 上段高さ / 下段高さ
-  const rowH = FUEL_H / 2;
+  // [F修正] 署名欄は正方形: 幅=FUEL_H（=SIGN_CELL_W=50pt）× 3人分
+  const signAreaW = SIGN_CELL_W * 3;  // = 150pt
+  const fuelAreaW = w - signAreaW;
+
   let cx = x;
 
-  // --- 上段: 給油量 / 給油時キロ / オイル / グリス / パンク / タイヤ偏磨耗 ---
-  // 給油量
-  const fuelLabelW = 40;
-  cell(doc, cx, y, fuelLabelW, rowH, '給油量', fLabel);
-  cx += fuelLabelW;
-  const fuelUnitW = 16;
-  cell(doc, cx, y, fuelUnitW, rowH, 'ℓ', { ...fLabel });
-  cx += fuelUnitW;
+  // ── 給油量 ──
+  const fuelLblW = 40;
+  cell(doc, cx, y, fuelLblW, rowH, '給油量', fLabel); cx += fuelLblW;
   const fuelValW = 45;
-  cell(doc, cx, y, fuelValW, rowH, data.fuelLiters, fVal);
-  cx += fuelValW;
+  cell(doc, cx, y, fuelValW, rowH, data.fuelLiters, fVal); cx += fuelValW;
+  const fuelUnitW = 16;
+  cell(doc, cx, y, fuelUnitW, rowH, 'ℓ', fLabel); cx += fuelUnitW;
 
-  // 給油時キロ
-  const fuelKmLabelW = 50;
-  cell(doc, cx, y, fuelKmLabelW, rowH, '給油時キロ', fLabel);
-  cx += fuelKmLabelW;
+  // ── 給油時キロ ──
+  const fuelKmLblW = 50;
+  cell(doc, cx, y, fuelKmLblW, rowH, '給油時キロ', fLabel); cx += fuelKmLblW;
   const fuelKmValW = 35;
-  cell(doc, cx, y, fuelKmValW, rowH, data.fuelOdometerKm, fVal);
-  cx += fuelKmValW;
+  cell(doc, cx, y, fuelKmValW, rowH, data.fuelOdometerKm, fVal); cx += fuelKmValW;
   const fuelKmUnitW = 18;
-  cell(doc, cx, y, fuelKmUnitW, rowH, 'km', { ...fLabel });
-  cx += fuelKmUnitW;
+  cell(doc, cx, y, fuelKmUnitW, rowH, 'km', fLabel); cx += fuelKmUnitW;
 
-  // オイル
-  const oilLabelW = 32;
-  cell(doc, cx, y, oilLabelW, rowH, 'オイル', fLabel);
-  cx += oilLabelW;
+  // ── オイル ──
+  const oilLblW = 32;
+  cell(doc, cx, y, oilLblW, rowH, 'オイル', fLabel); cx += oilLblW;
   const oilValW = 32;
-  cell(doc, cx, y, oilValW, rowH, data.oilLiters, fVal);
-  cx += oilValW;
+  cell(doc, cx, y, oilValW, rowH, data.oilLiters, fVal); cx += oilValW;
   const oilUnitW = 16;
-  cell(doc, cx, y, oilUnitW, rowH, 'ℓ', { ...fLabel });
-  cx += oilUnitW;
+  cell(doc, cx, y, oilUnitW, rowH, 'ℓ', fLabel); cx += oilUnitW;
 
-  // グリス
-  const greaseLabelW = 30;
-  cell(doc, cx, y, greaseLabelW, rowH, 'グリス', fLabel);
-  cx += greaseLabelW;
+  // ── グリス ──
+  const greaseLblW = 30;
+  cell(doc, cx, y, greaseLblW, rowH, 'グリス', fLabel); cx += greaseLblW;
   const greaseValW = 28;
-  cell(doc, cx, y, greaseValW, rowH, data.hasGrease ? 'レ' : '', fVal);
-  cx += greaseValW;
+  cell(doc, cx, y, greaseValW, rowH, data.hasGrease ? 'レ' : '', fVal); cx += greaseValW;
 
-  // パンク
-  const punctureLabelW = 28;
-  cell(doc, cx, y, punctureLabelW, rowH, 'パンク', fLabel);
-  cx += punctureLabelW;
+  // ── パンク ──
+  const punctureLblW = 28;
+  cell(doc, cx, y, punctureLblW, rowH, 'パンク', fLabel); cx += punctureLblW;
   const punctureValW = 28;
-  cell(doc, cx, y, punctureValW, rowH, data.hasPuncture ? 'レ' : '', fVal);
-  cx += punctureValW;
+  cell(doc, cx, y, punctureValW, rowH, data.hasPuncture ? 'レ' : '', fVal); cx += punctureValW;
 
-  // タイヤ偏磨耗
-  const tireLabelW = 50;
-  cell(doc, cx, y, tireLabelW, rowH, 'タイヤ偏磨耗', { ...fLabel, fontSize: 6.5 });
-  cx += tireLabelW;
+  // ── タイヤ偏磨耗 ──
+  const tireLblW = 50;
+  cell(doc, cx, y, tireLblW, rowH, 'タイヤ偏磨耗', { ...fLabel, fontSize: 6.5 }); cx += tireLblW;
   const tireValW = 28;
-  cell(doc, cx, y, tireValW, rowH, data.hasTireWear ? 'レ' : '', fVal);
-  cx += tireValW;
+  cell(doc, cx, y, tireValW, rowH, data.hasTireWear ? 'レ' : '', fVal); cx += tireValW;
 
-  // 残りスペースは署名欄 (3分割)
-  const signAreaW = x + w - cx;
-  const signW = Math.floor(signAreaW / 3);
+  // ── 給油エリアの残りスペース（スペーサー）──
+  const usedFuelW = cx - x;
+  if (usedFuelW < fuelAreaW) {
+    cell(doc, cx, y, fuelAreaW - usedFuelW, rowH, '');
+    cx = x + fuelAreaW;
+  }
 
-  // 上段: 署名ラベル
-  cell(doc, cx, y, signW, rowH, '運転手', fLabel);
-  cell(doc, cx + signW, y, signW, rowH, '運行管理者', fLabel);
-  cell(doc, cx + signW * 2, y, signAreaW - signW * 2, rowH, '整備管理者', fLabel);
-
-  // 下段: 署名スペース
-  cell(doc, cx, y + rowH, signW, rowH, '');
-  cell(doc, cx + signW, y + rowH, signW, rowH, '');
-  cell(doc, cx + signW * 2, y + rowH, signAreaW - signW * 2, rowH, '');
-
-  // 下段（給油部分）: 空欄
-  cx = x;
-  const lowerW = x + w - signAreaW - cx;
-  // 下段は空白（幅は上段の給油エリア分）
-  const upperFuelW = fuelLabelW + fuelUnitW + fuelValW + fuelKmLabelW + fuelKmValW + fuelKmUnitW +
-    oilLabelW + oilValW + oilUnitW + greaseLabelW + greaseValW + punctureLabelW + punctureValW +
-    tireLabelW + tireValW;
-  cell(doc, x, y + rowH, upperFuelW, rowH, '');
+  // [F修正] 署名欄: 正方形セル (SIGN_CELL_W × FUEL_H = 50 × 50pt)
+  const roles = ['運転手', '運行管理者', '整備管理者'];
+  roles.forEach((role, i) => {
+    const cellW = SIGN_CELL_W;
+    // 外枠（正方形）
+    doc.rect(cx, y, cellW, rowH).strokeColor('#000000').lineWidth(0.8).stroke();
+    // ラベル（上部に小さく表示）
+    doc.font(fontB).fontSize(6.5).fillColor('#000000');
+    doc.text(role, cx + 2, y + 3, { width: cellW - 4, align: 'center', lineBreak: false });
+    cx += cellW;
+  });
 }
 
-/** 点検チェックリスト ヘッダー行 */
+/**
+ * 点検チェックリスト ヘッダー行
+ * [G対応] INSP_ACT_W=56で自動反映
+ */
 function drawInspHeaderRow(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -552,22 +590,31 @@ function drawInspHeaderRow(
   const bg = '#E0E0E0';
   const fB = { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6.5, bg };
 
-  // 3グループそれぞれにヘッダー
   for (let g = 0; g < 3; g++) {
     const gx = x + g * INSP_GROUP_W;
     let cx = gx;
 
-    const itemW = g === 2 ? INSP_GROUP_W - INSP_PRE_W - INSP_POST_W - INSP_ACT_W : INSP_ITEM_W;
+    // 右グループのみ点検項目幅が異なる
+    const itemW = g === 2
+      ? INSP_GROUP_W - INSP_PRE_W - INSP_POST_W - (x + CONTENT_W - (gx + INSP_GROUP_W - INSP_PRE_W - INSP_POST_W))
+      : INSP_ITEM_W;
 
-    cell(doc, cx, y, itemW, h, '点　検　項　目', fB); cx += itemW;
+    // 点検項目
+    cell(doc, cx, y, INSP_ITEM_W, h, '点　検　項　目', fB); cx += INSP_ITEM_W;
+    // 乗車前
     cell(doc, cx, y, INSP_PRE_W, h, '乗車前', fB); cx += INSP_PRE_W;
+    // 乗車後
     cell(doc, cx, y, INSP_POST_W, h, '乗車後', fB); cx += INSP_POST_W;
+    // 措置 [G対応: INSP_ACT_W=56, 右グループは右端まで]
     const actW = g === 2 ? x + CONTENT_W - cx : INSP_ACT_W;
     cell(doc, cx, y, actW, h, '措置', fB);
   }
 }
 
-/** 点検チェックリスト 行（左・中・右それぞれ） */
+/**
+ * 点検チェックリスト 1行描画（左・中・右それぞれ）
+ * [G修正対応: INSP_ROW_H=15, INSP_ACT_W=56]
+ */
 function drawInspRow(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -579,7 +626,7 @@ function drawInspRow(
   fontN: string,
   fontB: string
 ): void {
-  const fN = { font: fontN, fontSize: 7 };
+  const fN = { font: fontN, fontSize: 6.5 };
 
   // 左列
   {
@@ -589,9 +636,9 @@ function drawInspRow(
     cell(doc, cx, y, INSP_ITEM_W, INSP_ROW_H, item?.name ?? '', {
       ...fN, align: 'left', pad: 3, bg,
     }); cx += INSP_ITEM_W;
-    cell(doc, cx, y, INSP_PRE_W, INSP_ROW_H, item?.preResult ?? '', fN); cx += INSP_PRE_W;
-    cell(doc, cx, y, INSP_POST_W, INSP_ROW_H, item?.postResult ?? '', fN); cx += INSP_POST_W;
-    cell(doc, cx, y, INSP_ACT_W, INSP_ROW_H, item?.measure ?? '', { ...fN, fontSize: 6 });
+    cell(doc, cx, y, INSP_PRE_W,  INSP_ROW_H, item?.preResult  ?? '', { ...fN, fontSize: 7 }); cx += INSP_PRE_W;
+    cell(doc, cx, y, INSP_POST_W, INSP_ROW_H, item?.postResult ?? '', { ...fN, fontSize: 7 }); cx += INSP_POST_W;
+    cell(doc, cx, y, INSP_ACT_W,  INSP_ROW_H, item?.measure    ?? '', { ...fN, fontSize: 6 });
   }
 
   // 中列
@@ -602,12 +649,12 @@ function drawInspRow(
     cell(doc, cx, y, INSP_ITEM_W, INSP_ROW_H, item?.name ?? '', {
       ...fN, align: 'left', pad: 3, bg,
     }); cx += INSP_ITEM_W;
-    cell(doc, cx, y, INSP_PRE_W, INSP_ROW_H, item?.preResult ?? '', fN); cx += INSP_PRE_W;
-    cell(doc, cx, y, INSP_POST_W, INSP_ROW_H, item?.postResult ?? '', fN); cx += INSP_POST_W;
-    cell(doc, cx, y, INSP_ACT_W, INSP_ROW_H, item?.measure ?? '', { ...fN, fontSize: 6 });
+    cell(doc, cx, y, INSP_PRE_W,  INSP_ROW_H, item?.preResult  ?? '', { ...fN, fontSize: 7 }); cx += INSP_PRE_W;
+    cell(doc, cx, y, INSP_POST_W, INSP_ROW_H, item?.postResult ?? '', { ...fN, fontSize: 7 }); cx += INSP_POST_W;
+    cell(doc, cx, y, INSP_ACT_W,  INSP_ROW_H, item?.measure    ?? '', { ...fN, fontSize: 6 });
   }
 
-  // 右列（6行のうち最初の1行のみディスクホイール、2行目以降は備考）
+  // 右列（rowIdx=0 のみディスクホイール, それ以降は備考エリアで一括描画）
   {
     const cx = x + INSP_GROUP_W * 2;
     const rightItemW = INSP_GROUP_W - INSP_PRE_W - INSP_POST_W - INSP_ACT_W;
@@ -616,24 +663,26 @@ function drawInspRow(
     if (rowIdx === 0 && rightItem) {
       // ディスクホイールの取付状況
       let cx2 = cx;
-      cell(doc, cx2, y, rightItemW, INSP_ROW_H, rightItem.name, {
-        ...fN, align: 'left', pad: 3,
+      cell(doc, cx2, y, rightItemW, INSP_ROW_H, rightItem.name ?? 'ディスクホイールの取付状況', {
+        ...fN, align: 'left', pad: 2,
       }); cx2 += rightItemW;
-      cell(doc, cx2, y, INSP_PRE_W, INSP_ROW_H, rightItem.preResult, fN); cx2 += INSP_PRE_W;
-      cell(doc, cx2, y, INSP_POST_W, INSP_ROW_H, rightItem.postResult, fN); cx2 += INSP_POST_W;
-      cell(doc, cx2, y, actW, INSP_ROW_H, rightItem.measure, { ...fN, fontSize: 6 });
+      cell(doc, cx2, y, INSP_PRE_W,  INSP_ROW_H, rightItem.preResult  ?? '', { ...fN, fontSize: 7 }); cx2 += INSP_PRE_W;
+      cell(doc, cx2, y, INSP_POST_W, INSP_ROW_H, rightItem.postResult ?? '', { ...fN, fontSize: 7 }); cx2 += INSP_POST_W;
+      cell(doc, cx2, y, actW,        INSP_ROW_H, rightItem.measure    ?? '', { ...fN, fontSize: 6 });
     } else if (rowIdx === 1) {
-      // 備考ラベル（5行分を占める大きなセル）
-      // ここは drawRightInspColumn で一括処理するのでスキップ
+      // 備考ラベル（drawRemarksArea で一括描画するためスキップ）
       cell(doc, cx, y, CONTENT_W - (cx - x), INSP_ROW_H, '');
     } else {
-      // 備考エリア（空）
+      // 備考エリア（空白）
       cell(doc, cx, y, CONTENT_W - (cx - x), INSP_ROW_H, '');
     }
   }
 }
 
-/** 点検右列の備考エリアを一括描画 */
+/**
+ * 右列の備考エリアを一括描画
+ * [G修正対応: INSP_ROW_H=15 により高さが自動縮小]
+ */
 function drawRemarksArea(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -678,100 +727,48 @@ function drawDailyDriverReport(
   const x0 = MARGIN_L;
   let y = MARGIN_T;
 
-  // ①タイトル
+  // ① タイトル
   drawTitle(doc, x0, y, CONTENT_W, TITLE_H, fontB);
   y += TITLE_H;
 
-  // ②ヘッダー行（日付・氏名・車番・キロ）
+  // ② ヘッダー行 [A修正: 始/終均等幅]
   drawHeaderRow(doc, x0, y, CONTENT_W, HEADER_H, data, fontN, fontB);
   y += HEADER_H;
 
-  // ③運行記録カラムヘッダー
+  // ③ 運行記録カラムヘッダー [D修正: 2行×3列]
   drawOperationColHeaders(doc, x0, y, COL_HEADER_H, fontB);
   y += COL_HEADER_H;
 
-  // ④運行記録6行
+  // ④ 運行記録6行 [B/C/D修正]
   drawOperationRows(doc, x0, y, data.trips, fontN);
   y += OP_ROW_H * OP_ROWS;
 
-  // ⑤給油・署名セクション
+  // ⑤ 給油・署名セクション [E/F修正: 1行 + 正方形署名欄]
   drawFuelSection(doc, x0, y, CONTENT_W, data, fontN, fontB);
   y += FUEL_H;
 
-  // ⑥点検チェックリスト ヘッダー
+  // ⑥ 点検チェックリスト ヘッダー
   drawInspHeaderRow(doc, x0, y, INSP_HEADER_H, fontB);
   y += INSP_HEADER_H;
 
-  // ⑦点検行（左・中で6行、右は1行+備考エリア）
+  // ⑦ 点検行 [G修正: INSP_ROW_H=15, INSP_ACT_W=56 - drawInspRow/drawRemarksArea使用]
   const rightColX = x0 + INSP_GROUP_W * 2;
-  const rightItemW = INSP_GROUP_W - INSP_PRE_W - INSP_POST_W - INSP_ACT_W;
 
   for (let i = 0; i < INSP_ROWS; i++) {
     const ry = y + i * INSP_ROW_H;
-    const leftItem = data.leftInspItems[i];
-    const middleItem = data.middleInspItems[i];
-
-    // 左列
-    {
-      let cx = x0;
-      const bg = i % 2 === 0 ? undefined : '#FAFAFA';
-      cell(doc, cx, ry, INSP_ITEM_W, INSP_ROW_H, leftItem?.name ?? '', {
-        font: fontN, fontSize: 7, align: 'left', pad: 3, bg,
-      }); cx += INSP_ITEM_W;
-      cell(doc, cx, ry, INSP_PRE_W, INSP_ROW_H, leftItem?.preResult ?? '', { font: fontN, fontSize: 8 }); cx += INSP_PRE_W;
-      cell(doc, cx, ry, INSP_POST_W, INSP_ROW_H, leftItem?.postResult ?? '', { font: fontN, fontSize: 8 }); cx += INSP_POST_W;
-      cell(doc, cx, ry, INSP_ACT_W, INSP_ROW_H, leftItem?.measure ?? '', { font: fontN, fontSize: 6.5 });
-    }
-
-    // 中列
-    {
-      let cx = x0 + INSP_GROUP_W;
-      const bg = i % 2 === 0 ? undefined : '#FAFAFA';
-      cell(doc, cx, ry, INSP_ITEM_W, INSP_ROW_H, middleItem?.name ?? '', {
-        font: fontN, fontSize: 7, align: 'left', pad: 3, bg,
-      }); cx += INSP_ITEM_W;
-      cell(doc, cx, ry, INSP_PRE_W, INSP_ROW_H, middleItem?.preResult ?? '', { font: fontN, fontSize: 8 }); cx += INSP_PRE_W;
-      cell(doc, cx, ry, INSP_POST_W, INSP_ROW_H, middleItem?.postResult ?? '', { font: fontN, fontSize: 8 }); cx += INSP_POST_W;
-      cell(doc, cx, ry, INSP_ACT_W, INSP_ROW_H, middleItem?.measure ?? '', { font: fontN, fontSize: 6.5 });
-    }
-
-    // 右列: i=0のみディスクホイール。それ以外はスキップ（備考エリアで一括描画）
-    if (i === 0) {
-      const rightItem = data.rightInspItems[0];
-      const actW = x0 + CONTENT_W - rightColX - rightItemW - INSP_PRE_W - INSP_POST_W;
-      let cx = rightColX;
-      cell(doc, cx, ry, rightItemW, INSP_ROW_H, rightItem?.name ?? 'ディスクホイールの取付状況', {
-        font: fontN, fontSize: 6.5, align: 'left', pad: 2,
-      }); cx += rightItemW;
-      cell(doc, cx, ry, INSP_PRE_W, INSP_ROW_H, rightItem?.preResult ?? '', { font: fontN, fontSize: 8 }); cx += INSP_PRE_W;
-      cell(doc, cx, ry, INSP_POST_W, INSP_ROW_H, rightItem?.postResult ?? '', { font: fontN, fontSize: 8 }); cx += INSP_POST_W;
-      cell(doc, cx, ry, actW, INSP_ROW_H, rightItem?.measure ?? '', { font: fontN, fontSize: 6 });
-    }
+    drawInspRow(
+      doc, x0, ry, i,
+      data.leftInspItems[i],
+      data.middleInspItems[i],
+      data.rightInspItems[0],
+      fontN, fontB
+    );
   }
 
-  // 備考ラベル + エリア（右列の i=1〜5 分 = 5行分）
-  const remarksY = y + INSP_ROW_H;  // i=1 の y 位置
-  const remarksH = INSP_ROW_H * (INSP_ROWS - 1);
-  const remarksW = x0 + CONTENT_W - rightColX;
+  // 備考エリア（右列 i=1〜5）
+  drawRemarksArea(doc, rightColX, y + INSP_ROW_H, data.remarks, fontN, fontB);
 
-  // 備考ラベル行（右列 i=1 の高さ）
-  cell(doc, rightColX, remarksY, remarksW, INSP_ROW_H,
-    '備　考', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#E8E8E8' });
-
-  // 備考内容エリア（i=2〜5 分 = 4行分）
-  const remarksContentH = INSP_ROW_H * (INSP_ROWS - 2);
-  doc.rect(rightColX, remarksY + INSP_ROW_H, remarksW, remarksContentH)
-    .strokeColor('#000000').lineWidth(0.5).stroke();
-  if (data.remarks) {
-    doc.font(fontN).fontSize(7).fillColor('#000000')
-      .text(data.remarks, rightColX + 3, remarksY + INSP_ROW_H + 3, {
-        width: remarksW - 6,
-        height: remarksContentH - 6,
-        lineBreak: true,
-      });
-  }
-
-  // ⑧凡例
+  // ⑧ 凡例
   y += INSP_ROW_H * INSP_ROWS + 2;
   doc.font(fontN).fontSize(7).fillColor('#000000')
     .text('レ……異常なし　　×……要修理調整', x0 + 2, y, { lineBreak: false });
@@ -783,6 +780,7 @@ function drawDailyDriverReport(
 
 /**
  * 運転日報車両点検 PDFを生成する（帳票デザイン準拠版）
+ * 修正指示A〜G全対応版
  * @param data 帳票データ
  * @param outputPath 出力ファイルパス
  * @returns ファイルサイズ（バイト）
@@ -812,6 +810,7 @@ export async function generateDailyDriverReportPDF(
 
       doc.addPage();
       drawDailyDriverReport(doc, data, japaneseFont ? 'JpFont' : null);
+
       doc.end();
 
       stream.on('finish', () => {
@@ -819,10 +818,20 @@ export async function generateDailyDriverReportPDF(
         logger.info('[PDF] 運転日報生成完了', { outputPath, fileSize: stats.size });
         resolve(stats.size);
       });
-      stream.on('error', reject);
-
+      stream.on('error', (error: Error) => {
+        logger.error('[PDF] 運転日報生成エラー', {
+          error: { message: error.message, stack: error.stack, name: error.name },
+          outputPath,
+        });
+        reject(error);
+      });
     } catch (error) {
-      logger.error('[PDF] 運転日報生成エラー', { error, outputPath });
+      logger.error('[PDF] 運転日報生成エラー（初期化）', {
+        error: error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : String(error),
+        outputPath,
+      });
       reject(error);
     }
   });
@@ -888,20 +897,19 @@ export interface DailyReportData {
 
 /**
  * @deprecated generateDailyDriverReportPDF を使用してください
- * 後方互換性のため残存。reportService.ts からは新関数を呼ぶこと。
+ * 後方互換性のため残存。
  */
 export async function generateDailyReportPDF(
   _data: DailyReportData,
   outputPath: string
 ): Promise<number> {
-  logger.warn('[PDF] generateDailyReportPDF は非推奨です。reportService.ts の変換処理を確認してください。');
-  // 空PDFを生成して返す
+  logger.warn('[PDF] generateDailyReportPDF は非推奨です。reportService.ts を確認してください。');
   return new Promise((resolve, reject) => {
     ensureReportDirectory();
     const doc = new PDFDocument({ size: 'A4', layout: 'landscape' });
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
-    doc.fontSize(12).text('レポート生成エラー: 旧インターフェースが呼ばれています。reportService.tsを確認してください。', 40, 40);
+    doc.fontSize(12).text('レポート生成エラー: 旧インターフェースが呼ばれています。', 40, 40);
     doc.end();
     stream.on('finish', () => {
       const stats = fs.statSync(outputPath);

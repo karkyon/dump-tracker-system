@@ -437,7 +437,8 @@ class VehicleService {
           status: (vehicleData as any).status || VEHICLE_STATUS.AVAILABLE,
           purchaseDate: (vehicleData as any).registrationDate || new Date(),
           inspectionExpiry: (vehicleData as any).nextMaintenanceDate,
-          notes: vehicleData.notes
+          notes: vehicleData.notes,
+          region: (vehicleData as any).region ?? null,
         };
 
         // ✅ FIX: VIN暗号化削除 (vinフィールド存在しない)
@@ -549,6 +550,9 @@ class VehicleService {
           notes: updateData.notes,
           // ✅ FIX: currentMileage を追加（走行距離更新対応）
           currentMileage: updateData.currentMileage,
+          region:        (updateData as any).region !== undefined
+                          ? ((updateData as any).region || null)
+                          : undefined,
         };
 
         // ✅ FIX: VIN暗号化削除 (vinフィールド存在しない)

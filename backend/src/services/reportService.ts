@@ -63,6 +63,12 @@ import {
   ensureReportDirectory
 } from './pdfReportGenerator';
 
+import {
+  aggregateAnnualTransportReport,
+  getFiscalYearRange,
+} from './annualTransportReportService';
+import { generateAnnualTransportReportPDF } from './annualTransportReportPDF';
+
 // 🎯 完成済みサービス層との統合連携（3層統合管理システム活用）
 import type { VehicleService } from './vehicleService';
 import type { InspectionService } from './inspectionService';
@@ -262,6 +268,28 @@ function buildInspResultMap(inspectionRecords: any[]): RawInspResult[] {
 }
 
 /**
+ * 開始・終了時刻から所要時間文字列を計算 (hh時間mm分)
+ *
+ * @param startStr 開始時刻
+ * @param endStr 終了時刻
+ */
+function calcTimeDuration(startStr: string, endStr: string): string {
+  if (!startStr || !endStr) return '';
+  const startParts = startStr.split(':').map(Number);
+  const endParts   = endStr.split(':').map(Number);
+  const sh = startParts[0] ?? NaN;
+  const sm = startParts[1] ?? NaN;
+  const eh = endParts[0]   ?? NaN;
+  const em = endParts[1]   ?? NaN;
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return '';
+  let totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (totalMinutes < 0) totalMinutes += 24 * 60;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}時間${String(m).padStart(2, '0')}分`;
+}
+
+/**
  * operation_details から TripCycleRow の配列を生成する
  * LOADING/UNLOADING をペアリングして1サイクル = 1行とする
  */
@@ -290,6 +318,8 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
     loadingCondition: string;
     loadingStartTime: string;
     loadingEndTime: string;
+    unloadingStartTime: string;   // NEW: 積降開始時刻
+    unloadingEndTime: string;     // NEW: 積降終了時刻
     hasLoading: boolean;
     hasUnloading: boolean;
   }
@@ -321,12 +351,16 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
         loadingCondition: notes,
         loadingStartTime: startT,
         loadingEndTime: endT,
+        unloadingStartTime: '',   // NEW
+        unloadingEndTime: '',     // NEW
         hasLoading: true,
         hasUnloading: false,
       };
     } else if (UNLOADING_TYPES.includes(actType)) {
       if (current && current.hasLoading) {
         current.unloadingLocation = locationName;
+        current.unloadingStartTime = startT;   // NEW: 積降開始時刻
+        current.unloadingEndTime = endT;       // NEW: 積降終了時刻
         current.hasUnloading = true;
         // 荷降ろし時のトン数があれば上書き
         if (qty > 0 && current.quantityTons === 0) current.quantityTons = qty;
@@ -344,6 +378,8 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
           loadingCondition: '',
           loadingStartTime: '',
           loadingEndTime: '',
+          unloadingStartTime: startT,   // ← 追加
+          unloadingEndTime: endT,       // ← 追加
           hasLoading: false,
           hasUnloading: true,
         });
@@ -1158,6 +1194,57 @@ class ReportService {
   }
 
   /**
+   * 実績報告書レポート生成
+   */
+  async generateAnnualTransportReport(
+    params: {
+      fiscalYear: number;
+      format?: any;
+      requesterId: string;
+      requesterRole: any;
+    }
+  ): Promise<ReportGenerationResult> {
+    this.validateReportPermissions(
+      params.requesterRole,
+      'ANNUAL_TRANSPORT_REPORT' as any,
+      undefined,
+      params.requesterId
+    );
+  //
+    const { start, end } = getFiscalYearRange(params.fiscalYear);
+  //
+    const report = await this.db.report.create({
+      data: {
+        reportType: 'ANNUAL_TRANSPORT_REPORT' as any,
+        format: params.format || 'PDF',
+        title: `貨物自動車運送事業実績報告書 ${params.fiscalYear}年度`,
+        description: '貨物自動車運送事業報告規則 第4号様式',
+        generatedBy: params.requesterId,
+        status: 'PENDING',
+        parameters: params as any,
+        startDate: start,
+        endDate: end,
+        tags: ['annual', 'transport', 'report'],
+      },
+      include: { user: true },
+    });
+  //
+    this.processReportGeneration(report.id);
+  //
+    logger.info('実績報告書生成ジョブ登録', { reportId: report.id, fiscalYear: params.fiscalYear });
+  //
+    return {
+      reportId: report.id,
+      reportType: 'ANNUAL_TRANSPORT_REPORT' as any,
+      format: params.format || 'PDF',
+      status: 'PENDING',
+      title: report.title,
+      description: report.description || undefined,
+      generatedBy: params.requesterId,
+    };
+  }
+
+  /**
    * レポート削除
    */
   async deleteReport(
@@ -1338,8 +1425,14 @@ class ReportService {
 
         // レポート種別に応じた生成処理
         switch (report.reportType) {
+          //
           case 'DAILY_OPERATION':
             ({ filePath, fileSize } = await this.generateDailyOperationPDF(report));
+            break;
+
+          // 🆕 P3-03: 貨物自動車運送事業実績報告書
+          case 'ANNUAL_TRANSPORT_REPORT':
+            ({ filePath, fileSize } = await this.generateAnnualTransportReportPDF(report));
             break;
 
           // 他の種別は将来実装（今は簡易レスポンス）
@@ -1530,6 +1623,10 @@ class ReportService {
         loadingCondition: c.loadingCondition,
         loadingStartTime: c.loadingStartTime,
         loadingEndTime: c.loadingEndTime,
+       loadingDuration: calcTimeDuration(c.loadingStartTime, c.loadingEndTime),     // NEW(D)
+       unloadingStartTime: c.unloadingStartTime ?? '',                               // NEW(D)
+       unloadingEndTime: c.unloadingEndTime ?? '',                                   // NEW(D)
+       unloadingDuration: calcTimeDuration(c.unloadingStartTime ?? '', c.unloadingEndTime ?? ''), // NEW(D)
       })),
       fuelLiters,
       fuelOdometerKm,
@@ -1553,6 +1650,36 @@ class ReportService {
     );
 
     const fileSize = await generateDailyDriverReportPDF(dailyDriverData, outputPath);
+
+    return { filePath: outputPath, fileSize };
+  }
+
+  /**
+  * 貨物自動車運送事業実績報告書 PDF生成
+  */
+  private async generateAnnualTransportReportPDF(
+    report: any
+  ): Promise<{ filePath: string; fileSize: number }> {
+    const params = report.parameters as any;
+    const fiscalYear: number = params?.fiscalYear
+      ? Number(params.fiscalYear)
+      : (report.startDate
+          ? new Date(report.startDate).getFullYear()
+          : new Date().getFullYear());
+
+    集計実行
+    const reportData = await aggregateAnnualTransportReport(fiscalYear);
+
+    出力ファイルパス
+    const fileName = `annual_transport_${fiscalYear}_${report.id}.pdf`;
+    const outputPath = require('path').join(
+      require('process').cwd(),
+      'generated_reports',
+      fileName
+    );
+
+    PDF生成
+    const fileSize = await generateAnnualTransportReportPDF(reportData, outputPath);
 
     return { filePath: outputPath, fileSize };
   }

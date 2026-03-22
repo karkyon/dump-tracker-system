@@ -301,9 +301,14 @@ model Operation {
   endOdometer                     Decimal?           @map("end_odometer") @db.Decimal(8, 2)
   startFuelLevel                  Decimal?           @map("start_fuel_level") @db.Decimal(8, 2)
   endFuelLevel                    Decimal?           @map("end_fuel_level") @db.Decimal(8, 2)
+  // 🆕 P1-05: 実績報告書用フィールド
+  loadedDistanceKm                Decimal?           @map("loaded_distance_km") @db.Decimal(8, 2)  // 実車キロ（積載状態での走行距離）
+  revenueYen                      Int?               @map("revenue_yen")                             // 営業収入（円）
   gpsLogs                         GpsLog[]
   inspectionRecords               InspectionRecord[]
   operationDetails                OperationDetail[]
+  // 🆕 P1-08: AccidentRecord 逆参照リレーション
+  accidentRecords                 AccidentRecord[]
   usersOperationsCreatedByTousers User?              @relation("operations_created_byTousers", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   usersOperationsDriverIdTousers  User               @relation("operations_driver_idTousers", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   vehicles                        Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -344,6 +349,8 @@ model User {
   inspectionRecords                    InspectionRecord[]
   maintenanceRecords                   MaintenanceRecord[]
   notifications                        Notification[]
+  // 🆕 P1-08: AccidentRecord 逆参照リレーション
+  accidentRecords                      AccidentRecord[]
   operationsOperationsCreatedByTousers Operation[]            @relation("operations_created_byTousers")
   operationsOperationsDriverIdTousers  Operation[]            @relation("operations_driver_idTousers")
 
@@ -371,13 +378,18 @@ model Vehicle {
   createdAt          DateTime?           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime?           @default(now()) @map("updated_at") @db.Timestamptz(6)
   vehicleType        String?             @map("vehicle_type") @db.VarChar(20)
+  // 🆕 P1-04: 地方運輸局管轄区域（実績報告書の地域別集計に使用）
+  region             TransportRegion?    @map("region")
   gpsLogs            GpsLog[]
   inspectionRecords  InspectionRecord[]
   maintenanceRecords MaintenanceRecord[]
   operations         Operation[]
+  // 🆕 P1-08: AccidentRecord 逆参照リレーション
+  accidentRecords    AccidentRecord[]
 
   @@index([plateNumber], map: "idx_vehicles_plate_number")
   @@index([status], map: "idx_vehicles_status")
+  @@index([region], map: "idx_vehicles_region")
   @@map("vehicles")
 }
 
@@ -434,23 +446,98 @@ model Report {
 }
 
 // =====================================
+// 🆕 P1-06: 事故記録テーブル
+// 貨物自動車運送事業実績報告書 事故件数欄に使用
+// =====================================
+
+/// 事故記録テーブル（貨物自動車運送事業報告規則 第4号様式 事故件数欄用）
+model AccidentRecord {
+  id            String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+
+  // 事故基本情報
+  accidentDate  DateTime        @map("accident_date") @db.Date                    // 事故発生日
+  accidentType  AccidentType    @map("accident_type")                              // 交通事故 or 重大事故
+
+  // 関係者（任意）
+  vehicleId     String?         @map("vehicle_id") @db.Uuid
+  driverId      String?         @map("driver_id") @db.Uuid
+  operationId   String?         @map("operation_id") @db.Uuid
+
+  // 被害状況
+  casualties    Int             @default(0) @map("casualties")                    // 死者数
+  injuries      Int             @default(0) @map("injuries")                      // 負傷者数
+
+  // 地域・詳細
+  region        TransportRegion? @map("region")                                   // 管轄区域
+  description   String?          @db.Text                                         // 概要
+
+  // タイムスタンプ
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // リレーション
+  vehicles      Vehicle?        @relation(fields: [vehicleId],   references: [id], onDelete: SetNull, onUpdate: NoAction)
+  users         User?           @relation(fields: [driverId],    references: [id], onDelete: SetNull, onUpdate: NoAction)
+  operations    Operation?      @relation(fields: [operationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([accidentDate],  map: "idx_accident_records_date")
+  @@index([accidentType],  map: "idx_accident_records_type")
+  @@index([vehicleId],     map: "idx_accident_records_vehicle")
+  @@index([region],        map: "idx_accident_records_region")
+  @@map("accident_records")
+}
+
+// =====================================
+// 🆕 P1-07: 貨物運送事業者情報テーブル
+// 実績報告書ヘッダー印字用。全体で1レコード運用
+// =====================================
+
+/// 貨物運送事業者情報（実績報告書ヘッダー用・全体で1レコード）
+model TransportBusinessSettings {
+  id                 String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+
+  // 事業者情報
+  businessNumber     String?  @map("business_number") @db.VarChar(20)             // 事業者番号（国交省発行）
+  companyName        String   @default("") @map("company_name") @db.VarChar(200)  // 事業者名（会社名）
+  address            String?  @db.VarChar(500)                                    // 住所
+  representativeName String?  @map("representative_name") @db.VarChar(100)        // 代表者名（役職及び氏名）
+  phoneNumber        String?  @map("phone_number") @db.VarChar(30)                // 電話番号
+
+  // 提出先
+  submissionTarget   String?  @map("submission_target") @db.VarChar(100)          // 提出先（例: 中国運輸局長）
+
+  // 事業内容チェック（複数選択可、最大3項目。様式規則の規定）
+  // 値例: ["DUMP_EARTH", "FROZEN", "LONG_ITEM", "TIMBER", "CONTAINER",
+  //        "MOVING", "READY_MIX", "HAZARDOUS", "OTHER"]
+  businessTypes      String[] @default([]) @map("business_types")
+
+  // タイムスタンプ
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("transport_business_settings")
+}
+
+// =====================================
 // Enum定義（レポート関連）
 // =====================================
 
 /// レポート種別
 enum ReportType {
-  DAILY_OPERATION         // 日次運行レポート
-  MONTHLY_OPERATION       // 月次運行レポート
-  VEHICLE_UTILIZATION     // 車両稼働レポート
-  INSPECTION_SUMMARY      // 点検サマリーレポート
-  TRANSPORTATION_SUMMARY  // 輸送サマリーレポート
-  CUSTOM                  // カスタムレポート
-  COMPREHENSIVE_DASHBOARD // 総合ダッシュボード
-  KPI_ANALYSIS           // KPI分析レポート
-  PREDICTIVE_ANALYTICS   // 予測分析レポート
-  MAINTENANCE_REPORT     // メンテナンスレポート
-  COST_ANALYSIS          // コスト分析レポート
-  PERFORMANCE_REPORT     // パフォーマンスレポート
+  DAILY_OPERATION          // 日次運行レポート
+  MONTHLY_OPERATION        // 月次運行レポート
+  VEHICLE_UTILIZATION      // 車両稼働レポート
+  INSPECTION_SUMMARY       // 点検サマリーレポート
+  TRANSPORTATION_SUMMARY   // 輸送サマリーレポート
+  CUSTOM                   // カスタムレポート
+  COMPREHENSIVE_DASHBOARD  // 総合ダッシュボード
+  KPI_ANALYSIS             // KPI分析レポート
+  PREDICTIVE_ANALYTICS     // 予測分析レポート
+  MAINTENANCE_REPORT       // メンテナンスレポート
+  COST_ANALYSIS            // コスト分析レポート
+  PERFORMANCE_REPORT       // パフォーマンスレポート
+  // 🆕 P1-03: 貨物自動車運送事業実績報告書（国交省提出 第4号様式）
+  ANNUAL_TRANSPORT_REPORT  // 貨物自動車運送事業実績報告書
 }
 
 /// レポート出力フォーマット
@@ -631,4 +718,37 @@ enum VehicleStatus {
   RETIRED
 
   @@map("vehicle_status")
+}
+
+// =====================================
+// 🆕 P1-01: 地方運輸局管轄区域 Enum
+// 貨物自動車運送事業報告規則 第4号様式の地域区分
+// =====================================
+
+/// 地方運輸局管轄区域（実績報告書 輸送実績の地域別集計に使用）
+enum TransportRegion {
+  HOKKAIDO  // 北海道
+  TOHOKU    // 東北
+  HOKURIKU  // 北陸信越
+  KANTO     // 関東
+  CHUBU     // 中部
+  KINKI     // 近畿
+  CHUGOKU   // 中国
+  SHIKOKU   // 四国
+  KYUSHU    // 九州
+  OKINAWA   // 沖縄
+
+  @@map("transport_region")
+}
+
+// =====================================
+// 🆕 P1-02: 事故種別 Enum
+// =====================================
+
+/// 事故種別（貨物自動車運送事業実績報告書 事故件数欄）
+enum AccidentType {
+  TRAFFIC   // 交通事故（道路交通法第72条第1項）
+  SERIOUS   // 重大事故（自動車事故報告規則第2条）
+
+  @@map("accident_type")
 }

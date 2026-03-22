@@ -27,6 +27,11 @@ import {
   sendNotFound
 } from '../utils/response';
 
+import {
+  aggregateAnnualTransportReport,
+  currentFiscalYear,
+} from '../services/annualTransportReportService';
+
 import logger from '../utils/logger';
 
 import fs from 'fs';
@@ -514,6 +519,70 @@ export const generateKPIAnalysis = asyncHandler(async (req: AuthenticatedRequest
 });
 
 /**
+ * 実績報告書 PDF生成
+ * POST /api/v1/reports/annual-transport
+ */
+export const generateAnnualTransportReport = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      return sendError(res, '認証が必要です', 401, ERROR_CODES.UNAUTHORIZED);
+    }
+
+    const { fiscalYear, format } = req.body;
+    const year: number = fiscalYear
+      ? Number(fiscalYear)
+      : currentFiscalYear();
+
+    if (isNaN(year) || year < 2000 || year > 2100) {
+      return sendError(res, '年度が無効です', 400, ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    logger.info('実績報告書生成リクエスト', {
+      userId: req.user.userId,
+      fiscalYear: year,
+    });
+
+    const report = await reportService.generateAnnualTransportReport({
+      fiscalYear: year,
+      format: format || 'PDF',
+      requesterId: req.user.userId,
+      requesterRole: req.user.role,
+    });
+
+    return sendSuccess(res, report, '実績報告書の生成を開始しました', 201);
+  }
+);
+
+/**
+ * 実績報告書 集計データプレビュー（JSON）
+ * GET /api/v1/reports/annual-transport/preview/:fiscalYear
+ */
+export const previewAnnualTransport = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      return sendError(res, '認証が必要です', 401, ERROR_CODES.UNAUTHORIZED);
+    }
+
+    const year = req.params.fiscalYear
+      ? Number(req.params.fiscalYear)
+      : currentFiscalYear();
+
+    if (isNaN(year) || year < 2000 || year > 2100) {
+      return sendError(res, '年度が無効です', 400, ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    logger.info('実績報告書プレビュー取得', {
+      userId: req.user.userId,
+      fiscalYear: year,
+    });
+
+    const data = await aggregateAnnualTransportReport(year);
+
+    return sendSuccess(res, data, '集計データを取得しました');
+  }
+);
+
+/**
  * 予測分析レポート生成(統合版)
  * POST /api/v1/reports/predictive-analytics
  * 権限制御: 管理者・マネージャー
@@ -842,7 +911,9 @@ export default {
   previewReport,
   deleteReport,
   getReportStatus,
-  getReportTemplates
+  getReportTemplates,
+  generateAnnualTransportReport,
+  previewAnnualTransport
 };
 
 // =====================================

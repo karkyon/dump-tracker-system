@@ -513,6 +513,13 @@ export class OperationService {
           endFuelLevel: endData.endFuelLevel,         // 🆕 追加
           totalDistanceKm: totalDistanceKm,           // 🆕 自動計算値
           fuelConsumedLiters: fuelConsumedLiters,     // 🆕 自動計算値
+          // 🆕 P1-05: 実績報告書用フィールド（管理者後入力で更新される）
+          ...(endData.loadedDistanceKm !== undefined && {
+            loadedDistanceKm: endData.loadedDistanceKm
+          }),
+          ...(endData.revenueYen !== undefined && {
+            revenueYen: endData.revenueYen
+          }),
           notes: endData.notes ? `${operation.notes || ''}\n${endData.notes}` : operation.notes,
           updatedAt: new Date()                       // 🆕 追加
         },

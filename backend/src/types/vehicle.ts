@@ -22,7 +22,7 @@ import type {
 
 // ✨ Prisma型定義との統合
 // 🔧 Phase 1-A-2修正: import type → import に変更（Enumは値として使用されるため）
-import { VehicleStatus, FuelType, UserRole } from '@prisma/client';
+import { VehicleStatus, FuelType, UserRole, TransportRegion } from '@prisma/client';
 
 import type {
   Operation as OperationModel,
@@ -101,6 +101,7 @@ export interface CreateVehicleRequest {
   insurance?: VehicleInsurance;
   tags?: string[];
   metadata?: Record<string, any>;
+  region?: TransportRegion;
 }
 
 /**
@@ -127,6 +128,7 @@ export interface VehicleResponseDTO {
   assignedDriverId?: string;
   currentMileage?: number;
   notes?: string;
+  region?: TransportRegion | null;
   isActive: boolean;
   createdAt: Date;  // 🔧 修正: Date型に統一
   updatedAt: Date;  // 🔧 修正: Date型に統一

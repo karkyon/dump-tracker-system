@@ -184,6 +184,28 @@ router.post(
 );
 
 /**
+ * 貨物自動車運送事業実績報告書 生成
+ * POST /api/v1/reports/annual-transport
+ * 権限: 管理者・マネージャー
+ */
+router.post(
+  '/annual-transport',
+  requireManagerOrAdmin,
+  reportController.generateAnnualTransportReport
+);
+
+/**
+ * 貨物自動車運送事業実績報告書 集計プレビュー（JSON）
+ * GET /api/v1/reports/annual-transport/preview/:fiscalYear
+ * 権限: 管理者・マネージャー
+ */
+router.get(
+  '/annual-transport/preview/:fiscalYear',
+  requireManagerOrAdmin,
+  reportController.previewAnnualTransport
+);
+
+/**
  * 予測分析レポート生成
  * POST /api/v1/reports/predictive-analytics
  * 権限: 管理者のみ
