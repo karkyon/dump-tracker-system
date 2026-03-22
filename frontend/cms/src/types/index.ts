@@ -97,7 +97,7 @@ export interface Location {
   address: string;                 // 住所
   latitude?: number;               // 緯度（バックエンド標準）
   longitude?: number;              // 経度（バックエンド標準）
-  locationType: 'PICKUP' | 'DELIVERY' | 'DEPOT' | 'MAINTENANCE' | 'FUEL_STATION' | 'REST_AREA' | 'CHECKPOINT' | 'OTHER';  // 場所種別（バックエンド標準）
+  locationType: 'PICKUP' | 'DELIVERY' | 'BOTH' | 'DEPOT' | 'MAINTENANCE' | 'FUEL_STATION' | 'REST_AREA' | 'CHECKPOINT' | 'OTHER';  // 場所種別（バックエンド標準）
   clientName?: string;             // 客先名
   contactPerson?: string;          // 担当者名
   contactPhone?: string;           // 電話番号
@@ -116,7 +116,7 @@ export interface Location {
   locationName?: string;           // @deprecated name を使用
   gpsLatitude?: number;            // @deprecated latitude を使用
   gpsLongitude?: number;           // @deprecated longitude を使用
-  type?: 'pickup' | 'delivery';    // @deprecated locationType を使用
+  type?: 'pickup' | 'delivery' | 'both';    // @deprecated locationType を使用
 }
 
 // =====================================

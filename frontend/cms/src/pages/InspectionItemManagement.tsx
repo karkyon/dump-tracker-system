@@ -258,16 +258,27 @@ const InspectionItemManagement: React.FC = () => {
         isActive: formData.isActive,
       });
       if (success) {
-        // 同じ種別（PRE/POST）のアイテムをorder順に並べ直してRenumber
+        // ✅ 修正: 編集対象を除外してから指定orderの位置に挿入し、連番付与
+        // （旧実装は order 値が重複した際に期待通りの位置にならないバグあり）
         const sameTypeItems = items
           .filter((i) => i.category === selectedItemForEdit.category)
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        // 更新対象を新しいorderで差し替えてからRenumber
-        const merged = sameTypeItems.map((i) =>
-          i.id === selectedItemForEdit.id ? { ...i, order: formData.order } : i
+
+        // ① 編集対象を除外
+        const withoutEdited = sameTypeItems.filter((i) => i.id !== selectedItemForEdit.id);
+
+        // ② 挿入位置を計算（0始まりのインデックス、末尾超えを防ぐ）
+        const targetIndex = Math.min(
+          Math.max(0, formData.order - 1),
+          withoutEdited.length
         );
-        merged.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        const renumbered = merged.map((i, idx) => ({ id: i.id, order: idx + 1 }));
+
+        // ③ 指定位置に挿入
+        withoutEdited.splice(targetIndex, 0, { ...selectedItemForEdit, order: formData.order });
+
+        // ④ 1から連番付与
+        const renumbered = withoutEdited.map((i, idx) => ({ id: i.id, order: idx + 1 }));
+
         await updateOrder(renumbered);
         toast.success('点検項目を更新しました');
         handleCloseModals();

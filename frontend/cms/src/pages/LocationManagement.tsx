@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, MapPin } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useMasterStore } from '../store/masterStore';
 import { Location } from '../types';
@@ -34,7 +34,7 @@ const LocationManagement: React.FC = () => {
     clientName: string;
     name: string;
     address: string;
-    locationType: 'PICKUP' | 'DELIVERY';
+    locationType: 'PICKUP' | 'DELIVERY' | 'BOTH';
     latitude: number;
     longitude: number;
   }
@@ -83,16 +83,19 @@ const LocationManagement: React.FC = () => {
       key: 'clientName',
       header: '客先名',
       sortable: true,
+      width: '120px',
     },
     {
       key: 'name',
       header: '場所名',
       sortable: true,
+      width: '140px',
     },
     {
       key: 'address',
       header: '住所',
       sortable: true,
+      width: '240px',
       render: (value: string) => (
         <span className="text-sm">{value || '-'}</span>
       ),
@@ -100,31 +103,22 @@ const LocationManagement: React.FC = () => {
     {
       key: 'locationType',
       header: '場所種別',
-      render: (value: string) => (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          value === 'PICKUP' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-        }`}>
-          {value === 'PICKUP' ? '積込' : '積降'}
-        </span>
-      ),
-    },
-    {
-      key: 'gpsCoordinates',
-      header: 'GPS座標情報',
-      render: (_: any, location: Location) => {
-        if (location.latitude && location.longitude) {
-          return (
-            <div className="flex items-center space-x-1">
-              <MapPin className="h-4 w-4 text-green-500" />
-              <span className="text-xs text-gray-600">
-                {Number(location.latitude).toFixed(6)}, {Number(location.longitude).toFixed(6)}
-              </span>
-            </div>
-          );
-        }
-        return <span className="text-gray-400">未設定</span>;
+      width: '90px',
+      render: (value: string) => {
+        const config: Record<string, { label: string; className: string }> = {
+          PICKUP:   { label: '積込',      className: 'bg-blue-100 text-blue-800' },
+          DELIVERY: { label: '積降',      className: 'bg-green-100 text-green-800' },
+          BOTH:     { label: '積込・積降', className: 'bg-purple-100 text-purple-800' },
+        };
+        const c = config[value] ?? { label: value, className: 'bg-gray-100 text-gray-800' };
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.className}`}>
+            {c.label}
+          </span>
+        );
       },
     },
+    // GPS座標情報列は非表示（列幅を節約するため削除）
     {
       key: 'registrationMethod',
       header: '登録方法',
@@ -173,8 +167,8 @@ const LocationManagement: React.FC = () => {
       clientName: location.clientName || '',
       name: location.name || '',
       address: location.address || '',
-      locationType: (location.locationType === 'PICKUP' || location.locationType === 'DELIVERY') 
-        ? location.locationType 
+      locationType: (['PICKUP', 'DELIVERY', 'BOTH'].includes(location.locationType))
+        ? location.locationType as 'PICKUP' | 'DELIVERY' | 'BOTH'
         : 'DELIVERY',
       latitude: location.latitude || 0,
       longitude: location.longitude || 0,
@@ -299,6 +293,7 @@ const LocationManagement: React.FC = () => {
               { value: '', label: 'すべての種別' },
               { value: 'PICKUP', label: '積込' },
               { value: 'DELIVERY', label: '積降' },
+              { value: 'BOTH', label: '積込・積降（両方）' },
             ]}
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}

@@ -41,37 +41,100 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // ダミーデータでダッシュボードを初期化
-    // 実際の実装では API からデータを取得
     const fetchDashboardData = async () => {
       try {
-        // ダミーデータ
-        setStats({
-          totalDrivers: 8,
-          activeVehicles: 4,
-          todayOperations: 12,
-          onlineVehicles: 3,
-        });
+        const token = localStorage.getItem('auth_token');
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+        const BASE = import.meta.env.VITE_API_URL || 'https://10.1.119.244:8443/api/v1';
 
-        setRecentOperations([
-          {
-            id: '1',
-            date: '2025/01/15 08:30',
-            driverName: '山田太郎',
-            vehicleNumber: '倉敷100あ1234',
-            status: 'ongoing',
-            operationTime: '2時間30分',
-          },
-          {
-            id: '2',
-            date: '2025/01/15 07:00',
-            driverName: '佐藤花子',
-            vehicleNumber: '倉敷100あ5678',
-            status: 'completed',
-            operationTime: '3時間15分',
-          },
+        // 並列でAPI取得
+        const [usersRes, vehiclesRes, operationsRes] = await Promise.allSettled([
+          fetch(`${BASE}/users?limit=200`, { headers }),
+          fetch(`${BASE}/vehicles?limit=200`, { headers }),
+          fetch(`${BASE}/operations?limit=10&sortOrder=desc`, { headers }),
         ]);
 
+        // ユーザー（稼働運転手数）
+        let totalDrivers = 0;
+        if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+          const usersJson = await usersRes.value.json();
+          const usersData = usersJson?.data?.users ?? usersJson?.data ?? [];
+          const allUsers = Array.isArray(usersData) ? usersData : (usersData?.data ?? []);
+          totalDrivers = allUsers.filter((u: any) =>
+            u.role === 'DRIVER' && (u.isActive !== false)
+          ).length;
+        }
+
+        // 車両（登録車両数・稼働中車両数）
+        let activeVehicles = 0;
+        let onlineVehicles = 0;
+        if (vehiclesRes.status === 'fulfilled' && vehiclesRes.value.ok) {
+          const vehiclesJson = await vehiclesRes.value.json();
+          const vData = vehiclesJson?.data;
+          const vehicleList: any[] = Array.isArray(vData)
+            ? vData
+            : Array.isArray(vData?.data)
+              ? vData.data
+              : Array.isArray(vData?.vehicles)
+                ? vData.vehicles
+                : [];
+          activeVehicles = vehicleList.length;
+          onlineVehicles = vehicleList.filter(
+            (v: any) => v.status === 'ACTIVE' || v.status === 'IN_USE'
+          ).length;
+        }
+
+        // 運行（今日の運行数・最近の運行）
+        let todayOperations = 0;
+        const recentOps: RecentOperation[] = [];
+        if (operationsRes.status === 'fulfilled' && operationsRes.value.ok) {
+          const opsJson = await operationsRes.value.json();
+          const opsData = opsJson?.data;
+          const opList: any[] = Array.isArray(opsData)
+            ? opsData
+            : Array.isArray(opsData?.data)
+              ? opsData.data
+              : Array.isArray(opsData?.operations)
+                ? opsData.operations
+                : [];
+
+          const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+          todayOperations = opList.filter((op: any) => {
+            const d = op.operationDate ?? op.actualStartTime ?? op.plannedStartTime ?? op.createdAt;
+            return d && String(d).startsWith(todayStr);
+          }).length;
+
+          // 最近5件を整形
+          opList.slice(0, 5).forEach((op: any) => {
+            const startTime = op.actualStartTime ?? op.plannedStartTime ?? op.createdAt;
+            const endTime   = op.actualEndTime   ?? op.plannedEndTime;
+            let operationTime = '-';
+            if (startTime && endTime) {
+              const diffMs = new Date(endTime).getTime() - new Date(startTime).getTime();
+              const hours   = Math.floor(diffMs / 3600000);
+              const minutes = Math.floor((diffMs % 3600000) / 60000);
+              operationTime = hours > 0 ? `${hours}時間${minutes}分` : `${minutes}分`;
+            }
+            recentOps.push({
+              id: op.id,
+              date: startTime
+                ? new Date(startTime).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                : '-',
+              driverName:    op.driver?.name ?? op.driver?.username ?? op.driverName ?? '不明',
+              vehicleNumber: op.vehicle?.plateNumber ?? op.vehicleNumber ?? '不明',
+              status: op.status === 'IN_PROGRESS' ? 'ongoing'
+                    : op.status === 'COMPLETED'   ? 'completed'
+                    : op.status ?? 'unknown',
+              operationTime,
+            });
+          });
+        }
+
+        setStats({ totalDrivers, activeVehicles, todayOperations, onlineVehicles });
+        setRecentOperations(recentOps);
         setLoading(false);
       } catch (error) {
         console.error('ダッシュボードデータの取得に失敗しました:', error);

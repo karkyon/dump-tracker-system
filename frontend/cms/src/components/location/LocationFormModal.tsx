@@ -13,7 +13,7 @@ interface LocationFormData {
   clientName: string;
   name: string;
   address: string;
-  locationType: 'PICKUP' | 'DELIVERY';
+  locationType: 'PICKUP' | 'DELIVERY' | 'BOTH';
   latitude: number;
   longitude: number;
   postalCode?: string;
@@ -340,6 +340,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
                   options={[
                     { value: 'PICKUP', label: '積込' },
                     { value: 'DELIVERY', label: '積降' },
+                    { value: 'BOTH', label: '積込・積降（両方）' },
                   ]}
                   value={formData.locationType}
                   onChange={(e) => setFormData({ ...formData, locationType: e.target.value as 'PICKUP' | 'DELIVERY' })}

@@ -603,6 +603,7 @@ enum LocationType {
   FUEL_STATION
   PICKUP
   DELIVERY
+  BOTH
 
   @@map("location_type")
 }

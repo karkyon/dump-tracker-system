@@ -192,8 +192,6 @@ const [generalSettings, setGeneralSettings] = useState(() => {
     { id: 'logs',     label: 'ログ管理',   icon: AlertTriangle },
   ];
 
-  const GENERAL_SETTINGS_KEY = 'dump_tracker_general_settings';
-
   const handleSaveGeneralSettings = async () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 500));

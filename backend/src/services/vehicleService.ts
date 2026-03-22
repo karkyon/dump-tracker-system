@@ -1079,6 +1079,7 @@ class VehicleService {
         role: vehicle.assignedDriver.role
       } : undefined,
 
+      region: vehicle.region ?? null,
       nextMaintenanceDate: vehicle.inspectionExpiry,
       maintenanceStatus: this.getMaintenanceStatus(vehicle)
     };
