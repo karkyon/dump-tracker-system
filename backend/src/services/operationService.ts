@@ -466,6 +466,8 @@ export class OperationService {
     endOdometer?: number;      // 🆕 運行終了時走行距離計（km）
     endFuelLevel?: number;     // 🆕 運行終了時燃料レベル（L）
     notes?: string;
+    loadedDistanceKm?: number;   // 🆕 P1-05: 実車キロ
+    revenueYen?: number;          // 🆕 P1-05: 営業収入
   }) {
     try {
       logger.info('運行終了処理開始', { operationId, endData });

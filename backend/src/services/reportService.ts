@@ -1667,19 +1667,23 @@ class ReportService {
           ? new Date(report.startDate).getFullYear()
           : new Date().getFullYear());
 
-    集計実行
+    // 集計実行
+    const { aggregateAnnualTransportReport } = await import('./annualTransportReportService');
+    const { generateAnnualTransportReportPDF: genPDF } = await import('./annualTransportReportPDF');
+
     const reportData = await aggregateAnnualTransportReport(fiscalYear);
 
-    出力ファイルパス
+    // 出力ファイルパス
+    const path = require('path');
     const fileName = `annual_transport_${fiscalYear}_${report.id}.pdf`;
-    const outputPath = require('path').join(
+    const outputPath = path.join(
       require('process').cwd(),
       'generated_reports',
       fileName
     );
 
-    PDF生成
-    const fileSize = await generateAnnualTransportReportPDF(reportData, outputPath);
+    // PDF生成
+    const fileSize = await genPDF(reportData, outputPath);
 
     return { filePath: outputPath, fileSize };
   }
