@@ -2,6 +2,7 @@
 // D4: 運行中画面 - F5リロード対応版（運行中なら復元、未運行なら開始）
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { 
@@ -40,6 +41,8 @@ interface GPSPosition {
 }
 
 const OperationMain: React.FC = () => {
+  useTLog('OPERATION_MAIN', '運行メイン');
+
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   

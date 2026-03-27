@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Settings, Save, Download, Trash2, AlertTriangle, Building2 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -58,6 +59,8 @@ const BUSINESS_TYPE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const SystemSettings: React.FC = () => {
+  useTLog('SYSTEM_SETTINGS', 'システム設定');
+
   const [activeTab, setActiveTab] = useState('general');
 const GENERAL_SETTINGS_KEY = 'dump_tracker_general_settings';
 const [generalSettings, setGeneralSettings] = useState(() => {

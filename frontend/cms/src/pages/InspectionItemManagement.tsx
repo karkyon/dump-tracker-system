@@ -11,6 +11,7 @@
 // 🐛 修正6: Table pagination プロパティ削除（存在しないため）
 
 import React, { useEffect, useState, useRef } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useInspectionItemStore } from '../store/inspectionItemStore';
@@ -22,6 +23,8 @@ import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 
 const InspectionItemManagement: React.FC = () => {
+  useTLog('INSPECTION_ITEM_MGMT', '点検項目管理');
+
   // ==========================================
   // Store接続（統一パターン）
   // ==========================================

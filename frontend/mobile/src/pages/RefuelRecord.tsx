@@ -6,12 +6,15 @@
 // ✅ 既存機能100%保持
 
 import React, { useState } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import apiService from '../services/api';
 import { useOperationStore } from '../stores/operationStore';
 
 const RefuelRecord: React.FC = () => {
+  useTLog('REFUEL_RECORD', '給油記録');
+
   const navigate = useNavigate();
   const operationStore = useOperationStore();
 

@@ -3,6 +3,7 @@
 // GET /mobile/operations/:id を呼び出して詳細表示
 
 import React, { useEffect, useState } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -87,6 +88,8 @@ const ACTIVITY_LABELS: Record<string, { label: string; color: string; icon: stri
 // OperationHistoryDetail コンポーネント
 // =====================================
 const OperationHistoryDetail: React.FC = () => {
+  useTLog('OPERATION_HISTORY_DETAIL', '運行履歴詳細');
+
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 

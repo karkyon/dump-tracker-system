@@ -3,6 +3,7 @@
 // ダミーデータを削除し、GET /mobile/operations を呼び出す完全実装
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -49,6 +50,8 @@ interface PaginationInfo {
 // OperationHistory コンポーネント
 // =====================================
 const OperationHistory: React.FC = () => {
+  useTLog('OPERATION_HISTORY', '運行履歴');
+
   const navigate = useNavigate();
 
   // 状態管理

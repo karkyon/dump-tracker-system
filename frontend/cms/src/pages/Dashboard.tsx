@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Link } from 'react-router-dom';
 import { 
   Users, 
@@ -31,6 +32,8 @@ interface RecentOperation {
 }
 
 const Dashboard: React.FC = () => {
+  useTLog('DASHBOARD', 'ダッシュボード');
+
   const [stats, setStats] = useState<DashboardStats>({
     totalDrivers: 0,
     activeVehicles: 0,

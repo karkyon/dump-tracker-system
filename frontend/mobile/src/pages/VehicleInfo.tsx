@@ -2,6 +2,7 @@
 // D2: 車両情報画面 - データベース連携版
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useOperationStore } from '../stores/operationStore';
@@ -42,6 +43,8 @@ interface VehicleDisplay {
 }
 
 const VehicleInfo: React.FC = () => {
+  useTLog('VEHICLE_INFO', '車両情報');
+
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
 

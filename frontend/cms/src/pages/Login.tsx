@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../store/authStore';
@@ -18,6 +19,8 @@ interface FormErrors {
 }
 
 const Login: React.FC = () => {
+  useTLog('LOGIN', 'ログイン');
+
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isAuthenticated, isLoading, error, clearError } = useAuthStore();

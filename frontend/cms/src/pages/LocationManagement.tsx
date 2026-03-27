@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useMasterStore } from '../store/masterStore';
@@ -12,6 +13,8 @@ import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate } from '../utils/helpers';
 
 const LocationManagement: React.FC = () => {
+  useTLog('LOCATION_MANAGEMENT', '場所管理');
+
   const {
     locations,
     locationLoading,

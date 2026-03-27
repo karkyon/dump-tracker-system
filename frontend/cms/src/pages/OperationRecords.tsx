@@ -2,6 +2,7 @@
 // 既存のOperationRecordsコンポーネント機能は100%保持
 // ✅ 修正: Google Maps APIキーを環境変数から取得するように変更
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { 
   Download, Eye, Truck, User, Calendar
 } from 'lucide-react';
@@ -99,6 +100,8 @@ const loadGoogleMapsScript = (callback: () => void) => {
 };
 
 const OperationRecords: React.FC = () => {
+  useTLog('OPERATION_RECORDS', '運行記録');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [driverFilter, setDriverFilter] = useState('');

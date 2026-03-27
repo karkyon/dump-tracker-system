@@ -7,6 +7,7 @@
 // =====================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { RefreshCw, MapPin, Truck, Clock, Navigation, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -256,6 +257,8 @@ const ALL_STATUS_KEYS: VehicleLocation['status'][] = [
 // =====================================
 
 const GPSMonitoring: React.FC = () => {
+  useTLog('GPS_MONITORING', 'GPS監視');
+
   // --- State ---
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');

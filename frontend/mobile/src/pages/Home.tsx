@@ -3,6 +3,7 @@
 // ✅ 既存機能100%保持 + 季節背景演出追加
 
 import React, { useEffect, useState } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useOperationStore } from '../stores/operationStore';
@@ -33,6 +34,8 @@ interface TodaysSummary {
  * Home画面コンポーネント - 季節テーマ統合版
  */
 const Home: React.FC = () => {
+  useTLog('HOME', 'ホーム');
+
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const operationStore = useOperationStore();

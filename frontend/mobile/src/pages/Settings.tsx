@@ -3,6 +3,7 @@
 // ✅ 既存機能100%保持 + 季節テーマ設定追加
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -53,6 +54,8 @@ interface SettingsData {
  * Settings画面コンポーネント - 季節テーマ設定追加版
  */
 const Settings: React.FC = () => {
+  useTLog('SETTINGS', '設定');
+
   const navigate = useNavigate();
   
   // 🎨 季節テーマHook

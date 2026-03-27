@@ -8,6 +8,7 @@
 // 🔧 修正: 運行開始時にフェーズをTO_UNLOADINGに更新（2025-12-12）
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { 
@@ -40,6 +41,8 @@ interface LoadingInputData {
 }
 
 const LoadingConfirmation: React.FC = () => {
+  useTLog('LOADING_CONFIRMATION', '積載確認');
+
   const navigate = useNavigate();
   const location = useLocation();
   const operationStore = useOperationStore();

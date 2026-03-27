@@ -8,6 +8,7 @@
 // 🔧 修正: D5a統合 (2025-03-08)
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
@@ -59,6 +60,8 @@ interface FormData {
 // ============================================================
 
 const LoadingInput: React.FC = () => {
+  useTLog('LOADING_INPUT', '積載入力');
+
   const navigate = useNavigate();
   const location = useLocation();
   const operationStore = useOperationStore();

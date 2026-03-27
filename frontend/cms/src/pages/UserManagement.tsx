@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '../store/userStore';
@@ -12,6 +13,8 @@ import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate } from '../utils/helpers';
 
 const UserManagement: React.FC = () => {
+  useTLog('USER_MANAGEMENT', 'ユーザー管理');
+
   const {
     users,
     isLoading,

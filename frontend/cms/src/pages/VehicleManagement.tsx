@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -14,6 +15,8 @@ import type { TransportRegion } from '../types';
 import { TRANSPORT_REGION_LABELS } from '../types';
 
 const VehicleManagement: React.FC = () => {
+  useTLog('VEHICLE_MANAGEMENT', '車両管理');
+
   const {
     vehicles,
     isLoading,

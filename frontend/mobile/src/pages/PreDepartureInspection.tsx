@@ -3,6 +3,7 @@
 // ✅ 全機能保持版（557行）- 文字化けのみ修正
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { 
@@ -34,6 +35,8 @@ interface InspectionItem {
 }
 
 const PreDepartureInspection: React.FC = () => {
+  useTLog('PRE_DEPARTURE_INSP', '出発前点検');
+
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const { 

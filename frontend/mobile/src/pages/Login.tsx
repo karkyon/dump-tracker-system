@@ -2,12 +2,15 @@
 // D1: ログイン画面 - 修正版(未使用変数削除)
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { User, Lock, Loader, CheckCircle2, AlertCircle, Truck } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 
 const Login: React.FC = () => {
+  useTLog('LOGIN', 'ログイン');
+
   const navigate = useNavigate();
   const { login, isAuthenticated, loading, error, clearError } = useAuthStore();
   

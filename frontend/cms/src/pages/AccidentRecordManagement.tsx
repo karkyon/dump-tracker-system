@@ -3,6 +3,7 @@
 // ADMIN / MANAGER 専用
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { AlertTriangle, Plus, Pencil, Trash2, X, Save } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import type {
@@ -81,6 +82,8 @@ const EMPTY_FORM: Partial<AccidentRecord> = {
 // =====================================
 
 const AccidentRecordManagement: React.FC = () => {
+  useTLog('ACCIDENT_RECORD_MGMT', '事故記録管理');
+
   const { user } = useAuthStore();
 
   // 一覧 state

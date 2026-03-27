@@ -10,6 +10,7 @@
 // 🔧 修正: 運行終了後のHome遷移とエラー抑制（2025年12月26日）
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import { useGPS } from '../hooks/useGPS';
 import apiService from '../services/api';
@@ -62,6 +63,8 @@ const MAP_UPDATE_INTERVAL = 3000;
 const MARKER_UPDATE_INTERVAL = 1000;
 
 const OperationRecord: React.FC = () => {
+  useTLog('OPERATION_RECORD', '運行記録');
+
   
   const [isMapReady, setIsMapReady] = useState(false);
   const lastMapUpdateRef = useRef<number>(0);

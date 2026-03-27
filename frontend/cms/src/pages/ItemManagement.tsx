@@ -2,6 +2,7 @@
 // 品目管理ページ
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Plus } from 'lucide-react';
 import Button from '../components/common/Button';
 import Table, { ActionButtons } from '../components/common/Table';
@@ -43,6 +44,8 @@ const getItemTypeLabel = (itemType: Item['item_type']): string => {
 // =====================================
 
 const ItemManagement: React.FC = () => {
+  useTLog('ITEM_MANAGEMENT', '品目管理');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);

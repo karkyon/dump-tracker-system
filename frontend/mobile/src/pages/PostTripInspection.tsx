@@ -5,6 +5,7 @@
 // ✅ 追加: 終了燃料レベル入力フィールド（オプション）
 
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { 
@@ -37,6 +38,8 @@ interface InspectionItem {
 }
 
 const PostTripInspection: React.FC = () => {
+  useTLog('POST_TRIP_INSP', '帰着後点検');
+
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const { 

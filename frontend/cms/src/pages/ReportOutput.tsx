@@ -53,6 +53,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { Download, FileText, Calendar, RefreshCw, CheckCircle, XCircle, Clock, Trash2, BarChart3 } from 'lucide-react';
 import Input from '../components/common/Input';
 import type { DataAvailabilityCheck, AnnualTransportPreview } from '../types';
@@ -114,6 +115,8 @@ const FISCAL_YEARS_OPTIONS = (() => {
 // =====================================
 
 function getAuthToken(): string | null {
+  useTLog('REPORT_OUTPUT', '帳票出力');
+
   return localStorage.getItem('auth_token');
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import { 
   Search, FileText, CheckCircle, XCircle, AlertCircle, 
@@ -114,6 +115,8 @@ interface TimelineEvent {
 // ===================================
 
 const OperationDebug: React.FC = () => {
+  useTLog('OPERATION_DEBUG', '運行デバッグ');
+
   // ステート管理
   const [operationId, setOperationId] = useState<string>('');
   const [recentOperations, setRecentOperations] = useState<OperationListItem[]>([]);
