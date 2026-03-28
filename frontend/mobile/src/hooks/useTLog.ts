@@ -3,9 +3,9 @@ declare global {
   interface Window {
     TLog?: {
       init: (config: object) => void;
-      screenLoad: (screenId: string, screenName: string) => void;
       startTrace: (opts?: object) => void;
       stopTrace: () => void;
+      screenLoad: (screenId: string, screenName: string) => void;
       log: (...args: unknown[]) => void;
       getTraceId: () => string;
     };
@@ -13,6 +13,11 @@ declare global {
 }
 export function useTLog(screenId: string, screenName: string) {
   useEffect(() => {
-    window.TLog?.screenLoad(screenId, screenName);
+    if (!window.TLog) return;
+    window.TLog.startTrace({ screenId, screenName });
+    window.TLog.screenLoad(screenId, screenName);
+    return () => {
+      window.TLog?.stopTrace();
+    };
   }, [screenId, screenName]);
 }
