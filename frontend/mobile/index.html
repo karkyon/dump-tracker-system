@@ -17,7 +17,18 @@
   <meta name="apple-mobile-web-app-title" content="ダンプ運行記録" />
   
   <title>ダンプ運行記録アプリ</title>
-</head>
+    <script src="https://tlog-apex.ddns.net/assets/tlog-sdk.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.TLog) {
+          window.TLog.init({
+            apiKey: 'ak_9652898bb0ddf83c9e210887d49039100392cf94b183ad283539191f2d8cff95',
+            serverUrl: 'https://tlog-apex.ddns.net',
+          });
+        }
+      });
+    </script>
+  </head>
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
