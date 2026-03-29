@@ -22,6 +22,11 @@ export function useTLog(screenId: string, screenName: string) {
       window.TLog.startTrace({ screenId, screenName });
     }
 
-    window.TLog.screenLoad(screenId, screenName);
+    // レンダリング完了後にスクショを撮るため500ms遅延
+    const timer = setTimeout(() => {
+      window.TLog?.screenLoad(screenId, screenName);
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [screenId, screenName]);
 }
