@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+
 declare global {
   interface Window {
     TLog?: {
@@ -11,13 +12,16 @@ declare global {
     };
   }
 }
+
 export function useTLog(screenId: string, screenName: string) {
   useEffect(() => {
     if (!window.TLog) return;
-    window.TLog.startTrace({ screenId, screenName });
+
+    const existingTraceId = window.TLog.getTraceId();
+    if (!existingTraceId) {
+      window.TLog.startTrace({ screenId, screenName });
+    }
+
     window.TLog.screenLoad(screenId, screenName);
-    return () => {
-      window.TLog?.stopTrace();
-    };
   }, [screenId, screenName]);
 }
