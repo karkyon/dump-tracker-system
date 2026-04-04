@@ -115,8 +115,6 @@ const FISCAL_YEARS_OPTIONS = (() => {
 // =====================================
 
 function getAuthToken(): string | null {
-  useTLog('REPORT_OUTPUT', '帳票出力');
-
   return localStorage.getItem('auth_token');
 }
 
@@ -338,6 +336,8 @@ const AvailabilityBadge: React.FC<{ status: 'ok' | 'warn' | 'error'; label: stri
 // =====================================
 
 const ReportOutput: React.FC = () => {
+  useTLog('REPORT_OUTPUT', '帳票出力');
+  
   // 日報フォーム状態
   const [dailyDate, setDailyDate] = useState(
     new Date().toISOString().split('T')[0]

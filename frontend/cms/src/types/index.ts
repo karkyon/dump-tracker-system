@@ -126,7 +126,7 @@ export interface Location {
 export interface Item {
   id: string;
   name: string;
-  item_type?: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE';  // ✅ 品目区分（再生材/バージン材/廃棄物）
+  itemType?: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE';
   description?: string;
   category?: string;
   unit?: string;

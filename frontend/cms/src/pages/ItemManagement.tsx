@@ -25,7 +25,7 @@ const ITEM_TYPE_OPTIONS: { value: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WAS
 /** フォームの初期値（新規作成・保存後リセット共通） */
 const DEFAULT_FORM_DATA = {
   name: '',
-  item_type: 'RECYCLED_MATERIAL' as 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE',
+  itemType: 'RECYCLED_MATERIAL' as 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE',
   description: '',
   displayOrder: 1,
 };
@@ -35,7 +35,7 @@ const DEFAULT_FORM_DATA = {
 // =====================================
 
 /** 品目区分の英語値を日本語ラベルに変換する */
-const getItemTypeLabel = (itemType: Item['item_type']): string => {
+const getItemTypeLabel = (itemType: Item['itemType']): string => {
   return ITEM_TYPE_OPTIONS.find((opt) => opt.value === itemType)?.label ?? '-';
 };
 
@@ -88,7 +88,7 @@ const ItemManagement: React.FC = () => {
     setEditingItem(item);
     setFormData({
       name: item.name,
-      item_type: item.item_type ?? 'RECYCLED_MATERIAL',
+      itemType: item.itemType ?? 'RECYCLED_MATERIAL',
       description: item.description ?? '',
       displayOrder: item.displayOrder ?? 1,
     });
@@ -124,7 +124,7 @@ const ItemManagement: React.FC = () => {
   const columns = [
     { key: 'displayOrder', header: '表示順', width: '100px' },
     { key: 'name',         header: '品目名' },
-    { key: 'item_type',    header: '品目区分', width: '120px' },
+    { key: 'itemType',    header: '品目区分', width: '120px' },
     { key: 'description',  header: '説明', width: '200px' },
     { key: 'createdAt',    header: '登録日', width: '150px' },
     { key: 'actions',      header: '操作', width: '100px' },
@@ -133,7 +133,7 @@ const ItemManagement: React.FC = () => {
   const tableData = displayItems.map((item: Item) => ({
     displayOrder: item.displayOrder ?? '-',
     name: item.name,
-    item_type: getItemTypeLabel(item.item_type),
+    itemType: getItemTypeLabel(item.itemType),
     description: item.description ?? '-',
     createdAt: item.createdAt
       ? new Date(item.createdAt).toLocaleDateString('ja-JP')
@@ -215,11 +215,11 @@ const ItemManagement: React.FC = () => {
               品目区分 *
             </label>
             <select
-              value={formData.item_type}
+              value={formData.itemType}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  item_type: e.target.value as 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE',
+                  itemType: e.target.value as 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE',
                 })
               }
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"

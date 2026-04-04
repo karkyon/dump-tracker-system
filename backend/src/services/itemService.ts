@@ -527,7 +527,7 @@ export class ItemService {
     return {
       id: item.id,
       name: item.name,
-      itemType: item.ItemType,  // ✅ PascalCase
+      itemType: item.ItemType,
       unit: item.unit,
       standardWeight: item.standardWeight,
       hazardous: item.hazardous,
