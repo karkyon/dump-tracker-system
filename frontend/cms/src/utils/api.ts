@@ -68,14 +68,11 @@ api.interceptors.response.use(
 
     // 認証エラーの場合、自動的にログアウト
     if (error.response?.status === 401) {
-      localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-      localStorage.removeItem(STORAGE_KEYS.USER_DATA);
-      localStorage.removeItem(STORAGE_KEYS.REMEMBER_LOGIN);
-      
-      // ログインページでない場合のみリダイレクト
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
-      }
+      // ✅ 修正: authStore に CustomEvent で通知
+      // - localStorage クリア・リダイレクト・Zustand 状態リセットは
+      //   authStore.ts の auth:unauthorized リスナーが一元管理
+      // - 循環インポート（api.ts ↔ authStore.ts）を回避
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     
     return Promise.reject(error);

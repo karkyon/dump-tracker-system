@@ -31,7 +31,7 @@ router.use((req, res, next) => {
  *       - in: query
  *         name: fiscalYear
  *         schema: { type: integer }
- *         description: 年度（例: 2025 → 2025/4/1〜2026/3/31）
+ *         description: "年度（例: 2025 → 2025/4/1〜2026/3/31）"
  *       - in: query
  *         name: accidentType
  *         schema: { type: string, enum: [TRAFFIC, SERIOUS] }
