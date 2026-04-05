@@ -1,12 +1,20 @@
+// frontend/cms/src/pages/UserManagement.tsx
+// 修正版: 2026-04-05
+//   ① バリデーション強化（ユーザー名文字制限・パスワード強度チェックをフロントでも実施）
+//   ② ログイン中ユーザーの削除ボタン・無効化ボタンを非活性化
+//   ③ 有効/無効ステータス切替ボタンを追加（クリック→確認ダイアログ）
+//   ④ バックエンドエラーメッセージをフォームに直接表示
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useTLog } from '../hooks/useTLog';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '../store/userStore';
+import { useAuthStore } from '../store/authStore';
 import type { User } from '../types';
 import Button from '../components/common/Button';
 import Input, { Select } from '../components/common/Input';
-import Table, { StatusBadge, ActionButtons } from '../components/common/Table';
+import Table, { ActionButtons } from '../components/common/Table';
 import Pagination from '../components/common/Pagination';
 import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
@@ -14,6 +22,9 @@ import { formatDate } from '../utils/helpers';
 
 const UserManagement: React.FC = () => {
   useTLog('USER_MANAGEMENT', 'ユーザー管理');
+
+  // ✅ 追加: ログイン中ユーザーを取得（自分自身の削除・無効化禁止に使用）
+  const { user: currentUser } = useAuthStore();
 
   const {
     users,
@@ -25,6 +36,7 @@ const UserManagement: React.FC = () => {
     createUser,
     updateUser,
     deleteUser,
+    toggleUserStatus,   // ✅ 追加: ステータス切替
     setFilters,
     setPage,
     clearError,
@@ -33,6 +45,9 @@ const UserManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  // ✅ 追加: ステータス切替用ダイアログ
+  const [showToggleDialog, setShowToggleDialog] = useState(false);
+  const [toggleTargetUser, setToggleTargetUser] = useState<User | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -60,7 +75,7 @@ const UserManagement: React.FC = () => {
     fetchUsers();
     isInitialMount.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空の依存配列 - マウント時のみ実行
+  }, []);
 
   // ✅ FIX: ページ変更検知（前回値と比較）
   useEffect(() => {
@@ -83,7 +98,7 @@ const UserManagement: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  // エラー処理
+  // エラー処理（storeのエラーをtoastで表示）
   useEffect(() => {
     if (error) {
       toast.error(error);
@@ -96,6 +111,26 @@ const UserManagement: React.FC = () => {
     setSearchTerm(value);
     if (value.length >= 2 || value.length === 0) {
       setFilters({ searchTerm: value });
+    }
+  };
+
+  // ✅ 追加: ステータス切替処理（確認ダイアログ表示）
+  const handleToggleStatus = (user: User) => {
+    setToggleTargetUser(user);
+    setShowToggleDialog(true);
+  };
+
+  // ✅ 追加: ステータス切替確定処理
+  const handleConfirmToggleStatus = async () => {
+    if (!toggleTargetUser) return;
+    const success = await toggleUserStatus(toggleTargetUser.id);
+    if (success) {
+      const willBeActive = !toggleTargetUser.isActive;
+      toast.success(
+        `ユーザー「${toggleTargetUser.name}」を${willBeActive ? '有効' : '無効'}にしました`
+      );
+      setShowToggleDialog(false);
+      setToggleTargetUser(null);
     }
   };
 
@@ -132,12 +167,30 @@ const UserManagement: React.FC = () => {
     {
       key: 'isActive',
       header: 'ステータス',
-      render: (value: boolean) => (
-        <StatusBadge 
-          status={value ? 'ACTIVE' : 'INACTIVE'} 
-          type="user"
-        />
-      ),
+      // ✅ 修正: クリック可能なステータスバッジに変更（自分自身は切替不可）
+      render: (value: boolean, user: User) => {
+        const isSelf = user.id === currentUser?.id;
+        return (
+          <button
+            type="button"
+            onClick={() => { if (!isSelf) handleToggleStatus(user); }}
+            disabled={isSelf}
+            title={
+              isSelf
+                ? '自分自身のステータスは変更できません'
+                : value
+                ? 'クリックして無効化する'
+                : 'クリックして有効化する'
+            }
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors
+              ${isSelf ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:opacity-80'}
+              ${value ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}
+            `}
+          >
+            {value ? '有効' : '無効'}
+          </button>
+        );
+      },
     },
     {
       key: 'lastLoginAt',
@@ -147,37 +200,62 @@ const UserManagement: React.FC = () => {
     {
       key: 'actions',
       header: '操作',
-      render: (_: any, user: User) => (
-        <ActionButtons
-          onEdit={() => handleEdit(user)}
-          onDelete={() => handleDelete(user.id)}
-        />
-      ),
+      // ✅ 修正: 自分自身の削除ボタンを非活性化
+      render: (_: any, user: User) => {
+        const isSelf = user.id === currentUser?.id;
+        return (
+          <ActionButtons
+            onEdit={() => handleEdit(user)}
+            onDelete={
+              isSelf
+                ? undefined  // undefinedにすることでActionButtonsが削除ボタンを非表示にする
+                : () => handleDelete(user.id)
+            }
+            deleteLabel={isSelf ? '自分自身は削除できません' : '削除'}
+          />
+        );
+      },
     },
   ];
 
-  // フォームバリデーション
+  // ✅ 修正: フォームバリデーション（強化版）
+  // バックエンドのバリデーションルールと完全一致させてフロントで事前検知する
   const validateForm = (isEdit = false): boolean => {
     const errors: Record<string, string> = {};
 
+    // ユーザー名: バックエンドの /^[a-zA-Z0-9_-]+$/ に合わせる
     if (!formData.username.trim()) {
       errors.username = 'ユーザー名は必須です';
+    } else if (formData.username.length < 3) {
+      errors.username = 'ユーザー名は3文字以上で入力してください';
+    } else if (formData.username.length > 50) {
+      errors.username = 'ユーザー名は50文字以下で入力してください';
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
+      // ✅ 追加: ピリオド・スペース等の禁止文字をフロントで事前チェック
+      errors.username = 'ユーザー名は英数字・アンダースコア(_)・ハイフン(-)のみ使用できます（ピリオド不可）';
     }
 
+    // 氏名
+    if (!formData.name.trim()) {
+      errors.name = '氏名は必須です';
+    }
+
+    // メールアドレス
     if (!formData.email.trim()) {
       errors.email = 'メールアドレスは必須です';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errors.email = '有効なメールアドレスを入力してください';
     }
 
-    if (!isEdit && !formData.password.trim()) {
-      errors.password = 'パスワードは必須です';
-    } else if (!isEdit && formData.password.length < 8) {
+    // パスワード（新規作成時のみ必須）
+    if (!isEdit) {
+      if (!formData.password.trim()) {
+        errors.password = 'パスワードは必須です';
+      } else if (formData.password.length < 8) {
+        errors.password = 'パスワードは8文字以上で入力してください';
+      }
+    } else if (isEdit && formData.password && formData.password.length < 8) {
       errors.password = 'パスワードは8文字以上で入力してください';
-    }
-
-    if (!formData.name.trim()) {
-      errors.name = '氏名は必須です';
     }
 
     setFormErrors(errors);
@@ -216,10 +294,11 @@ const UserManagement: React.FC = () => {
       employeeId: user.employeeId || '',
       phone: user.phone || '',
     });
+    setFormErrors({});
     setShowEditModal(true);
   };
 
-  // 削除
+  // 削除ダイアログ表示
   const handleDelete = (userId: string) => {
     setSelectedUserId(userId);
     setShowDeleteDialog(true);
@@ -229,12 +308,19 @@ const UserManagement: React.FC = () => {
   const handleSubmitCreate = async () => {
     if (!validateForm(false)) return;
 
-    const success = await createUser(formData);
+    const result = await createUser(formData);
 
-    if (success) {
+    if (result.success) {
       toast.success('ユーザーを登録しました');
       setShowCreateModal(false);
       resetForm();
+    } else {
+      // ✅ 修正: バックエンドのフィールド別エラーをフォームに反映
+      if (result.fieldErrors) {
+        setFormErrors(prev => ({ ...prev, ...result.fieldErrors }));
+      }
+      // 全体エラーはuseEffect内のtoastで表示されるが、
+      // フィールドエラーがある場合はモーダルを閉じずフォームに表示する
     }
   };
 
@@ -246,13 +332,17 @@ const UserManagement: React.FC = () => {
     const { password, ...baseUpdateData } = formData;
     const updateData = password ? { ...baseUpdateData, password } : baseUpdateData;
 
-    const success = await updateUser(selectedUserId, updateData);
+    const result = await updateUser(selectedUserId, updateData);
 
-    if (success) {
+    if (result.success) {
       toast.success('ユーザー情報を更新しました');
       setShowEditModal(false);
       resetForm();
       setSelectedUserId(null);
+    } else {
+      if (result.fieldErrors) {
+        setFormErrors(prev => ({ ...prev, ...result.fieldErrors }));
+      }
     }
   };
 
@@ -353,7 +443,9 @@ const UserManagement: React.FC = () => {
         />
       )}
 
-      {/* 新規作成モーダル */}
+      {/* ============================
+          新規作成モーダル
+      ============================ */}
       <FormModal
         isOpen={showCreateModal}
         onClose={() => {
@@ -365,6 +457,16 @@ const UserManagement: React.FC = () => {
         loading={isLoading}
         size="lg"
       >
+        {/* ✅ 追加: ユーザー名制約のガイダンスをフォーム上部に表示 */}
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <p className="text-xs text-blue-700">
+            <strong>【ユーザー名の入力規則】</strong>{' '}
+            英数字・アンダースコア(_)・ハイフン(-)のみ使用可能。
+            ピリオド(.)・スペース・全角文字は使用不可。
+            （例: tanaka_taro、driver-001）
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
             label="ユーザー名"
@@ -372,6 +474,7 @@ const UserManagement: React.FC = () => {
             value={formData.username}
             onChange={(e) => setFormData({ ...formData, username: e.target.value })}
             error={formErrors.username}
+            placeholder="例: tanaka_taro"
             required
           />
 
@@ -399,6 +502,7 @@ const UserManagement: React.FC = () => {
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             error={formErrors.password}
+            placeholder="8文字以上"
             required
           />
 
@@ -432,7 +536,9 @@ const UserManagement: React.FC = () => {
         </div>
       </FormModal>
 
-      {/* 編集モーダル */}
+      {/* ============================
+          編集モーダル
+      ============================ */}
       <FormModal
         isOpen={showEditModal}
         onClose={() => {
@@ -512,7 +618,9 @@ const UserManagement: React.FC = () => {
         </div>
       </FormModal>
 
-      {/* 削除確認ダイアログ */}
+      {/* ============================
+          削除確認ダイアログ
+      ============================ */}
       <ConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => {
@@ -524,6 +632,27 @@ const UserManagement: React.FC = () => {
         message="このユーザーを削除してもよろしいですか？この操作は取り消せません。"
         confirmText="削除"
         variant="danger"
+        loading={isLoading}
+      />
+
+      {/* ============================
+          ✅ 追加: ステータス切替確認ダイアログ
+      ============================ */}
+      <ConfirmDialog
+        isOpen={showToggleDialog}
+        onClose={() => {
+          setShowToggleDialog(false);
+          setToggleTargetUser(null);
+        }}
+        onConfirm={handleConfirmToggleStatus}
+        title={toggleTargetUser?.isActive ? 'ユーザーを無効化' : 'ユーザーを有効化'}
+        message={
+          toggleTargetUser?.isActive
+            ? `「${toggleTargetUser?.name}」を無効化します。\nこのユーザーはログインできなくなります。よろしいですか？`
+            : `「${toggleTargetUser?.name}」を有効化します。\nこのユーザーはログインできるようになります。よろしいですか？`
+        }
+        confirmText={toggleTargetUser?.isActive ? '無効化する' : '有効化する'}
+        variant={toggleTargetUser?.isActive ? 'danger' : 'info'}
         loading={isLoading}
       />
     </div>

@@ -409,13 +409,26 @@ export const userAPI = {
     // ✅ 修正: pageSizeをlimitに変換（バックエンド互換性のため）
     // バックエンドは limit パラメータを期待しているが、
     // フロントエンドのuserStoreは pageSize を送信するため変換が必要
-    const apiParams = params ? { ...params } : {};
+    const apiParams: any = params ? { ...params } : {};
+    // pageSize → limit 変換（バックエンド互換）
     if (apiParams.pageSize && !apiParams.limit) {
       apiParams.limit = apiParams.pageSize;
       delete apiParams.pageSize;
     }
-    
-    console.log('[User API] Converted params (pageSize→limit):', apiParams);
+    // searchTerm → search 変換（バックエンドは 'search' を期待）
+    if (apiParams.searchTerm !== undefined) {
+      apiParams.search = apiParams.searchTerm;
+      delete apiParams.searchTerm;
+    }
+    // isActive(boolean) → status('active'|'inactive') 変換
+    // バックエンドコントローラーは status パラメータで受け取る
+    if (apiParams.isActive !== undefined && apiParams.isActive !== '') {
+      apiParams.status = apiParams.isActive === true || apiParams.isActive === 'true'
+        ? 'active' : 'inactive';
+      delete apiParams.isActive;
+    }
+
+    console.log('[User API] Converted params:', apiParams);
     
     return apiClient.get('/users', { params: apiParams });
   },
@@ -439,6 +452,15 @@ export const userAPI = {
    */
   async deleteUser(id: string): Promise<ApiResponse<void>> {
     return apiClient.delete(`/users/${id}`);
+  },
+
+  /**
+   * ユーザーステータス切替 (有効⇔無効)
+   * PATCH /users/:id/toggle-status
+   */
+  async toggleUserStatus(id: string): Promise<ApiResponse<User>> {
+    console.log('[User API] toggleUserStatus attempt', { id });
+    return apiClient.patch(`/users/${id}/toggle-status`);
   }
 };
 

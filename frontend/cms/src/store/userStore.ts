@@ -43,8 +43,9 @@ interface UserState {
   // アクション
   fetchUsers: (filters?: FilterOptions) => Promise<void>;
   fetchUser: (id: string) => Promise<void>;
-  createUser: (userData: Partial<User>) => Promise<boolean>;
-  updateUser: (id: string, userData: Partial<User>) => Promise<boolean>;
+  createUser: (userData: Partial<User>) => Promise<{ success: boolean; fieldErrors?: Record<string, string> }>;
+  updateUser: (id: string, userData: Partial<User>) => Promise<{ success: boolean; fieldErrors?: Record<string, string> }>;
+  toggleUserStatus: (id: string) => Promise<boolean>;
   deleteUser: (id: string) => Promise<boolean>;
   setFilters: (filters: Partial<FilterOptions>) => void;
   setPage: (page: number) => void;
@@ -97,6 +98,34 @@ const denormalizeUser = (user: Partial<User>): any => {
   // }
   
   return backendData;
+};
+
+/**
+ * バックエンドのバリデーションエラーレスポンスを
+ * フォームフィールド別エラーに変換する
+ *
+ * バックエンドの sendValidationError は以下の形式でレスポンスを返す:
+ * {
+ *   success: false,
+ *   error: 'VALIDATION_ERROR',
+ *   message: '...',
+ *   errors: [{ field: 'username', message: '...' }]  // ← これを解析
+ * }
+ */
+const parseBackendFieldErrors = (response: any): Record<string, string> => {
+  const fieldErrors: Record<string, string> = {};
+ 
+  // response.errors 配列がある場合（sendValidationError の形式）
+  if (Array.isArray(response.errors)) {
+    response.errors.forEach((e: { field: string; message: string }) => {
+      if (e.field && e.message && e.field !== 'user') {
+        // 'user' フィールドは汎用エラーなのでスキップ
+        fieldErrors[e.field] = e.message;
+      }
+    });
+  }
+ 
+  return fieldErrors;
 };
 
 // ==========================================
@@ -274,32 +303,36 @@ export const useUserStore = create<UserState>((set, get) => ({
   // ==========================================
   createUser: async (userData: Partial<User>) => {
     set({ isLoading: true, error: null });
-
+ 
     console.log('[UserStore] createUser 開始', { userData });
-
+ 
     try {
-      // ✅ 改善1: フロントエンド形式 → バックエンド形式に変換（VehicleStoreから採用）
       const backendData = denormalizeUser(userData);
-      
       console.log('[UserStore] バックエンドに送信するデータ:', backendData);
-
+ 
       const response = await userAPI.createUser(backendData);
-
+ 
       console.log('[UserStore] createUser APIレスポンス:', response);
-
+ 
       if (response.success) {
-        // 作成成功後、一覧を再取得して最新状態を反映
         await get().fetchUsers();
         set({ isLoading: false });
         console.log('[UserStore] createUser 成功');
-        return true;
+        return { success: true };
       } else {
-        console.error('[UserStore] createUser 失敗:', response.error);
+        console.error('[UserStore] createUser 失敗:', response.error, response.message);
+ 
+        // ✅ バックエンドのエラーメッセージを優先表示（response.error はエラーコード）
+        const displayMessage = response.message || response.error || ERROR_MESSAGES.CREATE;
         set({
-          error: response.error || ERROR_MESSAGES.CREATE,
+          error: displayMessage,
           isLoading: false,
         });
-        return false;
+ 
+        // ✅ バックエンドのフィールド別エラーを解析して返す
+        const fieldErrors = parseBackendFieldErrors(response);
+ 
+        return { success: false, fieldErrors };
       }
     } catch (error) {
       console.error('[UserStore] createUser ネットワークエラー:', error);
@@ -307,7 +340,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         error: ERROR_MESSAGES.NETWORK,
         isLoading: false,
       });
-      return false;
+      return { success: false };
     }
   },
 
@@ -316,38 +349,34 @@ export const useUserStore = create<UserState>((set, get) => ({
   // ==========================================
   updateUser: async (id: string, userData: Partial<User>) => {
     set({ isLoading: true, error: null });
-
+ 
     console.log('[UserStore] updateUser 開始', { id, userData });
-
+ 
     try {
-      // ✅ 改善1: フロントエンド形式 → バックエンド形式に変換（VehicleStoreから採用）
       const backendData = denormalizeUser(userData);
-      
       console.log('[UserStore] バックエンドに送信するデータ:', backendData);
-
+ 
       const response = await userAPI.updateUser(id, backendData);
-
+ 
       console.log('[UserStore] updateUser APIレスポンス:', response);
-
+ 
       if (response.success) {
-        // 更新成功後、一覧を再取得
         await get().fetchUsers();
-        
-        // 現在選択中のユーザーが更新対象だった場合、詳細も再取得
         if (get().selectedUser?.id === id) {
           await get().fetchUser(id);
         }
-        
         set({ isLoading: false });
         console.log('[UserStore] updateUser 成功');
-        return true;
+        return { success: true };
       } else {
-        console.error('[UserStore] updateUser 失敗:', response.error);
+        console.error('[UserStore] updateUser 失敗:', response.error, response.message);
+        const displayMessage = response.message || response.error || ERROR_MESSAGES.UPDATE;
         set({
-          error: response.error || ERROR_MESSAGES.UPDATE,
+          error: displayMessage,
           isLoading: false,
         });
-        return false;
+        const fieldErrors = parseBackendFieldErrors(response);
+        return { success: false, fieldErrors };
       }
     } catch (error) {
       console.error('[UserStore] updateUser ネットワークエラー:', error);
@@ -355,7 +384,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         error: ERROR_MESSAGES.NETWORK,
         isLoading: false,
       });
-      return false;
+      return { success: false };
     }
   },
 
@@ -402,6 +431,44 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
+  // ==========================================
+  // ユーザーステータス切替
+  // ==========================================
+  toggleUserStatus: async (id: string) => {
+    set({ isLoading: true, error: null });
+ 
+    console.log('[UserStore] toggleUserStatus 開始', { id });
+ 
+    try {
+      const response = await userAPI.toggleUserStatus(id);
+ 
+      console.log('[UserStore] toggleUserStatus APIレスポンス:', response);
+ 
+      if (response.success) {
+        // 切替成功後、一覧を再取得して最新状態を反映
+        await get().fetchUsers();
+        set({ isLoading: false });
+        console.log('[UserStore] toggleUserStatus 成功');
+        return true;
+      } else {
+        console.error('[UserStore] toggleUserStatus 失敗:', response.error);
+        const displayMessage = response.message || response.error || 'ステータスの変更に失敗しました';
+        set({
+          error: displayMessage,
+          isLoading: false,
+        });
+        return false;
+      }
+    } catch (error) {
+      console.error('[UserStore] toggleUserStatus ネットワークエラー:', error);
+      set({
+        error: ERROR_MESSAGES.NETWORK,
+        isLoading: false,
+      });
+      return false;
+    }
+  },
+ 
   // ==========================================
   // フィルター設定
   // ==========================================
