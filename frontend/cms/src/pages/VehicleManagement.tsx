@@ -37,6 +37,8 @@ const VehicleManagement: React.FC = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [capacityInput, setCapacityInput] = useState<string>('');
+  const [mileageInput, setMileageInput] = useState<string>('');
 
   // フォームデータ
   // 🆕 P4-03: region（管轄区域）フィールドを追加
@@ -213,6 +215,11 @@ const VehicleManagement: React.FC = () => {
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
+    // 入力文字列を数値に変換（空白→0）
+    const parsedCapacity = capacityInput === '' ? 0 : parseFloat(capacityInput) || 0;
+    const parsedMileage  = mileageInput  === '' ? 0 : parseFloat(mileageInput)  || 0;
+    setFormData(prev => ({ ...prev, capacity: parsedCapacity, currentMileage: parsedMileage }));
+
     if (!formData.plateNumber.trim()) {
       errors.plateNumber = 'ナンバープレートは必須です';
     }
@@ -281,6 +288,8 @@ const VehicleManagement: React.FC = () => {
       notes: vehicle.notes || '',
       region: (vehicle.region as TransportRegion) || '',  // 🆕 P4-03
     });
+    setCapacityInput(String(vehicle.capacity ?? ''));
+    setMileageInput(String(vehicle.currentMileage ?? ''));
     setShowEditModal(true);
   };
 
@@ -484,11 +493,11 @@ const VehicleManagement: React.FC = () => {
 
           <Input
             label="積載量 (t)"
-            type="number"
-            min="0"
-            step="0.1"
-            value={formData.capacity}
-            onChange={(e) => setFormData({ ...formData, capacity: Number(e.target.value) })}
+            type="text"
+            inputMode="decimal"
+            value={capacityInput}
+            onChange={(e) => setCapacityInput(e.target.value)}
+            onBlur={() => { if (capacityInput === '') setCapacityInput('0'); }}
             error={formErrors.capacity}
             required
           />
@@ -508,10 +517,11 @@ const VehicleManagement: React.FC = () => {
           
           <Input
             label="現在走行距離 (km)"
-            type="number"
-            min="0"
-            value={formData.currentMileage}
-            onChange={(e) => setFormData({ ...formData, currentMileage: Number(e.target.value) })}
+            type="text"
+            inputMode="numeric"
+            value={mileageInput}
+            onChange={(e) => setMileageInput(e.target.value)}
+            onBlur={() => { if (mileageInput === '') setMileageInput('0'); }}
             error={formErrors.currentMileage}
             required
           />
