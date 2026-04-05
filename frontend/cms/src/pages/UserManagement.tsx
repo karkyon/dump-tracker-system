@@ -19,6 +19,7 @@ import Pagination from '../components/common/Pagination';
 import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate } from '../utils/helpers';
+import { getRoleBadgeConfig } from '../utils/roleHelpers';
 
 const UserManagement: React.FC = () => {
   useTLog('USER_MANAGEMENT', 'ユーザー管理');
@@ -154,11 +155,11 @@ const UserManagement: React.FC = () => {
     {
       key: 'role',
       header: '役割',
-      render: (value: string) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          {value === 'ADMIN' ? '管理者' : value === 'MANAGER' ? 'マネージャー' : 'ドライバー'}
-        </span>
-      ),
+      // ✅ 役割別配色: ADMIN=Purple, MANAGER=Blue, DRIVER=Teal（roleHelpers.ts で一元管理）
+      render: (value: string) => {
+        const cfg = getRoleBadgeConfig(value);
+        return <span className={cfg.className}>{cfg.label}</span>;
+      },
     },
     {
       key: 'employeeId',
