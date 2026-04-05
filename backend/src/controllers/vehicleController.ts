@@ -349,8 +349,8 @@ export class VehicleController {
       await this.vehicleService.deleteVehicle(vehicleId, {
         userId: userId!,
         userRole: userRole!,
-        hardDelete: false,
-        checkConstraints: false  // 非稼働化は進行中運行があっても実行可能
+        hardDelete: req.query.hardDelete === 'true',
+        checkConstraints: req.query.hardDelete === 'true'  // 物理削除時のみ制約チェック
       });
 
       logger.info('車両削除完了', {

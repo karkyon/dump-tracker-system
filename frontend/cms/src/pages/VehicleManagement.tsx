@@ -27,6 +27,7 @@ const VehicleManagement: React.FC = () => {
     createVehicle,
     updateVehicle,
     deleteVehicle,
+    hardDeleteVehicle,
     setFilters,
     setPage,
     clearError,
@@ -35,6 +36,7 @@ const VehicleManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showHardDeleteDialog, setShowHardDeleteDialog] = useState(false);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [capacityInput, setCapacityInput] = useState<string>('');
@@ -208,6 +210,8 @@ const VehicleManagement: React.FC = () => {
           onDelete={() => handleDelete(vehicle.id)}
           deleteLabel="非稼働にする"
           deleteIcon={<PowerOff className="w-4 h-4" />}
+          onHardDelete={() => handleHardDelete(vehicle.id)}
+          hardDeleteLabel="完全削除（取り消し不可）" 
         />
       ),
     },
@@ -295,10 +299,16 @@ const VehicleManagement: React.FC = () => {
     setShowEditModal(true);
   };
 
-  // 削除
+  // 非稼働化
   const handleDelete = (vehicleId: string) => {
     setSelectedVehicleId(vehicleId);
     setShowDeleteDialog(true);
+  };
+
+  // 物理削除
+  const handleHardDelete = (vehicleId: string) => {
+    setSelectedVehicleId(vehicleId);
+    setShowHardDeleteDialog(true);
   };
 
   // 作成処理
@@ -347,6 +357,17 @@ const VehicleManagement: React.FC = () => {
     if (success) {
       toast.success('車両を非稼働にしました');
       setShowDeleteDialog(false);
+      setSelectedVehicleId(null);
+    }
+  };
+
+  // 物理削除処理
+  const handleConfirmHardDelete = async () => {
+    if (!selectedVehicleId) return;
+    const success = await hardDeleteVehicle(selectedVehicleId);
+    if (success) {
+      toast.success('車両を完全に削除しました');
+      setShowHardDeleteDialog(false);
       setSelectedVehicleId(null);
     }
   };
@@ -697,7 +718,7 @@ const VehicleManagement: React.FC = () => {
         </div>
       </FormModal>
 
-      {/* 削除確認ダイアログ */}
+      {/* 非稼働確認ダイアログ */}
       <ConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => {
@@ -708,6 +729,21 @@ const VehicleManagement: React.FC = () => {
         title="車両を非稼働にする"
         message="この車両を非稼働状態にします。編集画面からいつでも稼働中に戻せます。"
         confirmText="非稼働にする"
+        variant="danger"
+        loading={isLoading}
+      />
+
+      {/* 物理削除確認ダイアログ */}
+      <ConfirmDialog
+        isOpen={showHardDeleteDialog}
+        onClose={() => {
+          setShowHardDeleteDialog(false);
+          setSelectedVehicleId(null);
+        }}
+        onConfirm={handleConfirmHardDelete}
+        title="⚠️ 車両を完全に削除"
+        message="この車両をデータベースから完全に削除します。この操作は取り消せません。関連する運行記録への影響を確認してから実行してください。"
+        confirmText="完全削除"
         variant="danger"
         loading={isLoading}
       />

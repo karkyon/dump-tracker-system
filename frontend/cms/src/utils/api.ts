@@ -495,6 +495,9 @@ export const vehicleAPI = {
    */
   async deleteVehicle(id: string): Promise<ApiResponse<void>> {
     return apiClient.delete(`/vehicles/${id}`);
+  },
+  async hardDeleteVehicle(id: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/vehicles/${id}?hardDelete=true`);
   }
 };
 

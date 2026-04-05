@@ -223,10 +223,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 interface ActionButtonsProps {
   onEdit?: () => void;
   onDelete?: () => void;
+  onHardDelete?: () => void;
   onView?: () => void;
   editLabel?: string;
   deleteLabel?: string;
   deleteIcon?: React.ReactNode;
+  hardDeleteLabel?: string;
   viewLabel?: string;
   size?: 'sm' | 'md';
 }
@@ -238,6 +240,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   editLabel = '編集',
   deleteLabel = '削除',
   deleteIcon,
+  onHardDelete,
+  hardDeleteLabel = '完全削除',
   viewLabel = '詳細',
 }) => {
   return (
@@ -270,6 +274,16 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
           className="inline-flex items-center justify-center p-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors"
         >
           {deleteIcon ?? <Trash2 className="w-4 h-4" />}
+        </button>
+      )}
+      {onHardDelete && (
+        <button
+          type="button"
+          onClick={onHardDelete}
+          title={hardDeleteLabel}
+          className="inline-flex items-center justify-center p-1.5 rounded border border-red-600 text-red-700 hover:bg-red-100 hover:border-red-700 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
         </button>
       )}
     </div>

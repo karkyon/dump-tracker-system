@@ -46,6 +46,7 @@ interface VehicleState {
   createVehicle: (vehicleData: Partial<Vehicle>) => Promise<boolean>;
   updateVehicle: (id: string, vehicleData: Partial<Vehicle>) => Promise<boolean>;
   deleteVehicle: (id: string) => Promise<boolean>;
+  hardDeleteVehicle: (id: string) => Promise<boolean>;
   setFilters: (filters: Partial<FilterOptions>) => void;
   setPage: (page: number) => void;
   clearError: () => void;
@@ -500,6 +501,27 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
    * エラーメッセージをクリアする
    * エラー通知を閉じる際に使用
    */
+  hardDeleteVehicle: async (id: string) => {
+    const { fetchVehicles } = get();
+    console.log('[VehicleStore] hardDeleteVehicle 開始', { id });
+    try {
+      const response = await vehicleAPI.hardDeleteVehicle(id);
+      if (response.success) {
+        console.log('[VehicleStore] hardDeleteVehicle 成功');
+        await fetchVehicles();
+        return true;
+      } else {
+        console.error('[VehicleStore] hardDeleteVehicle 失敗:', response.error);
+        set({ error: response.message || '物理削除に失敗しました' });
+        return false;
+      }
+    } catch (error) {
+      console.error('[VehicleStore] hardDeleteVehicle ネットワークエラー:', error);
+      set({ error: 'ネットワークエラーが発生しました' });
+      return false;
+    }
+  },
+
   clearError: () => {
     console.log('[VehicleStore] clearError');
     set({ error: null });
