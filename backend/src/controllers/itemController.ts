@@ -710,7 +710,8 @@ export const {
   getItemUsageStats,
   getItemStatistics,
   getPopularItems,
-  getLowStockItems
+  getLowStockItems,
+  updateDisplayOrder
 } = itemController;
 
 // デフォルトエクスポート

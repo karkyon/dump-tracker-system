@@ -34,7 +34,8 @@ import {
   getLowStockItems,
   getPopularItems,
   toggleItemStatus,
-  updateItem
+  updateItem,
+  updateDisplayOrder
 } from '../controllers/itemController';
 
 // =====================================
