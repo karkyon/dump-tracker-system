@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Edit2, Trash2, Eye } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Edit2, Trash2, Eye, PowerOff } from 'lucide-react';
 
 interface Column<T> {
   key: keyof T | string;
@@ -226,6 +226,7 @@ interface ActionButtonsProps {
   onView?: () => void;
   editLabel?: string;
   deleteLabel?: string;
+  deleteIcon?: React.ReactNode;
   viewLabel?: string;
   size?: 'sm' | 'md';
 }
@@ -236,6 +237,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   onView,
   editLabel = '編集',
   deleteLabel = '削除',
+  deleteIcon,
   viewLabel = '詳細',
 }) => {
   return (
@@ -267,7 +269,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
           title={deleteLabel}
           className="inline-flex items-center justify-center p-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors"
         >
-          <Trash2 className="w-4 h-4" />
+          {deleteIcon ?? <Trash2 className="w-4 h-4" />}
         </button>
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, PowerOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useVehicleStore } from '../store/vehicleStore';
 import { Vehicle } from '../types';
@@ -206,6 +206,8 @@ const VehicleManagement: React.FC = () => {
         <ActionButtons
           onEdit={() => handleEdit(vehicle)}
           onDelete={() => handleDelete(vehicle.id)}
+          deleteLabel="非稼働にする"
+          deleteIcon={<PowerOff className="w-4 h-4" />}
         />
       ),
     },
@@ -343,7 +345,7 @@ const VehicleManagement: React.FC = () => {
     const success = await deleteVehicle(selectedVehicleId);
 
     if (success) {
-      toast.success('車両を削除しました');
+      toast.success('車両を非稼働にしました');
       setShowDeleteDialog(false);
       setSelectedVehicleId(null);
     }
@@ -703,9 +705,9 @@ const VehicleManagement: React.FC = () => {
           setSelectedVehicleId(null);
         }}
         onConfirm={handleConfirmDelete}
-        title="車両削除"
-        message="この車両を削除してもよろしいですか？この操作は取り消せません。"
-        confirmText="削除"
+        title="車両を非稼働にする"
+        message="この車両を非稼働状態にします。編集画面からいつでも稼働中に戻せます。"
+        confirmText="非稼働にする"
         variant="danger"
         loading={isLoading}
       />

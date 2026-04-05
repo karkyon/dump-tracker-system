@@ -350,7 +350,7 @@ export class VehicleController {
         userId: userId!,
         userRole: userRole!,
         hardDelete: false,
-        checkConstraints: true
+        checkConstraints: false  // 非稼働化は進行中運行があっても実行可能
       });
 
       logger.info('車両削除完了', {
