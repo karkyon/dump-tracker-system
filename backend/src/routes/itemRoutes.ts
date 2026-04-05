@@ -629,7 +629,7 @@ router.patch('/:id/status', requireManager, validateId, toggleItemStatus);
  * 品目表示順一括更新
  * POST /items/update-order
  */
-router.post('/update-order', requireManager, itemController.updateDisplayOrder);
+router.post('/update-order', requireManager, updateDisplayOrder);
 
 // =====================================
 // ヘルスチェック
