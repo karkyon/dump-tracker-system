@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Edit2, Trash2, Eye, PowerOff } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Edit2, Trash2, Eye } from 'lucide-react';
 
 interface Column<T> {
   key: keyof T | string;
