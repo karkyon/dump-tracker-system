@@ -623,6 +623,13 @@ router.delete('/:id', requireAdmin, validateId, deleteItem);
  */
 router.patch('/:id/status', requireManager, validateId, toggleItemStatus);
 
+
+/**
+ * 品目表示順一括更新
+ * POST /items/update-order
+ */
+router.post('/update-order', requireManager, itemController.updateDisplayOrder);
+
 // =====================================
 // ヘルスチェック
 // =====================================

@@ -111,7 +111,7 @@ export class ItemController {
         limit: Number(req.query.limit) || 50,
         search: req.query.search as string,
         category: req.query.category as string,
-        isActive: req.query.isActive ? req.query.isActive === 'true' : undefined,
+        isActive: req.query.isActive !== undefined ? req.query.isActive === 'true' : true, // デフォルト: アクティブのみ表示
         minPrice: req.query.minPrice ? Number(req.query.minPrice) : undefined,
         maxPrice: req.query.maxPrice ? Number(req.query.maxPrice) : undefined,
         hasStock: req.query.hasStock ? req.query.hasStock === 'true' : undefined,
@@ -424,6 +424,58 @@ export class ItemController {
   // =====================================
   // 📊 統計・分析機能
   // =====================================
+
+
+  /**
+   * 品目表示順一括更新
+   */
+  updateDisplayOrder = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!['ADMIN', 'MANAGER'].includes(req.user?.role || '')) {
+        throw new AuthorizationError('品目表示順更新の権限がありません');
+      }
+
+      const { items } = req.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new ValidationError('更新対象の品目リストが必要です', 'items');
+      }
+
+      // 各品目のdisplayOrderを個別更新
+      await Promise.all(
+        items.map(({ id, order }: { id: string; order: number }) =>
+          this.itemService.updateItem(
+            id,
+            { displayOrder: order } as any,
+            req.user?.userId || '',
+            req.user?.role || 'ADMIN'
+          )
+        )
+      );
+
+      const response = {
+        success: true,
+        message: '表示順を更新しました',
+        timestamp: new Date().toISOString()
+      };
+
+      logger.info('品目表示順一括更新', {
+        count: items.length,
+        userId: req.user?.userId
+      });
+
+      res.status(200).json(response);
+
+    } catch (error) {
+      logger.error('品目表示順更新エラー', { error });
+      if (error instanceof AuthorizationError || error instanceof ValidationError) {
+        const errResponse = errorResponse(error.message, error.statusCode, error.code);
+        res.status(error.statusCode).json(errResponse);
+      } else {
+        const errResponse = errorResponse('表示順の更新に失敗しました', 500, 'UPDATE_ORDER_ERROR');
+        res.status(500).json(errResponse);
+      }
+    }
+  });
 
   /**
    * カテゴリ一覧取得

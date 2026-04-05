@@ -3,12 +3,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import Button from '../components/common/Button';
 import Table, { ActionButtons } from '../components/common/Table';
 import Input from '../components/common/Input';
 import Modal from '../components/common/Modal';
 import { useMasterStore } from '../store/masterStore';
+import { toast } from 'react-hot-toast';
 import { Item } from '../types';
 
 // =====================================
@@ -58,6 +59,7 @@ const ItemManagement: React.FC = () => {
     updateItem,
     deleteItem,
     fetchItems,
+    updateItemOrder,
   } = useMasterStore();
 
   // 初回マウント時のみデータ取得
@@ -97,8 +99,32 @@ const ItemManagement: React.FC = () => {
 
   const handleDeleteItem = async (id: string) => {
     if (confirm('この品目を削除しますか？')) {
-      await deleteItem(id);
+      const success = await deleteItem(id);
+      if (success) toast.success('品目を削除しました');
+      else toast.error('品目の削除に失敗しました');
     }
+  };
+
+  const handleMoveUp = async (item: Item, index: number) => {
+    if (index === 0) return;
+    const prevItem = displayItems[index - 1];
+    const success = await updateItemOrder([
+      { id: item.id, order: prevItem.displayOrder ?? index },
+      { id: prevItem.id, order: item.displayOrder ?? index + 1 },
+    ]);
+    if (success) toast.success('表示順を変更しました');
+    else toast.error('表示順の変更に失敗しました');
+  };
+
+  const handleMoveDown = async (item: Item, index: number) => {
+    if (index === displayItems.length - 1) return;
+    const nextItem = displayItems[index + 1];
+    const success = await updateItemOrder([
+      { id: item.id, order: nextItem.displayOrder ?? index + 2 },
+      { id: nextItem.id, order: item.displayOrder ?? index + 1 },
+    ]);
+    if (success) toast.success('表示順を変更しました');
+    else toast.error('表示順の変更に失敗しました');
   };
 
   const handleCloseModal = () => {
@@ -130,8 +156,28 @@ const ItemManagement: React.FC = () => {
     { key: 'actions',      header: '操作', width: '100px' },
   ];
 
-  const tableData = displayItems.map((item: Item) => ({
-    displayOrder: item.displayOrder ?? '-',
+  const tableData = displayItems.map((item: Item, index: number) => ({
+    displayOrder: (
+      <div className="flex items-center gap-2">
+        <span className="w-6 text-center text-sm">{item.displayOrder ?? '-'}</span>
+        <div className="flex flex-col">
+          <button
+            onClick={() => handleMoveUp(item, index)}
+            disabled={index === 0}
+            className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
+          >
+            <ChevronUp className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => handleMoveDown(item, index)}
+            disabled={index === displayItems.length - 1}
+            className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
+          >
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    ),
     name: item.name,
     itemType: getItemTypeLabel(item.itemType),
     description: item.description ?? '-',
