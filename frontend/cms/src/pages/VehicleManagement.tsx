@@ -120,14 +120,14 @@ const VehicleManagement: React.FC = () => {
     }
   }, [error, clearError]);
 
-  // 検索処理（デバウンス）- useRefで単一タイマーを保持
-  const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 検索処理（Enter確定のみ実行）
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      setFilters({ searchTerm: value });
-    }, 300);
+  };
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setFilters({ searchTerm: searchTerm });
+    }
   };
 
   // テーブルの列定義
@@ -378,6 +378,7 @@ const VehicleManagement: React.FC = () => {
               placeholder="ナンバープレート、モデル、製造元で検索..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               className="pl-10"
             />
           </div>
