@@ -185,6 +185,7 @@ export type VehicleUpdateInput = UpdateVehicleRequest;
  * 車両フィルター
  */
 export interface VehicleFilter {
+  search?: string;
   status?: VehicleStatus | VehicleStatus[];
   fuelType?: FuelType | FuelType[];
   assignedDriverId?: string;

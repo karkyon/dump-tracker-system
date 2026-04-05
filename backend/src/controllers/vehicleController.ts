@@ -94,11 +94,12 @@ export class VehicleController {
       const filter: VehicleFilter & PaginationQuery = {
         // ページネーション（共通型から）
         page: Number(req.query.page) || 1,
-        limit: Number(req.query.limit) || 10,
+        limit: Number(req.query.limit) || Number(req.query.pageSize) || 10,
 
         // 検索・フィルター
         status: req.query.status ? (req.query.status as string).split(',') as any[] : undefined,
         fuelType: req.query.fuelType ? (req.query.fuelType as string).split(',') as any[] : undefined,
+        search: (req.query.searchTerm as string) || (req.query.search as string) || undefined,
         manufacturer: req.query.manufacturer as string,
         yearFrom: req.query.yearFrom ? Number(req.query.yearFrom) : undefined,
         yearTo: req.query.yearTo ? Number(req.query.yearTo) : undefined,

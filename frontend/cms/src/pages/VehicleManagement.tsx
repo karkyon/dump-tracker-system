@@ -10,7 +10,7 @@ import Table, { StatusBadge, ActionButtons } from '../components/common/Table';
 import Pagination from '../components/common/Pagination';
 import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
-import { formatDate, formatNumber, debounce } from '../utils/helpers';
+import { formatDate, formatNumber } from '../utils/helpers';
 import type { TransportRegion } from '../types';
 import { TRANSPORT_REGION_LABELS } from '../types';
 
@@ -120,15 +120,14 @@ const VehicleManagement: React.FC = () => {
     }
   }, [error, clearError]);
 
-  // 検索処理（デバウンス）
+  // 検索処理（デバウンス）- useRefで単一タイマーを保持
+  const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    if (value.length >= 2 || value.length === 0) {
-      const debouncedUpdate = debounce(() => {
-        setFilters({ searchTerm: value });
-      }, 500);
-      debouncedUpdate();
-    }
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setFilters({ searchTerm: value });
+    }, 300);
   };
 
   // テーブルの列定義
