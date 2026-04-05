@@ -337,12 +337,11 @@ export class InspectionService {
       // シンプルなwhere条件
       const where: any = {};
 
-      // isActiveのフィルタ（デフォルトはtrue）
+      // isActiveのフィルタ（未指定時は全件取得 - フロント側でUIフィルタリング）
       if (isActive !== undefined) {
         where.isActive = isActive;
-      } else {
-        where.isActive = true;  // デフォルトはアクティブのみ
       }
+      // ※ isActiveが未指定の場合はフィルタなし（有効・無効の両方を取得）
 
       // inspectionTypeのフィルタ
       if (inspectionType) {

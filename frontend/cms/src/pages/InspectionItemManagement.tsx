@@ -54,6 +54,8 @@ const InspectionItemManagement: React.FC = () => {
   // 🐛 修正1: ソート状態を追加
   const [sortBy, setSortBy] = useState<'order' | 'name' | 'createdAt'>('order');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  // 🆕 状態フィルター（有効/無効/すべて）
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // フォームデータ
   const [formData, setFormData] = useState({
@@ -118,6 +120,13 @@ const InspectionItemManagement: React.FC = () => {
       result = result.filter((item) => item.category === categoryFilter);
     }
 
+    // 🆕 状態フィルター（有効/無効）
+    if (activeFilter !== 'all') {
+      result = result.filter((item) =>
+        activeFilter === 'active' ? item.isActive === true : item.isActive !== true
+      );
+    }
+
     // 🐛 修正1: ソート処理を追加
     result.sort((a, b) => {
       let compareValue = 0;
@@ -138,7 +147,7 @@ const InspectionItemManagement: React.FC = () => {
     });
 
     return result;
-  }, [items, searchQuery, categoryFilter, sortBy, sortOrder]);
+  }, [items, searchQuery, categoryFilter, activeFilter, sortBy, sortOrder]);
 
   // ==========================================
   // モーダル制御
@@ -475,7 +484,7 @@ const InspectionItemManagement: React.FC = () => {
 
       {/* フィルター */}
       <div className="bg-white p-4 rounded-lg shadow space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input
             type="text"
             placeholder="点検項目名で検索..."
@@ -489,6 +498,16 @@ const InspectionItemManagement: React.FC = () => {
               { value: 'all', label: 'すべてのカテゴリ' },
               { value: 'pre', label: '運行前' },
               { value: 'post', label: '運行後' },
+            ]}
+          />
+          {/* 🆕 状態フィルター */}
+          <Select
+            value={activeFilter}
+            onChange={(e) => setActiveFilter(e.target.value as 'all' | 'active' | 'inactive')}
+            options={[
+              { value: 'all', label: 'すべての状態' },
+              { value: 'active', label: '有効のみ' },
+              { value: 'inactive', label: '無効のみ' },
             ]}
           />
           <div className="flex gap-2">
