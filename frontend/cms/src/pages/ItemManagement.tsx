@@ -107,22 +107,26 @@ const ItemManagement: React.FC = () => {
 
   const handleMoveUp = async (item: Item, index: number) => {
     if (index === 0) return;
-    const prevItem = displayItems[index - 1];
-    const success = await updateItemOrder([
-      { id: item.id, order: prevItem.displayOrder ?? index },
-      { id: prevItem.id, order: item.displayOrder ?? index + 1 },
-    ]);
+    // 配列内で入れ替えてから全件連番付け直し
+    const reordered = [...displayItems];
+    const tmp = reordered[index - 1];
+    reordered[index - 1] = reordered[index];
+    reordered[index] = tmp;
+    const updates = reordered.map((it, i) => ({ id: it.id, order: i + 1 }));
+    const success = await updateItemOrder(updates);
     if (success) toast.success('表示順を変更しました');
     else toast.error('表示順の変更に失敗しました');
   };
 
   const handleMoveDown = async (item: Item, index: number) => {
     if (index === displayItems.length - 1) return;
-    const nextItem = displayItems[index + 1];
-    const success = await updateItemOrder([
-      { id: item.id, order: nextItem.displayOrder ?? index + 2 },
-      { id: nextItem.id, order: item.displayOrder ?? index + 1 },
-    ]);
+    // 配列内で入れ替えてから全件連番付け直し
+    const reordered = [...displayItems];
+    const tmp = reordered[index + 1];
+    reordered[index + 1] = reordered[index];
+    reordered[index] = tmp;
+    const updates = reordered.map((it, i) => ({ id: it.id, order: i + 1 }));
+    const success = await updateItemOrder(updates);
     if (success) toast.success('表示順を変更しました');
     else toast.error('表示順の変更に失敗しました');
   };
