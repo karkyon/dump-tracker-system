@@ -138,12 +138,45 @@ const ItemManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = editingItem
-      ? await updateItem(editingItem.id, formData)
-      : await createItem(formData);
 
-    if (success) {
-      handleCloseModal();
+    if (editingItem) {
+      // 更新：表示順の自動連番付け直し（InspectionItemManagement と同じロジック）
+      const success = await updateItem(editingItem.id, {
+        name: formData.name,
+        itemType: formData.itemType,
+        description: formData.description,
+      });
+
+      if (success) {
+        // 編集対象を除外した配列を作成し、指定位置に挿入して全件連番付け直し
+        const withoutEdited = items.filter((i: Item) => i.id !== editingItem.id);
+        const targetIndex = Math.min(
+          Math.max(0, (formData.displayOrder || 1) - 1),
+          withoutEdited.length
+        );
+        withoutEdited.splice(targetIndex, 0, { ...editingItem, displayOrder: formData.displayOrder });
+        const renumbered = withoutEdited.map((i: Item, idx: number) => ({ id: i.id, order: idx + 1 }));
+        await updateItemOrder(renumbered);
+        handleCloseModal();
+      }
+    } else {
+      // 新規作成：末尾に追加して連番付け直し
+      const success = await createItem({
+        name: formData.name,
+        itemType: formData.itemType,
+        description: formData.description,
+      });
+      if (success) {
+        // 作成後に全件取得し直して連番付け直し
+        const allItems = [...items];
+        const targetIndex = Math.min(
+          Math.max(0, (formData.displayOrder || allItems.length) - 1),
+          allItems.length
+        );
+        // 新規アイテムはfetchItems後にstoreに入るため、fetchItems後に連番付け直し
+        await fetchItems();
+        handleCloseModal();
+      }
     }
   };
 
@@ -307,7 +340,7 @@ const ItemManagement: React.FC = () => {
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  displayOrder: parseInt(e.target.value),
+                  displayOrder: parseInt(e.target.value) || 1,
                 })
               }
               min="1"
