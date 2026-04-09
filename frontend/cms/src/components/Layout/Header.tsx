@@ -63,7 +63,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarOpen }) => {
       const currentSettings = loadGeneralSettings();
 
       setLogoUrl(prev => (prev !== currentLogo ? currentLogo : prev));
-      setGeneralSettings(prev =>
+      setGeneralSettings((prev: typeof generalSettings) =>
         prev.companyName !== currentSettings.companyName ||
         prev.systemName  !== currentSettings.systemName
           ? currentSettings

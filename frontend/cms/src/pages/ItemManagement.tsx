@@ -105,7 +105,7 @@ const ItemManagement: React.FC = () => {
     }
   };
 
-  const handleMoveUp = async (item: Item, index: number) => {
+  const handleMoveUp = async (_item: Item, index: number) => {
     if (index === 0) return;
     // 配列内で入れ替えてから全件連番付け直し
     const reordered = [...displayItems];
@@ -118,7 +118,7 @@ const ItemManagement: React.FC = () => {
     else toast.error('表示順の変更に失敗しました');
   };
 
-  const handleMoveDown = async (item: Item, index: number) => {
+  const handleMoveDown = async (_item: Item, index: number) => {
     if (index === displayItems.length - 1) return;
     // 配列内で入れ替えてから全件連番付け直し
     const reordered = [...displayItems];
@@ -168,11 +168,6 @@ const ItemManagement: React.FC = () => {
       });
       if (success) {
         // 作成後に全件取得し直して連番付け直し
-        const allItems = [...items];
-        const targetIndex = Math.min(
-          Math.max(0, (formData.displayOrder || allItems.length) - 1),
-          allItems.length
-        );
         // 新規アイテムはfetchItems後にstoreに入るため、fetchItems後に連番付け直し
         await fetchItems();
         handleCloseModal();

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { AlertTriangle, Building2, Save, Settings, Trash2, Upload, X, Download } from 'lucide-react';
+import { AlertTriangle, Building2, Save, Settings, Trash2, Upload, Download } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { API_BASE_URL } from '../utils/constants';
