@@ -55,7 +55,7 @@ jobs:
             export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
             npm ci --production
             npx prisma generate --schema=./prisma/schema.camel.prisma 2>/dev/null || true
-            npx prisma db push --schema=./prisma/schema.camel.prisma --accept-data-loss 2>/dev/null || true
+            npx prisma db push --schema=./prisma/schema.camel.prisma 2>/dev/null || true
             rm -rf /tmp/backend-deploy
             sudo systemctl restart dump-tracker-backend.service
             echo "✅ Backend deployed to Staging"
