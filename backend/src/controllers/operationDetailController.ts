@@ -281,20 +281,23 @@ export class OperationDetailController {
             notes: detail.notes || null
           });
 
-          // 🆕 積込: 積込完了イベント（actualEndTime = 積込完了時刻）
-          //    モバイルの POST /trips/:id/loading/complete に対応
-          //    actualEndTime が設定されている場合のみ生成
-          if (detail.actualEndTime) {
+          // 🆕 積込: 積込完了イベント
+          //    モバイルの積込は1画面完結のため actualEndTime が null のケースがある
+          //    → actualEndTime が null でも quantityTons > 0 または itemId があれば完了とみなす
+          //    timestamp: actualEndTime があればそれ、なければ actualStartTime を使用
+          const loadingHasContent = Number(detail.quantityTons) > 0 || detail.itemId;
+          const loadingCompletedTime = detail.actualEndTime || (loadingHasContent ? (detail.actualStartTime || detail.plannedTime) : null);
+          if (loadingCompletedTime) {
             timeline.push({
               id: `${detail.id}-completed`,
               sequenceNumber: ++sequenceCounter,
               eventType: 'LOADING_COMPLETED',
-              timestamp: detail.actualEndTime,
+              timestamp: loadingCompletedTime,
               location: locationData,
               gpsLocation: null,
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
-              notes: detail.notes || '積込完了'
+              notes: detail.notes || null
             });
           }
 
