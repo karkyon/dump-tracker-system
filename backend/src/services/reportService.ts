@@ -120,7 +120,9 @@ function getDayOfWeek(date: Date): string {
 function formatTime(date: Date | null | undefined): string {
   if (!date) return '';
   const d = new Date(date);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  // ③修正: UTC → JST(+9時間) 変換
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 // =====================================
@@ -264,7 +266,14 @@ function buildInspResultMap(inspectionRecords: any[]): RawInspResult[] {
     }
   }
 
-  return Array.from(map.values());
+  // ⑤修正: postResult が空で preResult がある場合、preResult を複写（乗車後点検複写）
+  const results = Array.from(map.values());
+  for (const r of results) {
+    if (!r.postResult && r.preResult) {
+      r.postResult = r.preResult;
+    }
+  }
+  return results;
 }
 
 /**
@@ -304,6 +313,41 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
     const sb = b.sequence_number ?? b.sequenceNumber ?? 0;
     return sa - sb;
   });
+
+  // ②修正: UNLOADING重複排除（同一場所・60秒以内）
+  const deduped: any[] = [];
+  for (let i = 0; i < allDetails.length; i++) {
+    const cur = allDetails[i];
+    const at = cur.activity_type ?? cur.activityType ?? '';
+    if (at === 'UNLOADING' || at === 'UNLOADING_START' || at === 'UNLOADING_COMPLETE') {
+      const prev = deduped.slice().reverse().find((d: any) => {
+        const da = d.activity_type ?? d.activityType ?? '';
+        return da === 'UNLOADING' || da === 'UNLOADING_START' || da === 'UNLOADING_COMPLETE';
+      });
+      if (prev) {
+        const prevLoc = prev.locations?.name ?? prev.location?.name ?? '';
+        const curLoc  = cur.locations?.name  ?? cur.location?.name  ?? '';
+        const prevT = prev.actual_start_time ?? prev.actualStartTime;
+        const curT  = cur.actual_start_time  ?? cur.actualStartTime;
+        if (prevLoc === curLoc && prevT && curT) {
+          const diffMs = Math.abs(new Date(curT).getTime() - new Date(prevT).getTime());
+          if (diffMs <= 60000) {
+            // マージ: actualEndTime は後勝ち
+            const idx = deduped.lastIndexOf(prev);
+            if (cur.actual_end_time ?? cur.actualEndTime) {
+              deduped[idx].actual_end_time = cur.actual_end_time;
+              deduped[idx].actualEndTime   = cur.actualEndTime;
+            }
+            continue; // スキップ
+          }
+        }
+      }
+    }
+    deduped.push(cur);
+  }
+  // deduped を allDetails として使用
+  allDetails.length = 0;
+  allDetails.push(...deduped);
 
   const LOADING_TYPES = ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'];
   const UNLOADING_TYPES = ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE'];
@@ -1551,9 +1595,12 @@ class ReportService {
     const vehiclePlate: string = firstOp?.vehicles?.plateNumber ?? '未入力';
 
     // オドメーター（最初の開始〜最後の終了）
-    const startOdo = firstOp?.startOdometer != null ? fmtNum(firstOp.startOdometer, 0) : '';
+    // ①修正: startOdometer/endOdometer - snake_case/camelCase両対応
+    const startOdoVal = firstOp?.startOdometer ?? firstOp?.start_odometer;
+    const startOdo = startOdoVal != null ? fmtNum(startOdoVal, 0) : '';
     const lastOp = operations[operations.length - 1];
-    const endOdo = lastOp?.endOdometer != null ? fmtNum(lastOp.endOdometer, 0) : '';
+    const endOdoVal = lastOp?.endOdometer ?? lastOp?.end_odometer;
+    const endOdo = endOdoVal != null ? fmtNum(endOdoVal, 0) : '';
 
     // 運行詳細から TripCycleRow 構築
     const allDetailsList = operations.map((op: any) => op.operationDetails ?? []);
