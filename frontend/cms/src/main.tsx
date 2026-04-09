@@ -8,7 +8,7 @@ import './index.css';
 const handleCertificateError = () => {
   console.warn('⚠️ HTTPS証明書の警告が表示される場合があります');
   console.log('🔧 解決方法:');
-  console.log('1. ブラウザで https://10.1.119.244:8443 に直接アクセス');
+  console.log('1. ブラウザで https://dumptracker-s.ddns.net に直接アクセス');
   console.log('2. 「詳細設定」をクリック');
   console.log('3. 「10.1.119.244に進む（安全ではありません）」をクリック');
   console.log('4. 証明書を信頼させる');
@@ -65,7 +65,7 @@ const setupErrorHandling = () => {
 // API接続テスト
 const testApiConnection = async () => {
   try {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443';
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://dumptracker-s.ddns.net';
     console.log(`🔗 API接続テスト: ${apiBaseUrl}/health`);
     
     const response = await fetch(`${apiBaseUrl}/health`, {

@@ -51,7 +51,7 @@ const Dashboard: React.FC = () => {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         };
-        const BASE = import.meta.env.VITE_API_URL || 'https://10.1.119.244:8443/api/v1';
+        const BASE = import.meta.env.VITE_API_URL || 'https://dumptracker-s.ddns.net/api/v1';
 
         // 並列でAPI取得
         const [usersRes, vehiclesRes, operationsRes] = await Promise.allSettled([

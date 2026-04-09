@@ -94,9 +94,9 @@ const API_BASE = (() => {
     // CMS用 constants.ts から取得（存在する場合）
     return (window as any).__API_BASE_URL__
       || import.meta.env.VITE_API_BASE_URL
-      || 'https://10.1.119.244:8443/api/v1';
+      || 'https://dumptracker-s.ddns.net/api/v1';
   } catch {
-    return 'https://10.1.119.244:8443/api/v1';
+    return 'https://dumptracker-s.ddns.net/api/v1';
   }
 })();
 
