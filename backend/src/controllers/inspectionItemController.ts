@@ -94,7 +94,7 @@ class InspectionItemController {
       // フィルタオプション
       const filterOptions: any = {
         inspectionType: inspectionType as InspectionType,
-        isActive: isActive !== 'false'
+        isActive: isActive !== undefined ? isActive !== 'false' : undefined
       };
 
       // 🔧🔧🔧 デバッグ出力3: フィルタオプション確認

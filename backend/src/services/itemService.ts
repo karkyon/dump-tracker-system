@@ -251,9 +251,10 @@ export class ItemService {
         whereCondition.ItemType = filterConditions.itemType as ItemType;  // ✅ PascalCase
       }
 
-      if (filterConditions.isActive !== undefined) {
-        whereCondition.isActive = filterConditions.isActive;  // ✅ camelCase（@mapあり）
-      }
+      // デフォルトはアクティブのみ（論理削除されたものを除外）
+      whereCondition.isActive = filterConditions.isActive !== undefined
+        ? filterConditions.isActive
+        : true;
 
       if (filterConditions.hazardous !== undefined) {
         whereCondition.hazardous = filterConditions.hazardous;

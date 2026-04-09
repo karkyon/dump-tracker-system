@@ -23,6 +23,7 @@ import {
 import logger from '../utils/logger';
 
 // 完成済みcontrollers層との密連携
+import itemControllerDefault from '../controllers/itemController';
 import {
   createItem,
   deleteItem,
@@ -629,7 +630,7 @@ router.patch('/:id/status', requireManager, validateId, toggleItemStatus);
  * 品目表示順一括更新
  * POST /items/update-order
  */
-router.post('/update-order', requireManager, updateDisplayOrder);
+router.post('/update-order', requireManager, itemControllerDefault.updateDisplayOrder);
 
 // =====================================
 // ヘルスチェック

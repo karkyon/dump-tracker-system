@@ -1,4 +1,10 @@
-import React, { useState, useEffect } from 'react';
+// frontend/cms/src/components/Layout/Layout.tsx
+// 🔧 修正内容:
+//   - ヘッダーを画面全幅（両端）に配置
+//   - ヘッダーの下にサイドバーとメインコンテンツを横並びで配置
+//   - 既存機能（サイドバー開閉・リサイズ処理・Toast通知）は100%保持
+
+import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Header from './Header';
@@ -30,17 +36,20 @@ const Layout: React.FC = () => {
   }, []);
 
   return (
-    <div className="h-screen flex bg-gray-100">
-      {/* サイドバー */}
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
+    // ② 修正: flex-col にすることでヘッダーを最上部・全幅に配置
+    <div className="h-screen flex flex-col bg-gray-100">
 
-      {/* メインコンテンツエリア */}
-      <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
-        {/* ヘッダー */}
-        <Header 
-          onMenuToggle={toggleSidebar} 
-          isSidebarOpen={isSidebarOpen} 
-        />
+      {/* ヘッダー: 画面最上部・両端まで全幅表示 */}
+      <Header
+        onMenuToggle={toggleSidebar}
+        isSidebarOpen={isSidebarOpen}
+      />
+
+      {/* ヘッダー下段: サイドバー + メインコンテンツ を横並び */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* サイドバー（デスクトップは常時表示、モバイルはオーバーレイ） */}
+        <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
 
         {/* メインコンテンツ */}
         <main className="flex-1 overflow-y-auto">
