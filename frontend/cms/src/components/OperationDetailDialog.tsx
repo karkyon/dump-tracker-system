@@ -1506,6 +1506,70 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
                   {showOperationTimeline && operationDebugTimelineEvents.length > 0 && (
                     <div className="space-y-3">
+                      {/* ─────────────────────────────────────────────
+                          1日の運搬サマリカード
+                      ───────────────────────────────────────────── */}
+                      {(() => {
+                        const _evs = operationDebugTimelineEvents;
+                        // 積込・積降回数（ARRIVED = 到着した回数）
+                        const loadingCount   = _evs.filter(e => e.eventType === 'LOADING_ARRIVED').length;
+                        const unloadingCount = _evs.filter(e => e.eventType === 'UNLOADING_ARRIVED').length;
+                        // 積込完了イベントから重量・品目を集計
+                        const completedLoadings = _evs.filter(e => e.eventType === 'LOADING_COMPLETED');
+                        const uniqueItems = [...new Set(
+                          completedLoadings.filter(e => e.items).map(e => e.items!.name)
+                        )];
+                        const totalWeight = completedLoadings.reduce((sum, e) => sum + (e.quantityTons || 0), 0);
+                        // 走行距離は operation state から取得
+                        const distanceKm = operation?.totalDistanceKm ?? null;
+                        return (
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                            <div className="text-sm font-bold text-blue-800 mb-3">
+                              📊 1日の運搬サマリ
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              {/* 積込回数 */}
+                              <div className="bg-white rounded-lg p-3 border border-blue-100 text-center shadow-sm">
+                                <div className="text-2xl font-bold text-indigo-600">{loadingCount}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">積込回数</div>
+                              </div>
+                              {/* 積降回数 */}
+                              <div className="bg-white rounded-lg p-3 border border-blue-100 text-center shadow-sm">
+                                <div className="text-2xl font-bold text-purple-600">{unloadingCount}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">積降回数</div>
+                              </div>
+                              {/* 総重量 */}
+                              <div className="bg-white rounded-lg p-3 border border-blue-100 text-center shadow-sm">
+                                <div className="text-2xl font-bold text-green-600">
+                                  {totalWeight > 0 ? totalWeight.toFixed(1) : '-'}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0.5">総重量 (t)</div>
+                              </div>
+                              {/* 走行距離 */}
+                              <div className="bg-white rounded-lg p-3 border border-blue-100 text-center shadow-sm">
+                                <div className="text-2xl font-bold text-orange-600">
+                                  {distanceKm != null ? Number(distanceKm).toFixed(1) : '-'}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0.5">走行距離 (km)</div>
+                              </div>
+                            </div>
+                            {/* 運搬品目タグ */}
+                            {uniqueItems.length > 0 && (
+                              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-gray-500 flex-shrink-0">運搬品目:</span>
+                                {uniqueItems.map((name, i) => (
+                                  <span key={i} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+                                    {name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      {/* ─────────────────────────────────────────────
+                          タイムラインイベント一覧
+                      ───────────────────────────────────────────── */}
                       {(() => {
                         // ─────────────────────────────────────────────
                         // イベントをグループ化:
@@ -1556,12 +1620,18 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
  
                         // ─────────────────────────────────────────────
                         // サブイベント1行のレンダリングヘルパー
+                        // isArrived=true の場合: 場所・GPS・時刻のみ表示（コンテンツ非表示）
+                        // isArrived=false の場合: items・重量・手書き備考を表示
                         // ─────────────────────────────────────────────
+                        // 自動生成されたデフォルト備考 → 表示しない
+                        const AUTO_NOTES = ['積込完了', '積降完了'];
+
                         const renderSubRow = (
                           subEvent: OperationDebugTimelineEvent,
                           labelText: string,
                           dotColor: string,
-                          isFirst: boolean
+                          isFirst: boolean,
+                          isArrived: boolean = false
                         ) => (
                           <div className={`px-4 py-3 flex items-start gap-3 ${isFirst ? '' : 'border-t border-gray-100'}`}>
                             <div className={`w-2.5 h-2.5 rounded-full ${dotColor} mt-1.5 flex-shrink-0`} />
@@ -1588,16 +1658,26 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   </span>
                                 </div>
                               )}
-                              {subEvent.items && (
+                              {/* 品目 - 完了イベントのみ表示（到着行は場所情報のみ） */}
+                              {!isArrived && subEvent.items && (
                                 <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-600">
                                   <Package className="w-3 h-3 text-gray-400 flex-shrink-0" />
                                   <span>
                                     品目: {subEvent.items.name}
-                                    {subEvent.quantityTons ? ` ${subEvent.quantityTons}t` : ''}
+                                    {subEvent.items.unit ? ` (${subEvent.items.unit})` : ''}
                                   </span>
                                 </div>
                               )}
-                              {subEvent.notes && (
+                              {/* ⚖️ 重量 - 完了イベントのみ表示 */}
+                              {!isArrived && subEvent.quantityTons !== undefined && subEvent.quantityTons > 0 && (
+                                <div className="flex items-center gap-1 mt-1">
+                                  <span className="inline-flex items-center text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
+                                    ⚖️ 重量: {Number(subEvent.quantityTons).toFixed(1)} t
+                                  </span>
+                                </div>
+                              )}
+                              {/* 備考（手書き内容）- 完了イベントのみ、自動生成テキストは非表示 */}
+                              {!isArrived && subEvent.notes && !AUTO_NOTES.includes(subEvent.notes) && (
                                 <div className="text-xs text-gray-500 mt-0.5">
                                   備考: {subEvent.notes}
                                 </div>
@@ -1636,23 +1716,16 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 </div>
                                 {/* サブイベント */}
                                 <div className="bg-white">
-                                  {/* 到着 */}
-                                  {renderSubRow(group.arrivedEvent, '到着', arrivedDot, true)}
-                                  {/* 完了 */}
-                                  {group.completedEvent
-                                    ? renderSubRow(
-                                        group.completedEvent,
-                                        isLoading ? '積込完了' : '積降完了',
-                                        completedDot,
-                                        false
-                                      )
-                                    : (
-                                      <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 italic flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        完了記録なし（作業中の可能性があります）
-                                      </div>
-                                    )
-                                  }
+                                  {/* 到着 - isArrived=true: 場所・GPS・時刻のみ、コンテンツ非表示 */}
+                                  {renderSubRow(group.arrivedEvent, '到着', arrivedDot, true, true)}
+                                  {/* 完了 - items・重量・手書き備考を表示。自動生成の '積込完了'/'積降完了' は非表示 */}
+                                  {group.completedEvent && renderSubRow(
+                                    group.completedEvent,
+                                    isLoading ? '積込完了' : '積降完了',
+                                    completedDot,
+                                    false,
+                                    false
+                                  )}
                                 </div>
                               </div>
                             );

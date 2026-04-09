@@ -3,6 +3,7 @@
 // 運行詳細管理Controller - 完全拡張版
 // ✅ 運行開始/終了・点検イベント統合対応
 // ✅ TypeScriptエラー完全修正
+// ✅ DatabaseService統一（new PrismaClient() → DatabaseService.getInstance()）
 // 🆕 積込/積降サブイベント展開対応（到着・完了を個別イベントとして返却）
 // 最終更新: 2026-04-09
 // =====================================
@@ -19,9 +20,11 @@ import type { PaginationQuery } from '../types/common';
 import { ValidationError } from '../utils/errors';
 import logger from '../utils/logger';
 import { sendNotFound, sendSuccess } from '../utils/response';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+// ✅ 修正: new PrismaClient() → DatabaseService.getInstance() に統一
+// ✅ 理由: new PrismaClient() は snake_case スキーマのクライアントを生成するが、
+//          本プロジェクトは schema.camel.prisma の camelCase クライアントを使用する。
+//          DatabaseService.getInstance() が正しい camelCase クライアントを返す。
+import { DatabaseService } from '../utils/database';
 
 /**
  * 統合タイムラインイベント型定義
@@ -122,10 +125,14 @@ export class OperationDetailController {
     }
 
     try {
+      // ✅ 修正: DatabaseService.getInstance() を使用（camelCase スキーマ対応）
+      const db = DatabaseService.getInstance();
+
       // =====================================
       // 1. 運行基本情報を取得
+      // ✅ 修正: prisma.operation (singular camelCase) を使用
       // =====================================
-      const operation = await prisma.operations.findUnique({
+      const operation = await db.operation.findUnique({
         where: { id: operationId as string },
         include: {
           vehicles: true,
@@ -139,8 +146,9 @@ export class OperationDetailController {
 
       // =====================================
       // 2. 点検記録を取得
+      // ✅ 修正: db.inspectionRecord (camelCase) を使用
       // =====================================
-      const inspectionRecords = await (prisma as any).inspectionRecord.findMany({
+      const inspectionRecords = await db.inspectionRecord.findMany({
         where: { operationId: operationId as string },
         include: {
           inspectionItemResults: true
@@ -150,8 +158,9 @@ export class OperationDetailController {
 
       // =====================================
       // 3. 運行詳細を取得（積込/積降/給油/休憩など）
+      // ✅ 修正: db.operationDetail (camelCase) を使用
       // =====================================
-      const operationDetails = await (prisma as any).operationDetail.findMany({
+      const operationDetails = await db.operationDetail.findMany({
         where: { operationId: operationId as string },
         include: {
           locations: true,
@@ -166,8 +175,9 @@ export class OperationDetailController {
 
       // =====================================
       // 4. GPSログを取得（走行軌跡用）
+      // ✅ 修正: db.gpsLog (camelCase) を使用
       // =====================================
-      const gpsLogs = await (prisma as any).gpsLog.findMany({
+      const gpsLogs = await db.gpsLog.findMany({
         where: { operationId: operationId as string },
         orderBy: { recordedAt: 'asc' },
         take: 500
@@ -193,7 +203,7 @@ export class OperationDetailController {
       }
 
       // 5-2. 運行前点検イベント
-      // ✅ 修正: inspection_records.latitude/longitude を直接使用
+      // ✅ 修正: inspectionRecord.latitude/longitude を直接使用
       inspectionRecords
         .filter((ir: any) => ir.inspectionType === 'PRE_TRIP')
         .forEach((inspection: any) => {
@@ -284,7 +294,7 @@ export class OperationDetailController {
               gpsLocation: null,
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
-              notes: detail.notes || null
+              notes: detail.notes || '積込完了'
             });
           }
 
@@ -343,7 +353,7 @@ export class OperationDetailController {
       });
 
       // 5-4. 運行後点検イベント
-      // ✅ 修正: inspection_records.latitude/longitude を直接使用
+      // ✅ 修正: inspectionRecord.latitude/longitude を直接使用
       inspectionRecords
         .filter((ir: any) => ir.inspectionType === 'POST_TRIP')
         .forEach((inspection: any) => {
@@ -552,50 +562,83 @@ export class OperationDetailController {
 
     // シーケンス番号でソート
     const sorted = Array.isArray(operationDetails)
-      ? [...operationDetails].sort((a: any, b: any) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))
-      : operationDetails;
+      ? operationDetails.sort((a: any, b: any) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))
+      : [];
 
     return sendSuccess(res, sorted);
   });
 
   /**
-   * 効率分析
-   * GET /operation-details/analysis
+   * 作業効率分析
+   * GET /operation-details/efficiency-analysis
    */
-  getEfficiencyAnalysis = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  getEfficiencyAnalysis = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
 
-    logger.info('効率分析取得', { userId, startDate, endDate });
+    logger.info('作業効率分析取得', { userId, startDate, endDate });
 
-    const filter: any = {};  // ✅ 修正: OperationDetailWhereInputの代わりにanyを使用
+    // ✅ 修正: DatabaseService.getInstance() を使用
+    const db = DatabaseService.getInstance();
 
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) filter.createdAt.gte = new Date(startDate as string);
-      if (endDate) filter.createdAt.lte = new Date(endDate as string);
+    // フィルター条件の構築
+    const filter: any = {};
+    if (startDate) {
+      filter.actualStartTime = { gte: new Date(startDate) };
+    }
+    if (endDate) {
+      filter.actualEndTime = { ...filter.actualEndTime, lte: new Date(endDate) };
     }
 
-    const operationDetails = await this.operationDetailService.findMany({
-      where: filter
-    });
-
-    const byActivityType: Record<string, number> = {};
-    operationDetails.forEach((detail: any) => {
-      byActivityType[detail.activityType] = (byActivityType[detail.activityType] || 0) + 1;
-    });
-
-    const analysis = {
-      totalOperations: operationDetails.length,
-      completedOperations: operationDetails.filter((d: any) => d.actualEndTime).length,
-      byActivityType,
-      period: {
-        startDate: startDate || new Date(),
-        endDate: endDate || new Date()
+    // 作業種別別集計
+    const details = await db.operationDetail.findMany({
+      where: filter,
+      select: {
+        activityType: true,
+        actualStartTime: true,
+        actualEndTime: true,
+        plannedTime: true
       }
+    });
+
+    // 種別ごとに集計
+    const byActivityType: Record<string, {
+      total: number;
+      completed: number;
+      completionRate: number;
+      avgDurationMinutes: number;
+    }> = {};
+
+    details.forEach((d: any) => {
+      const type = d.activityType || 'UNKNOWN';
+      if (!byActivityType[type]) {
+        byActivityType[type] = { total: 0, completed: 0, completionRate: 0, avgDurationMinutes: 0 };
+      }
+      byActivityType[type].total++;
+      if (d.actualEndTime) {
+        byActivityType[type].completed++;
+        if (d.actualStartTime) {
+          const durationMs = new Date(d.actualEndTime).getTime() - new Date(d.actualStartTime).getTime();
+          byActivityType[type].avgDurationMinutes += durationMs / 60000;
+        }
+      }
+    });
+
+    // 完了率・平均時間を計算
+    Object.keys(byActivityType).forEach(type => {
+      const entry = byActivityType[type];
+      if (!entry) return;
+      entry.completionRate = entry.total > 0 ? Math.round((entry.completed / entry.total) * 100) : 0;
+      entry.avgDurationMinutes = entry.completed > 0 ? Math.round(entry.avgDurationMinutes / entry.completed) : 0;
+    });
+
+    const result = {
+      totalOperations: details.length,
+      completedOperations: details.filter((d: any) => d.actualEndTime).length,
+      byActivityType
     };
 
-    return sendSuccess(res, analysis);
+    return sendSuccess(res, result);
   });
 
   /**
@@ -604,32 +647,34 @@ export class OperationDetailController {
    */
   bulkOperation = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
-    const { operationIds, action } = req.body;
+    const { operationIds, action } = req.body as {
+      operationIds: string[];
+      action: 'complete' | 'cancel';
+    };
+
+    if (!Array.isArray(operationIds) || operationIds.length === 0) {
+      throw new ValidationError('運行詳細IDの配列は必須です');
+    }
+    if (!['complete', 'cancel'].includes(action)) {
+      throw new ValidationError('アクションは complete または cancel のいずれかです');
+    }
 
     logger.info('一括作業操作', { userId, operationIds, action });
 
-    if (!operationIds || !Array.isArray(operationIds) || operationIds.length === 0) {
-      throw new ValidationError('運行詳細IDの配列は必須です');
-    }
-
-    if (!['complete', 'cancel'].includes(action)) {
-      throw new ValidationError('無効なアクション');
-    }
-
-    const results = {
-      success: [] as string[],
-      failed: [] as { id: string; error: string }[]
+    const results: { success: string[]; failed: { id: string; error: string }[] } = {
+      success: [],
+      failed: []
     };
 
     for (const id of operationIds) {
       try {
+        const updateData: any = {};
         if (action === 'complete') {
-          await this.operationDetailService.update(id, {
-            actualEndTime: new Date()
-          });
+          updateData.actualEndTime = new Date();
         } else if (action === 'cancel') {
-          await this.operationDetailService.delete(id);
+          updateData.notes = 'キャンセル';
         }
+        await this.operationDetailService.update(id, updateData);
         results.success.push(id);
       } catch (error) {
         results.failed.push({
