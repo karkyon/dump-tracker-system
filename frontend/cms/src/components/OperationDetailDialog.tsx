@@ -150,7 +150,9 @@ interface OperationDebugTimelineEvent {
   eventType: 'TRIP_START' | 'TRIP_END' | 'PRE_INSPECTION' | 'POST_INSPECTION' | 
              'LOADING' | 'UNLOADING' | 'TRANSPORTING' | 'WAITING' | 
              'MAINTENANCE' | 'REFUELING' | 'FUELING' | 
-             'BREAK' | 'BREAK_START' | 'BREAK_END' | 'OTHER';
+             'BREAK' | 'BREAK_START' | 'BREAK_END' | 'OTHER' |
+             'LOADING_ARRIVED' | 'LOADING_COMPLETED' |
+             'UNLOADING_ARRIVED' | 'UNLOADING_COMPLETED';
   timestamp: string | null;
   location?: {
     id: string;
@@ -1164,6 +1166,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
       TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
       WAITING: { label: '待機', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      LOADING_ARRIVED:    { label: '積込場所 到着', icon: <MapPin />, className: 'bg-blue-100 text-blue-800' },
+      LOADING_COMPLETED:  { label: '積込完了',     icon: <CheckCircle />, className: 'bg-indigo-100 text-indigo-800' },
+      UNLOADING_ARRIVED:  { label: '積降場所 到着', icon: <MapPin />, className: 'bg-orange-100 text-orange-800' },
+      UNLOADING_COMPLETED:{ label: '積降完了',     icon: <CheckCircle />, className: 'bg-purple-100 text-purple-800' },
     };
 
     return typeConfig[eventType] || {
@@ -1500,94 +1506,257 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
                   {showOperationTimeline && operationDebugTimelineEvents.length > 0 && (
                     <div className="space-y-3">
-                      {operationDebugTimelineEvents.map((event) => {
-                        const typeInfo = getEventTypeInfo(event.eventType);
-                        
-                        return (
-                          <div key={event.id} className="border border-gray-200 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                              {/* シーケンス番号 */}
-                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                <span className="text-sm font-semibold text-blue-600">{event.sequenceNumber}</span>
-                              </div>
-
-                              <div className="flex-1">
-                                {/* イベント種別と時刻 */}
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
-                                    {typeInfo.icon}
-                                    {typeInfo.label}
+                      {(() => {
+                        // ─────────────────────────────────────────────
+                        // イベントをグループ化:
+                        //   LOADING_ARRIVED + LOADING_COMPLETED   → 積込セクション
+                        //   UNLOADING_ARRIVED + UNLOADING_COMPLETED → 積降セクション
+                        //   それ以外 → 単独イベント（既存表示）
+                        // ─────────────────────────────────────────────
+                        type RenderGroup =
+                          | { type: 'LOADING_GROUP';   groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null }
+                          | { type: 'UNLOADING_GROUP'; groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null }
+                          | { type: 'SINGLE'; event: OperationDebugTimelineEvent };
+ 
+                        const groups: RenderGroup[] = [];
+                        let loadingGroupNum  = 0;
+                        let unloadingGroupNum = 0;
+                        let idx = 0;
+                        const evs = operationDebugTimelineEvents;
+ 
+                        while (idx < evs.length) {
+                          const ev = evs[idx];
+                          if (ev.eventType === 'LOADING_ARRIVED') {
+                            loadingGroupNum++;
+                            const next = idx + 1 < evs.length && evs[idx + 1].eventType === 'LOADING_COMPLETED'
+                              ? evs[idx + 1] : null;
+                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: next });
+                            idx += next ? 2 : 1;
+                          } else if (ev.eventType === 'UNLOADING_ARRIVED') {
+                            unloadingGroupNum++;
+                            const next = idx + 1 < evs.length && evs[idx + 1].eventType === 'UNLOADING_COMPLETED'
+                              ? evs[idx + 1] : null;
+                            groups.push({ type: 'UNLOADING_GROUP', groupNum: unloadingGroupNum, arrivedEvent: ev, completedEvent: next });
+                            idx += next ? 2 : 1;
+                          } else {
+                            // LOADING_COMPLETED / UNLOADING_COMPLETED が孤立している場合も単独表示
+                            groups.push({ type: 'SINGLE', event: ev });
+                            idx++;
+                          }
+                        }
+ 
+                        // ─────────────────────────────────────────────
+                        // タイムスタンプ整形ユーティリティ
+                        // ─────────────────────────────────────────────
+                        const fmtTs = (ts: string | null) =>
+                          ts ? new Date(ts).toLocaleString('ja-JP', {
+                            month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit'
+                          }) : '-';
+ 
+                        // ─────────────────────────────────────────────
+                        // サブイベント1行のレンダリングヘルパー
+                        // ─────────────────────────────────────────────
+                        const renderSubRow = (
+                          subEvent: OperationDebugTimelineEvent,
+                          labelText: string,
+                          dotColor: string,
+                          isFirst: boolean
+                        ) => (
+                          <div className={`px-4 py-3 flex items-start gap-3 ${isFirst ? '' : 'border-t border-gray-100'}`}>
+                            <div className={`w-2.5 h-2.5 rounded-full ${dotColor} mt-1.5 flex-shrink-0`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-800">▶ {labelText}</span>
+                                {subEvent.timestamp && (
+                                  <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded whitespace-nowrap">
+                                    記録時刻: {fmtTs(subEvent.timestamp)}
                                   </span>
-                                  {event.timestamp && (
-                                    <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                                      {formatTime(event.timestamp)}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* 登録場所情報 */}
-                                {event.location && (
-                                  <div className="text-sm text-gray-600 mb-1">
-                                    <MapPin className="w-4 h-4 inline-block mr-1 text-gray-400" />
-                                    <span className="font-medium">{event.location.name}</span>
-                                    <span className="text-gray-500 ml-2">{event.location.address}</span>
-                                  </div>
-                                )}
-
-                                {/* GPS座標 */}
-                                {event.gpsLocation && (
-                                  <div className="text-sm text-gray-600 mb-1">
-                                    <Navigation className="w-4 h-4 inline-block mr-1 text-gray-400" />
-                                    GPS座標: {formatGps(event.gpsLocation.latitude, event.gpsLocation.longitude)}
-                                    <span className="text-xs text-gray-500 ml-2">
-                                      記録時刻: {formatTime(event.gpsLocation.recordedAt)}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* 品目情報 */}
-                                {event.items && (
-                                  <div className="text-sm text-gray-600 mb-1">
-                                    <Package className="w-4 h-4 inline-block mr-1 text-gray-400" />
-                                    品目: {event.items.name}
-                                    {event.quantityTons && event.quantityTons > 0 && (
-                                      <span className="ml-2">({event.quantityTons} {event.items.unit})</span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* 点検サマリー */}
-                                {event.inspectionDetails && (
-                                  <div className="mt-2 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded p-3">
-                                    <div className="flex items-center justify-between">
-                                      <div className="text-sm">
-                                        <span className="font-medium text-gray-700">点検項目: {event.inspectionDetails.totalItems}件</span>
-                                        <span className="ml-3 text-green-600">合格: {event.inspectionDetails.passedItems}件</span>
-                                        <span className="ml-3 text-red-600">不合格: {event.inspectionDetails.failedItems}件</span>
-                                      </div>
-                                      <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                                        event.inspectionDetails.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                        event.inspectionDetails.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
-                                        'bg-gray-100 text-gray-800'
-                                      }`}>
-                                        {event.inspectionDetails.status === 'COMPLETED' ? '完了' :
-                                         event.inspectionDetails.status === 'IN_PROGRESS' ? '実施中' : '待機中'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* 備考 */}
-                                {event.notes && (
-                                  <div className="text-sm text-gray-600 mt-2">
-                                    <span className="font-medium">備考:</span> {event.notes}
-                                  </div>
                                 )}
                               </div>
+                              {subEvent.location && (
+                                <div className="flex items-start gap-1 mt-1 text-xs text-gray-600">
+                                  <MapPin className="w-3 h-3 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <span className="break-all">{subEvent.location.name} {subEvent.location.address}</span>
+                                </div>
+                              )}
+                              {subEvent.gpsLocation && (
+                                <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-400">
+                                  <Navigation className="w-3 h-3 flex-shrink-0" />
+                                  <span>
+                                    GPS座標: {subEvent.gpsLocation.latitude.toFixed(6)}, {subEvent.gpsLocation.longitude.toFixed(6)}
+                                  </span>
+                                </div>
+                              )}
+                              {subEvent.items && (
+                                <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-600">
+                                  <Package className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                  <span>
+                                    品目: {subEvent.items.name}
+                                    {subEvent.quantityTons ? ` ${subEvent.quantityTons}t` : ''}
+                                  </span>
+                                </div>
+                              )}
+                              {subEvent.notes && (
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  備考: {subEvent.notes}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
-                      })}
+ 
+                        // ─────────────────────────────────────────────
+                        // グループ描画
+                        // ─────────────────────────────────────────────
+                        return groups.map((group, gIdx) => {
+                          if (group.type === 'LOADING_GROUP' || group.type === 'UNLOADING_GROUP') {
+                            const isLoading     = group.type === 'LOADING_GROUP';
+                            const groupLabel    = isLoading ? '積込' : '積降';
+                            const borderCls     = isLoading ? 'border-indigo-400' : 'border-purple-400';
+                            const headerBg      = isLoading ? 'bg-indigo-50 border-indigo-200' : 'bg-purple-50 border-purple-200';
+                            const headerTextCls = isLoading ? 'text-indigo-800' : 'text-purple-800';
+                            const arrivedDot    = isLoading ? 'bg-blue-400' : 'bg-orange-400';
+                            const completedDot  = 'bg-green-400';
+ 
+                            return (
+                              <div key={`group-${gIdx}`} className={`border-2 ${borderCls} rounded-lg overflow-hidden`}>
+                                {/* グループヘッダー */}
+                                <div className={`${headerBg} border-b px-4 py-2 flex items-center gap-2`}>
+                                  <Truck className={`w-4 h-4 ${headerTextCls} flex-shrink-0`} />
+                                  <span className={`text-sm font-bold ${headerTextCls}`}>
+                                    {groupLabel}
+                                    {group.groupNum > 1 && `（${group.groupNum}回目）`}
+                                  </span>
+                                  {group.arrivedEvent.location && (
+                                    <span className="text-xs text-gray-500 truncate">
+                                      ─ {group.arrivedEvent.location.name}
+                                    </span>
+                                  )}
+                                </div>
+                                {/* サブイベント */}
+                                <div className="bg-white">
+                                  {/* 到着 */}
+                                  {renderSubRow(group.arrivedEvent, '到着', arrivedDot, true)}
+                                  {/* 完了 */}
+                                  {group.completedEvent
+                                    ? renderSubRow(
+                                        group.completedEvent,
+                                        isLoading ? '積込完了' : '積降完了',
+                                        completedDot,
+                                        false
+                                      )
+                                    : (
+                                      <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 italic flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        完了記録なし（作業中の可能性があります）
+                                      </div>
+                                    )
+                                  }
+                                </div>
+                              </div>
+                            );
+                          }
+ 
+                          // ─────────────────────────────────────────
+                          // 通常イベント（TRIP_START/END, 点検, 給油, 休憩等）
+                          // ─────────────────────────────────────────
+                          const { event } = group;
+                          const typeInfo = getEventTypeInfo(event.eventType);
+                          return (
+                            <div key={event.id} className="border border-gray-200 rounded-lg p-4">
+                              <div className="flex items-start gap-3">
+                                {/* シーケンス番号 */}
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <span className="text-sm font-semibold text-blue-600">{event.sequenceNumber}</span>
+                                </div>
+ 
+                                <div className="flex-1">
+                                  {/* イベント種別と時刻 */}
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
+                                      {typeInfo.icon}
+                                      {typeInfo.label}
+                                    </span>
+                                    {event.timestamp && (
+                                      <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
+                                        記録時刻: {fmtTs(event.timestamp)}
+                                      </span>
+                                    )}
+                                  </div>
+ 
+                                  {/* 場所情報 */}
+                                  {event.location && (
+                                    <div className="flex items-start gap-2 text-sm text-gray-600 mb-2">
+                                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                      <div>
+                                        <p className="font-medium">{event.location.name}</p>
+                                        <p className="text-xs text-gray-500">{event.location.address}</p>
+                                      </div>
+                                    </div>
+                                  )}
+ 
+                                  {/* GPS座標 */}
+                                  {event.gpsLocation && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+                                      <Navigation className="w-3 h-3 flex-shrink-0" />
+                                      <span>
+                                        GPS座標: {event.gpsLocation.latitude.toFixed(6)}, {event.gpsLocation.longitude.toFixed(6)}
+                                      </span>
+                                    </div>
+                                  )}
+ 
+                                  {/* 品目・数量 */}
+                                  {event.items && (
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                                      <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                      <span>
+                                        品目: {event.items.name}
+                                        {event.quantityTons ? ` ${event.quantityTons}t` : ''}
+                                      </span>
+                                    </div>
+                                  )}
+ 
+                                  {/* 点検詳細 */}
+                                  {event.inspectionDetails && (
+                                    <div className="bg-gray-50 rounded-lg p-3 mb-2">
+                                      <div className="flex items-center gap-4 text-sm">
+                                        <span className="text-gray-600">
+                                          ステータス:
+                                          <span className={`ml-1 font-medium ${
+                                            event.inspectionDetails.status === 'COMPLETED' ? 'text-green-600' :
+                                            event.inspectionDetails.status === 'IN_PROGRESS' ? 'text-blue-600' :
+                                            'text-gray-600'
+                                          }`}>
+                                            {event.inspectionDetails.status === 'COMPLETED' ? '完了' :
+                                             event.inspectionDetails.status === 'IN_PROGRESS' ? '実施中' : '待機中'}
+                                          </span>
+                                        </span>
+                                        <span className="text-gray-600">
+                                          合格: <span className="font-medium text-green-600">{event.inspectionDetails.passedItems}</span>
+                                          /{event.inspectionDetails.totalItems}項目
+                                        </span>
+                                        {event.inspectionDetails.failedItems > 0 && (
+                                          <span className="text-red-600 font-medium">
+                                            不合格: {event.inspectionDetails.failedItems}件
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+ 
+                                  {/* 備考 */}
+                                  {event.notes && (
+                                    <div className="text-sm text-gray-600 mt-2">
+                                      <span className="font-medium">備考:</span> {event.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
 

@@ -38,6 +38,7 @@ interface VehicleDisplay {
   vehicleNumber: string;  // 表示用(車番)
   vehicleType: string;
   currentMileage: number;
+  status: string;          // 🆕 車両ステータス追加 (ACTIVE / MAINTENANCE / INACTIVE / RETIRED)
   lastDriver?: string;
   lastOperationDate?: string;
 }
@@ -130,6 +131,7 @@ const VehicleInfo: React.FC = () => {
             vehicleNumber: v.plateNumber,  // 車番(ナンバープレート)
             vehicleType: v.vehicleType || v.model || '未設定',  // 🆕 フォールバック追加
             currentMileage: v.currentMileage,
+            status: v.status,  // 🆕 ステータスをそのまま保持
             lastDriver: lastDriver || '未割当',
             lastOperationDate: lastOperationDate || '－'
           };
@@ -193,12 +195,19 @@ const VehicleInfo: React.FC = () => {
   // ✅ 車両選択時の処理
   const handleVehicleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const vehicleId = e.target.value;
+
+    // 🆕 選択不可ステータスの車両は弾く（disabled optionの二重チェック）
+    const selected = vehicles.find(v => v.id === vehicleId);
+    if (selected && selected.status !== 'ACTIVE') {
+      toast.error('この車両は現在選択できません');
+      return;
+    }
+
     setSelectedVehicleId(vehicleId);
     
-    const vehicle = vehicles.find(v => v.id === vehicleId);
-    if (vehicle) {
-      setVehicleInfo(vehicle);
-      setStartMileage(vehicle.currentMileage.toString());
+    if (selected) {
+      setVehicleInfo(selected);
+      setStartMileage(selected.currentMileage.toString());
     } else {
       setVehicleInfo(null);
       setStartMileage('');
@@ -354,11 +363,24 @@ const VehicleInfo: React.FC = () => {
                 transition-all duration-200 text-gray-800 font-medium cursor-pointer"
             >
               <option value="">車両を選択してください</option>
-              {vehicles.map(vehicle => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.vehicleNumber} ({vehicle.vehicleType})
-                </option>
-              ))}
+              {vehicles.map(vehicle => {
+                const isSelectable = vehicle.status === 'ACTIVE';
+                const statusLabel =
+                  vehicle.status === 'MAINTENANCE' ? ' 【メンテ中】' :
+                  vehicle.status === 'INACTIVE'    ? ' 【非稼働】' :
+                  vehicle.status === 'RETIRED'     ? ' 【廃車】' :
+                  '';
+                return (
+                  <option
+                    key={vehicle.id}
+                    value={vehicle.id}
+                    disabled={!isSelectable}
+                    style={{ color: isSelectable ? 'inherit' : '#9ca3af' }}
+                  >
+                    {vehicle.vehicleNumber} ({vehicle.vehicleType}){statusLabel}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

@@ -114,12 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           - モバイル: 従来通り fixed オーバーレイ表示
       */}
       <div
-        className={`
-          lg:static lg:translate-x-0 lg:w-64 lg:flex-shrink-0 lg:h-full
-          fixed inset-y-0 left-0 z-50 w-64 bg-gray-800
-          transform transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        `}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-800 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 lg:w-64 lg:flex-shrink-0 lg:h-full ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="flex flex-col h-full">
           {/* ロゴエリア（モバイル時のみ表示: lg以上ではヘッダーにロゴがあるため不要） */}
@@ -189,4 +184,4 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   );
 };
 
-export default Sidebar;s
+export default Sidebar;

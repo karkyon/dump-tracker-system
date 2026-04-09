@@ -3,7 +3,8 @@
 // 運行詳細管理Controller - 完全拡張版
 // ✅ 運行開始/終了・点検イベント統合対応
 // ✅ TypeScriptエラー完全修正
-// 最終更新: 2025-12-30
+// 🆕 積込/積降サブイベント展開対応（到着・完了を個別イベントとして返却）
+// 最終更新: 2026-04-09
 // =====================================
 
 import { Response } from 'express';
@@ -24,13 +25,18 @@ const prisma = new PrismaClient();
 
 /**
  * 統合タイムラインイベント型定義
+ * 🆕 積込/積降サブイベントタイプを追加
  */
 interface TimelineEvent {
   id: string;
   sequenceNumber: number;
   eventType: 'TRIP_START' | 'TRIP_END' | 'PRE_INSPECTION' | 'POST_INSPECTION' |
              'LOADING' | 'UNLOADING' | 'TRANSPORTING' | 'WAITING' |
-             'MAINTENANCE' | 'REFUELING' | 'BREAK' | 'OTHER';
+             'MAINTENANCE' | 'REFUELING' | 'BREAK' | 'OTHER' |
+             // 🆕 積込サブイベント（モバイルの loading/start → loading/complete フローに対応）
+             'LOADING_ARRIVED' | 'LOADING_COMPLETED' |
+             // 🆕 積降サブイベント（モバイルの unloading/start → unloading/complete フローに対応）
+             'UNLOADING_ARRIVED' | 'UNLOADING_COMPLETED';
   timestamp: Date | null;
   location?: {
     id: string;
@@ -79,6 +85,9 @@ export class OperationDetailController {
    * - inspection_records: 運行前/後点検イベント
    * - operation_details: 積込/積降/給油/休憩などのイベント
    * - gps_logs: GPS座標情報
+   *
+   * 🆕 LOADING → LOADING_ARRIVED + LOADING_COMPLETED に展開
+   * 🆕 UNLOADING → UNLOADING_ARRIVED + UNLOADING_COMPLETED に展開
    */
   getAllOperationDetails = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
@@ -114,68 +123,54 @@ export class OperationDetailController {
 
     try {
       // =====================================
-      // 1. 運行基本情報取得
+      // 1. 運行基本情報を取得
       // =====================================
-      const operation = await prisma.operation.findUnique({
-        where: { id: operationId },
+      const operation = await prisma.operations.findUnique({
+        where: { id: operationId as string },
         include: {
-          vehicles: true,  // ✅ 修正: 正しいリレーション名
-          usersOperationsDriverIdTousers: true  // ✅ 修正: 正しいリレーション名
+          vehicles: true,
+          usersOperationsDriverIdTousers: true
         }
       });
 
       if (!operation) {
-        return sendNotFound(res, '運行記録が見つかりません');
+        return sendNotFound(res, '運行が見つかりません');
       }
 
       // =====================================
-      // 2. operation_details（既存イベント）取得
+      // 2. 点検記録を取得
       // =====================================
-      const operationDetails = await prisma.operationDetail.findMany({
-        where: { operationId },
+      const inspectionRecords = await (prisma as any).inspectionRecord.findMany({
+        where: { operationId: operationId as string },
         include: {
-          locations: {  // ✅ 修正: 正しいリレーション名
-            select: {
-              id: true,
-              name: true,
-              address: true,
-              latitude: true,
-              longitude: true
-            }
-          },
-          items: {  // ✅ 修正: 正しいリレーション名
-            select: {
-              id: true,
-              name: true,
-              unit: true
-            }
-          }
+          inspectionItemResults: true
         },
-        orderBy: { sequenceNumber: 'asc' }
+        orderBy: { startedAt: 'asc' }
       });
 
       // =====================================
-      // 3. inspection_records（点検イベント）取得
+      // 3. 運行詳細を取得（積込/積降/給油/休憩など）
       // =====================================
-      const inspectionRecords = await prisma.inspectionRecord.findMany({
-        where: { operationId },
+      const operationDetails = await (prisma as any).operationDetail.findMany({
+        where: { operationId: operationId as string },
         include: {
-          inspectionItemResults: {  // ✅ 修正: 正しいリレーション名
-            select: {
-              resultValue: true,  // ✅ 修正: "result" → "resultValue"
-              isPassed: true      // ✅ 修正: "isPassed" を追加
-            }
-          }
+          locations: true,
+          items: true
         },
-        orderBy: { createdAt: 'asc' }
+        orderBy: [
+          { actualStartTime: 'asc' },
+          { plannedTime: 'asc' },
+          { sequenceNumber: 'asc' }
+        ]
       });
 
       // =====================================
-      // 4. gps_logs（GPS座標）取得
+      // 4. GPSログを取得（走行軌跡用）
       // =====================================
-      const gpsLogs = await prisma.gpsLog.findMany({
-        where: { operationId },
-        orderBy: { recordedAt: 'asc' }
+      const gpsLogs = await (prisma as any).gpsLog.findMany({
+        where: { operationId: operationId as string },
+        orderBy: { recordedAt: 'asc' },
+        take: 500
       });
 
       // =====================================
@@ -200,12 +195,12 @@ export class OperationDetailController {
       // 5-2. 運行前点検イベント
       // ✅ 修正: inspection_records.latitude/longitude を直接使用
       inspectionRecords
-        .filter(ir => ir.inspectionType === 'PRE_TRIP')
-        .forEach(inspection => {
+        .filter((ir: any) => ir.inspectionType === 'PRE_TRIP')
+        .forEach((inspection: any) => {
           // ✅ 修正: inspectionItemResults の集計
           const totalItems = inspection.inspectionItemResults.length;
-          const passedItems = inspection.inspectionItemResults.filter(r => r.isPassed === true).length;
-          const failedItems = inspection.inspectionItemResults.filter(r => r.isPassed === false).length;
+          const passedItems = inspection.inspectionItemResults.filter((r: any) => r.isPassed === true).length;
+          const failedItems = inspection.inspectionItemResults.filter((r: any) => r.isPassed === false).length;
 
           timeline.push({
             id: inspection.id,
@@ -229,44 +224,133 @@ export class OperationDetailController {
         });
 
       // 5-3. 運行詳細イベント（積込/積降/給油/休憩など）
-      // ✅ 修正: operation_details.latitude/longitude を直接使用
-      operationDetails.forEach(detail => {
-        timeline.push({
-          id: detail.id,
-          sequenceNumber: ++sequenceCounter,
-          eventType: detail.activityType as any,
-          timestamp: detail.actualStartTime || detail.plannedTime,
-          location: detail.locations ? {  // ✅ 修正: 正しいリレーション名
-            id: detail.locations.id,
-            name: detail.locations.name,
-            address: detail.locations.address || '',
-            latitude: Number(detail.locations.latitude),
-            longitude: Number(detail.locations.longitude)
-          } : null,
-          gpsLocation: (detail.latitude && detail.longitude) ? {
-            latitude: Number(detail.latitude),
-            longitude: Number(detail.longitude),
-            recordedAt: detail.gpsRecordedAt || detail.actualStartTime || detail.plannedTime || new Date()
-          } : null,
-          quantityTons: Number(detail.quantityTons) || 0,
-          items: detail.items ? {  // ✅ 修正: 正しいリレーション名
-            id: detail.items.id,
-            name: detail.items.name,
-            unit: detail.items.unit
-          } : null,
-          notes: detail.notes
-        });
+      // 🆕 LOADING → LOADING_ARRIVED + LOADING_COMPLETED に展開
+      //    モバイルの loading/start（actualStartTime=到着時刻）と
+      //    loading/complete（actualEndTime=積込完了時刻）を個別イベントとして返却
+      // 🆕 UNLOADING → UNLOADING_ARRIVED + UNLOADING_COMPLETED に展開
+      //    モバイルの unloading/start（actualStartTime=到着時刻）と
+      //    unloading/complete（actualEndTime=積降完了時刻）を個別イベントとして返却
+      operationDetails.forEach((detail: any) => {
+        // 共通: 場所情報
+        const locationData = detail.locations ? {
+          id: detail.locations.id,
+          name: detail.locations.name,
+          address: detail.locations.address || '',
+          latitude: Number(detail.locations.latitude),
+          longitude: Number(detail.locations.longitude)
+        } : null;
+
+        // 共通: GPS位置情報
+        const gpsLocationData = (detail.latitude && detail.longitude) ? {
+          latitude: Number(detail.latitude),
+          longitude: Number(detail.longitude),
+          recordedAt: detail.gpsRecordedAt || detail.actualStartTime || detail.plannedTime || new Date()
+        } : null;
+
+        // 共通: 品目情報
+        const itemsData = detail.items ? {  // ✅ 修正: 正しいリレーション名
+          id: detail.items.id,
+          name: detail.items.name,
+          unit: detail.items.unit
+        } : null;
+
+        if (detail.activityType === 'LOADING') {
+          // ─────────────────────────────────────────
+          // 🆕 積込: 到着イベント（actualStartTime = 積込場所到着時刻）
+          //    モバイルの POST /trips/:id/loading/start に対応
+          // ─────────────────────────────────────────
+          timeline.push({
+            id: `${detail.id}-arrived`,
+            sequenceNumber: ++sequenceCounter,
+            eventType: 'LOADING_ARRIVED',
+            timestamp: detail.actualStartTime || detail.plannedTime,
+            location: locationData,
+            gpsLocation: gpsLocationData,
+            quantityTons: 0,
+            items: null,
+            notes: detail.notes || null
+          });
+
+          // 🆕 積込: 積込完了イベント（actualEndTime = 積込完了時刻）
+          //    モバイルの POST /trips/:id/loading/complete に対応
+          //    actualEndTime が設定されている場合のみ生成
+          if (detail.actualEndTime) {
+            timeline.push({
+              id: `${detail.id}-completed`,
+              sequenceNumber: ++sequenceCounter,
+              eventType: 'LOADING_COMPLETED',
+              timestamp: detail.actualEndTime,
+              location: locationData,
+              gpsLocation: null,
+              quantityTons: Number(detail.quantityTons) || 0,
+              items: itemsData,
+              notes: detail.notes || null
+            });
+          }
+
+        } else if (detail.activityType === 'UNLOADING') {
+          // ─────────────────────────────────────────
+          // 🆕 積降: 到着イベント（actualStartTime = 積降場所到着時刻）
+          //    モバイルの POST /trips/:id/unloading/start に対応
+          // ─────────────────────────────────────────
+          timeline.push({
+            id: `${detail.id}-arrived`,
+            sequenceNumber: ++sequenceCounter,
+            eventType: 'UNLOADING_ARRIVED',
+            timestamp: detail.actualStartTime || detail.plannedTime,
+            location: locationData,
+            gpsLocation: gpsLocationData,
+            quantityTons: 0,
+            items: null,
+            notes: detail.notes || null
+          });
+
+          // 🆕 積降: 積降完了イベント（actualEndTime = 積降完了時刻）
+          //    モバイルの POST /trips/:id/unloading/complete に対応
+          //    actualEndTime が設定されている場合のみ生成
+          if (detail.actualEndTime) {
+            timeline.push({
+              id: `${detail.id}-completed`,
+              sequenceNumber: ++sequenceCounter,
+              eventType: 'UNLOADING_COMPLETED',
+              timestamp: detail.actualEndTime,
+              location: locationData,
+              gpsLocation: null,
+              quantityTons: Number(detail.quantityTons) || 0,
+              items: itemsData,
+              notes: detail.notes || '積降完了'
+            });
+          }
+
+        } else {
+          // ─────────────────────────────────────────
+          // その他（FUELING, BREAK_START, BREAK_END,
+          //         TRANSPORTING, WAITING, MAINTENANCE,
+          //         REFUELING, OTHER）は既存動作を維持
+          // ─────────────────────────────────────────
+          timeline.push({
+            id: detail.id,
+            sequenceNumber: ++sequenceCounter,
+            eventType: detail.activityType as any,
+            timestamp: detail.actualStartTime || detail.plannedTime,
+            location: locationData,
+            gpsLocation: gpsLocationData,
+            quantityTons: Number(detail.quantityTons) || 0,
+            items: itemsData,
+            notes: detail.notes
+          });
+        }
       });
 
       // 5-4. 運行後点検イベント
       // ✅ 修正: inspection_records.latitude/longitude を直接使用
       inspectionRecords
-        .filter(ir => ir.inspectionType === 'POST_TRIP')
-        .forEach(inspection => {
+        .filter((ir: any) => ir.inspectionType === 'POST_TRIP')
+        .forEach((inspection: any) => {
           // ✅ 修正: inspectionItemResults の集計
           const totalItems = inspection.inspectionItemResults.length;
-          const passedItems = inspection.inspectionItemResults.filter(r => r.isPassed === true).length;
-          const failedItems = inspection.inspectionItemResults.filter(r => r.isPassed === false).length;
+          const passedItems = inspection.inspectionItemResults.filter((r: any) => r.isPassed === true).length;
+          const failedItems = inspection.inspectionItemResults.filter((r: any) => r.isPassed === false).length;
 
           timeline.push({
             id: inspection.id,
@@ -336,7 +420,7 @@ export class OperationDetailController {
         },
         // ✅ 追加: 走行軌跡用GPSログ（イベントPINとは別）
         // フロントエンドの表示設定（ON/OFF・インターバル）に応じてフィルタリングして使用
-        routeGpsLogs: gpsLogs.map(log => ({
+        routeGpsLogs: gpsLogs.map((log: any) => ({
           latitude: Number(log.latitude),
           longitude: Number(log.longitude),
           recordedAt: log.recordedAt,
@@ -433,7 +517,7 @@ export class OperationDetailController {
    */
   deleteOperationDetail = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
-    const { id } = req.params;  // ✅ 修正: idの型はstring
+    const { id } = req.params;
 
     // ✅ 修正: undefinedチェック追加
     if (!id) {
@@ -442,40 +526,43 @@ export class OperationDetailController {
 
     logger.info('運行詳細削除', { userId, id });
 
-    // ✅ 修正: deleteメソッドはvoidを返すので、存在確認を先にする
-    const existing = await this.operationDetailService.findByKey(id);
-    if (!existing) {
-      return sendNotFound(res, '運行詳細が見つかりません');
-    }
-
     await this.operationDetailService.delete(id);
 
-    return sendSuccess(res, { message: '運行詳細を削除しました' });
+    return sendSuccess(res, { id });
   });
 
   /**
    * 運行別詳細一覧取得
    * GET /operation-details/by-operation/:operationId
+   * ✅ operationDetailRoutes.ts が参照するため必須メソッド
    */
-  getOperationDetailsByOperation = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {  // ✅ 修正: メソッド追加
+  getOperationDetailsByOperation = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
     const { operationId } = req.params;
 
+    if (!operationId) {
+      throw new ValidationError('運行IDは必須です');
+    }
+
     logger.info('運行別詳細一覧取得', { userId, operationId });
 
-    const details = await this.operationDetailService.findMany({
-      where: { operationId },
-      orderBy: { sequenceNumber: 'asc' }
+    const operationDetails = await this.operationDetailService.findMany({
+      where: { operationId }
     });
 
-    return sendSuccess(res, details);
+    // シーケンス番号でソート
+    const sorted = Array.isArray(operationDetails)
+      ? [...operationDetails].sort((a: any, b: any) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))
+      : operationDetails;
+
+    return sendSuccess(res, sorted);
   });
 
   /**
    * 効率分析
-   * GET /operation-details/efficiency-analysis
+   * GET /operation-details/analysis
    */
-  getEfficiencyAnalysis = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  getEfficiencyAnalysis = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<any> => {
     const userId = req.user!.userId;
     const { startDate, endDate } = req.query;
 
@@ -578,45 +665,11 @@ export class OperationDetailController {
       total,
       completed,
       inProgress: total - completed,
-      completionRate: total > 0 ? (completed / total) * 100 : 0,
-      timestamp: new Date().toISOString()
+      completionRate: total > 0 ? Math.round((completed / total) * 100) : 0
     };
 
     return sendSuccess(res, stats);
   });
-}
-
-// =====================================
-// ヘルパー関数
-// =====================================
-
-/**
- * 指定時刻に最も近いGPSログを検索
- * ✅ 保持（将来のリアルタイム位置表示等で使用する可能性あり）
- * ⚠️ イベントGPS表示には使用しない
- *    → イベントGPSは operation_details.latitude/longitude を直接使用すること
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function findNearestGPS(gpsLogs: any[], targetTime: Date | null): any | null {
-  if (!targetTime || gpsLogs.length === 0) return null;
-
-  const targetTimestamp = targetTime.getTime();
-
-  let nearest = gpsLogs[0];
-  let minDiff = Math.abs(nearest.recordedAt.getTime() - targetTimestamp);
-
-  for (const log of gpsLogs) {
-    const diff = Math.abs(log.recordedAt.getTime() - targetTimestamp);
-    if (diff < minDiff) {
-      minDiff = diff;
-      nearest = log;
-    }
-  }
-
-  // 5分以内のGPSログのみ返す
-  if (minDiff > 5 * 60 * 1000) return null;
-
-  return nearest;
 }
 
 export default OperationDetailController;
