@@ -1636,21 +1636,28 @@ class ReportService {
     // 点検結果マップを構築
     const inspResults = buildInspResultMap(allInspRecords);
 
-    // 固定点検項目リストへマッピング
-    const leftItems = FIXED_INSP_LEFT.map((name, i) => {
-      const matched = matchInspItem(name, INSP_LEFT_KEYWORDS[i] ?? [], inspResults);
-      return { name, preResult: matched.pre, postResult: matched.post, measure: matched.measure };
+    // ⑦修正: DBのPRE_TRIP点検項目をdisplayOrder順で取得（最大16件）
+    const dbInspItems = await (this.db as any).inspectionItem.findMany({
+      where: { isActive: true, inspectionType: 'PRE_TRIP' },
+      orderBy: { displayOrder: 'asc' },
+      take: 16,
     });
 
-    const middleItems = FIXED_INSP_MIDDLE.map((name, i) => {
-      const matched = matchInspItem(name, INSP_MIDDLE_KEYWORDS[i] ?? [], inspResults);
-      return { name, preResult: matched.pre, postResult: matched.post, measure: matched.measure };
+    // DB項目ごとに inspResults から結果を検索してマッピング
+    const allMappedItems = dbInspItems.map((dbItem: any) => {
+      const result = inspResults.find((r: any) => r.name === dbItem.name);
+      return {
+        name: dbItem.name,
+        preResult:  result?.preResult  ?? '',
+        postResult: result?.postResult ?? '',
+        measure:    result?.measure    ?? '',
+      };
     });
 
-    const rightItems = FIXED_INSP_RIGHT.map((name, i) => {
-      const matched = matchInspItem(name, INSP_RIGHT_KEYWORDS[i] ?? [], inspResults);
-      return { name, preResult: matched.pre, postResult: matched.post, measure: matched.measure };
-    });
+    // 前半8件 → 左列、後半8件 → 右列（最大16項目）
+    const leftItems   = allMappedItems.slice(0, 8);
+    const middleItems = allMappedItems.slice(8, 16);
+    const rightItems: any[] = [];  // 旧3列目は廃止
 
     // 帳票データ組み立て
     const dailyDriverData: any /* DailyDriverReportData */ = {
@@ -1669,7 +1676,7 @@ class ReportService {
         quantityTons: c.quantityTons > 0 ? parseFloat(fmtNum(c.quantityTons, 2)) : 0,
         loadingCondition: c.loadingCondition,
         loadingStartTime: c.loadingStartTime,
-        loadingEndTime: c.loadingEndTime,
+        loadingEndTime: c.loadingEndTime || c.unloadingStartTime,  // ⑤修正: 積込終了=積降移動開始時刻
        loadingDuration: calcTimeDuration(c.loadingStartTime, c.loadingEndTime),     // NEW(D)
        unloadingStartTime: c.unloadingStartTime ?? '',                               // NEW(D)
        unloadingEndTime: c.unloadingEndTime ?? '',                                   // NEW(D)

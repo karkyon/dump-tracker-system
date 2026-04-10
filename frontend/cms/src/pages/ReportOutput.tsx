@@ -78,6 +78,12 @@ interface Report {
   errorMessage: string | null;
 }
 
+interface DriverUser {
+  id: string;
+  name: string;
+  username: string;
+}
+
 interface GeneratingReport {
   reportId: string;
   title: string;
@@ -343,6 +349,8 @@ const ReportOutput: React.FC = () => {
     new Date().toISOString().split('T')[0]
   );
   const [dailyFormat, setDailyFormat] = useState<ReportFormat>('PDF');
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+  const [drivers, setDrivers] = useState<DriverUser[]>([]);
   const [dailyInclude, setDailyInclude] = useState({
     vehicleInfo: true,
     driverInfo: true,
@@ -391,6 +399,28 @@ const ReportOutput: React.FC = () => {
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
+
+  // 運転手一覧を取得
+  useEffect(() => {
+    const fetchDrivers = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/users?role=DRIVER&limit=100`, {
+          headers: getAuthHeaders(),
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        // レスポンス構造の正規化
+        const rawData = json.data?.data?.users ?? json.data?.users ?? json.data ?? [];
+        const list: DriverUser[] = Array.isArray(rawData)
+          ? rawData.map((u: any) => ({ id: u.id, name: u.name ?? u.username, username: u.username }))
+          : [];
+        setDrivers(list);
+      } catch (err) {
+        console.error('[ReportOutput] ドライバー取得エラー:', err);
+      }
+    };
+    fetchDrivers();
+  }, []);
 
   // =====================================
   // ポーリング処理
@@ -459,6 +489,7 @@ const ReportOutput: React.FC = () => {
       const result = await apiGenerateDailyReport({
         date: dailyDate,
         format: dailyFormat,
+        driverId: selectedDriverId || undefined,
       });
 
       const newGenerating: GeneratingReport = {
@@ -583,6 +614,25 @@ const ReportOutput: React.FC = () => {
                 value={dailyDate}
                 onChange={(e) => setDailyDate(e.target.value)}
               />
+            </div>
+
+            {/* 運転手選択 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                運転手 <span className="text-gray-400 text-xs">（未選択の場合は当日の全運行を集計）</span>
+              </label>
+              <select
+                value={selectedDriverId}
+                onChange={(e) => setSelectedDriverId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">── 全員（指定なし）──</option>
+                {drivers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}（{d.username}）
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* 出力形式 */}
