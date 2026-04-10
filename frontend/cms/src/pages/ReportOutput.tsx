@@ -351,12 +351,7 @@ const ReportOutput: React.FC = () => {
   const [dailyFormat, setDailyFormat] = useState<ReportFormat>('PDF');
   const [selectedDriverId, setSelectedDriverId] = useState<string>('');
   const [drivers, setDrivers] = useState<DriverUser[]>([]);
-  const [dailyInclude, setDailyInclude] = useState({
-    vehicleInfo: true,
-    driverInfo: true,
-    operationDetails: true,
-    inspectionResults: true,
-  });
+  // dailyInclude: 廃止（チェックボックスUI削除）
 
   // 生成中レポートの追跡
   const [generatingReports, setGeneratingReports] = useState<GeneratingReport[]>([]);
@@ -647,31 +642,6 @@ const ReportOutput: React.FC = () => {
                 <option value="EXCEL">Excel</option>
                 <option value="CSV">CSV</option>
               </select>
-            </div>
-
-            {/* 含まれる項目 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">含まれる項目</label>
-              <div className="space-y-2">
-                {[
-                  { key: 'vehicleInfo', label: '車両情報' },
-                  { key: 'driverInfo', label: '運転手情報' },
-                  { key: 'operationDetails', label: '運行詳細' },
-                  { key: 'inspectionResults', label: '点検結果' },
-                ].map(({ key, label }) => (
-                  <label key={key} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={dailyInclude[key as keyof typeof dailyInclude]}
-                      onChange={(e) =>
-                        setDailyInclude((prev) => ({ ...prev, [key]: e.target.checked }))
-                      }
-                      className="mr-2 rounded border-gray-300 text-blue-600"
-                    />
-                    <span className="text-sm text-gray-700">{label}</span>
-                  </label>
-                ))}
-              </div>
             </div>
 
             {/* 生成ボタン */}
