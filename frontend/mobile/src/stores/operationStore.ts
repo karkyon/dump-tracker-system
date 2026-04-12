@@ -41,6 +41,8 @@ export interface OperationState {
   loadingLocationLat: number | null;   // 🆕 積込場所緯度
   loadingLocationLng: number | null;   // 🆕 積込場所経度
   unloadingLocation: string | null;
+  customerId: string | null;      // 🆕 客先ID
+  customerName: string | null;    // 🆕 客先名
   
   // 運行ステータス
   status: 'IDLE' | 'INSPECTING' | 'IN_PROGRESS' | 'COMPLETED';
@@ -73,6 +75,7 @@ export interface OperationState {
   setLoadingLocation: (location: string) => void;
   setLoadingLocationWithCoords: (location: string, lat: number, lng: number) => void; // 🆕
   setUnloadingLocation: (location: string) => void;
+  setCustomerInfo: (info: { customerId: string; customerName: string }) => void; // 🆕
   
   completeOperation: () => void;
   
@@ -105,6 +108,8 @@ export const useOperationStore = create<OperationState>()(
       loadingLocationLat: null,   // 🆕
       loadingLocationLng: null,   // 🆕
       unloadingLocation: null,
+      customerId: null,           // 🆕
+      customerName: null,         // 🆕
 
       // Actions
       setVehicleInfo: (info) => {
@@ -236,6 +241,12 @@ export const useOperationStore = create<OperationState>()(
         set({ loadingLocation: location, loadingLocationLat: lat, loadingLocationLng: lng });
       },
 
+      // 🆕 客先情報設定
+      setCustomerInfo: (info) => {
+        console.log('[Operation Store] 🏢 SET CUSTOMER INFO:', info);
+        set({ customerId: info.customerId, customerName: info.customerName });
+      },
+
       // 🆕 積降場所設定
       setUnloadingLocation: (location) => {
         console.log('[Operation Store] 📍 SET UNLOADING LOCATION:', location);
@@ -269,6 +280,8 @@ export const useOperationStore = create<OperationState>()(
           breakCount: 0,
           previousPhase: null,
           loadingLocation: null,
+          customerId: null,
+          customerName: null,
           loadingLocationLat: null,   // 🆕
           loadingLocationLng: null,   // 🆕
           unloadingLocation: null
@@ -303,6 +316,8 @@ export const useOperationStore = create<OperationState>()(
           breakCount: state.breakCount,            // 🔧 休憩回数も永続化 (2026-02-01)
           previousPhase: state.previousPhase, // 🆕 休憩前フェーズも永続化 (2025-12-28)
           loadingLocation: state.loadingLocation,
+          customerId: state.customerId,
+          customerName: state.customerName,
           loadingLocationLat: state.loadingLocationLat,   // 🆕
           loadingLocationLng: state.loadingLocationLng,   // 🆕
           unloadingLocation: state.unloadingLocation

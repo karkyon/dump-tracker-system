@@ -50,13 +50,18 @@ const VehicleInfo: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuthStore();
 
   // 別名をつけて Store の関数を取得
-  const { setVehicleInfo: saveVehicleToStore, setDriverInfo: saveDriverToStore } = useOperationStore();
+  const { setVehicleInfo: saveVehicleToStore, setDriverInfo: saveDriverToStore, setCustomerInfo: saveCustomerToStore } = useOperationStore();
   
   const [vehicles, setVehicles] = useState<VehicleDisplay[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [vehicleInfo, setVehicleInfo] = useState<VehicleDisplay | null>(null);
   const [startMileage, setStartMileage] = useState('');
   const [isFetching, setIsFetching] = useState(true);
+
+  // 🆕 客先選択
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [isCustomerFetching, setIsCustomerFetching] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -66,6 +71,25 @@ const VehicleInfo: React.FC = () => {
 
   useEffect(() => {
     fetchVehicles();
+  }, []);
+
+  // 🆕 客先一覧取得
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setIsCustomerFetching(true);
+      try {
+        const res = await apiService.getCustomers();
+        if (res.success) {
+          const list = res.data?.customers || res.data || [];
+          setCustomers(Array.isArray(list) ? list : []);
+        }
+      } catch (e) {
+        console.error('客先取得エラー:', e);
+      } finally {
+        setIsCustomerFetching(false);
+      }
+    };
+    fetchCustomers();
   }, []);
 
   // ✅ 修正: 実際にAPIから車両データを取得
@@ -220,6 +244,11 @@ const VehicleInfo: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
+    if (!selectedCustomerId) {
+      toast.error('客先を選択してください');
+      return false;
+    }
+
     if (!selectedVehicleId) {
       toast.error('車番を選択してください');
       return false;
@@ -259,6 +288,14 @@ const VehicleInfo: React.FC = () => {
         });
       }
       
+      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+      if (selectedCustomer) {
+        saveCustomerToStore({
+          customerId: selectedCustomer.id,
+          customerName: selectedCustomer.name,
+        });
+      }
+
       toast.success('車両情報を保存しました');
       navigate('/pre-departure-inspection');
     } else {
@@ -350,6 +387,29 @@ const VehicleInfo: React.FC = () => {
 
       <main className="max-w-md mx-auto px-6 py-8">
         <div className="bg-white rounded-2xl shadow-lg p-6 space-y-6">
+          {/* 🆕 客先選択 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-3">
+              客先 <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={selectedCustomerId}
+              onChange={e => setSelectedCustomerId(e.target.value)}
+              className="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl
+                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                transition-all duration-200 text-gray-800 font-medium cursor-pointer"
+            >
+              <option value="">
+                {isCustomerFetching ? '読み込み中...' : '客先を選択してください'}
+              </option>
+              {customers.map(customer => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* ✅ 車番選択 */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-3">

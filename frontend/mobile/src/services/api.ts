@@ -58,6 +58,7 @@ export interface StartOperationRequest {
   startLongitude: number;
   startLocation?: string;
   cargoInfo?: string;
+  customerId?: string;   // 🆕 客先ID
 }
 
 export interface EndOperationRequest {
