@@ -84,7 +84,6 @@ export interface LocationInfo {
   latitude?: number;
   longitude?: number;
   locationType: LocationType;
-  clientName?: string;
   contactPerson?: string;
   contactPhone?: string;
   contactEmail?: string;
@@ -131,7 +130,6 @@ export interface CreateLocationRequest {
   latitude?: number;
   longitude?: number;
   locationType: LocationType;
-  clientName?: string;
   contactPerson?: string;
   contactPhone?: string;
   contactEmail?: string;
@@ -193,7 +191,6 @@ export interface LocationListResponse extends ApiListResponse<LocationResponseDT
 export interface LocationFilter extends PaginationQuery {
   search?: string;
   locationType?: LocationType[];
-  clientName?: string;
   isActive?: boolean;
   hasCoordinates?: boolean;
   within?: {
@@ -211,7 +208,7 @@ export interface LocationFilter extends PaginationQuery {
     };
   };
   accessibility?: Partial<LocationAccessibility>;
-  sortBy?: 'name' | 'address' | 'locationType' | 'clientName' | 'createdAt' | 'updatedAt' | 'distance';
+  sortBy?: 'name' | 'address' | 'locationType' | 'createdAt' | 'updatedAt' | 'distance';
 }
 
 /**
@@ -220,7 +217,6 @@ export interface LocationFilter extends PaginationQuery {
 export interface LocationSearchQuery extends SearchQuery {
   name?: string;
   address?: string;
-  clientName?: string;
   contactPerson?: string;
   fullText?: string; // 全文検索
   fuzzy?: boolean; // あいまい検索
@@ -410,7 +406,7 @@ export interface LocationReportConfig {
     startDate: Date;
     endDate: Date;
   };
-  groupBy?: 'locationType' | 'clientName' | 'region';
+  groupBy?: 'locationType' | 'region';
   sortBy?: 'name' | 'operationCount' | 'distance' | 'createdAt';
   customFields?: string[];
   mapConfig?: LocationMapConfig;
