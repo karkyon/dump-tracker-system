@@ -10,7 +10,6 @@ import { Coordinates } from '../../types/maps';
 import { useZipCodeSearch, useGeocoding, useGoogleMapsLoader } from '../../hooks/useGoogleMaps';
 
 interface LocationFormData {
-  clientName: string;
   name: string;
   address: string;
   locationType: 'PICKUP' | 'DELIVERY' | 'BOTH';
@@ -47,7 +46,6 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
   const { geocodeAddress } = useGeocoding();
 
   const [formData, setFormData] = useState<LocationFormData>({
-    clientName: '',
     name: '',
     address: '',
     locationType: 'DELIVERY',
@@ -148,11 +146,6 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
   // バリデーション
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-
-    if (!formData.clientName.trim()) {
-      errors.clientName = '客先名は必須です';
-    }
-
     if (!formData.name.trim()) {
       errors.name = '場所名は必須です';
     }
@@ -259,16 +252,6 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
               <div className="space-y-6">
                 {/* 基本情報 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label="客先名"
-                    type="text"
-                    value={formData.clientName}
-                    onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                    error={formErrors.clientName}
-                    placeholder="例: 株式会社○○"
-                    required
-                  />
-
                   <Input
                     label="場所名"
                     type="text"

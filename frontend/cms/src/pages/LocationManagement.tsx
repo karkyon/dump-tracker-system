@@ -34,7 +34,6 @@ const LocationManagement: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('');
 
   interface LocationFormData {
-    clientName: string;
     name: string;
     address: string;
     locationType: 'PICKUP' | 'DELIVERY' | 'BOTH';
@@ -44,7 +43,6 @@ const LocationManagement: React.FC = () => {
 
   // フォームデータ
   const [formData, setFormData] = useState<LocationFormData>({
-    clientName: '',
     name: '',
     address: '',
     locationType: 'DELIVERY',
@@ -68,8 +66,7 @@ const LocationManagement: React.FC = () => {
 
   // フィルタリング処理
   const filteredLocations = Array.isArray(locations) ? locations.filter(location => {
-    const matchesSearch = !searchTerm || 
-      (location.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
+    const matchesSearch = !searchTerm ||
       (location.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
       location.address?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
     
@@ -82,12 +79,6 @@ const LocationManagement: React.FC = () => {
 
   // テーブルの列定義
   const columns = [
-    {
-      key: 'clientName',
-      header: '客先名',
-      sortable: true,
-      width: '120px',
-    },
     {
       key: 'name',
       header: '場所名',
@@ -153,7 +144,6 @@ const LocationManagement: React.FC = () => {
   // 新規作成
   const handleCreate = () => {
     setFormData({
-      clientName: '',
       name: '',
       address: '',
       locationType: 'DELIVERY',
@@ -167,7 +157,6 @@ const LocationManagement: React.FC = () => {
   const handleEdit = (location: Location) => {
     console.log('[LocationManagement] Editing location:', location);
     setFormData({
-      clientName: location.clientName || '',
       name: location.name || '',
       address: location.address || '',
       locationType: (['PICKUP', 'DELIVERY', 'BOTH'].includes(location.locationType))
@@ -189,7 +178,6 @@ const LocationManagement: React.FC = () => {
   // 作成処理（新しいLocationFormModal用）
   const handleSubmitCreate = async (data: Omit<LocationFormData, 'postalCode'>) => {
     const locationData = {
-      clientName: data.clientName,
       name: data.name,
       address: data.address,
       locationType: data.locationType,
@@ -215,7 +203,6 @@ const LocationManagement: React.FC = () => {
     if (!selectedLocationId) return;
 
     const locationData = {
-      clientName: data.clientName,
       name: data.name,
       address: data.address,
       locationType: data.locationType,
@@ -330,7 +317,6 @@ const LocationManagement: React.FC = () => {
         }}
         title="場所情報編集"
         initialData={{
-          clientName: formData.clientName,
           name: formData.name,
           address: formData.address,
           locationType: formData.locationType,
