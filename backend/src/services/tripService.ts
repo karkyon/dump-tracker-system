@@ -1363,13 +1363,29 @@ class TripService {
         take: 1
       });
 
+      // 積降開始ボタン廃止対応: レコードがなければ新規作成して即完了
+      let unloadingDetail: any;
       if (!existingDetails || existingDetails.length === 0) {
-        throw new NotFoundError('先に積降を開始してください', 'operation_detail');
+        const allDetails = await this.operationDetailService.findMany({
+          where: { operationId: tripId },
+          orderBy: { sequenceNumber: 'desc' },
+          take: 1
+        });
+        const nextSeq = ((allDetails[0]?.sequenceNumber ?? 0) as number) + 1;
+        unloadingDetail = await this.operationDetailService.create({
+          operationId: tripId,
+          activityType: 'UNLOADING' as any,
+          sequenceNumber: nextSeq,
+          actualStartTime: data.endTime ? new Date(data.endTime) : new Date(),
+          locationId: data.locationId,
+          notes: data.notes || '積降完了',
+          quantityTons: data.quantity ?? 0,
+        });
+      } else {
+        unloadingDetail = existingDetails[0];
       }
-
-      const unloadingDetail = existingDetails[0];
       if (!unloadingDetail) {
-        throw new NotFoundError('積降開始レコードが見つかりません');
+        throw new NotFoundError('積降レコードの作成に失敗しました');
       }
 
       logger.info('📦 [completeUnloading] 積降開始レコード取得完了', {
