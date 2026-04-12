@@ -67,6 +67,7 @@ export interface CreateTripRequest {
     accuracy?: number;
     address?: string;
   };
+  customerId?: string;  // 🆕 客先ID
 }
 
 // 運行更新リクエスト型

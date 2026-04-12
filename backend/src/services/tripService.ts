@@ -192,7 +192,8 @@ class TripService {
         plannedStartTime: typeof request.actualStartTime === 'string'
           ? new Date(request.actualStartTime)
           : request.actualStartTime,
-        notes: request.notes
+        notes: request.notes,
+        customerId: request.customerId  // 🆕 客先ID
       };
       logger.info('✅ [LINE 12] リクエストマッピング完了', { startTripRequest });
 

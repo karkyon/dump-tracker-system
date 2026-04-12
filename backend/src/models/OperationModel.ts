@@ -232,6 +232,7 @@ export interface StartTripOperationRequest {
   plannedRoute?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   notes?: string;
+  customerId?: string;  // 🆕 客先ID
 }
 
 // =====================================

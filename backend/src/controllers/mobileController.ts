@@ -268,7 +268,8 @@ export class MobileController {
           longitude: req.body.startLongitude,
           accuracy: req.body.gpsAccuracy || 10,
           address: req.body.startLocation
-        } : undefined
+        } : undefined,
+        customerId: req.body.customerId  // 🆕 客先ID
       };
 
       logger.info('運行開始リクエスト', { tripData });
