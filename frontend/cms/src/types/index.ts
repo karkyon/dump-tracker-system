@@ -98,7 +98,6 @@ export interface Location {
   latitude?: number;               // 緯度（バックエンド標準）
   longitude?: number;              // 経度（バックエンド標準）
   locationType: 'PICKUP' | 'DELIVERY' | 'BOTH' | 'DEPOT' | 'MAINTENANCE' | 'FUEL_STATION' | 'REST_AREA' | 'CHECKPOINT' | 'OTHER';  // 場所種別（バックエンド標準）
-  clientName?: string;             // 客先名
   contactPerson?: string;          // 担当者名
   contactPhone?: string;           // 電話番号
   contactEmail?: string;           // メールアドレス
@@ -161,7 +160,6 @@ export interface OperationRecord {
   date?: string;                    // 運行日
   driverName?: string;              // 運転手名
   vehicleNumber?: string;           // 車両番号
-  clientName?: string;              // 客先名
   loadingLocation?: string;         // 積込場所名
   unloadingLocation?: string;       // 積下場所名
   item?: string;                    // ✅ 品目名
