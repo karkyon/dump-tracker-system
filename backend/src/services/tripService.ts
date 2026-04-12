@@ -1377,7 +1377,7 @@ class TripService {
           activityType: 'UNLOADING' as any,
           sequenceNumber: nextSeq,
           actualStartTime: data.endTime ? new Date(data.endTime) : new Date(),
-          locationId: data.locationId,
+
           notes: data.notes || '積降完了',
           quantityTons: data.quantity ?? 0,
         });
