@@ -1390,6 +1390,27 @@ class APIServiceClass {
       throw error;
     }
   }
+
+  // =============================================================================
+  // 🆕 客先マスタAPI
+  // =============================================================================
+
+  /**
+   * 客先一覧取得
+   * GET /api/v1/customers
+   */
+  async getCustomers(): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<any>>(
+        '/customers',
+        { params: { isActive: 'true', limit: 200 } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('客先一覧取得エラー:', error);
+      return { success: false, data: { customers: [] }, message: '客先の取得に失敗しました' };
+    }
+  }
 }
 
 // シングルトンインスタンスをエクスポート
