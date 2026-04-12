@@ -148,7 +148,6 @@ class LocationServiceWrapper {
         latitude: request.latitude,
         longitude: request.longitude,
         locationType: request.locationType,
-        clientName: request.clientName?.trim(),
         contactPerson: request.contactPerson?.trim(),
         contactPhone: request.contactPhone?.trim(),
         contactEmail: request.contactEmail?.trim(),
@@ -234,8 +233,7 @@ class LocationServiceWrapper {
       if (filterConditions.search) {
         whereCondition.OR = [
           { name: { contains: filterConditions.search, mode: 'insensitive' } },
-          { address: { contains: filterConditions.search, mode: 'insensitive' } },
-          { clientName: { contains: filterConditions.search, mode: 'insensitive' } }
+          { address: { contains: filterConditions.search, mode: 'insensitive' } }
         ];
       }
 
@@ -390,7 +388,6 @@ class LocationServiceWrapper {
       if (updateData.latitude !== undefined) cleanUpdateData.latitude = updateData.latitude;
       if (updateData.longitude !== undefined) cleanUpdateData.longitude = updateData.longitude;
       if (updateData.locationType !== undefined) cleanUpdateData.locationType = updateData.locationType;
-      if (updateData.clientName !== undefined) cleanUpdateData.clientName = updateData.clientName?.trim();
       if (updateData.contactPerson !== undefined) cleanUpdateData.contactPerson = updateData.contactPerson?.trim();
       if (updateData.contactPhone !== undefined) cleanUpdateData.contactPhone = updateData.contactPhone?.trim();
       if (updateData.contactEmail !== undefined) cleanUpdateData.contactEmail = updateData.contactEmail?.trim();
@@ -671,7 +668,6 @@ class LocationServiceWrapper {
       locationType: location.locationType,
       latitude: lat,
       longitude: lng,
-      clientName: location.clientName ?? undefined,
       contactPerson: location.contactPerson ?? undefined,
       contactPhone: location.contactPhone ?? undefined,
       contactEmail: location.contactEmail ?? undefined,

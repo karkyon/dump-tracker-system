@@ -254,7 +254,6 @@ export class LocationService {
         name: location.name,
         address: location.address,
         locationType: location.locationType,
-        clientName: location.clientName || undefined,
         contactPerson: location.contactPerson || undefined,
         contactPhone: location.contactPhone || undefined,
         contactEmail: location.contactEmail || undefined,
@@ -911,17 +910,12 @@ export class LocationService {
     if (filter.search) {
       where.OR = [
         { name: { contains: filter.search, mode: 'insensitive' } },
-        { address: { contains: filter.search, mode: 'insensitive' } },
-        { clientName: { contains: filter.search, mode: 'insensitive' } }
+        { address: { contains: filter.search, mode: 'insensitive' } }
       ];
     }
 
     if (filter.locationType?.length) {
       where.locationType = { in: filter.locationType };
-    }
-
-    if (filter.clientName) {
-      where.clientName = { contains: filter.clientName, mode: 'insensitive' };
     }
 
     if (typeof filter.isActive === 'boolean') {
@@ -978,7 +972,6 @@ export class LocationService {
       latitude: lat,
       longitude: lng,
       locationType: location.locationType,
-      clientName: location.clientName || undefined,
       contactPerson: location.contactPerson || undefined,
       contactPhone: location.contactPhone || undefined,
       contactEmail: location.contactEmail || undefined,
