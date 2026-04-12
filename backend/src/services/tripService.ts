@@ -1081,7 +1081,6 @@ class TripService {
       // operation_detail作成（actualEndTime は null）
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
-        locationId: data.locationId,
         itemId: undefined,  // 積込開始時点では品目未確定
         sequenceNumber: nextSequenceNumber,
         activityType: 'LOADING' as ActivityType,
@@ -1279,7 +1278,6 @@ class TripService {
       // operation_detail作成（actualEndTime は null）
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
-        locationId: data.locationId,
         itemId: undefined,  // 積降開始時点では品目未確定
         sequenceNumber: nextSequenceNumber,
         activityType: 'UNLOADING' as ActivityType,
