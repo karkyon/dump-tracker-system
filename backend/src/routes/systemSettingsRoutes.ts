@@ -5,7 +5,7 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', authenticateToken, getSystemSettings);
-router.put('/', authenticateToken, updateSystemSettings);
+router.get('/', authenticateToken(), getSystemSettings);
+router.put('/', authenticateToken(), updateSystemSettings);
 
 export default router;
