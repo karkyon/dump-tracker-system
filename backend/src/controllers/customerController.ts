@@ -37,7 +37,7 @@ export const getCustomers = asyncHandler(async (req: AuthenticatedRequest, res: 
     db.customer.count({ where }),
   ]);
 
-  sendSuccess(res, { customers, total }, '客先一覧を取得しました');
+  return sendSuccess(res, { customers, total }, '客先一覧を取得しました');
 });
 
 /**
@@ -48,7 +48,7 @@ export const getCustomerById = asyncHandler(async (req: AuthenticatedRequest, re
   const { id } = req.params;
   const customer = await db.customer.findUnique({ where: { id } });
   if (!customer) return sendError(res, '客先が見つかりません', 404);
-  sendSuccess(res, customer, '客先情報を取得しました');
+  return sendSuccess(res, customer, '客先情報を取得しました');
 });
 
 /**
@@ -64,7 +64,7 @@ export const createCustomer = asyncHandler(async (req: AuthenticatedRequest, res
   });
 
   logger.info('客先作成', { customerId: customer.id, userId: req.user?.userId });
-  sendSuccess(res, customer, '客先を登録しました', 201);
+  return sendSuccess(res, customer, '客先を登録しました', 201);
 });
 
 /**
@@ -93,7 +93,7 @@ export const updateCustomer = asyncHandler(async (req: AuthenticatedRequest, res
   });
 
   logger.info('客先更新', { customerId: id, userId: req.user?.userId });
-  sendSuccess(res, customer, '客先情報を更新しました');
+  return sendSuccess(res, customer, '客先情報を更新しました');
 });
 
 /**
@@ -114,5 +114,5 @@ export const deleteCustomer = asyncHandler(async (req: AuthenticatedRequest, res
 
   await db.customer.delete({ where: { id } });
   logger.info('客先削除', { customerId: id, userId: req.user?.userId });
-  sendSuccess(res, null, '客先を削除しました');
+  return sendSuccess(res, null, '客先を削除しました');
 });
