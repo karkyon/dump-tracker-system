@@ -241,9 +241,6 @@ class LocationServiceWrapper {
         whereCondition.locationType = { in: filterConditions.locationType };
       }
 
-      if (filterConditions.clientName) {
-        whereCondition.clientName = { contains: filterConditions.clientName, mode: 'insensitive' };
-      }
 
       if (filterConditions.isActive !== undefined) {
         whereCondition.isActive = filterConditions.isActive;
