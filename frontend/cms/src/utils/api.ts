@@ -809,17 +809,19 @@ export default api;
 // 🆕 客先マスタ API
 // =====================================
 export const customerAPI = {
-  getCustomers: async (params: Record<string, any> = {}) => {
-    const query = new URLSearchParams(
-      Object.entries(params).filter(([_, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])
-    ).toString();
-    return apiRequest(`/customers${query ? '?' + query : ''}`);
+  async getCustomers(params?: any): Promise<ApiResponse<any>> {
+    return apiClient.get('/customers', { params });
   },
-  getCustomer: async (id: string) => apiRequest(`/customers/${id}`),
-  createCustomer: async (data: Record<string, any>) =>
-    apiRequest('/customers', { method: 'POST', body: JSON.stringify(data) }),
-  updateCustomer: async (id: string, data: Record<string, any>) =>
-    apiRequest(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteCustomer: async (id: string) =>
-    apiRequest(`/customers/${id}`, { method: 'DELETE' }),
+  async getCustomer(id: string): Promise<ApiResponse<any>> {
+    return apiClient.get(`/customers/${id}`);
+  },
+  async createCustomer(data: any): Promise<ApiResponse<any>> {
+    return apiClient.post('/customers', data);
+  },
+  async updateCustomer(id: string, data: any): Promise<ApiResponse<any>> {
+    return apiClient.put(`/customers/${id}`, data);
+  },
+  async deleteCustomer(id: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/customers/${id}`);
+  },
 };

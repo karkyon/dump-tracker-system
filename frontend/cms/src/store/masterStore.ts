@@ -67,6 +67,11 @@ export const useMasterStore = create<MasterState>((set, get) => ({
   itemLoading: false,
   itemError: null,
 
+  // 客先
+  customers: [],
+  customerLoading: false,
+  customerError: null,
+
   // 点検項目一覧取得
   fetchInspectionItems: async (filters = {}) => {
     set({ inspectionLoading: true, inspectionError: null });

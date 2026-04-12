@@ -140,7 +140,7 @@ const CustomerManagement: React.FC = () => {
     </div>
   );
 
-  if (customerLoading && customers.length === 0) return <SectionLoading message="客先データを読み込み中..." />;
+  if (customerLoading && customers.length === 0) return <SectionLoading text="客先データを読み込み中..." />;
 
   return (
     <div className="p-6">
