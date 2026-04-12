@@ -14,6 +14,7 @@ import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import { useGPS } from '../hooks/useGPS';
 import apiService from '../services/api';
+import { calculateDistance } from '../utils/helpers';
 import GoogleMapWrapper, {
   updateMarkerPosition,
   panMapToPosition,
@@ -28,15 +29,8 @@ import { LocationRegistrationDialog, type NewLocationData } from '../components/
 import { useOperationStore } from '../stores/operationStore';
 import { useAuthStore } from '../stores/authStore';
 
-// 運行状態の型定義
-type OperationPhase = 
-  | 'TO_LOADING' 
-  | 'AT_LOADING' 
-  | 'TO_UNLOADING' 
-  | 'AT_UNLOADING' 
-  | 'UNLOADING_IN_PROGRESS'  // 🆕 追加: 積降作業中
-  | 'BREAK' 
-  | 'REFUEL';
+// 運行状態の型定義（operationStore.ts の OperationPhase を使用）
+import type { OperationPhase } from '../stores/operationStore';
 
 interface OperationState {
   id: string | null;
@@ -182,6 +176,169 @@ const OperationRecord: React.FC = () => {
       startTracking();
     }
   }, [isTracking, startTracking]);
+
+  // 🆕 距離検知: 積込/積降場所から離れたら自動フェーズ移行
+  const departureAlertFiredRef = React.useRef(false);
+  useEffect(() => {
+    if (!currentPosition) return;
+
+    const phase = operation.phase;
+    const alertDistanceKm = 0.2; // デフォルト200m = 0.2km（将来: system_settingsから取得）
+
+    // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
+    // 積込場所到着中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
+    if (phase === 'AT_LOADING') {
+      const loadingLat = operationStore.loadingLocationLat;
+      const loadingLng = operationStore.loadingLocationLng;
+      if (loadingLat == null || loadingLng == null) return;
+
+      const dist = calculateDistance(
+        currentPosition.coords.latitude,
+        currentPosition.coords.longitude,
+        loadingLat,
+        loadingLng
+      );
+
+      if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
+        departureAlertFiredRef.current = true;
+        toast('📦 積込場所から離れました。積降場所へ移動中に切り替えます', {
+          icon: '🚛',
+          duration: 4000,
+          style: { background: '#FF9800', color: '#fff', fontWeight: 'bold' }
+        });
+        setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
+        operationStore.setPhase('TO_UNLOADING');
+        console.log('🚛 自動フェーズ移行: AT_LOADING → TO_UNLOADING (距離:', (dist * 1000).toFixed(0), 'm)');
+      }
+      if (dist < alertDistanceKm) {
+        departureAlertFiredRef.current = false; // 戻ってきたらリセット
+      }
+    }
+
+    // 積降場所到着中（AT_UNLOADING）に積降場所から離れたら自動的に TO_LOADING へ
+    if (phase === 'AT_UNLOADING') {
+      const selectedUnloading = (window as any).selectedUnloadingLocation;
+      if (!selectedUnloading?.latitude || !selectedUnloading?.longitude) return;
+
+      const dist = calculateDistance(
+        currentPosition.coords.latitude,
+        currentPosition.coords.longitude,
+        selectedUnloading.latitude,
+        selectedUnloading.longitude
+      );
+
+      if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
+        departureAlertFiredRef.current = true;
+        toast('✅ 積降場所から離れました。次の積込場所へ移動中に切り替えます', {
+          icon: '🔄',
+          duration: 4000,
+          style: { background: '#4CAF50', color: '#fff', fontWeight: 'bold' }
+        });
+
+        // 積降完了APIを自動呼び出し
+        const currentOperationId = operationStore.operationId;
+        if (currentOperationId) {
+          apiService.completeUnloadingAtLocation(currentOperationId, {
+            endTime: new Date(),
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy,
+            notes: '自動積降完了（離脱検知）'
+          }).catch(err => console.error('自動積降完了エラー:', err));
+        }
+
+        setOperation(prev => ({ ...prev, phase: 'TO_LOADING' }));
+        operationStore.setPhase('TO_LOADING');
+        (window as any).selectedUnloadingLocation = null;
+        departureAlertFiredRef.current = false;
+        console.log('🔄 自動フェーズ移行: AT_UNLOADING → TO_LOADING (距離:', (dist * 1000).toFixed(0), 'm)');
+      }
+      if (dist < alertDistanceKm) {
+        departureAlertFiredRef.current = false;
+      }
+    }
+  }, [currentPosition, operation.phase]);
+
+  // 🆕 距離検知: 積込/積降場所から離れたら自動フェーズ移行
+  useEffect(() => {
+    if (!currentPosition) return;
+
+    const phase = operation.phase;
+    const alertDistanceKm = 0.2; // デフォルト200m = 0.2km（将来: system_settingsから取得）
+
+    // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
+    // 積込場所到着中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
+    if (phase === 'AT_LOADING') {
+      const loadingLat = operationStore.loadingLocationLat;
+      const loadingLng = operationStore.loadingLocationLng;
+      if (loadingLat == null || loadingLng == null) return;
+
+      const dist = calculateDistance(
+        currentPosition.coords.latitude,
+        currentPosition.coords.longitude,
+        loadingLat,
+        loadingLng
+      );
+
+      if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
+        departureAlertFiredRef.current = true;
+        toast('📦 積込場所から離れました。積降場所へ移動中に切り替えます', {
+          icon: '🚛',
+          duration: 4000,
+          style: { background: '#FF9800', color: '#fff', fontWeight: 'bold' }
+        });
+        setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
+        operationStore.setPhase('TO_UNLOADING');
+        console.log('🚛 自動フェーズ移行: AT_LOADING → TO_UNLOADING (距離:', (dist * 1000).toFixed(0), 'm)');
+      }
+      if (dist < alertDistanceKm) {
+        departureAlertFiredRef.current = false; // 戻ってきたらリセット
+      }
+    }
+
+    // 積降場所到着中（AT_UNLOADING）に積降場所から離れたら自動的に TO_LOADING へ
+    if (phase === 'AT_UNLOADING') {
+      const selectedUnloading = (window as any).selectedUnloadingLocation;
+      if (!selectedUnloading?.latitude || !selectedUnloading?.longitude) return;
+
+      const dist = calculateDistance(
+        currentPosition.coords.latitude,
+        currentPosition.coords.longitude,
+        selectedUnloading.latitude,
+        selectedUnloading.longitude
+      );
+
+      if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
+        departureAlertFiredRef.current = true;
+        toast('✅ 積降場所から離れました。次の積込場所へ移動中に切り替えます', {
+          icon: '🔄',
+          duration: 4000,
+          style: { background: '#4CAF50', color: '#fff', fontWeight: 'bold' }
+        });
+
+        // 積降完了APIを自動呼び出し
+        const currentOperationId = operationStore.operationId;
+        if (currentOperationId) {
+          apiService.completeUnloadingAtLocation(currentOperationId, {
+            endTime: new Date(),
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy,
+            notes: '自動積降完了（離脱検知）'
+          }).catch(err => console.error('自動積降完了エラー:', err));
+        }
+
+        setOperation(prev => ({ ...prev, phase: 'TO_LOADING' }));
+        operationStore.setPhase('TO_LOADING');
+        (window as any).selectedUnloadingLocation = null;
+        departureAlertFiredRef.current = false;
+        console.log('🔄 自動フェーズ移行: AT_UNLOADING → TO_LOADING (距離:', (dist * 1000).toFixed(0), 'm)');
+      }
+      if (dist < alertDistanceKm) {
+        departureAlertFiredRef.current = false;
+      }
+    }
+  }, [currentPosition, operation.phase]);
 
   // ✅ 経過時間計算（既存）
   useEffect(() => {
@@ -396,16 +553,21 @@ const OperationRecord: React.FC = () => {
         // ここでは状態更新と遷移のみ行う（二重呼び出し修正）
         console.log('🚛 積込場所選択完了 → LoadingConfirmation画面へ遷移');
         
-        // 状態更新
+        // 状態更新（座標も保存）
         setOperation(prev => ({
           ...prev,
           phase: 'AT_LOADING',
           loadingLocation: selectedLocation.location.name
         }));
+        // 🆕 積込場所の座標をstoreに保存（距離検知用）
+        operationStore.setLoadingLocationWithCoords(
+          selectedLocation.location.name,
+          selectedLocation.location.latitude ?? currentPosition.coords.latitude,
+          selectedLocation.location.longitude ?? currentPosition.coords.longitude
+        );
 
         toast.success(`積込場所「${selectedLocation.location.name}」に到着しました`);
         
-        // D5積込場所入力画面へ遷移
         console.log('📍 次: D5積込場所入力画面へ遷移');
         navigate('/loading-input', {
           state: {
@@ -656,61 +818,7 @@ const OperationRecord: React.FC = () => {
   /**
    * ✅ 既存: 積降開始ハンドラー
    */
- const handleUnloadingStart = async () => {
-  try {
-    setIsSubmitting(true);
-    
-    const currentOperationId = operationStore.operationId;
-    if (!currentOperationId) {
-      toast.error('運行IDが見つかりません');
-      setIsSubmitting(false);
-      return;
-    }
-
-    // 保存された地点情報を取得
-    const selectedLocation = (window as any).selectedUnloadingLocation;
-    if (!selectedLocation) {
-      toast.error('積降場所が選択されていません');
-      setIsSubmitting(false);
-      return;
-    }
-
-    console.log('📦 積降開始API呼び出し:', {
-      tripId: currentOperationId,
-      locationId: selectedLocation.id,
-      position: {
-        latitude: selectedLocation.latitude,
-        longitude: selectedLocation.longitude
-      }
-    });
-
-    // 🆕 新API呼び出し: 積降開始
-    await apiService.startUnloadingAtLocation(currentOperationId, {
-      locationId: selectedLocation.id,
-      latitude: selectedLocation.latitude,
-      longitude: selectedLocation.longitude,
-      accuracy: selectedLocation.accuracy,
-      startTime: new Date()
-    });
-
-    console.log('✅ 積降開始完了');
-
-    // フェーズ更新: UNLOADING_IN_PROGRESS
-    setOperation(prev => ({
-      ...prev,
-      phase: 'UNLOADING_IN_PROGRESS'
-    }));
-    operationStore.setPhase('UNLOADING_IN_PROGRESS');
-
-    toast.success('積降を開始しました');
-    setIsSubmitting(false);
-
-  } catch (error) {
-    console.error('❌ 積降開始エラー:', error);
-    toast.error('積降開始に失敗しました');
-    setIsSubmitting(false);
-  }
-};
+// handleUnloadingStart は廃止（積降開始ボタン廃止・UNLOADING_IN_PROGRESS廃止）
 
   /**
    * ✅ 既存: 積降完了ハンドラー
@@ -752,6 +860,8 @@ const OperationRecord: React.FC = () => {
         phase: 'TO_LOADING'
       }));
       operationStore.setPhase('TO_LOADING');
+      (window as any).selectedUnloadingLocation = null;
+      departureAlertFiredRef.current = false;
 
       toast.success('積降が完了しました。次の積込場所へ移動してください。');
       setIsSubmitting(false);
@@ -1018,31 +1128,19 @@ const OperationRecord: React.FC = () => {
         );
 
       case 'AT_UNLOADING':
+        // 🆕 積降開始ボタン廃止: 積降完了ボタンのみ表示（距離検知で自動移行も可）
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button
-              onClick={handleUnloadingStart}
-              disabled={isSubmitting}
-              style={{
-                padding: '20px 16px',
-                fontSize: '20px',
-                fontWeight: 'bold',
-                color: 'white',
-                background: isSubmitting ? '#ccc' : '#4CAF50',
-                border: 'none',
-                borderRadius: '10px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                width: '100%'
-              }}
-            >
-              🚛 積降開始
-            </button>
-          </div>
-        );
-
-      case 'UNLOADING_IN_PROGRESS':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{
+              padding: '10px 16px',
+              fontSize: '13px',
+              color: '#666',
+              background: '#FFF3E0',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              📍 積降場所に到着中 — 積降が完了したら下のボタンを押してください
+            </div>
             <button
               onClick={handleUnloadingComplete}
               disabled={isSubmitting}
@@ -1318,7 +1416,7 @@ function getPhaseLabel(phase: OperationPhase): string {
     case 'AT_LOADING': return '積込場所到着';
     case 'TO_UNLOADING': return '積降場所へ移動中';
     case 'AT_UNLOADING': return '積降場所到着';
-    case 'UNLOADING_IN_PROGRESS': return '積降作業中';
+    // UNLOADING_IN_PROGRESS: 廃止
     case 'BREAK': return '休憩中';
     case 'REFUEL': return '給油中';
     default: return '不明';

@@ -14,9 +14,9 @@ export type OperationPhase =
   | 'AT_LOADING' 
   | 'TO_UNLOADING' 
   | 'AT_UNLOADING' 
-  | 'UNLOADING_IN_PROGRESS'  // 🆕 追加: 積降作業中
   | 'BREAK' 
   | 'REFUEL';
+// UNLOADING_IN_PROGRESS は廃止（積降開始ボタン廃止）
 
 /**
  * 運行状態インターフェース
@@ -38,6 +38,8 @@ export interface OperationState {
   breakCount: number;                              // 🔧 休憩回数（永続化対象）(2026-02-01)
   previousPhase: OperationPhase | null; // 🆕 休憩前のフェーズを記憶 (2025-12-28)
   loadingLocation: string | null;
+  loadingLocationLat: number | null;   // 🆕 積込場所緯度
+  loadingLocationLng: number | null;   // 🆕 積込場所経度
   unloadingLocation: string | null;
   
   // 運行ステータス
@@ -69,6 +71,7 @@ export interface OperationState {
   savePreviousPhase: (phase: OperationPhase) => void; // 🆕 休憩前フェーズ保存 (2025-12-28)
   incrementBreakCount: () => void;              // 🔧 休憩回数インクリメント (2026-02-01)
   setLoadingLocation: (location: string) => void;
+  setLoadingLocationWithCoords: (location: string, lat: number, lng: number) => void; // 🆕
   setUnloadingLocation: (location: string) => void;
   
   completeOperation: () => void;
@@ -96,9 +99,11 @@ export const useOperationStore = create<OperationState>()(
       
       // 🆕 フェーズ管理初期値
       phase: 'TO_LOADING',
-      breakCount: 0,                           // 🔧 休憩回数（永続化対象）(2026-02-01)
-      previousPhase: null, // 🆕 初期状態ではnull (2025-12-28)
+      breakCount: 0,
+      previousPhase: null,
       loadingLocation: null,
+      loadingLocationLat: null,   // 🆕
+      loadingLocationLng: null,   // 🆕
       unloadingLocation: null,
 
       // Actions
@@ -221,9 +226,14 @@ export const useOperationStore = create<OperationState>()(
       setLoadingLocation: (location) => {
         console.log('[Operation Store] 📍 SET LOADING LOCATION:', location);
         set({ loadingLocation: location });
-        
         const currentState = get();
         console.log('[Operation Store] 📊 Full state after setLoadingLocation:', currentState);
+      },
+
+      // 🆕 積込場所設定（座標付き）
+      setLoadingLocationWithCoords: (location, lat, lng) => {
+        console.log('[Operation Store] 📍 SET LOADING LOCATION WITH COORDS:', location, lat, lng);
+        set({ loadingLocation: location, loadingLocationLat: lat, loadingLocationLng: lng });
       },
 
       // 🆕 積降場所設定
@@ -255,10 +265,12 @@ export const useOperationStore = create<OperationState>()(
           status: 'IDLE',
           inspectionCompleted: false,
           inspectionRecordId: null,
-          phase: 'TO_LOADING', // 🔧 リセット時も初期フェーズに戻す
-          breakCount: 0,       // 🔧 休憩回数もリセット (2026-02-01)
-          previousPhase: null, // 🆕 リセット時にクリア (2025-12-28)
+          phase: 'TO_LOADING',
+          breakCount: 0,
+          previousPhase: null,
           loadingLocation: null,
+          loadingLocationLat: null,   // 🆕
+          loadingLocationLng: null,   // 🆕
           unloadingLocation: null
         });
       }
@@ -291,6 +303,8 @@ export const useOperationStore = create<OperationState>()(
           breakCount: state.breakCount,            // 🔧 休憩回数も永続化 (2026-02-01)
           previousPhase: state.previousPhase, // 🆕 休憩前フェーズも永続化 (2025-12-28)
           loadingLocation: state.loadingLocation,
+          loadingLocationLat: state.loadingLocationLat,   // 🆕
+          loadingLocationLng: state.loadingLocationLng,   // 🆕
           unloadingLocation: state.unloadingLocation
         };
       },

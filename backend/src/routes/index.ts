@@ -653,6 +653,14 @@ const businessRoutes = [
     priority: 'normal' as const,
     requireAuth: false,
     description: '貨物運送事業者情報設定'
+  },
+  // 🆕 システム設定ルート（離脱距離等）
+  {
+    name: 'systemSettingsRoutes',
+    path: '/settings/system',
+    priority: 'normal' as const,
+    requireAuth: false,
+    description: 'システム設定（離脱距離等）'
   }
 ];
 

@@ -43,6 +43,7 @@ interface SettingsData {
   alerts: {
     speedLimit: number;
     continuousDriving: number;
+    departureAlertDistanceM: number;  // 🆕 積込/積降場所からの離脱検知距離(m)
   };
   data: {
     syncInterval: number;
@@ -88,7 +89,8 @@ const Settings: React.FC = () => {
     },
     alerts: {
       speedLimit: 80,
-      continuousDriving: 240
+      continuousDriving: 240,
+      departureAlertDistanceM: 200
     },
     data: {
       syncInterval: 30,
