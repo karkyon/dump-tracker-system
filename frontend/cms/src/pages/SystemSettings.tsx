@@ -19,6 +19,29 @@ const getAuthHeaders = (): Record<string, string> => {
   };
 };
 
+/** システム設定取得 */
+const fetchSystemSettings = async (): Promise<Record<string, string>> => {
+  const res = await fetch(`${API_BASE_URL}/settings/system`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) return {};
+  const json = await res.json();
+  return json.data ?? {};
+};
+
+/** システム設定保存 */
+const saveSystemSettings = async (updates: { key: string; value: string }[]): Promise<void> => {
+  const res = await fetch(`${API_BASE_URL}/settings/system`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'APIエラー' }));
+    throw new Error(err.message || `保存エラー: ${res.status}`);
+  }
+};
+
 /** 事業者情報取得 */
 const fetchTransportBusiness = async (): Promise<TransportBusinessSettings> => {
   const res = await fetch(`${API_BASE_URL}/settings/transport-business`, {
@@ -143,6 +166,22 @@ const SystemSettings: React.FC = () => {
     submissionTarget:   '',
     businessTypes:      [],
   });
+  // 🆕 運行設定（離脱検知距離）
+  const [departureAlertDistanceM, setDepartureAlertDistanceM] = useState<number>(200);
+  const [operationSettingSaving, setOperationSettingSaving] = useState(false);
+  const [operationSettingSaved, setOperationSettingSaved]   = useState(false);
+
+  // 🆕 システム設定読み込み
+  React.useEffect(() => {
+    fetchSystemSettings()
+      .then(data => {
+        if (data.departure_alert_distance_m) {
+          setDepartureAlertDistanceM(parseInt(data.departure_alert_distance_m, 10));
+        }
+      })
+      .catch(err => console.error('システム設定取得エラー:', err));
+  }, []);
+
   const [businessLoading, setBusinessLoading] = useState(false);
   const [businessSaved,   setBusinessSaved]   = useState(false);
   const [businessError,   setBusinessError]   = useState<string | null>(null);
@@ -174,9 +213,10 @@ const SystemSettings: React.FC = () => {
   // ① 事業者情報タブの NEW バッジを削除
   // =====================================
   const tabs = [
-    { id: 'general',  label: '一般設定',   icon: Settings      },
-    { id: 'business', label: '事業者情報', icon: Building2     },  // 🆕 P4-04（① NEWバッジ削除済み）
-    { id: 'logs',     label: 'ログ管理',   icon: AlertTriangle },
+    { id: 'general',   label: '一般設定',   icon: Settings      },
+    { id: 'operation', label: '運行設定',   icon: Settings      },  // 🆕 離脱検知距離等
+    { id: 'business',  label: '事業者情報', icon: Building2     },
+    { id: 'logs',      label: 'ログ管理',   icon: AlertTriangle },
   ];
 
   // =====================================
@@ -283,6 +323,23 @@ const SystemSettings: React.FC = () => {
   // =====================================
   // 🆕 P4-04: 事業者情報保存
   // =====================================
+
+  /** 🆕 運行設定保存 */
+  const handleSaveOperationSettings = async () => {
+    setOperationSettingSaving(true);
+    setOperationSettingSaved(false);
+    try {
+      await saveSystemSettings([
+        { key: 'departure_alert_distance_m', value: String(departureAlertDistanceM) }
+      ]);
+      setOperationSettingSaved(true);
+      setTimeout(() => setOperationSettingSaved(false), 3000);
+    } catch (err: any) {
+      alert(err.message || '保存に失敗しました');
+    } finally {
+      setOperationSettingSaving(false);
+    }
+  };
 
   /** 🆕 事業者情報保存 */
   const handleSaveBusinessSettings = async () => {
@@ -703,6 +760,62 @@ const SystemSettings: React.FC = () => {
               <Save className="w-4 h-4 mr-2" />
               設定を保存
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          🆕 運行設定タブ
+      ===================================================== */}
+      {activeTab === 'operation' && (
+        <div className="space-y-6">
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-2">離脱検知設定</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              積込・積降場所からこの距離以上離れたとき、自動的に次のフェーズに移行しトーストで通知します。
+            </p>
+
+            <div className="space-y-4 max-w-md">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  離脱検知距離
+                  <span className="ml-2 text-blue-600 font-bold">{departureAlertDistanceM} m</span>
+                </label>
+                <input
+                  type="range"
+                  min={50}
+                  max={500}
+                  step={50}
+                  value={departureAlertDistanceM}
+                  onChange={(e) => setDepartureAlertDistanceM(parseInt(e.target.value, 10))}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>50m</span>
+                  <span>200m（デフォルト）</span>
+                  <span>500m</span>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-xs text-blue-800 space-y-1">
+                <p className="font-semibold">動作説明</p>
+                <p>• 積込場所到着中に {departureAlertDistanceM}m 以上移動 → 「積降場所へ移動中」に自動切替</p>
+                <p>• 積降場所到着中に {departureAlertDistanceM}m 以上移動 → 積降完了を自動記録し「積込場所へ移動中」に切替</p>
+              </div>
+            </div>
+
+            {operationSettingSaved && (
+              <div className="mt-4 bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-700">
+                ✅ 運行設定を保存しました
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <Button onClick={handleSaveOperationSettings} disabled={operationSettingSaving}>
+                <Save className="w-4 h-4 mr-2" />
+                {operationSettingSaving ? '保存中...' : '設定を保存'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
