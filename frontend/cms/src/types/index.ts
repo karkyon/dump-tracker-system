@@ -484,3 +484,19 @@ export interface AnnualTransportPreview {
   businessSettings: TransportBusinessSettings | null;
   availability: DataAvailabilityCheck;
 }
+
+// =====================================
+// 🆕 客先マスタ型定義
+// =====================================
+export interface Customer {
+  id: string;
+  name: string;
+  reading?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}

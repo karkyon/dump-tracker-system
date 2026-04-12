@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { InspectionItem, Location, Item, FilterOptions } from '../types';
-import { inspectionItemAPI, locationAPI, itemAPI } from '../utils/api';
+import { InspectionItem, Location, Item, Customer, FilterOptions } from '../types';
+import { inspectionItemAPI, locationAPI, itemAPI, customerAPI } from '../utils/api';
 
 interface MasterState {
   // 点検項目
@@ -30,6 +30,17 @@ interface MasterState {
   createLocation: (locationData: Partial<Location>) => Promise<boolean>;
   updateLocation: (id: string, locationData: Partial<Location>) => Promise<boolean>;
   deleteLocation: (id: string) => Promise<boolean>;
+
+  // 客先
+  customers: Customer[];
+  customerLoading: boolean;
+  customerError: string | null;
+
+  // アクション - 客先
+  fetchCustomers: () => Promise<void>;
+  createCustomer: (data: Partial<Customer>) => Promise<boolean>;
+  updateCustomer: (id: string, data: Partial<Customer>) => Promise<boolean>;
+  deleteCustomer: (id: string) => Promise<boolean>;
 
   // アクション - 品目
   fetchItems: (filters?: FilterOptions) => Promise<void>;
@@ -314,6 +325,55 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       });
       return false;
     }
+  },
+
+  // 客先一覧取得
+  fetchCustomers: async () => {
+    set({ customerLoading: true, customerError: null });
+    try {
+      const response = await customerAPI.getCustomers({ isActive: 'true' });
+      if (response.success) {
+        const data = response.data?.customers || response.data || [];
+        set({ customers: Array.isArray(data) ? data : [], customerLoading: false });
+      } else {
+        set({ customerError: response.error || '客先の取得に失敗しました', customerLoading: false });
+      }
+    } catch {
+      set({ customerError: 'ネットワークエラーが発生しました', customerLoading: false });
+    }
+  },
+
+  // 客先作成
+  createCustomer: async (data: Partial<Customer>) => {
+    set({ customerLoading: true, customerError: null });
+    try {
+      const response = await customerAPI.createCustomer(data);
+      if (response.success) { await get().fetchCustomers(); set({ customerLoading: false }); return true; }
+      set({ customerError: response.error || '客先の作成に失敗しました', customerLoading: false });
+      return false;
+    } catch { set({ customerError: 'ネットワークエラーが発生しました', customerLoading: false }); return false; }
+  },
+
+  // 客先更新
+  updateCustomer: async (id: string, data: Partial<Customer>) => {
+    set({ customerLoading: true, customerError: null });
+    try {
+      const response = await customerAPI.updateCustomer(id, data);
+      if (response.success) { await get().fetchCustomers(); set({ customerLoading: false }); return true; }
+      set({ customerError: response.error || '客先の更新に失敗しました', customerLoading: false });
+      return false;
+    } catch { set({ customerError: 'ネットワークエラーが発生しました', customerLoading: false }); return false; }
+  },
+
+  // 客先削除
+  deleteCustomer: async (id: string) => {
+    set({ customerLoading: true, customerError: null });
+    try {
+      const response = await customerAPI.deleteCustomer(id);
+      if (response.success) { await get().fetchCustomers(); set({ customerLoading: false }); return true; }
+      set({ customerError: response.error || '客先の削除に失敗しました', customerLoading: false });
+      return false;
+    } catch { set({ customerError: 'ネットワークエラーが発生しました', customerLoading: false }); return false; }
   },
 
   // 品目一覧取得

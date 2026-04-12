@@ -48,6 +48,12 @@ export const NAVIGATION_ITEMS = [
     icon: 'CheckSquare'
   },
   {
+    id: 'customers',
+    name: '客先管理',
+    path: '/customers',
+    icon: 'Building2'
+  },
+  {
     id: 'locations',
     name: '積込・積下場所管理',
     path: '/locations',
