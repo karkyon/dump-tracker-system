@@ -268,17 +268,23 @@ class UserController {
         return sendUnauthorizedError(res, '他のユーザーを更新する権限がありません');
       }
 
-      // ✅ 修正: passwordフィールドが含まれる場合はbcryptでハッシュ化してpasswordHashとして渡す
+      // ✅ 修正: passwordフィールドはuserService.updateがフィルタするため直接Prismaで更新
       const { password: rawPassword, ...restBody } = req.body;
       const updateData: any = {
         ...restBody,
         updatedBy: req.user?.userId
       };
 
+      // パスワードが含まれる場合は先にPrismaで直接更新（userService.updateはpasswordHashを除外するため）
       if (rawPassword && rawPassword.length >= 8) {
         const bcrypt = require('bcrypt');
-        updateData.passwordHash = await bcrypt.hash(rawPassword, 10);
-        logger.info('📝 管理者によるパスワード更新', { userId: id, updatedBy: req.user?.userId });
+        const newHash = await bcrypt.hash(rawPassword, 10);
+        const { DatabaseService } = require('../config/database');
+        await DatabaseService.getInstance().user.update({
+          where: { id },
+          data: { passwordHash: newHash, passwordChangedAt: new Date() }
+        });
+        logger.info('✅ 管理者によるパスワード直接更新完了', { userId: id, updatedBy: req.user?.userId });
       }
 
       const updatedUser = await this.userService.update(id, updateData);
