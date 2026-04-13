@@ -80,7 +80,9 @@ const VehicleInfo: React.FC = () => {
       try {
         const res = await apiService.getCustomers();
         if (res.success) {
-          const list = res.data?.customers || res.data || [];
+          // 二重ネスト対応
+          const inner = res.data?.data || res.data;
+          const list = inner?.customers || (Array.isArray(inner) ? inner : []);
           setCustomers(Array.isArray(list) ? list : []);
         }
       } catch (e) {

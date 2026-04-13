@@ -5,7 +5,7 @@
 // ✅ 地点名は手入力
 // 作成日: 2025年12月7日
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
 // 注意: Google Maps API の型定義は GoogleMapWrapper.tsx で既に定義されているため
@@ -42,10 +42,12 @@ export const LocationRegistrationDialog: React.FC<LocationRegistrationDialogProp
   const [address, setAddress] = useState('住所を取得中...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
+  const addressFetchedRef = useRef(false); // 🔧 GPS更新による点滅防止
 
-  // 逆ジオコーディング（GPS座標から住所を取得）
+  // 逆ジオコーディング（GPS座標から住所を取得 - ダイアログ表示時の初回のみ）
   useEffect(() => {
-    if (!visible || !currentPosition) return;
+    if (!visible || !currentPosition || addressFetchedRef.current) return;
+    addressFetchedRef.current = true; // 🔧 再取得防止フラグ
 
     const fetchAddress = async () => {
       setAddressLoading(true);
@@ -87,6 +89,7 @@ export const LocationRegistrationDialog: React.FC<LocationRegistrationDialogProp
       setLocationName('');
       setAddress('住所を取得中...');
       setIsSubmitting(false);
+      addressFetchedRef.current = false; // 🔧 フラグリセット
     }
   }, [visible]);
 

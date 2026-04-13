@@ -354,6 +354,21 @@ export class MobileController {
 
       const updatedTrip = endResult.data;
 
+      // 🆕 運行終了距離で車両の currentMileage を更新（次回運行の開始距離に反映）
+      const finalOdometer = req.body.finalOdometerReading;
+      if (finalOdometer && updatedTrip?.vehicleId) {
+        try {
+          const prisma = DatabaseService.getInstance();
+          await prisma.vehicle.update({
+            where: { id: updatedTrip.vehicleId },
+            data: { currentMileage: parseInt(String(finalOdometer)) }
+          });
+          logger.info('車両走行距離更新完了', { vehicleId: updatedTrip.vehicleId, currentMileage: finalOdometer });
+        } catch (mileageErr) {
+          logger.warn('車両走行距離更新失敗（運行終了は続行）', { error: mileageErr });
+        }
+      }
+
       const mobileResponse = {
         tripId: updatedTrip.id,
         status: 'completed',
