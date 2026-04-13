@@ -275,16 +275,13 @@ class UserController {
         updatedBy: req.user?.userId
       };
 
-      // パスワードが含まれる場合は先にPrismaで直接更新（userService.updateはpasswordHashを除外するため）
+      // ✅ パスワードが含まれる場合は userService.updateUserPasswordHash で更新
+      // （DatabaseServiceの遅延requireを避けるためuserService経由で実行）
       if (rawPassword && rawPassword.length >= 8) {
         const bcrypt = require('bcrypt');
         const newHash = await bcrypt.hash(rawPassword, 10);
-        const { DatabaseService } = require('../config/database');
-        await DatabaseService.getInstance().user.update({
-          where: { id },
-          data: { passwordHash: newHash, passwordChangedAt: new Date() }
-        });
-        logger.info('✅ 管理者によるパスワード直接更新完了', { userId: id, updatedBy: req.user?.userId });
+        await this.userService.updateUserPasswordHash(id, newHash);
+        logger.info('✅ 管理者によるパスワード更新完了', { userId: id, updatedBy: req.user?.userId });
       }
 
       const updatedUser = await this.userService.update(id, updateData);

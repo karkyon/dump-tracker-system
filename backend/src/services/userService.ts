@@ -579,6 +579,22 @@ class UserService {
   }
 
   /**
+   * ✅ 管理者用: パスワードハッシュを直接更新（現在パスワード確認なし）
+   */
+  async updateUserPasswordHash(userId: string, passwordHash: string): Promise<void> {
+    try {
+      await this.db.getInstance().user.update({
+        where: { id: userId },
+        data: { passwordHash, passwordChangedAt: new Date() }
+      });
+      logger.info('管理者によるパスワード直接更新完了', { userId });
+    } catch (error) {
+      logger.error('パスワード直接更新エラー', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
    * パスワード検証（既存保持・認証連携用）
    */
   async verifyUserPassword(userId: string, password: string): Promise<boolean> {
