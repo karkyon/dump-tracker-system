@@ -120,25 +120,6 @@ const CustomerManagement: React.FC = () => {
     setSelectedId(null);
   };
 
-  const FormBody = () => (
-    <div className="space-y-4 p-4">
-      <Input label="客先名 *" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="例: 株式会社○○" />
-      <Input label="読み仮名" value={formData.reading} onChange={e => setFormData({ ...formData, reading: e.target.value })} placeholder="例: かぶしきがいしゃ○○" />
-      <Input label="住所" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="例: 大阪府○○市..." />
-      <Input label="電話番号" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="例: 06-1234-5678" />
-      <Input label="メールアドレス" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="例: info@example.com" />
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
-        <textarea
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          rows={3}
-          value={formData.notes}
-          onChange={e => setFormData({ ...formData, notes: e.target.value })}
-          placeholder="備考を入力..."
-        />
-      </div>
-    </div>
-  );
 
   if (customerLoading && customers.length === 0) return <SectionLoading text="客先データを読み込み中..." />;
 
@@ -177,7 +158,68 @@ const CustomerManagement: React.FC = () => {
               <h2 className="text-lg font-semibold">新規客先追加</h2>
               <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            <FormBody />
+            <div className="space-y-4 p-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">客先名 *</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: 株式会社○○"
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">読み仮名</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: かぶしきがいしゃ○○"
+                  value={formData.reading}
+                  onChange={e => setFormData({ ...formData, reading: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">住所</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: 大阪府○○市..."
+                  value={formData.address}
+                  onChange={e => setFormData({ ...formData, address: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">電話番号</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: 06-1234-5678"
+                  value={formData.phone}
+                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+                <input
+                  type="email"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: info@example.com"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
+                <textarea
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="備考を入力..."
+                  value={formData.notes}
+                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                />
+              </div>
+            </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t">
               <Button variant="outline" onClick={() => setShowCreateModal(false)}>キャンセル</Button>
               <Button onClick={handleSubmitCreate} disabled={customerLoading}>登録</Button>
@@ -194,7 +236,68 @@ const CustomerManagement: React.FC = () => {
               <h2 className="text-lg font-semibold">客先情報編集</h2>
               <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            <FormBody />
+            <div className="space-y-4 p-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">客先名 *</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: 株式会社○○"
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">読み仮名</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: かぶしきがいしゃ○○"
+                  value={formData.reading}
+                  onChange={e => setFormData({ ...formData, reading: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">住所</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: 大阪府○○市..."
+                  value={formData.address}
+                  onChange={e => setFormData({ ...formData, address: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">電話番号</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: 06-1234-5678"
+                  value={formData.phone}
+                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+                <input
+                  type="email"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例: info@example.com"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
+                <textarea
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="備考を入力..."
+                  value={formData.notes}
+                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                />
+              </div>
+            </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t">
               <Button variant="outline" onClick={() => setShowEditModal(false)}>キャンセル</Button>
               <Button onClick={handleSubmitEdit} disabled={customerLoading}>更新</Button>
