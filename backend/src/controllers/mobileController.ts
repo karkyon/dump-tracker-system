@@ -342,7 +342,7 @@ export class MobileController {
           address: req.body.endPosition.address
         } : undefined,
         notes: req.body.notes,
-        endMileage: req.body.finalOdometerReading // ✅ 修正: finalOdometerReading → endMileage
+        endOdometer: req.body.endOdometer // ✅ 修正: PostTripInspectionが送るフィールド名に合わせる
       };
 
       const endResult = await this.tripService.endTrip(tripId, endTripData);
@@ -354,19 +354,24 @@ export class MobileController {
 
       const updatedTrip = endResult.data;
 
-      // 🆕 運行終了距離で車両の currentMileage を更新（次回運行の開始距離に反映）
-      const finalOdometer = req.body.finalOdometerReading;
-      if (finalOdometer && updatedTrip?.vehicleId) {
+      // ✅ 運行終了距離で車両の currentMileage を更新（次回運行の開始距離に反映）
+      const finalOdometer = req.body.endOdometer;
+      // vehicleId は updatedTrip か、リクエストボディから取得
+      const vehicleIdForUpdate = updatedTrip?.vehicleId || req.body.vehicleId;
+      logger.info('車両走行距離更新チェック', { finalOdometer, vehicleIdForUpdate, tripVehicleId: updatedTrip?.vehicleId });
+      if (finalOdometer && vehicleIdForUpdate) {
         try {
           const prisma = DatabaseService.getInstance();
           await prisma.vehicle.update({
-            where: { id: updatedTrip.vehicleId },
+            where: { id: vehicleIdForUpdate },
             data: { currentMileage: parseInt(String(finalOdometer)) }
           });
-          logger.info('車両走行距離更新完了', { vehicleId: updatedTrip.vehicleId, currentMileage: finalOdometer });
+          logger.info('✅ 車両走行距離更新完了', { vehicleId: vehicleIdForUpdate, currentMileage: finalOdometer });
         } catch (mileageErr) {
           logger.warn('車両走行距離更新失敗（運行終了は続行）', { error: mileageErr });
         }
+      } else {
+        logger.warn('⚠️ 車両走行距離更新スキップ', { finalOdometer, vehicleIdForUpdate });
       }
 
       const mobileResponse = {
