@@ -7,7 +7,6 @@ import { toast } from 'react-hot-toast';
 import { useMasterStore } from '../store/masterStore';
 import { Customer } from '../types';
 import Button from '../components/common/Button';
-import Input from '../components/common/Input';
 import Table, { ActionButtons } from '../components/common/Table';
 import { ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
