@@ -55,21 +55,14 @@ jobs:
             export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
             npm ci --production
             npx prisma generate --schema=./prisma/schema.camel.prisma 2>/dev/null || true
-            npx prisma db push --schema=./prisma/schema.camel.prisma --accept-data-loss 2>&1 || echo "db push警告あり（継続）"
+            npx prisma db push --schema=./prisma/schema.camel.prisma 2>/dev/null || true
             # ✅ テーブル権限付与（db push後はownerがpostgresになる場合があるため）
             sudo -u postgres psql dump_tracker_staging -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo -u postgres psql dump_tracker_staging -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             rm -rf /tmp/backend-deploy
-            # ✅ nohup/pkill方式でデタッチ再起動（systemdなし・YAML互換）
-            printf '#!/bin/bash
-cd ~/projects/dump-tracker/backend
-pkill -f "ts-node src/index.ts" 2>/dev/null || true
-sleep 2
-nohup npx ts-node src/index.ts >> ~/projects/dump-tracker/backend/logs/combined.log 2>&1 &
-echo "Backend restarted PID: $!"
-' > /tmp/restart-backend.sh
-            chmod +x /tmp/restart-backend.sh
-            nohup bash /tmp/restart-backend.sh > /tmp/restart-backend.log 2>&1 &
+            pkill -f "ts-node src/index.ts" 2>/dev/null || true
+            sleep 2
+            nohup bash -c 'cd ~/projects/dump-tracker/backend && npx ts-node src/index.ts >> ~/projects/dump-tracker/backend/logs/combined.log 2>&1' &
             sleep 5
             echo "✅ Backend deployed to Staging"
 
