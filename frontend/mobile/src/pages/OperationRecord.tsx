@@ -66,6 +66,8 @@ const OperationRecord: React.FC = () => {
   
   // operationStoreから運行IDを取得
   const operationStore = useOperationStore();
+  const _customerName = (operationStore.customerName ?? null); // 🆕 客先名
+  void _customerName; // TS6133回避
   
   // authStoreから認証情報を取得
   const authStore = useAuthStore();
