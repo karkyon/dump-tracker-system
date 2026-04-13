@@ -338,7 +338,9 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     try {
       const response = await customerAPI.getCustomers({ isActive: 'true' });
       if (response.success) {
-        const data = response.data?.customers || response.data || [];
+        // 二重ネスト構造に対応（locationAPI パターン2と同様）
+        const innerData = response.data?.data || response.data;
+        const data = innerData?.customers || (Array.isArray(innerData) ? innerData : []);
         set({ customers: Array.isArray(data) ? data : [], customerLoading: false });
       } else {
         set({ customerError: response.error || '客先の取得に失敗しました', customerLoading: false });
