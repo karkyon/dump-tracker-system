@@ -110,6 +110,14 @@ export class AuthController {
       } else if (error instanceof AuthenticationError) {
         const errResponse = createErrorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
+      } else if (error instanceof AuthorizationError) {
+        // 🆕 認証失敗(パスワード不一致等)はAuthorizationErrorで来る場合があるため追加
+        const errResponse = createErrorResponse(error.message, error.statusCode, error.code);
+        res.status(error.statusCode).json(errResponse);
+      } else if (error instanceof AppError) {
+        // 🆕 その他AppError系は statusCode を使用
+        const errResponse = createErrorResponse(error.message, error.statusCode, error.code);
+        res.status(error.statusCode).json(errResponse);
       } else {
         const errResponse = createErrorResponse('ログイン処理に失敗しました', 500, 'LOGIN_ERROR');
         res.status(500).json(errResponse);
