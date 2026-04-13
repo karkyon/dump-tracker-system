@@ -242,6 +242,7 @@ const OperationRecords: React.FC = () => {
 
   const columns = [
     { key: 'date', header: '運行日', render: (_value: any, record: Operation) => record?.actualStartTime ? <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-gray-400" /><span>{new Date(record.actualStartTime).toLocaleDateString('ja-JP')}</span></div> : <span>-</span> },
+    { key: 'customer', header: '客先', render: (_value: any, record: Operation) => <span className="text-sm">{(record as any)?.customer?.name || '-'}</span> },
     { key: 'driver', header: '運転手', render: (_value: any, record: Operation) => <div className="flex items-center gap-2"><User className="w-4 h-4 text-gray-400" /><span>{record?.usersOperationsDriverIdTousers?.name || '-'}</span></div> },
     { key: 'vehicle', header: '車両', render: (_value: any, record: Operation) => <div className="flex items-center gap-2"><Truck className="w-4 h-4 text-gray-400" /><span>{record?.vehicles?.plateNumber || '-'}</span></div> },
     { key: 'operationNumber', header: '運行番号', render: (_value: any, record: Operation) => <span className="font-medium">{record?.operationNumber || '-'}</span> },

@@ -1403,6 +1403,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           </p>
                         </div>
                       </div>
+                      {(operation as any)?.customer?.name && (
+                        <div>
+                          <p className="text-sm text-gray-500 mb-1">客先</p>
+                          <p className="font-medium text-green-700">🏢 {(operation as any).customer.name}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-sm text-gray-500 mb-1">車両</p>
                         <div className="flex items-center gap-2">

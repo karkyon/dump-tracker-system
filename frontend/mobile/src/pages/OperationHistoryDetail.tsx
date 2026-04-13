@@ -67,6 +67,7 @@ interface OperationDetail {
   activities: ActivityRecord[];
   fuelRecords: FuelRecord[];
   notes: string;
+  customerName?: string; // 🆕 客先名
 }
 
 // =====================================
@@ -230,6 +231,17 @@ const OperationHistoryDetail: React.FC = () => {
                 <div className="font-semibold text-gray-800">{detail.driver.name || '不明'}</div>
               </div>
             </div>
+            {detail.customerName && (
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-50 rounded-lg">
+                  <span className="text-base">🏢</span>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">客先</div>
+                  <div className="font-semibold text-gray-800">{detail.customerName}</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

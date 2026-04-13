@@ -35,6 +35,7 @@ interface OperationHistoryItem {
   loadingCount: number;
   unloadingCount: number;
   status: 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED';
+  customerName?: string; // 🆕 客先名
 }
 
 interface PaginationInfo {

@@ -66,8 +66,7 @@ const OperationRecord: React.FC = () => {
   
   // operationStoreから運行IDを取得
   const operationStore = useOperationStore();
-  const _customerName = (operationStore.customerName ?? null); // 🆕 客先名
-  void _customerName; // TS6133回避
+  const customerName = operationStore.customerName ?? null; // 🆕 客先名
   
   // authStoreから認証情報を取得
   const authStore = useAuthStore();
@@ -1220,6 +1219,11 @@ const OperationRecord: React.FC = () => {
         <div style={{ marginTop: '8px', fontSize: '14px', opacity: 0.9 }}>
           {operation.operationNumber} - {operation.vehicleName}
         </div>
+        {customerName && (
+          <div style={{ marginTop: '4px', fontSize: '13px', color: '#90EE90' }}>
+            🏢 {customerName}
+          </div>
+        )}
       </div>
 
       {/* ステータスバー */}
@@ -1287,6 +1291,7 @@ const OperationRecord: React.FC = () => {
             <div><strong>休憩回数:</strong> {operation.breakCount} 回</div>
             <div><strong>積込場所:</strong> {operation.loadingLocation || '未設定'}</div>
             <div><strong>積降場所:</strong> {operation.unloadingLocation || '未設定'}</div>
+            {customerName && <div><strong>客先:</strong> {customerName}</div>}
           </div>
         </div>
       )}
