@@ -545,38 +545,52 @@ export class MobileController {
 
       this.collectStats('operation', req.user.userId);
 
-      // ✅ 修正: notes → specialInstructions に変更
-      const locationData = {
-        name: req.body.name || `位置 ${new Date().toLocaleString('ja-JP')}`,
-        locationType: req.body.locationType || req.body.type || 'DESTINATION',
-        latitude: new Decimal(req.body.latitude),
-        longitude: new Decimal(req.body.longitude),
-        address: req.body.address || '',  // ✅ 修正: デフォルト値を追加
-        specialInstructions: 'モバイルからクイック登録'
+      const baseName = req.body.name || `位置 ${new Date().toLocaleString('ja-JP')}`;
+
+      // ✅ 修正: name @unique 制約に対応。重複時はタイムスタンプ付きでリトライ
+      const tryCreate = async (name: string) => {
+        return await this.locationService.create({
+          name,
+          locationType: req.body.locationType || req.body.type || 'DESTINATION',
+          latitude: new Decimal(req.body.latitude),
+          longitude: new Decimal(req.body.longitude),
+          address: req.body.address || '',
+          specialInstructions: 'モバイルからクイック登録'
+        });
       };
 
-      logger.info('位置作成データ', { data: locationData });
+      logger.info('クイック位置登録開始', { baseName, body: req.body });
 
-      const result = await this.locationService.create(locationData);
+      let result = await tryCreate(baseName);
 
-      // ✅ OperationResult型のため、result.success と result.data をチェック
+      // 失敗時: P2002(unique constraint)ならタイムスタンプ付きでリトライ
+      if (!result.success) {
+        const errMsg = result.message || '';
+        if (errMsg.includes('P2002') || errMsg.includes('unique') || errMsg.includes('Unique') || errMsg.includes('失敗')) {
+          const altName = `${baseName}-${Date.now()}`;
+          logger.info('名前重複のためリトライ', { baseName, altName });
+          result = await tryCreate(altName);
+        }
+      }
+
       if (!result.success || !result.data) {
-        logger.error('位置作成失敗', { result });
+        logger.error('クイック位置登録失敗', { result, body: req.body });
         sendError(res, result.message || '位置情報の作成に失敗しました', 500, 'LOCATION_CREATE_ERROR');
         return;
       }
 
-      logger.info('位置作成成功', { locationId: result.data.id });
+      logger.info('クイック位置登録成功', { locationId: result.data.id, name: result.data.name });
       sendSuccess(res, result.data, 'クイック位置登録が完了しました', 201);
+      return;
 
     } catch (error) {
-      logger.error('Failed to create location', {
-        category: 'error',
-        data: {
-          error: error instanceof Error ? error.message : String(error),
-          data: req.body
-        }
-      });
+      const errStr = error instanceof Error ? error.message : String(error);
+      logger.error('クイック位置登録 例外', { error: errStr, body: req.body });
+      // Prisma P2002 unique constraint → 409
+      if (errStr.includes('P2002') || errStr.includes('Unique constraint')) {
+        sendError(res, 'この地点名は既に登録されています', 409, 'LOCATION_NAME_DUPLICATE');
+        return;
+      }
       sendError(res, '位置情報の作成に失敗しました', 500, 'LOCATION_CREATE_ERROR');
     }
   });
