@@ -66,7 +66,6 @@ const OperationRecord: React.FC = () => {
   
   // operationStoreから運行IDを取得
   const operationStore = useOperationStore();
-  const customerName = operationStore.customerName; // 🆕 客先名
   
   // authStoreから認証情報を取得
   const authStore = useAuthStore();
