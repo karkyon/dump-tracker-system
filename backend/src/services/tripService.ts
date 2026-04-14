@@ -724,9 +724,15 @@ class TripService {
                 role: true,
                 employeeId: true
               }
+            },
+            // ✅ 追加: 客先情報（customerName 表示用）
+            customer: {
+              select: { id: true, name: true }
+            },
+            // ✅ 追加: 積込/積降回数計算用（activityTypeのみ取得で軽量）
+            operationDetails: {
+              select: { activityType: true }
             }
-            // 🔥 operation_details と gps_logs は一覧では取得しない
-            // 詳細表示が必要な場合は getTripById を使用
           }
         }),
         prisma.operation.count({ where: whereClause })
@@ -809,6 +815,10 @@ class TripService {
           gpsLogs: {
             orderBy: { recordedAt: 'desc' },
             take: 100 // 最新100件のみ
+          },
+          // ✅ 追加: 客先情報
+          customer: {
+            select: { id: true, name: true }
           }
         }
       });
