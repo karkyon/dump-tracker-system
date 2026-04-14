@@ -301,11 +301,6 @@ const UserManagement: React.FC = () => {
     setShowEditModal(true);
   };
 
-  // 削除ダイアログ表示
-  const handleDelete = (userId: string) => {
-    setSelectedUserId(userId);
-    setShowDeleteDialog(true);
-  };
 
   // 作成処理
   const handleSubmitCreate = async () => {
