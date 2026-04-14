@@ -344,7 +344,12 @@ export class OperationService {
           where: params.where,
           orderBy: params.orderBy || { createdAt: 'desc' },
           skip,
-          take: pageSize
+          take: pageSize,
+          include: {
+            vehicles: true,                       // ✅ 車両情報
+            usersOperationsDriverIdTousers: true, // ✅ ドライバー情報
+            customer: true                        // ✅ 客先情報
+          }
         }),
         this.prisma.operation.count({ where: params.where })
       ]);
