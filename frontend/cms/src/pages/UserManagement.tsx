@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { Plus, Search, UserCheck, UserX } from 'lucide-react';
+import { Plus, Search, Edit2, UserCheck, UserX } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '../store/userStore';
 import { useAuthStore } from '../store/authStore';
@@ -212,10 +212,7 @@ const UserManagement: React.FC = () => {
               title="編集"
               className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
+              <Edit2 className="w-4 h-4" />
             </button>
             {!isSelf && (
               <button
@@ -223,7 +220,7 @@ const UserManagement: React.FC = () => {
                 title={isActive ? 'クリックして無効化' : 'クリックして有効化'}
                 className={`p-1 rounded transition-colors ${isActive ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-green-500 hover:text-green-700 hover:bg-green-50'}`}
               >
-                {isActive ? <UserX size={16} /> : <UserCheck size={16} />}
+                {isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
               </button>
             )}
           </div>
