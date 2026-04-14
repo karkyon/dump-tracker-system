@@ -12,6 +12,7 @@ import {
   // Fuel
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
+import { apiClient } from '../utils/api';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { StatusBadge } from '../components/common/Table';
 
@@ -46,25 +47,18 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        };
-        const BASE = import.meta.env.VITE_API_URL || 'https://dumptracker-s.ddns.net/api/v1';
-
-        // 並列でAPI取得
+        // ✅ 修正: fetch直接呼び出し → apiClient（axios）に統一
+        // apiClientはローカル/staging環境を自動判別し、認証トークンも自動付与
         const [usersRes, vehiclesRes, operationsRes] = await Promise.allSettled([
-          fetch(`${BASE}/users?limit=200`, { headers }),
-          fetch(`${BASE}/vehicles?limit=200`, { headers }),
-          fetch(`${BASE}/operations?limit=10&sortOrder=desc`, { headers }),
+          apiClient.get<any>('/users', { params: { limit: 200 } }),
+          apiClient.get<any>('/vehicles', { params: { limit: 200 } }),
+          apiClient.get<any>('/operations', { params: { limit: 10, sortOrder: 'desc' } }),
         ]);
 
         // ユーザー（稼働運転手数）
         let totalDrivers = 0;
-        if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
-          const usersJson = await usersRes.value.json();
-          const usersData = usersJson?.data?.users ?? usersJson?.data ?? [];
+        if (usersRes.status === 'fulfilled') {
+          const usersData = (usersRes.value as any)?.data?.users ?? (usersRes.value as any)?.data ?? [];
           const allUsers = Array.isArray(usersData) ? usersData : (usersData?.data ?? []);
           totalDrivers = allUsers.filter((u: any) =>
             u.role === 'DRIVER' && (u.isActive !== false)
@@ -74,9 +68,8 @@ const Dashboard: React.FC = () => {
         // 車両（登録車両数・稼働中車両数）
         let activeVehicles = 0;
         let onlineVehicles = 0;
-        if (vehiclesRes.status === 'fulfilled' && vehiclesRes.value.ok) {
-          const vehiclesJson = await vehiclesRes.value.json();
-          const vData = vehiclesJson?.data;
+        if (vehiclesRes.status === 'fulfilled') {
+          const vData = (vehiclesRes.value as any)?.data;
           const vehicleList: any[] = Array.isArray(vData)
             ? vData
             : Array.isArray(vData?.data)
@@ -93,9 +86,8 @@ const Dashboard: React.FC = () => {
         // 運行（今日の運行数・最近の運行）
         let todayOperations = 0;
         const recentOps: RecentOperation[] = [];
-        if (operationsRes.status === 'fulfilled' && operationsRes.value.ok) {
-          const opsJson = await operationsRes.value.json();
-          const opsData = opsJson?.data;
+        if (operationsRes.status === 'fulfilled') {
+          const opsData = (operationsRes.value as any)?.data;
           const opList: any[] = Array.isArray(opsData)
             ? opsData
             : Array.isArray(opsData?.data)
