@@ -83,6 +83,7 @@ const ACTIVITY_LABELS: Record<string, { label: string; color: string; icon: stri
   BREAK_START: { label: '休憩開始', color: 'text-gray-600 bg-gray-50', icon: '☕' },
   BREAK_END: { label: '休憩終了', color: 'text-gray-600 bg-gray-50', icon: '▶️' },
   FUEL: { label: '給油', color: 'text-green-700 bg-green-50', icon: '⛽' },
+  FUELING: { label: '給油', color: 'text-green-700 bg-green-50', icon: '⛽' }, // ✅ 追加: FUELINGも給油として表示
 };
 
 // =====================================
