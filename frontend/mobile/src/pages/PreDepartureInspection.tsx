@@ -47,6 +47,7 @@ const PreDepartureInspection: React.FC = () => {
     setInspectionCompleted,
     startOperation 
   } = useOperationStore();
+  const customerId = useOperationStore(s => s.customerId);
   
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -221,6 +222,7 @@ const PreDepartureInspection: React.FC = () => {
       const operationResponse = await apiService.startOperation({
         vehicleId,
         driverId,
+        customerId: customerId || undefined,  // ✅ 客先ID追加
         startLatitude: 35.6812,
         startLongitude: 139.7671,
         startLocation: '車庫',
