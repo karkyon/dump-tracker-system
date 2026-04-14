@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { Plus, Search, Edit2, UserCheck, UserX } from 'lucide-react';
+import { Plus, Search, UserCheck, UserX } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '../store/userStore';
 import { useAuthStore } from '../store/authStore';
@@ -206,24 +206,16 @@ const UserManagement: React.FC = () => {
         const isSelf = user.id === currentUser?.id;
         const isActive = user.isActive;
         return (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleEdit(user)}
-              title="編集"
-              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-            {!isSelf && (
-              <button
-                onClick={() => { setToggleTargetUser(user); setShowToggleDialog(true); }}
-                title={isActive ? 'クリックして無効化' : 'クリックして有効化'}
-                className={`p-1 rounded transition-colors ${isActive ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-green-500 hover:text-green-700 hover:bg-green-50'}`}
-              >
-                {isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-              </button>
-            )}
-          </div>
+          <ActionButtons
+            onEdit={() => handleEdit(user)}
+            onDelete={
+              isSelf
+                ? undefined
+                : () => { setToggleTargetUser(user); setShowToggleDialog(true); }
+            }
+            deleteLabel={isActive ? 'クリックして無効化' : 'クリックして有効化'}
+            deleteIcon={isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+          />
         );
       },
     },
