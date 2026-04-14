@@ -97,6 +97,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           isAuthenticated: false,
+          isLoading: false,  // ✅ 修正: getProfile失敗→logout時にisLoadingがtrueのまま残る問題を解消
           error: null,
         });
       },
@@ -134,9 +135,11 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
             });
           } else {
+            set({ isLoading: false });  // ✅ 修正: logout前にisLoadingを解除
             get().logout();
           }
         } catch (error) {
+          set({ isLoading: false });  // ✅ 修正: logout前にisLoadingを解除
           get().logout();
         }
       },
