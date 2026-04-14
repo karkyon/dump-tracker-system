@@ -312,6 +312,14 @@ const OperationHistory: React.FC = () => {
                 <div className="text-gray-500">{operation.driverName}</div>
               </div>
 
+              {/* ✅ 追加: 客先名 */}
+              {operation.customerName && (
+                <div className="flex items-center gap-1.5 mb-2 text-sm">
+                  <MapPin className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="text-purple-700 font-medium text-xs">{operation.customerName}</span>
+                </div>
+              )}
+
               {/* 運行情報グリッド */}
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {/* 運行時間 */}
@@ -332,12 +340,23 @@ const OperationHistory: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 積降回数 */}
+                {/* 積込回数 */}
+                <div className="text-center bg-blue-50 rounded-lg py-2">
+                  <MapPin className="w-4 h-4 text-blue-600 mx-auto mb-1" />
+                  <div className="text-xs text-gray-500 mb-0.5">積込回数</div>
+                  <div className="text-sm font-semibold text-blue-700">
+                    {operation.loadingCount}回
+                  </div>
+                </div>
+              </div>
+
+              {/* 積降回数（2行目） */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
                 <div className="text-center bg-orange-50 rounded-lg py-2">
                   <MapPin className="w-4 h-4 text-orange-600 mx-auto mb-1" />
                   <div className="text-xs text-gray-500 mb-0.5">積降回数</div>
                   <div className="text-sm font-semibold text-orange-700">
-                    {operation.loadingCount + operation.unloadingCount}回
+                    {operation.unloadingCount}回
                   </div>
                 </div>
               </div>

@@ -358,7 +358,13 @@ export class MobileController {
       const finalOdometer = req.body.endOdometer;
       // vehicleId は updatedTrip か、リクエストボディから取得
       const vehicleIdForUpdate = updatedTrip?.vehicleId || req.body.vehicleId;
-      logger.info('車両走行距離更新チェック', { finalOdometer, vehicleIdForUpdate, tripVehicleId: updatedTrip?.vehicleId });
+      logger.info('車両走行距離更新チェック', { 
+        finalOdometer, 
+        vehicleIdForUpdate,
+        tripVehicleId: updatedTrip?.vehicleId,
+        bodyVehicleId: req.body.vehicleId,
+        updatedTripKeys: updatedTrip ? Object.keys(updatedTrip) : []
+      });
       if (finalOdometer && vehicleIdForUpdate) {
         try {
           const prisma = DatabaseService.getInstance();
@@ -1133,12 +1139,15 @@ export class MobileController {
           : 0;
 
         const details = trip.operationDetails || trip.operation_details || [];
-        const loadingCount = details.filter((d: any) =>
-          ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'].includes(d.activity_type || d.activityType || '')
-        ).length;
-        const unloadingCount = details.filter((d: any) =>
-          ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE'].includes(d.activity_type || d.activityType || '')
-        ).length;
+        // ✅ 修正: activityType(camelCase)で確実にカウント
+        const loadingCount = details.filter((d: any) => {
+          const t = d.activityType || d.activity_type || '';
+          return ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'].includes(t);
+        }).length;
+        const unloadingCount = details.filter((d: any) => {
+          const t = d.activityType || d.activity_type || '';
+          return ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE'].includes(t);
+        }).length;
 
         const vehicleData = trip.vehicles || trip.vehicle;
         const driverData = trip.usersOperationsDriverIdTousers || trip.driver;
@@ -1155,6 +1164,7 @@ export class MobileController {
             || req.user!.name || '不明',
           startTime: startTime ? new Date(startTime).toTimeString().slice(0, 5) : '',
           endTime: endTime ? new Date(endTime).toTimeString().slice(0, 5) : '',
+          customerName: trip.customer?.name || null, // ✅ 追加: 客先名
           totalDistance: trip.total_distance_km
             ? Number(trip.total_distance_km)
             : (trip.totalDistanceKm ? Number(trip.totalDistanceKm) : 0),
@@ -1331,6 +1341,7 @@ export class MobileController {
             || `${driverData?.last_name || driverData?.lastName || ''} ${driverData?.first_name || driverData?.firstName || ''}`.trim()
             || driverData?.username || '',
         },
+        customerName: (trip as any).customer?.name || null, // ✅ 追加: 客先名
         startTime: startTime ? new Date(startTime).toISOString() : null,
         endTime: endTime ? new Date(endTime).toISOString() : null,
         totalDistance: (trip as any).total_distance_km
