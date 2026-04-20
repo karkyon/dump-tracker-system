@@ -1090,7 +1090,7 @@ class APIServiceClass {
     name: string;
     latitude: number;
     longitude: number;
-    locationType: 'DEPOT' | 'DESTINATION';
+    locationType: 'PICKUP' | 'DELIVERY';
     address?: string;
   }): Promise<APIResponse<LocationInfo>> {
     try {

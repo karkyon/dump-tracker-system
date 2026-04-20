@@ -204,6 +204,13 @@ class LocationController {
         throw new ValidationError('住所は必須です');
       }
 
+      // 【修正】registration_method カラムが存在しないため
+      // special_instructions で登録元を識別できるよう設定
+      // モバイル登録は mobileController で 'モバイルからクイック登録' を設定済み
+      if (!createData.accessInstructions && !createData.notes) {
+        createData.accessInstructions = '管理者から登録';
+      }
+
       // ✅ 修正: LocationResponseDTOを直接返すメソッドを使用
       const location = await this.locationServiceWrapper.createLocation(
         createData,

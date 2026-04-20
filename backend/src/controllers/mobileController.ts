@@ -358,8 +358,8 @@ export class MobileController {
       const finalOdometer = req.body.endOdometer;
       // vehicleId は updatedTrip か、リクエストボディから取得
       const vehicleIdForUpdate = updatedTrip?.vehicleId || req.body.vehicleId;
-      logger.info('車両走行距離更新チェック', { 
-        finalOdometer, 
+      logger.info('車両走行距離更新チェック', {
+        finalOdometer,
         vehicleIdForUpdate,
         tripVehicleId: updatedTrip?.vehicleId,
         bodyVehicleId: req.body.vehicleId,
@@ -558,11 +558,22 @@ export class MobileController {
 
       const baseName = req.body.name || `位置 ${new Date().toLocaleString('ja-JP')}`;
 
-      // ✅ 修正: name @unique 制約に対応。重複時はタイムスタンプ付きでリトライ
+      // ============================================================
+      // モバイル側が最初から PICKUP/DELIVERY で送信するため
+      // 変換ロジック不要。そのまま受け取って保存する。
+      // 念のため不正な値が来た場合のフォールバックのみ残す。
+      // ============================================================
+      const rawLocationType = req.body.locationType || req.body.type || 'DELIVERY';
+      // PICKUP/DELIVERY/BOTH のみ受け付ける（不正値は DELIVERY にフォールバック）
+      const validLocationTypes: LocationType[] = ['PICKUP', 'DELIVERY', 'BOTH'];
+      const normalizedLocationType: LocationType = validLocationTypes.includes(rawLocationType as LocationType)
+        ? rawLocationType as LocationType
+        : 'DELIVERY';
+
       const tryCreate = async (name: string) => {
         return await this.locationService.create({
           name,
-          locationType: req.body.locationType || req.body.type || 'DESTINATION',
+          locationType: normalizedLocationType,
           latitude: new Decimal(req.body.latitude),
           longitude: new Decimal(req.body.longitude),
           address: req.body.address || '',
@@ -796,11 +807,17 @@ export class MobileController {
       let locationTypeFilter: LocationType[] | undefined;
 
       if (phase === 'TO_LOADING' || phase === 'AT_LOADING') {
-        // 積込場所への移動中・到着時 → DEPOT（積込場所）を検索
-        locationTypeFilter = ['DEPOT'];
+        // 積込場所への移動中・到着時
+        // DEPOT   = モバイルから登録した積込場所
+        // PICKUP  = CMSから登録した積込場所
+        // BOTH    = CMSから登録した積込・積降兼用場所
+        locationTypeFilter = ['DEPOT', 'PICKUP', 'BOTH'];
       } else if (phase === 'TO_UNLOADING' || phase === 'AT_UNLOADING') {
-        // 積降場所への移動中・到着時 → DESTINATION（積降場所）を検索
-        locationTypeFilter = ['DESTINATION'];
+        // 積降場所への移動中・到着時
+        // DESTINATION = モバイルから登録した積降場所
+        // DELIVERY    = CMSから登録した積降場所
+        // BOTH        = CMSから登録した積込・積降兼用場所
+        locationTypeFilter = ['DESTINATION', 'DELIVERY', 'BOTH'];
       } else if (phase === 'REFUEL') {
         // 給油中 → FUEL_STATION（給油所）を検索
         locationTypeFilter = ['FUEL_STATION'];

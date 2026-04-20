@@ -23,11 +23,14 @@ interface LocationRegistrationDialogProps {
   onCancel: () => void;
 }
 
+// ============================================================
+// モバイル登録時から CMS統一型 PICKUP/DELIVERY で保存する
+// ============================================================
 export interface NewLocationData {
   name: string;
   latitude: number;
   longitude: number;
-  locationType: 'DEPOT' | 'DESTINATION'; // DEPOT=積込場所, DESTINATION=積降場所
+  locationType: 'PICKUP' | 'DELIVERY'; // PICKUP=積込場所, DELIVERY=積降場所
   address: string;
 }
 
@@ -117,7 +120,7 @@ export const LocationRegistrationDialog: React.FC<LocationRegistrationDialogProp
         name: locationName.trim(),
         latitude: currentPosition.latitude,
         longitude: currentPosition.longitude,
-        locationType: locationType === 'LOADING' ? 'DEPOT' : 'DESTINATION',
+        locationType: locationType === 'LOADING' ? 'PICKUP' : 'DELIVERY',
         address: address === '住所を取得中...' || address === '住所の取得に失敗しました' || address === 'Google Maps APIが読み込まれていません'
           ? '' 
           : address

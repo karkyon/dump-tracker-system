@@ -100,9 +100,11 @@ const LocationManagement: React.FC = () => {
       width: '90px',
       render: (value: string) => {
         const config: Record<string, { label: string; className: string }> = {
-          PICKUP:   { label: '積込',      className: 'bg-blue-100 text-blue-800' },
-          DELIVERY: { label: '積降',      className: 'bg-green-100 text-green-800' },
-          BOTH:     { label: '積込・積降', className: 'bg-purple-100 text-purple-800' },
+          PICKUP:      { label: '積込',      className: 'bg-blue-100 text-blue-800' },
+          DEPOT:       { label: '積込',      className: 'bg-blue-100 text-blue-800' },
+          DELIVERY:    { label: '積降',      className: 'bg-green-100 text-green-800' },
+          DESTINATION: { label: '積降',      className: 'bg-green-100 text-green-800' },
+          BOTH:        { label: '積込・積降', className: 'bg-purple-100 text-purple-800' },
         };
         const c = config[value] ?? { label: value, className: 'bg-gray-100 text-gray-800' };
         return (
@@ -116,13 +118,21 @@ const LocationManagement: React.FC = () => {
     {
       key: 'registrationMethod',
       header: '登録方法',
-      render: (value: string) => (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          value === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
-        }`}>
-          {value === 'admin' ? '管理者から' : 'アプリから'}
-        </span>
-      ),
+      render: (value: string, location: Location) => {
+        // registration_method カラムが存在しないため special_instructions で判定
+        // バックエンド登録時: '管理者から登録' or 'モバイルからクイック登録'
+        const isAdmin =
+          value === 'admin' ||
+          (location as any).specialInstructions === '管理者から登録' ||
+          (location as any).special_instructions === '管理者から登録';
+        return (
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
+          }`}>
+            {isAdmin ? '管理者から' : 'アプリから'}
+          </span>
+        );
+      },
     },
     {
       key: 'createdAt',
@@ -279,10 +289,13 @@ const LocationManagement: React.FC = () => {
           </div>
           
           <Select
+            label="場所種別"
             options={[
               { value: '', label: 'すべての種別' },
-              { value: 'PICKUP', label: '積込' },
-              { value: 'DELIVERY', label: '積降' },
+              { value: 'PICKUP', label: '積込（CMS登録）' },
+              { value: 'DEPOT', label: '積込（アプリ登録）' },
+              { value: 'DELIVERY', label: '積降（CMS登録）' },
+              { value: 'DESTINATION', label: '積降（アプリ登録）' },
               { value: 'BOTH', label: '積込・積降（両方）' },
             ]}
             value={typeFilter}
