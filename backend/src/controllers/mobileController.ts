@@ -957,14 +957,19 @@ export class MobileController {
         data: { customerId }
       });
 
-      // operation_details に切替履歴を記録
+      // operation_details に切替履歴を記録（sequenceNumber重複回避）
+      const maxSeq = await db.operationDetail.aggregate({
+        where: { operationId },
+        _max: { sequenceNumber: true }
+      });
+      const nextSeq = (maxSeq._max.sequenceNumber ?? -1) + 1;
       await db.operationDetail.create({
         data: {
           operationId,
           activityType: 'NOTE',
           notes: `客先変更: ${previousCustomerName} → ${customer.name}`,
           actualStartTime: new Date(),
-          sequenceNumber: 0,
+          sequenceNumber: nextSeq,
           quantityTons: 0,
         }
       });
