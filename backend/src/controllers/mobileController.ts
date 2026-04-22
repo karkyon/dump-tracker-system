@@ -964,6 +964,8 @@ export class MobileController {
           activityType: 'NOTE',
           notes: `客先変更: ${previousCustomerName} → ${customer.name}`,
           actualStartTime: new Date(),
+          sequenceNumber: 0,
+          quantityTons: 0,
         }
       });
 
