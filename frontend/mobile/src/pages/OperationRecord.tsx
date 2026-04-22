@@ -1116,7 +1116,7 @@ const OperationRecord: React.FC = () => {
                 fontSize: '20px',
                 fontWeight: 'bold',
                 color: 'white',
-                background: isSubmitting ? '#ccc' : '#2196F3',
+                background: isSubmitting ? '#ccc' : '#4CAF50',
                 border: 'none',
                 borderRadius: '10px',
                 cursor: isSubmitting ? 'not-allowed' : 'pointer',
