@@ -7,7 +7,7 @@
 // ✅ e-reverse リンク: https://webpage.e-reverse.com
 // 🔧 修正: D5a統合 (2025-03-08)
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTLog } from '../hooks/useTLog';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
