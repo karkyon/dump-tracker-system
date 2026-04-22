@@ -1264,11 +1264,61 @@ const OperationRecord: React.FC = () => {
         <div style={{ marginTop: '8px', fontSize: '14px', opacity: 0.9 }}>
           {operation.operationNumber} - {operation.vehicleName}
         </div>
-        {customerName && (
-          <div style={{ marginTop: '4px', fontSize: '13px', color: '#90EE90' }}>
-            🏢 {customerName}
+        {/* REQ-011: 客先名 + 切替ボタン */}
+        <div style={{
+          marginTop: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'rgba(255,255,255,0.15)',
+          border: '1.5px solid rgba(255,255,255,0.5)',
+          borderRadius: '8px',
+          padding: '6px 10px',
+        }}>
+          <div style={{
+            fontSize: '16px',
+            fontWeight: 'bold',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            flex: 1,
+            minWidth: 0,
+          }}>
+            <span>🏢</span>
+            <span style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {customerName || '客先未設定'}
+            </span>
           </div>
-        )}
+          <button
+            onClick={handleOpenCustomerDialog}
+            disabled={isSubmitting || operation.phase === 'BREAK'}
+            title="別客先へ切替"
+            style={{
+              marginLeft: '8px',
+              flexShrink: 0,
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              border: '1.5px solid rgba(255,255,255,0.7)',
+              background: 'rgba(255,255,255,0.2)',
+              color: 'white',
+              fontSize: '18px',
+              cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              opacity: (isSubmitting || operation.phase === 'BREAK') ? 0.4 : 1,
+            }}
+          >
+            🔄
+          </button>
+        </div>
       </div>
 
       {/* ステータスバー */}
@@ -1411,26 +1461,6 @@ const OperationRecord: React.FC = () => {
             📋 詳細
           </button>
         </div>
-
-        {/* REQ-011: 別客先へ切替ボタン */}
-        <button
-          onClick={handleOpenCustomerDialog}
-          disabled={isSubmitting || operation.phase === 'BREAK'}
-          style={{
-            width: '100%',
-            marginTop: '8px',
-            padding: '14px',
-            fontSize: '15px',
-            fontWeight: 'bold',
-            color: 'white',
-            background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#795548',
-            border: 'none',
-            borderRadius: '10px',
-            cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'
-          }}
-        >
-          🔄 別客先へ切替
-        </button>
 
         {/* 運行終了ボタン */}
         <button
