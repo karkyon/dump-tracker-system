@@ -69,6 +69,10 @@ const LoadingInput: React.FC = () => {
   // D4から渡された位置情報（またはD5a廃止後のstate引き継ぎ）
   const locationState = location.state as LocationState | undefined;
 
+  // REQ-003修正: 客先名は operationStore.customerName（運行開始時に選択した客先）を使用
+  // 地点の contactPerson（担当者名）は客先名ではないため使用しない
+  const resolvedClientName = operationStore.customerName || '';
+
   // ---- 品目マスタ ----
   const [items, setItems] = useState<Item[]>([]);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
@@ -77,7 +81,7 @@ const LoadingInput: React.FC = () => {
   const [formData, setFormData] = useState<FormData>({
     locationId: locationState?.locationId || '',
     locationName: locationState?.locationName || '',
-    clientName: locationState?.clientName || '担当者未登録',
+    clientName: resolvedClientName,
     selectedItemIds: [],
     selectedItemNames: [],
     itemId: '',
@@ -387,7 +391,7 @@ const LoadingInput: React.FC = () => {
                 color: '#374151',
               }}
             >
-              {formData.clientName || '担当者未登録'}
+              {formData.clientName || '（客先未選択）'}
             </div>
           </div>
 
