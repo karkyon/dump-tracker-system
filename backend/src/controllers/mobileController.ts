@@ -905,8 +905,10 @@ export class MobileController {
         return;
       }
 
+      const db = DatabaseService.getInstance();
+
       // 運行の存在確認
-      const operation = await this.prisma.operation.findUnique({
+      const operation = await db.operation.findUnique({
         where: { id: operationId },
         select: { id: true, status: true, driverId: true, customerId: true }
       });
@@ -929,7 +931,7 @@ export class MobileController {
       }
 
       // 客先の存在確認
-      const customer = await this.prisma.customer.findUnique({
+      const customer = await db.customer.findUnique({
         where: { id: customerId },
         select: { id: true, name: true, isActive: true }
       });
@@ -942,7 +944,7 @@ export class MobileController {
       // 変更前の客先名を取得（履歴用）
       let previousCustomerName = '未設定';
       if (operation.customerId) {
-        const prev = await this.prisma.customer.findUnique({
+        const prev = await db.customer.findUnique({
           where: { id: operation.customerId },
           select: { name: true }
         });
@@ -950,13 +952,13 @@ export class MobileController {
       }
 
       // operations.customerId を更新
-      const updated = await this.prisma.operation.update({
+      await db.operation.update({
         where: { id: operationId },
         data: { customerId }
       });
 
       // operation_details に切替履歴を記録
-      await this.prisma.operationDetail.create({
+      await db.operationDetail.create({
         data: {
           operationId,
           activityType: 'NOTE',
