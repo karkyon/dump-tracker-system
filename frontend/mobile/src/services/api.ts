@@ -282,7 +282,20 @@ class APIServiceClass {
           } else if (status === 404) {
             toast.error('リソースが見つかりません');
           } else if (status >= 500) {
-            toast.error('サーバーエラーが発生しました');
+            const errorCode: string = (error.response.data?.error as string) || '';
+            const isRetryable = isRetryableServerError(status, errorCode);
+            if (isRetryable) {
+              toast.error(
+                '⚠️ 一時的なサーバーエラーです。しばらくしてから再試行してください',
+                { duration: 6000 }
+              );
+            } else {
+              const displayCode = errorCode || `HTTP_${status}`;
+              toast.error(
+                `❌ 処理に失敗しました（エラー: ${displayCode}）。管理者に連絡してください`,
+                { duration: Infinity }
+              );
+            }
           } else {
             toast.error(message || 'エラーが発生しました');
           }
@@ -1430,6 +1443,34 @@ class APIServiceClass {
     }
   }
 
+}
+
+// =============================================================================
+// BUG-022: 500系エラー種別判定ヘルパー
+// =============================================================================
+
+/**
+ * サーバーエラーがリトライ可能（一時的）かを判定する
+ * バックエンド errorHandler.ts が返す errorCode フィールドを活用
+ *
+ * リトライ可能（一時的）:
+ *   - 503 Service Unavailable
+ *   - DATABASE_CONNECTION_FAILED （DB接続タイムアウト）
+ *   - EXTERNAL_SERVICE_UNAVAILABLE（外部サービス停止）
+ *   - REQUEST_TIMEOUT             （リクエストタイムアウト）
+ *
+ * リトライ不可（恒久的）:
+ *   - DATABASE_ERROR, DUPLICATE_ENTRY, CONFLICT_ERROR,
+ *     VALIDATION_ERROR, CONFIGURATION_ERROR, その他500
+ */
+function isRetryableServerError(status: number, errorCode: string): boolean {
+  if (status === 503) return true;
+  const retryableCodes: string[] = [
+    'DATABASE_CONNECTION_FAILED',
+    'EXTERNAL_SERVICE_UNAVAILABLE',
+    'REQUEST_TIMEOUT',
+  ];
+  return retryableCodes.includes(errorCode);
 }
 
 // シングルトンインスタンスをエクスポート
