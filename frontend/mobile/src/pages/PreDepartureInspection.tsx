@@ -72,29 +72,65 @@ const PreDepartureInspection: React.FC = () => {
     fetchInspectionItems();
   }, [isAuthenticated, vehicleId, navigate]);
 
+  // BUG-014: キャッシュキー定数
+  const INSPECTION_CACHE_KEY = 'inspection_items_cache_pre_trip';
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24時間
+
+  /** localStorage から点検項目キャッシュを読み込む */
+  const loadFromCache = (): any[] | null => {
+    try {
+      const raw = localStorage.getItem(INSPECTION_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Date.now() - parsed.savedAt > CACHE_TTL_MS) {
+        localStorage.removeItem(INSPECTION_CACHE_KEY);
+        return null;
+      }
+      return parsed.items;
+    } catch {
+      return null;
+    }
+  };
+
+  /** localStorage に点検項目キャッシュを保存する */
+  const saveToCache = (items: any[]) => {
+    try {
+      localStorage.setItem(INSPECTION_CACHE_KEY, JSON.stringify({ items, savedAt: Date.now() }));
+    } catch {
+      // localStorage 容量超過などは無視
+    }
+  };
+
   /**
    * 点検項目取得（バックエンドAPIから）
-   * ハードコードされたフォールバックは完全削除
+   * BUG-014: ① 指数バックオフ付き自動リトライ（最大3回）
+   *          ② localStorage キャッシュ（ネットワーク不可時のフォールバック）
    */
   const fetchInspectionItems = async () => {
     setIsFetching(true);
     setError(null);
     setIsCriticalError(false);
 
-    try {
-      console.log('[D3] 📋 点検項目取得開始');
-      
-      const response = await apiService.getInspectionItems({
-        inspectionType: 'PRE_TRIP',
-        isActive: true
-      });
+    const MAX_RETRIES = 3;
+    const BASE_DELAY_MS = 1000;
 
-      console.log('[D3] 📡 API レスポンス:', response);
+    let lastError: any = null;
 
-      if (response.success && response.data) {
-        // APIレスポンスから点検項目を取得
-        const items = Array.isArray(response.data) 
-          ? response.data 
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`[D3] 📋 点検項目取得開始 (試行 ${attempt}/${MAX_RETRIES})`);
+
+        const response = await apiService.getInspectionItems({
+          inspectionType: 'PRE_TRIP',
+          isActive: true
+        });
+
+        console.log('[D3] 📡 API レスポンス:', response);
+
+        if (response.success && response.data) {
+          // APIレスポンスから点検項目を取得
+          const items = Array.isArray(response.data)
+            ? response.data 
           : response.data.data || [];
 
         if (items.length === 0) {
@@ -115,36 +151,61 @@ const PreDepartureInspection: React.FC = () => {
         itemsWithChecked.sort((a: any, b: any) => a.displayOrder - b.displayOrder);
 
         setInspectionItems(itemsWithChecked);
-        console.log('[D3] ✅ 点検項目取得成功:', itemsWithChecked.length, '件');
+        // BUG-014: キャッシュに保存（次回ネットワーク不可時のフォールバック用）
+        saveToCache(itemsWithChecked);
+        console.log('[D3] ✅ 点検項目取得成功 & キャッシュ保存:', itemsWithChecked.length, '件');
+        setIsFetching(false);
+        return; // 成功時はループを抜ける
       } else {
         throw new Error(response.message || '点検項目の取得に失敗しました');
       }
 
-    } catch (error: any) {
-      console.error('[D3] ❌ 点検項目取得エラー:', error);
-      
-      // エラーメッセージの詳細化
-      let errorMessage = '点検項目の読み込みに失敗しました';
-      let isCritical = true;
+        lastError = error;
+        console.warn(`[D3] ⚠️ 試行 ${attempt} 失敗:`, error.message);
 
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = 'サーバーへの接続がタイムアウトしました。ネットワーク接続を確認してください。';
-      } else if (error.response?.status === 500) {
+        if (attempt < MAX_RETRIES) {
+          const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          console.log(`[D3] ⏳ ${delay}ms 後に再試行...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // --- 全リトライ失敗 → キャッシュから復元を試みる ---
+    console.error('[D3] ❌ 全リトライ失敗。キャッシュ確認:', lastError);
+    const cachedItems = loadFromCache();
+
+    if (cachedItems && cachedItems.length > 0) {
+      console.log(`[D3] 📦 キャッシュから復元: ${cachedItems.length}件`);
+      // チェック状態をリセットして復元
+      const restored = cachedItems.map((item: any) => ({ ...item, checked: false }));
+      setInspectionItems(restored);
+      setError('オフラインモード: 前回取得した点検項目を表示しています。');
+      setIsCriticalError(false);
+      toast('ネットワーク接続不可のため、前回の点検項目を使用します', {
+        icon: '📦',
+        duration: 4000,
+      });
+    } else {
+      // キャッシュもない → 致命的エラー
+      let errorMessage = '点検項目の読み込みに失敗しました';
+
+      if (lastError?.code === 'ECONNABORTED' || lastError?.message?.includes('timeout')) {
+        errorMessage = 'サーバーへの接続がタイムアウトしました（3回試行済み）。ネットワーク接続を確認してください。';
+      } else if (lastError?.response?.status === 500) {
         errorMessage = 'サーバー内部エラーが発生しました。システム管理者に連絡してください。';
-      } else if (error.response?.status === 404) {
+      } else if (lastError?.response?.status === 404) {
         errorMessage = '点検項目APIが見つかりません。システム管理者に連絡してください。';
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
+      } else if (lastError?.message) {
+        errorMessage = lastError.message;
       }
 
       setError(errorMessage);
-      setIsCriticalError(isCritical);
+      setIsCriticalError(true);
       toast.error(errorMessage, { duration: 5000 });
-    } finally {
-      setIsFetching(false);
     }
+
+    setIsFetching(false);
   };
 
   /**
