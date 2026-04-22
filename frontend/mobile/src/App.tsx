@@ -35,9 +35,17 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
   const operationStore = useOperationStore();
   
   useEffect(() => {
-    // 認証されていない場合は何もしない
+    // 認証されていない場合: 運行中データが残っていればリセット
     if (!isAuthenticated) {
       console.log('[StateRestorer] 🔒 未認証のため状態復元をスキップ');
+      // BUG-018: 未認証なのに IN_PROGRESS データが残っている場合は強制リセット
+      if (operationStore.status === 'IN_PROGRESS' && operationStore.operationId) {
+        console.warn('[StateRestorer] ⚠️ BUG-018: 未認証だが運行中データが残存 → リセット実行', {
+          operationId: operationStore.operationId,
+          status: operationStore.status
+        });
+        operationStore.resetOperation();
+      }
       return;
     }
 
