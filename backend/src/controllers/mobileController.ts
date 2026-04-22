@@ -963,7 +963,7 @@ export class MobileController {
           operationId,
           activityType: 'NOTE',
           notes: `客先変更: ${previousCustomerName} → ${customer.name}`,
-          startTime: new Date(),
+          actualStartTime: new Date(),
         }
       });
 
