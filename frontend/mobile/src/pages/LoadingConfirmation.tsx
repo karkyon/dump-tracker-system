@@ -53,6 +53,8 @@ const LoadingConfirmation: React.FC = () => {
   // 状態管理
   const [finalConfirmed, setFinalConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // BUG-017: useRefで送信中フラグを管理
+  const isSubmittingRef = React.useRef(false);
 
   // D5から情報が渡されていない場合はエラー
   useEffect(() => {
@@ -108,7 +110,13 @@ const LoadingConfirmation: React.FC = () => {
     }
 
     try {
-      setIsSubmitting(true);
+      // BUG-017: useRefによる確実な二重送信防止
+    if (isSubmittingRef.current) {
+      console.warn('[LoadingConfirmation] ⚠️ BUG-017: 送信中のため多重タップを無視');
+      return;
+    }
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
 
       // GPS位置を取得
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -182,6 +190,7 @@ const LoadingConfirmation: React.FC = () => {
         });
       }
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

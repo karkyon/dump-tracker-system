@@ -7,7 +7,7 @@
 // ✅ e-reverse リンク: https://webpage.e-reverse.com
 // 🔧 修正: D5a統合 (2025-03-08)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTLog } from '../hooks/useTLog';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -93,6 +93,8 @@ const LoadingInput: React.FC = () => {
 
   // ---- 送信中フラグ ----
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // BUG-017: useRefで送信中フラグを管理（React state更新の非同期性による多重タップ防止）
+  const isSubmittingRef = React.useRef(false);
 
   // ------------------------------------------------------------
   // 品目マスタ取得
@@ -211,7 +213,13 @@ const LoadingInput: React.FC = () => {
     }
 
     try {
-      setIsSubmitting(true);
+      // BUG-017: useRefによる確実な二重送信防止
+    if (isSubmittingRef.current) {
+      console.warn('[LoadingInput] ⚠️ BUG-017: 送信中のため多重タップを無視');
+      return;
+    }
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
 
       // GPS位置取得
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -280,6 +288,7 @@ const LoadingInput: React.FC = () => {
         toast.error(error.message || '積込記録の登録に失敗しました', { duration: 5000 });
       }
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
