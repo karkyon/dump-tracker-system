@@ -881,6 +881,111 @@ export class MobileController {
     }
   });
 
+  /**
+   * 客先変更（運行中）
+   * PATCH /api/v1/mobile/operations/:id/customer
+   * REQ-011: 運行終了せずに客先だけ変更する
+   */
+  public changeCustomer = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        sendError(res, '認証が必要です', 401, 'AUTHENTICATION_REQUIRED');
+        return;
+      }
+
+      const operationId = req.params.id;
+      const { customerId } = req.body;
+
+      if (!operationId) {
+        sendError(res, '運行IDが必要です', 400, 'MISSING_OPERATION_ID');
+        return;
+      }
+      if (!customerId) {
+        sendError(res, '客先IDが必要です', 400, 'MISSING_CUSTOMER_ID');
+        return;
+      }
+
+      // 運行の存在確認
+      const operation = await this.prisma.operation.findUnique({
+        where: { id: operationId },
+        select: { id: true, status: true, driverId: true, customerId: true }
+      });
+
+      if (!operation) {
+        sendError(res, '運行が見つかりません', 404, 'OPERATION_NOT_FOUND');
+        return;
+      }
+
+      // 運行中チェック
+      if (operation.status !== 'IN_PROGRESS') {
+        sendError(res, '運行中の運行のみ客先変更できます', 400, 'OPERATION_NOT_IN_PROGRESS');
+        return;
+      }
+
+      // ドライバー本人チェック
+      if (operation.driverId !== req.user.userId) {
+        sendError(res, 'この運行の客先を変更する権限がありません', 403, 'FORBIDDEN');
+        return;
+      }
+
+      // 客先の存在確認
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { id: true, name: true, isActive: true }
+      });
+
+      if (!customer || !customer.isActive) {
+        sendError(res, '指定された客先が見つかりません', 404, 'CUSTOMER_NOT_FOUND');
+        return;
+      }
+
+      // 変更前の客先名を取得（履歴用）
+      let previousCustomerName = '未設定';
+      if (operation.customerId) {
+        const prev = await this.prisma.customer.findUnique({
+          where: { id: operation.customerId },
+          select: { name: true }
+        });
+        if (prev) previousCustomerName = prev.name;
+      }
+
+      // operations.customerId を更新
+      const updated = await this.prisma.operation.update({
+        where: { id: operationId },
+        data: { customerId }
+      });
+
+      // operation_details に切替履歴を記録
+      await this.prisma.operationDetail.create({
+        data: {
+          operationId,
+          activityType: 'NOTE',
+          notes: `客先変更: ${previousCustomerName} → ${customer.name}`,
+          startTime: new Date(),
+        }
+      });
+
+      logger.info('客先変更完了', {
+        operationId,
+        previousCustomerId: operation.customerId,
+        newCustomerId: customerId,
+        userId: req.user.userId
+      });
+
+      sendSuccess(res, {
+        operationId,
+        customerId,
+        customerName: customer.name
+      }, `客先を「${customer.name}」に変更しました`);
+
+    } catch (error) {
+      logger.error('客先変更エラー', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      sendError(res, '客先の変更に失敗しました', 500, 'CHANGE_CUSTOMER_ERROR');
+    }
+  });
+
   // =====================================
   // 車両管理
   // =====================================

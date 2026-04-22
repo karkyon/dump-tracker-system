@@ -838,6 +838,51 @@ router.get('/operations/:id',
  *       500:
  *         description: サーバーエラー
  */
+
+/**
+ * @swagger
+ * /mobile/operations/{id}/customer:
+ *   patch:
+ *     summary: 客先変更（運行中）
+ *     description: REQ-011 運行終了せずに客先だけ変更する
+ *     tags: [📱 モバイル - 運行管理]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 運行ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [customerId]
+ *             properties:
+ *               customerId:
+ *                 type: string
+ *                 description: 新しい客先ID
+ *     responses:
+ *       200:
+ *         description: 客先変更成功
+ *       400:
+ *         description: バリデーションエラー
+ *       403:
+ *         description: 権限エラー
+ *       404:
+ *         description: 運行または客先が見つかりません
+ */
+router.patch('/operations/:id/customer',
+  logRequest('PATCH /mobile/operations/:id/customer'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  mobileController.changeCustomer
+);
+
 router.post('/operations/nearby-locations',
   logRequest('POST /mobile/operations/nearby-locations'),
   authenticateToken(),

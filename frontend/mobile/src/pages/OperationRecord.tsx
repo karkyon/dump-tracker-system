@@ -100,6 +100,10 @@ const OperationRecord: React.FC = () => {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // REQ-011: 別客先へ切替
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+  const [customerList, setCustomerList] = useState<{ id: string; name: string }[]>([]);
+  const [isCustomerChanging, setIsCustomerChanging] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
@@ -768,7 +772,48 @@ const OperationRecord: React.FC = () => {
   const handleLocationRegisterCancel = () => {
     setShowRegistrationDialog(false);
     setRegistrationLocationType(null);
+  }
+
+  // =====================================
+  // REQ-011: 別客先へ切替ハンドラー
+  // =====================================
+  const handleOpenCustomerDialog = async () => {
+    try {
+      const res = await apiService.getCustomers();
+      if (res.success) {
+        const inner = res.data?.data || res.data;
+        const list = inner?.customers || (Array.isArray(inner) ? inner : []);
+        setCustomerList(Array.isArray(list) ? list : []);
+      }
+    } catch (e) {
+      toast.error('客先一覧の取得に失敗しました');
+    }
+    setShowCustomerDialog(true);
   };
+
+  const handleChangeCustomer = async (customerId: string, customerName: string) => {
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません');
+      return;
+    }
+    setIsCustomerChanging(true);
+    try {
+      const res = await apiService.changeOperationCustomer(currentOperationId, customerId);
+      if (res.success) {
+        operationStore.setCustomerInfo({ customerId, customerName });
+        toast.success(`客先を「${customerName}」に変更しました`);
+        setShowCustomerDialog(false);
+      } else {
+        toast.error(res.message || '客先の変更に失敗しました');
+      }
+    } catch (e) {
+      toast.error('客先の変更に失敗しました');
+    } finally {
+      setIsCustomerChanging(false);
+    }
+  };
+;
 
   // =====================================
   // ✅ 既存の機能（完全保持）
@@ -1367,6 +1412,26 @@ const OperationRecord: React.FC = () => {
           </button>
         </div>
 
+        {/* REQ-011: 別客先へ切替ボタン */}
+        <button
+          onClick={handleOpenCustomerDialog}
+          disabled={isSubmitting || operation.phase === 'BREAK'}
+          style={{
+            width: '100%',
+            marginTop: '8px',
+            padding: '14px',
+            fontSize: '15px',
+            fontWeight: 'bold',
+            color: 'white',
+            background: (isSubmitting || operation.phase === 'BREAK') ? '#ccc' : '#795548',
+            border: 'none',
+            borderRadius: '10px',
+            cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer'
+          }}
+        >
+          🔄 別客先へ切替
+        </button>
+
         {/* 運行終了ボタン */}
         <button
           onClick={handleOperationEnd}
@@ -1398,7 +1463,66 @@ const OperationRecord: React.FC = () => {
         title={dialogType === 'LOADING' ? '積込場所を選択' : '積降場所を選択'}
       />
 
-      {/* 🆕 新規地点登録ダイアログ */}
+      
+      {/* REQ-011: 別客先へ切替ダイアログ */}
+      {showCustomerDialog && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '12px', padding: '20px',
+            width: '100%', maxWidth: '360px', maxHeight: '80vh', overflow: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold', color: '#333' }}>
+              🔄 別客先へ切替
+            </h3>
+            <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#666' }}>
+              変更する客先を選択してください
+            </p>
+            {customerList.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
+                客先が登録されていません
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {customerList.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleChangeCustomer(c.id, c.name)}
+                    disabled={isCustomerChanging}
+                    style={{
+                      padding: '12px 16px',
+                      fontSize: '15px',
+                      textAlign: 'left',
+                      background: isCustomerChanging ? '#f5f5f5' : '#f8f9fa',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '8px',
+                      cursor: isCustomerChanging ? 'not-allowed' : 'pointer',
+                      color: '#333'
+                    }}
+                  >
+                    🏢 {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setShowCustomerDialog(false)}
+              style={{
+                marginTop: '16px', width: '100%', padding: '12px',
+                fontSize: '15px', background: '#e0e0e0', border: 'none',
+                borderRadius: '8px', cursor: 'pointer', color: '#333'
+              }}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+{/* 🆕 新規地点登録ダイアログ */}
       {currentPosition && registrationLocationType && (
         <LocationRegistrationDialog
           visible={showRegistrationDialog}

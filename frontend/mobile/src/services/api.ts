@@ -1411,6 +1411,25 @@ class APIServiceClass {
       return { success: false, data: { customers: [] }, message: '客先の取得に失敗しました' };
     }
   }
+
+  /**
+   * 客先変更（運行中）
+   * PATCH /api/v1/mobile/operations/:id/customer
+   * REQ-011: 別客先へ切替
+   */
+  async changeOperationCustomer(operationId: string, customerId: string): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.patch<APIResponse<any>>(
+        `/mobile/operations/${operationId}/customer`,
+        { customerId }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('客先変更エラー:', error);
+      return { success: false, data: null, message: '客先の変更に失敗しました' };
+    }
+  }
+
 }
 
 // シングルトンインスタンスをエクスポート
