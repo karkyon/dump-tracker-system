@@ -1412,6 +1412,19 @@ class APIServiceClass {
    * 客先一覧取得
    * GET /api/v1/customers
    */
+  async updateActivityRecord(activityId: string, body: Record<string, any>): Promise<any> {
+    try {
+      const response = await this.axiosInstance.put(
+        `/operation-details/${activityId}`,
+        body
+      );
+      return response.data;
+    } catch (error) {
+      console.error('updateActivityRecord error:', error);
+      throw error;
+    }
+  }
+
   async getCustomers(): Promise<APIResponse<any>> {
     try {
       const response = await this.axiosInstance.get<APIResponse<any>>(

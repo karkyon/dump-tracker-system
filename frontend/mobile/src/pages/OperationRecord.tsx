@@ -27,6 +27,8 @@ import { LocationSelectionDialog } from '../components/LocationSelectionDialog';
 import type { NearbyLocationResult } from '../hooks/useNearbyLocationDetection';
 import { LocationRegistrationDialog, type NewLocationData } from '../components/LocationRegistrationDialog';
 import { useOperationStore } from '../stores/operationStore';
+import ActivityEditSheet from '../components/ActivityEditSheet';
+import type { ActivityRecord } from '../components/ActivityEditSheet';
 import { useAuthStore } from '../stores/authStore';
 
 // 運行状態の型定義（operationStore.ts の OperationPhase を使用）
@@ -108,8 +110,16 @@ const OperationRecord: React.FC = () => {
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
   // ✅ 既存の詳細情報表示状態
-  const [showDetails, setShowDetails] = useState(false);
+  const [_showDetails, _setShowDetails] = useState(false); // 旧詳細パネル（互換保持）
   const [showMap] = useState(true);
+
+  // 🆕 詳細パネル用state
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
+  const [detailActivities, setDetailActivities] = useState<any[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailCustomers, setDetailCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [detailItems, setDetailItems] = useState<{ id: string; name: string }[]>([]);
+  const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
 
   // 🆕 地点選択ダイアログの状態（D5/D6新仕様）
   const [locationDialogVisible, setLocationDialogVisible] = useState(false);
@@ -777,6 +787,36 @@ const OperationRecord: React.FC = () => {
   // =====================================
   // REQ-011: 別客先へ切替ハンドラー
   // =====================================
+  // ─── 詳細パネル: データ取得 ───
+  const fetchDetailActivities = async () => {
+    const opId = operationStore.operationId;
+    if (!opId) return;
+    setDetailLoading(true);
+    try {
+      const res = await (apiService as any).getOperationDetail(opId);
+      const detail = res?.data ?? res;
+      if (detail?.activities && Array.isArray(detail.activities)) {
+        setDetailActivities(detail.activities.filter((a: any) =>
+          !['NOTE', 'OTHER'].includes(a.activityType || '')
+        ));
+      }
+      try {
+        const cr = await apiService.getCustomers();
+        const ci = cr?.data?.customers ?? cr?.data ?? cr;
+        if (Array.isArray(ci)) setDetailCustomers(ci);
+      } catch {}
+      try {
+        const ir = await (apiService as any).getItems();
+        const ii = ir?.data?.items ?? ir?.data ?? ir;
+        if (Array.isArray(ii)) setDetailItems(ii);
+      } catch {}
+    } catch (e) {
+      console.error('[詳細パネル] 取得失敗:', e);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const handleOpenCustomerDialog = async () => {
     try {
       const res = await apiService.getCustomers();
@@ -1366,24 +1406,72 @@ const OperationRecord: React.FC = () => {
         </div>
       )}
 
-      {/* 詳細情報パネル */}
-      {showDetails && (
-        <div style={{
-          background: 'white',
-          padding: '16px',
-          borderTop: '1px solid #e0e0e0',
-          maxHeight: '300px',
-          overflowY: 'auto'
-        }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
-            📋 運行詳細情報
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div><strong>運転手:</strong> {operation.driverName}</div>
-            <div><strong>休憩回数:</strong> {operation.breakCount} 回</div>
-            <div><strong>積込場所:</strong> {operation.loadingLocation || '未設定'}</div>
-            <div><strong>積降場所:</strong> {operation.unloadingLocation || '未設定'}</div>
-            {customerName && <div><strong>客先:</strong> {customerName}</div>}
+      {/* 詳細パネル（MAPオーバーレイ）*/}
+      {showDetailPanel && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }} />
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
+            {/* ヘッダー */}
+            <div style={{ background: '#5048b8', color: '#fff', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>運行詳細情報</span>
+              <button onClick={() => setShowDetailPanel(false)} style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            </div>
+            {/* サマリー */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#e5e7eb', flexShrink: 0 }}>
+              {[
+                { val: `${detailActivities.filter(a => ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積込回数' },
+                { val: `${detailActivities.filter(a => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積降回数' },
+                { val: operation.driverName || '-', lbl: '運転手' },
+                { val: customerName || '-', lbl: '客先' },
+              ].map(({ val, lbl }) => (
+                <div key={lbl} style={{ background: '#f9fafb', padding: '5px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{val}</div>
+                  <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>{lbl}</div>
+                </div>
+              ))}
+            </div>
+            {/* リスト */}
+            <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+              <div style={{ fontSize: 9, fontWeight: 500, color: '#6b7280', padding: '5px 10px 2px', letterSpacing: '.05em', textTransform: 'uppercase', borderBottom: '0.5px solid #e5e7eb' }}>運行内容 — タップで編集</div>
+              {detailLoading ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>読み込み中...</div>
+              ) : detailActivities.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>アクティビティなし</div>
+              ) : detailActivities.map((act, idx) => {
+                const isL = ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(act.activityType);
+                const isU = ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(act.activityType);
+                const isF = ['FUELING','FUEL'].includes(act.activityType);
+                const isB = ['BREAK','BREAK_START','BREAK_END'].includes(act.activityType);
+                const dotColor = isL ? '#3b6fd4' : isU ? '#c96b2a' : isF ? '#3a7d44' : isB ? '#7c6de0' : '#9ca3af';
+                const badgeBg  = isL ? '#e6eefa' : isU ? '#faeadd' : isF ? '#eaf3de' : isB ? '#eeedfe' : '#f3f4f6';
+                const badgeFg  = isL ? '#185fa5' : isU ? '#8a3a1a' : isF ? '#27500a' : isB ? '#3c3489' : '#6b7280';
+                const LABELS: Record<string, string> = {
+                  LOADING: '積込到着', LOADING_START: '積込到着', LOADING_COMPLETE: '積込完了',
+                  UNLOADING: '積降完了', UNLOADING_START: '積降到着', UNLOADING_COMPLETE: '積降完了',
+                  FUELING: '給油', FUEL: '給油', BREAK: '休憩', BREAK_START: '休憩開始', BREAK_END: '休憩終了'
+                };
+                const label = LABELS[act.activityType] || act.activityType;
+                const timeStr = act.startTime ? new Date(act.startTime).toTimeString().slice(0, 5) : '--:--';
+                const isLast = idx === detailActivities.length - 1;
+                return (
+                  <button key={act.id} onClick={() => setEditingActivity(act)} style={{ width: '100%', padding: '6px 10px', background: '#fff', border: 'none', borderBottom: '0.5px solid #e5e7eb', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 7, textAlign: 'left', position: 'relative' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 8, flexShrink: 0, paddingTop: 3 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor }} />
+                      {!isLast && <div style={{ width: 1, flex: 1, minHeight: 8, marginTop: 2, background: '#e5e7eb' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 9, fontWeight: 500, padding: '1px 6px', borderRadius: 8, background: badgeBg, color: badgeFg, flexShrink: 0 }}>{label}</span>
+                        <span style={{ fontSize: 9, color: '#9ca3af' }}>{timeStr}</span>
+                      </div>
+                      {act.locationName && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {act.locationName}</div>}
+                      {isL && <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>{act.customerName || customerName || ''}{act.itemName ? ` ／ ${act.itemName}` : ''}{act.quantity != null && Number(act.quantity) > 0 ? ` × ${act.quantity}t` : ''}</div>}
+                    </div>
+                    <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11 }}>✏️</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -1443,19 +1531,22 @@ const OperationRecord: React.FC = () => {
           </button>
           
           <button
-            onClick={() => setShowDetails(!showDetails)}
+            onClick={() => {
+              if (!showDetailPanel) fetchDetailActivities();
+              setShowDetailPanel(p => !p);
+            }}
             style={{
               padding: '20px 12px',
               fontSize: '16px',
               fontWeight: 'bold',
               color: 'white',
-              background: '#607D8B',
+              background: showDetailPanel ? '#37474F' : '#607D8B',
               border: 'none',
               borderRadius: '10px',
               cursor: 'pointer'
             }}
           >
-            📋 詳細
+            {showDetailPanel ? '📋 詳細 ▲' : '📋 詳細'}
           </button>
         </div>
 
@@ -1561,6 +1652,23 @@ const OperationRecord: React.FC = () => {
           }}
           onRegister={handleLocationRegister}
           onCancel={handleLocationRegisterCancel}
+        />
+      )}
+
+      {/* 編集シート（全画面スライドイン）*/}
+      {editingActivity && (
+        <ActivityEditSheet
+          activity={editingActivity}
+          operationId={operationStore.operationId || ''}
+          onClose={() => setEditingActivity(null)}
+          onSaved={(updated) => {
+            setDetailActivities(prev =>
+              prev.map(a => a.id === updated.id ? { ...a, ...updated } : a)
+            );
+            setEditingActivity(null);
+          }}
+          customers={detailCustomers}
+          items={detailItems}
         />
       )}
     </div>
