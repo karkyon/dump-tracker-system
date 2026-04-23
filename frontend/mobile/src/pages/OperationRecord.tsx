@@ -1294,11 +1294,13 @@ const OperationRecord: React.FC = () => {
               {customerName || '客先未設定'}
             </span>
           </div>
+          {/* REQ-011: 切替ボタンはD5（LoadingInput）へ移動したため非表示 */}
           <button
             onClick={handleOpenCustomerDialog}
             disabled={isSubmitting || operation.phase === 'BREAK'}
             title="別客先へ切替"
             style={{
+              display: 'none',
               marginLeft: '8px',
               flexShrink: 0,
               width: '32px',
@@ -1308,12 +1310,7 @@ const OperationRecord: React.FC = () => {
               background: 'rgba(255,255,255,0.2)',
               color: 'white',
               fontSize: '18px',
-              cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0,
-              opacity: (isSubmitting || operation.phase === 'BREAK') ? 0.4 : 1,
+              cursor: (isSubmitting || operation.phase === 'BREAK') ? 'not-allowed' : 'default',
             }}
           >
             🔄

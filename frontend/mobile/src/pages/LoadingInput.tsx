@@ -74,6 +74,11 @@ const LoadingInput: React.FC = () => {
   // 地点の contactPerson（担当者名）は客先名ではないため使用しない
   const resolvedClientName = operationStore.customerName || '';
 
+  // ---- 客先切替ダイアログ ----
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+  const [customerList, setCustomerList] = useState<{ id: string; name: string }[]>([]);
+  const [isCustomerChanging, setIsCustomerChanging] = useState(false);
+
   // ---- 品目マスタ ----
   const [items, setItems] = useState<Item[]>([]);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
@@ -100,6 +105,44 @@ const LoadingInput: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   // BUG-017: useRefで送信中フラグを管理（React state更新の非同期性による多重タップ防止）
   const isSubmittingRef = React.useRef(false);
+
+  // ------------------------------------------------------------
+  // 客先切替ハンドラー（D4から移植）
+  // ------------------------------------------------------------
+  const handleOpenCustomerDialog = async () => {
+    try {
+      const res = await apiService.getCustomers();
+      const inner = res?.data?.customers ?? res?.data ?? res;
+      setCustomerList(Array.isArray(inner) ? inner : []);
+    } catch (e) {
+      toast.error('客先一覧の取得に失敗しました');
+    }
+    setShowCustomerDialog(true);
+  };
+
+  const handleChangeCustomer = async (customerId: string, customerName: string) => {
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません');
+      return;
+    }
+    setIsCustomerChanging(true);
+    try {
+      const res = await apiService.changeOperationCustomer(currentOperationId, customerId);
+      if (res.success) {
+        operationStore.setCustomerInfo({ customerId, customerName });
+        setFormData(prev => ({ ...prev, clientName: customerName }));
+        toast.success(`客先を「${customerName}」に変更しました`);
+        setShowCustomerDialog(false);
+      } else {
+        toast.error(res.message || '客先の変更に失敗しました');
+      }
+    } catch (e) {
+      toast.error('客先の変更に失敗しました');
+    } finally {
+      setIsCustomerChanging(false);
+    }
+  };
 
   // ------------------------------------------------------------
   // 品目マスタ取得
@@ -341,7 +384,7 @@ const LoadingInput: React.FC = () => {
           <Truck style={{ width: '28px', height: '28px' }} />
           <div>
             <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>
-              積込場所入力
+              客先積載物入力
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.9 }}>
               品目と積み込み量を確認してください
@@ -382,18 +425,31 @@ const LoadingInput: React.FC = () => {
             <label style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>
               客先名
             </label>
-            <div
+            <button
+              onClick={handleOpenCustomerDialog}
+              disabled={isSubmitting}
               style={{
+                width: '100%',
                 padding: '10px 12px',
-                background: '#f9fafb',
+                background: '#f0f4ff',
                 borderRadius: '8px',
-                border: '1px solid #e5e7eb',
+                border: '2px solid #667eea',
                 fontSize: '15px',
                 color: '#374151',
+                textAlign: 'left',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                boxSizing: 'border-box',
               }}
             >
-              {formData.clientName || '（客先未選択）'}
-            </div>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                🏢 {formData.clientName || '（タップして客先を選択）'}
+              </span>
+              <span style={{ fontSize: '18px', flexShrink: 0 }}>🔄</span>
+            </button>
           </div>
 
           <div>
@@ -724,6 +780,64 @@ const LoadingInput: React.FC = () => {
         </div>
 
       </main>
+
+      {/* ===== 客先切替ダイアログ（D4から移植） ===== */}
+      {showCustomerDialog && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '12px', padding: '20px',
+            width: '100%', maxWidth: '360px', maxHeight: '80vh', overflow: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold', color: '#333' }}>
+              🔄 別客先へ切替
+            </h3>
+            <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#666' }}>
+              変更する客先を選択してください
+            </p>
+            {customerList.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
+                客先が登録されていません
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {customerList.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleChangeCustomer(c.id, c.name)}
+                    disabled={isCustomerChanging}
+                    style={{
+                      padding: '12px 16px',
+                      fontSize: '15px',
+                      textAlign: 'left',
+                      background: isCustomerChanging ? '#f5f5f5' : '#f8f9fa',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '8px',
+                      cursor: isCustomerChanging ? 'not-allowed' : 'pointer',
+                      color: '#333'
+                    }}
+                  >
+                    🏢 {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setShowCustomerDialog(false)}
+              style={{
+                marginTop: '16px', width: '100%', padding: '12px',
+                fontSize: '15px', background: '#e0e0e0', border: 'none',
+                borderRadius: '8px', cursor: 'pointer', color: '#333'
+              }}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ===== フッター（ボタン）===== */}
       <footer
