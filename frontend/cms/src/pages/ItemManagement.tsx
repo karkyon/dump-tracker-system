@@ -48,6 +48,8 @@ const ItemManagement: React.FC = () => {
   useTLog('ITEM_MANAGEMENT', '品目管理');
 
   const [searchQuery, setSearchQuery] = useState('');
+  // REQ-009: 品目区分フィルタータブ
+  const [itemTypeFilter, setItemTypeFilter] = useState<'all' | 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
@@ -69,11 +71,13 @@ const ItemManagement: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 検索フィルタリング＋表示順ソート
+  // REQ-009: 検索 + 区分フィルタリング + 表示順ソート
   const displayItems = [...items]
-    .filter((item: Item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    .filter((item: Item) => {
+      const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchType = itemTypeFilter === 'all' || item.itemType === itemTypeFilter;
+      return matchSearch && matchType;
+    })
     .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
 
   // ----------------
@@ -119,6 +123,7 @@ const ItemManagement: React.FC = () => {
   };
 
   const handleMoveDown = async (_item: Item, index: number) => {
+    // REQ-009: displayItems はフィルター後リストなのでグループ内末尾チェックが正しく機能する
     if (index === displayItems.length - 1) return;
     // 配列内で入れ替えてから全件連番付け直し
     const reordered = [...displayItems];
@@ -192,22 +197,25 @@ const ItemManagement: React.FC = () => {
     displayOrder: (
       <div className="flex items-center gap-2">
         <span className="w-6 text-center text-sm">{item.displayOrder ?? '-'}</span>
-        <div className="flex flex-col">
-          <button
-            onClick={() => handleMoveUp(item, index)}
-            disabled={index === 0}
-            className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
-          >
-            <ChevronUp className="w-3 h-3" />
-          </button>
-          <button
-            onClick={() => handleMoveDown(item, index)}
-            disabled={index === displayItems.length - 1}
-            className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
-          >
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        </div>
+        {/* REQ-009: allタブ時は並び替えボタン非表示 */}
+        {itemTypeFilter !== 'all' && (
+          <div className="flex flex-col">
+            <button
+              onClick={() => handleMoveUp(item, index)}
+              disabled={index === 0}
+              className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
+            >
+              <ChevronUp className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => handleMoveDown(item, index)}
+              disabled={index === displayItems.length - 1}
+              className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          </div>
+        )}
       </div>
     ),
     name: item.name,
@@ -240,6 +248,33 @@ const ItemManagement: React.FC = () => {
 
       <div className="bg-white shadow rounded-lg">
         <div className="p-6">
+          {/* REQ-009: 品目区分タブ */}
+          <div className="flex gap-2 border-b border-gray-200 mb-4">
+            {([
+              { value: 'all',               label: 'すべて' },
+              { value: 'RECYCLED_MATERIAL', label: '再生材' },
+              { value: 'VIRGIN_MATERIAL',   label: 'バージン材' },
+              { value: 'WASTE',             label: '廃棄物' },
+            ] as const).map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setItemTypeFilter(tab.value)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  itemTypeFilter === tab.value
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.label}
+                <span className="ml-1 text-xs text-gray-400">
+                  ({tab.value === 'all'
+                    ? items.length
+                    : items.filter((i: Item) => i.itemType === tab.value).length})
+                </span>
+              </button>
+            ))}
+          </div>
+
           <div className="mb-4">
             <h2 className="text-lg font-medium text-gray-900 mb-4">検索・フィルター</h2>
             <div className="flex gap-4">

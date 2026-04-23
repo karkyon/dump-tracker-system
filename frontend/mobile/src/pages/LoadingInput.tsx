@@ -37,6 +37,7 @@ interface LocationState {
 interface Item {
   id: string;
   name: string;
+  itemType?: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE'; // REQ-009
   displayOrder?: number;
 }
 
@@ -442,45 +443,77 @@ const LoadingInput: React.FC = () => {
             品目を選択＊（複数選択可能）
           </p>
 
+          {/* REQ-009: 品目区分ごとにグループ表示 */}
           {isLoadingItems ? (
             <div style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>
               品目を読み込み中...
             </div>
-          ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '8px',
-                marginBottom: '12px',
-              }}
-            >
-              {items.map(item => {
-                const isSelected = formData.selectedItemIds.includes(item.id);
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleItemToggle(item.id)}
-                    style={{
-                      padding: '10px 6px',
-                      fontSize: '14px',
-                      fontWeight: isSelected ? 'bold' : 'normal',
-                      color: isSelected ? 'white' : '#374151',
-                      background: isSelected
-                        ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                        : 'white',
-                      border: `2px solid ${isSelected ? '#667eea' : '#d1d5db'}`,
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {isSelected ? `✓ ${item.name}` : item.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          ) : (() => {
+            // 区分定義（表示順）
+            const TYPE_GROUPS: { key: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined; label: string }[] = [
+              { key: 'RECYCLED_MATERIAL', label: '再生材' },
+              { key: 'VIRGIN_MATERIAL',   label: 'バージン材' },
+              { key: 'WASTE',             label: '廃棄物' },
+              { key: undefined,           label: 'その他' },
+            ];
+            // 区分ごとにグループ化してソート
+            const grouped = TYPE_GROUPS.map(group => ({
+              ...group,
+              items: items
+                .filter(it => it.itemType === group.key || (group.key === undefined && !it.itemType))
+                .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999)),
+            })).filter(g => g.items.length > 0);
+
+            return (
+              <div style={{ marginBottom: '12px' }}>
+                {grouped.map(group => (
+                  <div key={group.label} style={{ marginBottom: '12px' }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      color: '#9ca3af',
+                      letterSpacing: '0.05em',
+                      marginBottom: '6px',
+                      paddingBottom: '4px',
+                      borderBottom: '1px solid #f3f4f6',
+                    }}>
+                      {group.label}
+                    </div>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '8px',
+                    }}>
+                      {group.items.map(item => {
+                        const isSelected = formData.selectedItemIds.includes(item.id);
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => handleItemToggle(item.id)}
+                            style={{
+                              padding: '10px 6px',
+                              fontSize: '14px',
+                              fontWeight: isSelected ? 'bold' : 'normal',
+                              color: isSelected ? 'white' : '#374151',
+                              background: isSelected
+                                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                : 'white',
+                              border: `2px solid ${isSelected ? '#667eea' : '#d1d5db'}`,
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              textAlign: 'center',
+                            }}
+                          >
+                            {isSelected ? `✓ ${item.name}` : item.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* 選択中表示 */}
           {displayItemLabels && (
