@@ -261,26 +261,64 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
           </div>
           {/* 積込専用 */}
           {isLoad(activity.activityType) && (<>
+            {/* 積込場所名 */}
+            <div>
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>積込場所名</div>
+              <input
+                type="text"
+                value={locationName}
+                onChange={e => setLocationName(e.target.value)}
+                placeholder="例: 翠香園町ダート"
+                style={{ ...inputStyle, fontSize: 15, height: 44 }}
+              />
+            </div>
+            {/* 客先（表示のみ） */}
             <div>
               <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>客先</div>
-              <div style={{ ...inputStyle, cursor: 'default', color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}
-                onClick={() => toast('客先変更は客先積載物入力画面から行えます')}>
-                <span>{customerDisplayName || '（客先積載物入力画面で変更）'}</span>
-                <span style={{ fontSize: 11 }}>🔄</span>
+              <div style={{
+                ...inputStyle,
+                height: 44,
+                background: '#f9fafb',
+                color: customerDisplayName ? '#374151' : '#9ca3af',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                cursor: 'default', pointerEvents: 'none'
+              }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>
+                  🏢 {customerDisplayName || '（客先積載物入力画面で変更）'}
+                </span>
+                <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0, marginLeft: 6 }}>変更不可</span>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-              <div>
-                <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>品目</div>
-                <select value={itemId} onChange={e => setItemId(e.target.value)} style={{ ...inputStyle, fontSize: 12 }}>
-                  <option value="">-- 選択 --</option>
-                  {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
+            {/* 品目 */}
+            <div>
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>品目</div>
+              <select
+                value={itemId}
+                onChange={e => setItemId(e.target.value)}
+                style={{ ...inputStyle, fontSize: 15, height: 44 }}
+              >
+                <option value="">-- 品目を選択 --</option>
+                {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+              {items.length === 0 && (
+                <div style={{ fontSize: 10, color: '#ef4444', marginTop: 3 }}>※ 品目が読み込まれていません</div>
+              )}
+            </div>
+            {/* 重量 */}
+            <div>
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>
+                重量（トン）<span style={{ fontSize: 9, color: '#ef4444', marginLeft: 4 }}>必須</span>
               </div>
-              <div>
-                <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>重量（t）<span style={{ fontSize: 9, color: '#ef4444' }}>必須</span></div>
-                <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="例: 12.5" style={inputStyle} />
-              </div>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={quantity}
+                onChange={e => setQuantity(e.target.value)}
+                placeholder="例: 12.5"
+                step="0.1"
+                min="0"
+                style={{ ...inputStyle, fontSize: 16, height: 44 }}
+              />
             </div>
           </>)}
           {/* 給油専用 */}
