@@ -550,6 +550,9 @@ class VehicleService {
           notes: updateData.notes,
           // ✅ FIX: currentMileage を追加（走行距離更新対応）
           currentMileage: updateData.currentMileage,
+          inspectionExpiry: (updateData as any).inspectionExpiry !== undefined
+                          ? ((updateData as any).inspectionExpiry ? new Date((updateData as any).inspectionExpiry) : null)
+                          : undefined,  // REQ-007: 車検期限
           region:        (updateData as any).region !== undefined
                           ? ((updateData as any).region || null)
                           : undefined,

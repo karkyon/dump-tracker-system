@@ -487,7 +487,7 @@ const VehicleManagement: React.FC = () => {
           />
 
           <Input
-            label="製造元"
+            label="メーカー"
             type="text"
             value={formData.manufacturer}
             onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
@@ -626,7 +626,7 @@ const VehicleManagement: React.FC = () => {
           />
 
           <Input
-            label="製造元"
+            label="メーカー"
             type="text"
             value={formData.manufacturer}
             onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
