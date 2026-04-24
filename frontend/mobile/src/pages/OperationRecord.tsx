@@ -807,9 +807,14 @@ const OperationRecord: React.FC = () => {
       } catch {}
       try {
         const ir = await (apiService as any).getItems();
-        const ii = ir?.data?.items ?? ir?.data ?? ir;
-        if (Array.isArray(ii)) setDetailItems(ii);
-      } catch {}
+        // getItems レスポンス: { success, data: { items: [...] } } または { success, data: [...] }
+        const ii = ir?.data?.items ?? (Array.isArray(ir?.data) ? ir.data : null) ?? ir;
+        const itemList = Array.isArray(ii) ? ii : [];
+        setDetailItems(itemList);
+        console.log('[詳細パネル] 品目取得:', itemList.length, '件');
+      } catch (e) {
+        console.error('[詳細パネル] 品目取得失敗:', e);
+      }
     } catch (e) {
       console.error('[詳細パネル] 取得失敗:', e);
     } finally {

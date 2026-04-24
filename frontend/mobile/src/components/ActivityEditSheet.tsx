@@ -187,7 +187,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     setLocationName(activity.locationName || '');
     setCustomerDisplayName(activity.customerName || (operationStore.customerName ?? ''));
     setItemId(activity.itemId || '');
-    setQuantity(activity.quantity != null ? String(activity.quantity) : '');
+    setQuantity(activity.quantity != null && activity.quantity > 0 ? String(activity.quantity) : '');
     setFuelAmount(''); setFuelCost('');
     setNotes(activity.notes || '');
   }, [activity]);
@@ -205,9 +205,10 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
         actualEndTime:   endHHMM ? toISO(activity.endTime, endHHMM) : undefined,
         notes,
       };
-      if (locationName) body.locationName = locationName;
+      // locationName は全種別で送信（空の場合も送信して既存値を上書き可能に）
+      body.locationName = locationName;
       if (isLoad(activity.activityType)) {
-        if (itemId)   body.itemId      = itemId;
+        if (itemId)   body.itemId       = itemId;
         if (quantity) body.quantityTons = parseFloat(quantity);
       }
       if (isFuel(activity.activityType)) {
