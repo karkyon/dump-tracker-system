@@ -154,6 +154,9 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   const accuracyHistoryRef = useRef<number[]>([]);
   const previousPositionRef = useRef<Position | null>(null);
   const currentPositionRef = useRef<Position | null>(null);
+  // BUG-020: iOS バックグラウンド復帰時のGPS再開用ref
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const isTrackingRef = useRef<boolean>(false);
 
   const evaluateQuality = (acc: number): 'high' | 'medium' | 'low' | 'poor' => {
     if (acc <= 5) return 'high';
@@ -548,10 +551,25 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       startTimeRef.current = Date.now();
       lastGPSUpdateRef.current = Date.now();
       setIsTracking(true);
+      isTrackingRef.current = true; // BUG-020: ref経由でvisibilitychangeから参照
       setIsPaused(false);
       setError(null);
       toast.success('GPS追跡を開始しました');
       console.log('🛰️ GPS追跡開始 - Watch ID:', watchId);
+      // BUG-020: Screen Wake Lock 取得（iOS画面OFFでJS停止を防ぐ）
+      if ('wakeLock' in navigator) {
+        try {
+          const wl = await (navigator as any).wakeLock.request('screen');
+          wakeLockRef.current = wl;
+          console.log('🔒 Screen Wake Lock 取得成功');
+          wl.addEventListener('release', () => {
+            console.warn('⚠️ Screen Wake Lock が解放されました');
+            wakeLockRef.current = null;
+          });
+        } catch (wlErr) {
+          console.warn('⚠️ Screen Wake Lock 取得失敗（非対応デバイス）:', wlErr);
+        }
+      }
     } catch (err) {
       console.error('❌ GPS追跡開始エラー:', err);
       handleError(err as GeolocationPositionError);
@@ -565,8 +583,14 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       watchIdRef.current = null;
     }
     setIsTracking(false);
+    isTrackingRef.current = false; // BUG-020
     setIsPaused(false);
     startTimeRef.current = null;
+    // BUG-020: Screen Wake Lock 解放
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch((e: any) => console.warn('Wake Lock 解放エラー:', e));
+      wakeLockRef.current = null;
+    }
     console.log('🛑 GPS追跡停止');
     toast.success('GPS追跡を停止しました');
   }, []);
@@ -601,6 +625,55 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     setOptions(prev => ({ ...prev, ...newOptions }));
   }, []);
 
+  // BUG-020: Page Visibility API — バックグラウンド復帰時にGPS追跡を再開
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isTrackingRef.current) {
+        console.log('📱 [BUG-020] アプリ復帰検知 — GPS追跡状態を確認中...');
+
+        // watchPosition が生きているか確認（iOSではバックグラウンドで自動解除される）
+        // 既存 watchId をクリアして再登録することで確実に再開する
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+          console.log('🔄 [BUG-020] 旧 watchPosition をクリア');
+        }
+
+        const gpsOptions: PositionOptions = {
+          enableHighAccuracy: true,
+          timeout: GPS_CONFIG.TIMEOUT,
+          maximumAge: GPS_CONFIG.MAXIMUM_AGE
+        };
+
+        const newWatchId = navigator.geolocation.watchPosition(
+          handlePositionUpdate,
+          handleError,
+          gpsOptions
+        );
+        watchIdRef.current = newWatchId;
+        console.log('✅ [BUG-020] GPS追跡を再開しました - 新 Watch ID:', newWatchId);
+        toast('GPS追跡を再開しました（バックグラウンドからの復帰）', { icon: '📍', duration: 3000 });
+
+        // Screen Wake Lock も再取得（バックグラウンド移行で解放されているため）
+        if ('wakeLock' in navigator && !wakeLockRef.current) {
+          try {
+            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+            console.log('🔒 [BUG-020] Screen Wake Lock 再取得成功');
+          } catch (wlErr) {
+            console.warn('⚠️ [BUG-020] Screen Wake Lock 再取得失敗:', wlErr);
+          }
+        }
+      } else if (document.visibilityState === 'hidden') {
+        console.log('📱 [BUG-020] バックグラウンド移行検知 — GPS追跡中:', isTrackingRef.current);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []); // マウント時1回のみ登録（isTrackingRef で最新状態を参照）
+
   useEffect(() => {
     if (options.autoStart) {
       startTracking();
@@ -608,6 +681,11 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     return () => {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      // BUG-020: アンマウント時も Wake Lock 解放
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
       }
     };
   }, [options.autoStart]);
