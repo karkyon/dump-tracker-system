@@ -247,12 +247,43 @@ const VehicleInfo: React.FC = () => {
         const today = new Date();
         const diffDays = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
-          toast.error(`⚠️ この車両は車検が切れています（${expiry.toLocaleDateString('ja-JP')}期限）`, { duration: 8000 });
+          toast.error(
+            `🚨 車検切れ！\nこの車両は車検が切れています\n期限: ${expiry.toLocaleDateString('ja-JP')}\n\n⚠️ 直ちに運行を中止してください`,
+            {
+              duration: 15000,
+              style: {
+                fontSize: '16px',
+                fontWeight: 'bold',
+                padding: '20px 24px',
+                maxWidth: '380px',
+                lineHeight: '1.8',
+                background: '#7f1d1d',
+                color: '#fff',
+                border: '3px solid #ef4444',
+                borderRadius: '12px',
+              },
+            }
+          );
         } else if (diffDays <= 60) {
-          toast(`⚠️ 車検期限まで残り${diffDays}日です（${expiry.toLocaleDateString('ja-JP')}期限）`, {
-            duration: 6000,
-            icon: '🔔',
-          });
+          const isUrgent = diffDays <= 14;
+          toast(
+            `${isUrgent ? '🔴' : '🟡'} 車検期限まで残り ${diffDays} 日\n期限: ${expiry.toLocaleDateString('ja-JP')}\n${isUrgent ? '\n⚠️ 至急、車検の手続きをしてください！' : '\n早めに車検の手続きをしてください。'}`,
+            {
+              duration: isUrgent ? 15000 : 10000,
+              icon: isUrgent ? '🚗' : '📋',
+              style: {
+                fontSize: isUrgent ? '15px' : '14px',
+                fontWeight: 'bold',
+                padding: '20px 24px',
+                maxWidth: '380px',
+                lineHeight: '1.8',
+                background: isUrgent ? '#7c2d12' : '#78350f',
+                color: '#fff',
+                border: isUrgent ? '3px solid #f97316' : '2px solid #f59e0b',
+                borderRadius: '12px',
+              },
+            }
+          );
         }
       }
     } else {
