@@ -1437,7 +1437,34 @@ const OperationRecord: React.FC = () => {
                 <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>読み込み中...</div>
               ) : detailActivities.length === 0 ? (
                 <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>アクティビティなし</div>
-              ) : detailActivities.map((act, idx) => {
+              ) : (() => {
+                // BREAK_START + BREAK_END → 単一 BREAK にマージ
+                const merged: any[] = [];
+                const usedIds = new Set<string>();
+                for (const act of detailActivities) {
+                  if (usedIds.has(act.id)) continue;
+                  if (['BREAK_START', 'BREAK'].includes(act.activityType)) {
+                    const paired = detailActivities.find(
+                      a => a.activityType === 'BREAK_END' && a.sequenceNumber > act.sequenceNumber
+                    );
+                    if (paired) usedIds.add(paired.id);
+                    merged.push({
+                      ...act,
+                      activityType: 'BREAK',
+                      endTime: paired?.startTime ?? act.endTime,
+                    });
+                  } else if (act.activityType === 'BREAK_END') {
+                    // BREAK_START と対になっている場合はスキップ済み
+                    if (!usedIds.has(act.id)) {
+                      // 対応する START がなかった孤立 END → 単体表示
+                      merged.push({ ...act, activityType: 'BREAK' });
+                    }
+                  } else {
+                    merged.push(act);
+                  }
+                }
+                return merged;
+              })().map((act, idx, arr) => {
                 const isL = ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(act.activityType);
                 const isU = ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(act.activityType);
                 const isF = ['FUELING','FUEL'].includes(act.activityType);
@@ -1463,7 +1490,7 @@ const OperationRecord: React.FC = () => {
                 const label   = LABELS[act.activityType] || act.activityType;
                 const icon    = ICONS[act.activityType] || '•';
                 const timeStr = act.startTime ? new Date(act.startTime).toTimeString().slice(0, 5) : '--:--';
-                const isLast  = idx === detailActivities.length - 1;
+                const isLast  = idx === arr.length - 1;
                 return (
                   <button
                     key={act.id}
@@ -1508,6 +1535,13 @@ const OperationRecord: React.FC = () => {
                         }}>
                           <span style={{ color: '#9ca3af', fontSize: 10 }}>📍</span>
                           {act.locationName}
+                        </div>
+                      )}
+                      {isB && act.endTime && (
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                          {act.startTime ? new Date(act.startTime).toTimeString().slice(0, 5) : '--:--'}
+                          {' ～ '}
+                          {new Date(act.endTime).toTimeString().slice(0, 5)}
                         </div>
                       )}
                       {isL && (act.customerName || customerName || act.itemName) && (
