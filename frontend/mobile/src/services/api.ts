@@ -267,7 +267,7 @@ class APIServiceClass {
         console.log(`[API] Response:`, response.data);
         return response;
       },
-      (error: AxiosError<any>) => {
+      async (error: AxiosError<any>) => {
         console.error('[API] Response error:', error);
         
         if (error.response) {
