@@ -56,10 +56,30 @@ const Dashboard: React.FC = () => {
         ]);
 
         // ユーザー（稼働運転手数）
+        // BUG-009修正: /users APIレスポンス構造に合わせてユーザー配列を正確に取得
+        // apiClient ラッパー経由のレスポンス構造:
+        //   usersRes.value.data = { success, data: { users: [...], pagination: {...} } }
+        // → users配列は data.data.users にある
         let totalDrivers = 0;
         if (usersRes.status === 'fulfilled') {
-          const usersData = (usersRes.value as any)?.data?.users ?? (usersRes.value as any)?.data ?? [];
-          const allUsers = Array.isArray(usersData) ? usersData : (usersData?.data ?? []);
+          const raw = (usersRes.value as any)?.data;
+          // パターン1: { data: { users: [...] } }  (二重ネスト)
+          // パターン2: { users: [...] }             (一重ネスト)
+          // パターン3: [...]                        (配列直接)
+          const allUsers: any[] =
+            Array.isArray(raw?.data?.users)  ? raw.data.users  :
+            Array.isArray(raw?.data)         ? raw.data        :
+            Array.isArray(raw?.users)        ? raw.users       :
+            Array.isArray(raw)               ? raw             :
+            [];
+          console.log('[Dashboard] ユーザーデータ解析:', {
+            rawType: typeof raw,
+            hasDataUsers: Array.isArray(raw?.data?.users),
+            hasDataArray: Array.isArray(raw?.data),
+            hasUsers: Array.isArray(raw?.users),
+            isArray: Array.isArray(raw),
+            resolvedCount: allUsers.length
+          });
           totalDrivers = allUsers.filter((u: any) =>
             u.role === 'DRIVER' && (u.isActive !== false)
           ).length;
@@ -157,8 +177,14 @@ const Dashboard: React.FC = () => {
         setStats({ totalDrivers, activeVehicles, todayOperations, onlineVehicles });
         setRecentOperations(recentOps);
         setLoading(false);
-      } catch (error) {
-        console.error('ダッシュボードデータの取得に失敗しました:', error);
+      } catch (error: any) {
+        // BUG-009修正: error が {} になる問題を修正（各フィールドを明示展開）
+        console.error('[ERROR] ダッシュボードデータの取得に失敗しました:', {
+          message: error?.message,
+          status:  error?.response?.status,
+          data:    error?.response?.data,
+          code:    error?.code,
+        });
         setLoading(false);
       }
     };

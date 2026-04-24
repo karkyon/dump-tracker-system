@@ -275,9 +275,43 @@ class APIServiceClass {
           const message = error.response.data?.message || error.message;
           
           if (status === 401) {
-            toast.error('認証エラー: 再ログインが必要です');
+            // BUG-021修正: 401受信時はまずrefreshTokenで再認証を試みる
+            // operationStoreのデータを保持したまま再ログイン誘導する
+            const originalRequest = error.config;
+            const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh');
+            const storedRefreshToken = localStorage.getItem('refresh_token');
+
+            if (!isRefreshRequest && storedRefreshToken) {
+              try {
+                console.warn('[API] 401検知 → refreshToken試行中...');
+                const refreshResponse = await this.axiosInstance.post(
+                  '/mobile/auth/refresh',
+                  { refreshToken: storedRefreshToken }
+                );
+                const newAccessToken = refreshResponse.data?.data?.accessToken;
+                if (newAccessToken) {
+                  this.setToken(newAccessToken);
+                  if (refreshResponse.data?.data?.refreshToken) {
+                    localStorage.setItem('refresh_token', refreshResponse.data.data.refreshToken);
+                  }
+                  console.log('[API] ✅ refreshToken成功 → 元のリクエストをリトライ');
+                  if (originalRequest) {
+                    originalRequest.headers = originalRequest.headers || {};
+                    originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+                    return await this.axiosInstance(originalRequest);
+                  }
+                }
+              } catch (refreshError) {
+                console.error('[API] refreshToken失敗:', refreshError);
+              }
+            }
+
+            // refreshToken失敗 または なし → operationStoreを保持したままログイン画面へ
+            // ※ operation-store(localStorage)はクリアしない。ログイン後に運行継続できるようにする。
+            console.error('[API] 認証失敗 → ログイン画面へ (operationStore保持)');
+            toast.error('セッションの有効期限が切れました。再ログインが必要です。', { duration: 5000 });
             this.clearToken();
-            window.location.href = '/login';
+            setTimeout(() => { window.location.href = '/login'; }, 1200);
           } else if (status === 403) {
             toast.error('権限エラー: この操作は許可されていません');
           } else if (status === 404) {

@@ -426,6 +426,18 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     const quality = evaluateQuality(currentAccuracy);
     setQualityStatus(quality);
 
+    // BUG-008修正: 精度閾値チェック（500m超で警告、4000m超でエラー相当）
+    if (currentAccuracy > 4000) {
+      console.error(`❌ GPS精度異常: accuracy=${currentAccuracy.toFixed(0)}m — 位置情報が信頼できません`);
+      toast.error(
+        `GPS精度が非常に低い状態です（誤差 ${Math.round(currentAccuracy)}m）\nGPS信号を確認してください`,
+        { duration: 6000 }
+      );
+    } else if (currentAccuracy > 500) {
+      console.warn(`⚠️ GPS精度低下: accuracy=${currentAccuracy.toFixed(0)}m`);
+      toast(`GPS精度が低い状態です（誤差 ${Math.round(currentAccuracy)}m）`, { icon: '⚠️', duration: 4000 });
+    }
+
     const metadata: GPSMetadata = {
       accuracy: currentAccuracy,
       speed: calculatedSpeed,
@@ -471,6 +483,19 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   };
 
   const handleError = (error: GeolocationPositionError) => {
+    // BUG-008修正: GeolocationPositionError は JSON.stringify すると {} になるため
+    // code / message を明示的に展開してログ出力する
+    const errorDetail = {
+      code: error.code,
+      message: error.message,
+      codeLabel:
+        error.code === error.PERMISSION_DENIED    ? 'PERMISSION_DENIED'    :
+        error.code === error.POSITION_UNAVAILABLE ? 'POSITION_UNAVAILABLE' :
+        error.code === error.TIMEOUT              ? 'TIMEOUT'              :
+        `UNKNOWN(${error.code})`
+    };
+    console.error('❌ GPS Error:', errorDetail);
+
     let errorMessage = '位置情報の取得に失敗しました';
     switch (error.code) {
       case error.PERMISSION_DENIED:
@@ -485,7 +510,6 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     }
     setError(errorMessage);
     toast.error(errorMessage);
-    console.error('❌ GPS Error:', error);
     options.onError?.(error);
   };
 
