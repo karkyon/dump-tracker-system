@@ -13,7 +13,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import { useGPS } from '../hooks/useGPS';
-import apiService from '../services/api';
+import apiService, { retryWithBackoff } from '../services/api';
 import { calculateDistance } from '../utils/helpers';
 import GoogleMapWrapper, {
   updateMarkerPosition,
@@ -949,14 +949,17 @@ const OperationRecord: React.FC = () => {
         ?? (window as any).selectedUnloadingLocation?.id
         ?? undefined;
       console.log('📦 積降完了 locationId:', unloadingLocationId);
-      await apiService.completeUnloadingAtLocation(currentOperationId, {
-        locationId: unloadingLocationId,
-        endTime: new Date(),
-        latitude: currentPosition?.coords.latitude,
-        longitude: currentPosition?.coords.longitude,
-        accuracy: currentPosition?.coords.accuracy,
-        notes: '積降完了',
-      });
+      await retryWithBackoff(
+        () => apiService.completeUnloadingAtLocation(currentOperationId, {
+          locationId: unloadingLocationId,
+          endTime: new Date(),
+          latitude: currentPosition?.coords.latitude,
+          longitude: currentPosition?.coords.longitude,
+          accuracy: currentPosition?.coords.accuracy,
+          notes: '積降完了',
+        }),
+        3, 1000, '積降完了'
+      );
 
       console.log('✅ 積降完了');
 
@@ -998,14 +1001,17 @@ const OperationRecord: React.FC = () => {
       
       console.log('☕ 休憩開始処理開始:', currentOperationId);
       
-      // 🆕 休憩開始API呼び出し
-      const response = await apiService.startBreak(currentOperationId, {
+      // BUG-019: リトライ付き
+      const response = await retryWithBackoff(
+        () => apiService.startBreak(currentOperationId, {
         latitude: currentPosition?.coords.latitude,
         longitude: currentPosition?.coords.longitude,
         accuracy: currentPosition?.coords.accuracy,  // 🆕 追加
         location: '',  // 休憩場所名（任意）
         notes: ''  // メモ（任意）
-      });
+      }),
+        3, 1000, '休憩開始'
+      );
       
       console.log('✅ 休憩開始API成功:', response);
       
@@ -1044,13 +1050,16 @@ const OperationRecord: React.FC = () => {
       
       console.log('⏱️ 休憩終了処理開始:', currentOperationId);
       
-      // 🆕 休憩終了API呼び出し
-      const response = await apiService.endBreak(currentOperationId, {
+      // BUG-019: リトライ付き
+      const response = await retryWithBackoff(
+        () => apiService.endBreak(currentOperationId, {
         latitude: currentPosition?.coords.latitude,
         longitude: currentPosition?.coords.longitude,
         accuracy: currentPosition?.coords.accuracy,
         notes: ''
-      });
+      }),
+        3, 1000, '休憩終了'
+      );
       
       console.log('✅ 休憩終了API成功:', response);
       

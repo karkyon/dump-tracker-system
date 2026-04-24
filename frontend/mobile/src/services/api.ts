@@ -1231,6 +1231,17 @@ class APIServiceClass {
    * 車両一覧取得
    * GET /api/v1/mobile/vehicles
    */
+
+  async getVehicleById(vehicleId: string): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.get<APIResponse<any>>(`/vehicles/${vehicleId}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('[API] getVehicleById エラー:', error);
+      throw error;
+    }
+  }
+
   async getVehicles(params?: {
     status?: string;
     search?: string;
@@ -1477,6 +1488,30 @@ class APIServiceClass {
  *   - DATABASE_ERROR, DUPLICATE_ENTRY, CONFLICT_ERROR,
  *     VALIDATION_ERROR, CONFIGURATION_ERROR, その他500
  */
+
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelayMs = 1000,
+  label = 'API'
+): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const isNetworkErr = !err.response || err.code === 'ECONNABORTED' || err.message?.includes('Network Error');
+      const isRetryable = isNetworkErr || err.response?.status === 503;
+      if (!isRetryable || attempt === maxRetries) throw err;
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      console.warn(`[${label}] 試行${attempt}失敗、${delay}ms後にリトライ:`, err.message);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
+}
+
 function isRetryableServerError(status: number, errorCode: string): boolean {
   if (status === 503) return true;
   const retryableCodes: string[] = [

@@ -79,7 +79,25 @@ const PostTripInspection: React.FC = () => {
       return;
     }
 
-    fetchInspectionItems();
+    // BUG-007: vehicleIdのDB存在確認
+    const validateVehicleId = async () => {
+      try {
+        await apiService.getVehicleById(vehicleId);
+        fetchInspectionItems();
+      } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 404 || status === 400) {
+          console.error('[D8] BUG-007: 不正なvehicleId検出、Storeリセット:', vehicleId);
+          toast.error('車両情報が無効です。\n再度車両を選択してください。', { duration: 6000 });
+          resetOperation();
+          navigate('/vehicle-info', { replace: true });
+        } else {
+          console.warn('[D8] BUG-007: vehicleId検証エラー（続行）:', err.message);
+          fetchInspectionItems();
+        }
+      }
+    };
+    validateVehicleId();
   }, [isAuthenticated, operationId, vehicleId, navigate]);
 
 
