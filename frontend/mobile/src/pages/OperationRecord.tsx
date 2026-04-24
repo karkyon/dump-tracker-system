@@ -593,20 +593,31 @@ const OperationRecord: React.FC = () => {
           }
         });
       } else {
-        // 🔧 修正: 積降場所選択後は画面遷移せず地図表示のまま
+        // 積降場所選択後は画面遷移せず地図表示のまま
         console.log('📦 積降場所選択 - 地図画面のまま');
-        
-        // 状態更新のみ（API呼び出しなし）
+
+        // ✅ 修正: recordUnloadingArrival を呼び出して operation_details に UNLOADING レコードを作成
+        console.log('🚛 積降場所到着記録API呼び出し開始');
+        await apiService.recordUnloadingArrival(currentOperationId, {
+          locationId: selectedLocation.location.id,
+          latitude: currentPosition.coords.latitude,
+          longitude: currentPosition.coords.longitude,
+          accuracy: currentPosition.coords.accuracy,
+          arrivalTime: new Date()
+        });
+        console.log('✅ 積降場所到着記録完了');
+
+        // 状態更新
         setOperation(prev => ({
           ...prev,
           phase: 'AT_UNLOADING',
           unloadingLocation: selectedLocation.location.name
         }));
 
-        // operationStoreにも保存
-        operationStore.setUnloadingLocation(selectedLocation.location.name);
+        // operationStoreにも保存（locationId を渡す）
+        operationStore.setUnloadingLocation(selectedLocation.location.name, selectedLocation.location.id);
         operationStore.setPhase('AT_UNLOADING');
-        
+
         // 地図を保持したまま、地点情報を保存
         (window as any).selectedUnloadingLocation = {
           id: selectedLocation.location.id,
