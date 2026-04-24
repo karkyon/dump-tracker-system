@@ -110,7 +110,7 @@ const OperationRecord: React.FC = () => {
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
   // ✅ 既存の詳細情報表示状態
-  const [_showDetails, _setShowDetails] = useState(false); // 旧詳細パネル（互換保持）
+  // 旧 showDetails state は削除済み（showDetailPanel に統合）
   const [showMap] = useState(true);
 
   // 🆕 詳細パネル用state

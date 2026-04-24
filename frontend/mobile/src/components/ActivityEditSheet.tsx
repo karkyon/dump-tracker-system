@@ -71,7 +71,7 @@ const TimeDial: React.FC<{
       </div>
       {open && (
         <div style={{ marginTop: 4, border: '0.5px solid #d1d5db', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-          <div style={{ background: accentColor, color: '#fff', padding: '5px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: `linear-gradient(135deg, ${accentColor}dd 0%, ${accentColor} 100%)`, color: '#fff', padding: '5px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 11, fontWeight: 500 }}>{label}を設定</span>
             <span style={{ fontSize: 9, opacity: .8 }}>↑↓ タップで±1</span>
           </div>
@@ -121,21 +121,34 @@ const MiniMap: React.FC<{ accentColor: string }> = ({ accentColor }) => (
   </div>
 );
 
-const ACTIVITY_CONFIG: Record<string, { label: string; color: string; badge: string }> = {
-  LOADING:            { label: '積込 編集', color: '#2e5fa8', badge: '積込到着' },
-  LOADING_START:      { label: '積込 編集', color: '#2e5fa8', badge: '積込到着' },
-  LOADING_COMPLETE:   { label: '積込 編集', color: '#2e5fa8', badge: '積込完了' },
-  UNLOADING:          { label: '積降 編集', color: '#7c3a0a', badge: '積降完了' },
-  UNLOADING_START:    { label: '積降 編集', color: '#7c3a0a', badge: '積降到着' },
-  UNLOADING_COMPLETE: { label: '積降 編集', color: '#7c3a0a', badge: '積降完了' },
-  FUELING:            { label: '給油 編集', color: '#2e6e3a', badge: '給油' },
-  FUEL:               { label: '給油 編集', color: '#2e6e3a', badge: '給油' },
-  BREAK:              { label: '休憩 編集', color: '#4a3a9e', badge: '休憩' },
-  BREAK_START:        { label: '休憩 編集', color: '#4a3a9e', badge: '休憩開始' },
-  BREAK_END:          { label: '休憩 編集', color: '#4a3a9e', badge: '休憩終了' },
+// 種別ごとのカラー定義
+// color        : ヘッダー背景・アクセント（濃色）
+// colorLight   : ヘッダー下部グラデーション（少し明るめ）
+// bannerBg     : バナー背景色
+// bannerText   : バナー文字色
+// bannerBorder : バナー左ボーダー色
+const ACTIVITY_CONFIG: Record<string, {
+  label: string; color: string; colorLight: string; badge: string;
+  bannerBg: string; bannerText: string; bannerBorder: string;
+}> = {
+  // 積込: 青系
+  LOADING:            { label: '積込 編集', color: '#1a4a91', colorLight: '#2e5fa8', badge: '積込到着',  bannerBg: '#e8f0fc', bannerText: '#1a4a91', bannerBorder: '#2e5fa8' },
+  LOADING_START:      { label: '積込 編集', color: '#1a4a91', colorLight: '#2e5fa8', badge: '積込到着',  bannerBg: '#e8f0fc', bannerText: '#1a4a91', bannerBorder: '#2e5fa8' },
+  LOADING_COMPLETE:   { label: '積込 編集', color: '#1a4a91', colorLight: '#2e5fa8', badge: '積込完了',  bannerBg: '#e8f0fc', bannerText: '#1a4a91', bannerBorder: '#2e5fa8' },
+  // 積降: 焦茶・オレンジ系
+  UNLOADING:          { label: '積降 編集', color: '#6b2d08', colorLight: '#9a4010', badge: '積降完了',  bannerBg: '#fbeee8', bannerText: '#7c3a0a', bannerBorder: '#c96b2a' },
+  UNLOADING_START:    { label: '積降 編集', color: '#6b2d08', colorLight: '#9a4010', badge: '積降到着',  bannerBg: '#fbeee8', bannerText: '#7c3a0a', bannerBorder: '#c96b2a' },
+  UNLOADING_COMPLETE: { label: '積降 編集', color: '#6b2d08', colorLight: '#9a4010', badge: '積降完了',  bannerBg: '#fbeee8', bannerText: '#7c3a0a', bannerBorder: '#c96b2a' },
+  // 給油: 深緑系
+  FUELING:            { label: '給油 編集', color: '#1a5228', colorLight: '#2e6e3a', badge: '給油',      bannerBg: '#e8f5ec', bannerText: '#1a5228', bannerBorder: '#3a7d44' },
+  FUEL:               { label: '給油 編集', color: '#1a5228', colorLight: '#2e6e3a', badge: '給油',      bannerBg: '#e8f5ec', bannerText: '#1a5228', bannerBorder: '#3a7d44' },
+  // 休憩: 深紫系
+  BREAK:              { label: '休憩 編集', color: '#352880', colorLight: '#4a3a9e', badge: '休憩',      bannerBg: '#eeedfe', bannerText: '#352880', bannerBorder: '#7c6de0' },
+  BREAK_START:        { label: '休憩 編集', color: '#352880', colorLight: '#4a3a9e', badge: '休憩開始',  bannerBg: '#eeedfe', bannerText: '#352880', bannerBorder: '#7c6de0' },
+  BREAK_END:          { label: '休憩 編集', color: '#352880', colorLight: '#4a3a9e', badge: '休憩終了',  bannerBg: '#eeedfe', bannerText: '#352880', bannerBorder: '#7c6de0' },
 };
 
-const getCfg = (t: string) => ACTIVITY_CONFIG[t] || { label: '編集', color: '#5048b8', badge: t };
+const getCfg = (t: string) => ACTIVITY_CONFIG[t] || { label: '編集', color: '#5048b8', colorLight: '#6058c8', badge: t, bannerBg: '#eeedfe', bannerText: '#5048b8', bannerBorder: '#7c6de0' };
 const isLoad  = (t: string) => ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(t);
 const isUnl   = (t: string) => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(t);
 const isFuel  = (t: string) => ['FUELING','FUEL'].includes(t);
@@ -230,13 +243,13 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
       <style>{`@keyframes slideInRight{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
       <div style={{ position: 'fixed', inset: 0, background: '#fff', zIndex: 3000, display: 'flex', flexDirection: 'column', animation: 'slideInRight 0.2s ease-out' }}>
         {/* ヘッダー */}
-        <div style={{ background: cfg.color, color: '#fff', padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ background: `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.colorLight} 100%)`, color: '#fff', padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 12, opacity: .85, cursor: 'pointer', whiteSpace: 'nowrap', color: '#fff' }} onClick={onClose}>← 詳細へ戻る</span>
           <span style={{ fontSize: 14, fontWeight: 500, flex: 1, textAlign: 'center', color: '#fff' }}>{cfg.label}</span>
           <span style={{ fontSize: 9, fontWeight: 500, padding: '2px 7px', borderRadius: 8, background: 'rgba(255,255,255,0.22)', color: '#fff' }}>{cfg.badge}</span>
         </div>
         {/* バナー */}
-        <div style={{ margin: '10px 12px 0', borderRadius: 7, padding: '6px 10px', fontSize: 10, lineHeight: 1.6, borderLeft: `3px solid ${cfg.color}`, background: cfg.color + '15', color: cfg.color }}>
+        <div style={{ margin: '10px 12px 0', borderRadius: 7, padding: '6px 10px', fontSize: 10, lineHeight: 1.6, borderLeft: `3px solid ${cfg.bannerBorder}`, background: cfg.bannerBg, color: cfg.bannerText }}>
           {isLoad(activity.activityType)  && '積込の到着・完了時刻、品目・重量を修正できます。'}
           {isUnl(activity.activityType)   && '積降の到着・完了時刻と場所を修正できます。'}
           {isFuel(activity.activityType)  && '給油の時刻・量・金額・場所を修正できます。'}
@@ -310,7 +323,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
         {/* フッター */}
         <div style={{ padding: '8px 12px 12px', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 7, borderTop: '0.5px solid #e5e7eb', background: '#fff', flexShrink: 0 }}>
           <div style={{ padding: 9, textAlign: 'center', background: '#f3f4f6', borderRadius: 7, fontSize: 12, color: '#6b7280', border: '0.5px solid #d1d5db', cursor: 'pointer' }} onClick={onClose}>取消</div>
-          <div style={{ padding: 9, textAlign: 'center', background: isSaving ? '#9ca3af' : cfg.color, borderRadius: 7, fontSize: 13, fontWeight: 500, color: '#fff', cursor: 'pointer' }} onClick={isSaving ? undefined : handleSave}>
+          <div style={{ padding: 9, textAlign: 'center', background: isSaving ? '#9ca3af' : `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.colorLight} 100%)`, borderRadius: 7, fontSize: 13, fontWeight: 500, color: '#fff', cursor: 'pointer' }} onClick={isSaving ? undefined : handleSave}>
             {isSaving ? '保存中...' : '保存する'}
           </div>
         </div>
