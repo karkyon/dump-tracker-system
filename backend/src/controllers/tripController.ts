@@ -1434,7 +1434,7 @@ export class TripController {
         locationId: breakData.locationId || '',  // 休憩場所は任意
         itemId: '',
         quantity: 0,
-        activityType: 'BREAK_START' as any,  // TODO: ActivityType に BREAK_START 追加
+        activityType: 'BREAK_START',
         startTime: new Date(),
         endTime: undefined,
         notes: `休憩開始${breakData.location ? `: ${breakData.location}` : ''}${breakData.notes ? ` - ${breakData.notes}` : ''}`,
@@ -1613,7 +1613,7 @@ export class TripController {
         locationId: '',
         itemId: '',
         quantity: 0,
-        activityType: 'BREAK_END' as any,  // TODO: ActivityType に BREAK_END 追加
+        activityType: 'BREAK_END',
         startTime: new Date(),
         endTime: new Date(),
         notes: `休憩終了${breakData.notes ? ` - ${breakData.notes}` : ''}`,

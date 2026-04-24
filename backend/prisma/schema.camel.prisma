@@ -706,6 +706,9 @@ enum ActivityType {
   MAINTENANCE       // メンテナンス
   REFUELING         // 給油
   BREAK             // 休憩
+  BREAK_START       // 休憩開始
+  BREAK_END         // 休憩終了
+  NOTE              // メモ・記録
   OTHER             // その他
   TRIP_START        // 運行開始
   TRIP_END          // 運行終了
