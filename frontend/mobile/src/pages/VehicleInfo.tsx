@@ -492,7 +492,7 @@ const VehicleInfo: React.FC = () => {
                     disabled={!isSelectable}
                     style={{ color: isSelectable ? 'inherit' : '#9ca3af' }}
                   >
-                    {vehicle.vehicleNumber} ({vehicle.vehicleType}){statusLabel}
+                    {vehicle.vehicleNumber}{statusLabel}
                   </option>
                 );
               })}
