@@ -1442,32 +1442,94 @@ const OperationRecord: React.FC = () => {
                 const isU = ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(act.activityType);
                 const isF = ['FUELING','FUEL'].includes(act.activityType);
                 const isB = ['BREAK','BREAK_START','BREAK_END'].includes(act.activityType);
-                const dotColor = isL ? '#3b6fd4' : isU ? '#c96b2a' : isF ? '#3a7d44' : isB ? '#7c6de0' : '#9ca3af';
-                const badgeBg  = isL ? '#e6eefa' : isU ? '#faeadd' : isF ? '#eaf3de' : isB ? '#eeedfe' : '#f3f4f6';
-                const badgeFg  = isL ? '#185fa5' : isU ? '#8a3a1a' : isF ? '#27500a' : isB ? '#3c3489' : '#6b7280';
                 const LABELS: Record<string, string> = {
-                  LOADING: '積込到着', LOADING_START: '積込到着', LOADING_COMPLETE: '積込完了',
-                  UNLOADING: '積降完了', UNLOADING_START: '積降到着', UNLOADING_COMPLETE: '積降完了',
-                  FUELING: '給油', FUEL: '給油', BREAK: '休憩', BREAK_START: '休憩開始', BREAK_END: '休憩終了'
+                  LOADING: '積込', LOADING_START: '積込到着', LOADING_COMPLETE: '積込完了',
+                  UNLOADING: '積降', UNLOADING_START: '積降到着', UNLOADING_COMPLETE: '積降完了',
+                  FUELING: '給油', FUEL: '給油',
+                  BREAK: '休憩', BREAK_START: '休憩開始', BREAK_END: '休憩終了',
                 };
-                const label = LABELS[act.activityType] || act.activityType;
+                const ICONS: Record<string, string> = {
+                  LOADING: '📦', LOADING_START: '🚛', LOADING_COMPLETE: '✅',
+                  UNLOADING: '📤', UNLOADING_START: '🏗️', UNLOADING_COMPLETE: '✅',
+                  FUELING: '⛽', FUEL: '⛽',
+                  BREAK: '☕', BREAK_START: '☕', BREAK_END: '▶️',
+                };
+                const iconBg  = isL ? '#e6eefa' : isU ? '#faeadd' : isF ? '#e6f4ea' : isB ? '#eeedfe' : '#f3f4f6';
+                const badgeBg = iconBg;
+                const badgeFg = isL ? '#185fa5' : isU ? '#8a3a1a' : isF ? '#276128' : isB ? '#3c3489' : '#6b7280';
+                const label   = LABELS[act.activityType] || act.activityType;
+                const icon    = ICONS[act.activityType] || '•';
                 const timeStr = act.startTime ? new Date(act.startTime).toTimeString().slice(0, 5) : '--:--';
-                const isLast = idx === detailActivities.length - 1;
+                const isLast  = idx === detailActivities.length - 1;
                 return (
-                  <button key={act.id} onClick={() => setEditingActivity(act)} style={{ width: '100%', padding: '6px 10px', background: '#fff', border: 'none', borderBottom: '0.5px solid #e5e7eb', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 7, textAlign: 'left', position: 'relative' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 8, flexShrink: 0, paddingTop: 3 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor }} />
-                      {!isLast && <div style={{ width: 1, flex: 1, minHeight: 8, marginTop: 2, background: '#e5e7eb' }} />}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 9, fontWeight: 500, padding: '1px 6px', borderRadius: 8, background: badgeBg, color: badgeFg, flexShrink: 0 }}>{label}</span>
-                        <span style={{ fontSize: 9, color: '#9ca3af' }}>{timeStr}</span>
+                  <button
+                    key={act.id}
+                    onClick={() => setEditingActivity(act)}
+                    style={{
+                      width: '100%', padding: '8px 10px 8px 10px',
+                      background: '#fff', border: 'none',
+                      borderBottom: isLast ? 'none' : '0.5px solid #f3f4f6',
+                      cursor: 'pointer', display: 'flex', alignItems: 'flex-start',
+                      gap: 9, textAlign: 'left',
+                    }}
+                  >
+                    {/* 左: アイコン + 縦ライン */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 30 }}>
+                      <div style={{
+                        width: 30, height: 30, borderRadius: '50%',
+                        background: iconBg, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        fontSize: 14, flexShrink: 0,
+                      }}>
+                        {icon}
                       </div>
-                      {act.locationName && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {act.locationName}</div>}
-                      {isL && <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>{act.customerName || customerName || ''}{act.itemName ? ` ／ ${act.itemName}` : ''}{act.quantity != null && Number(act.quantity) > 0 ? ` × ${act.quantity}t` : ''}</div>}
+                      {!isLast && (
+                        <div style={{ width: 2, flex: 1, minHeight: 10, marginTop: 3, background: '#e5e7eb', borderRadius: 1 }} />
+                      )}
                     </div>
-                    <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11 }}>✏️</span>
+
+                    {/* 中央: ラベル + 場所 + 品目 */}
+                    <div style={{ flex: 1, minWidth: 0, paddingTop: 5, paddingBottom: isLast ? 0 : 8 }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 600,
+                        padding: '2px 8px', borderRadius: 10,
+                        background: badgeBg, color: badgeFg,
+                      }}>
+                        {label}
+                      </span>
+                      {act.locationName && (
+                        <div style={{
+                          fontSize: 11, color: '#4b5563', marginTop: 3,
+                          display: 'flex', alignItems: 'center', gap: 3,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          <span style={{ color: '#9ca3af', fontSize: 10 }}>📍</span>
+                          {act.locationName}
+                        </div>
+                      )}
+                      {isL && (act.customerName || customerName || act.itemName) && (
+                        <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>
+                          {act.customerName || customerName || ''}
+                          {act.itemName ? (
+                            <span> ／ <span style={{ color: '#374151', fontWeight: 500 }}>{act.itemName}</span></span>
+                          ) : null}
+                          {act.quantity != null && Number(act.quantity) > 0 ? (
+                            <span style={{ color: '#374151', fontWeight: 500 }}> × {act.quantity}t</span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 右: 時刻 ＋ 編集アイコン（時刻を✏️の左に配置） */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      flexShrink: 0, paddingTop: 6,
+                    }}>
+                      <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: '0.02em' }}>
+                        {timeStr}
+                      </span>
+                      <span style={{ fontSize: 13, color: '#d1d5db' }}>✏️</span>
+                    </div>
                   </button>
                 );
               })}
