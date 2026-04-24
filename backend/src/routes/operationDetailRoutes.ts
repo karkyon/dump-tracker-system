@@ -25,7 +25,8 @@ import { Router } from 'express';
 import {
   authenticateToken,
   requireAdmin,
-  requireManager
+  requireManager,
+  requireRole
 } from '../middleware/auth';
 import {
   validateId,
