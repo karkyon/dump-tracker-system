@@ -141,6 +141,7 @@ export interface VehicleResponseDTO {
   };
   operationCount?: number;
   lastOperationDate?: Date;
+  inspectionExpiry?: Date | null;  // REQ-007
   nextMaintenanceDate?: Date;
   maintenanceStatus?: 'UP_TO_DATE' | 'DUE_SOON' | 'OVERDUE';
   currentLocation?: {

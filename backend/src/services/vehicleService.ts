@@ -1083,6 +1083,7 @@ class VehicleService {
       } : undefined,
 
       region: vehicle.region ?? null,
+      inspectionExpiry: vehicle.inspectionExpiry,  // REQ-007: 車検期限
       nextMaintenanceDate: vehicle.inspectionExpiry,
       maintenanceStatus: this.getMaintenanceStatus(vehicle)
     };
