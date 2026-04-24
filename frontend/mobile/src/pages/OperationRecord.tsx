@@ -1419,10 +1419,10 @@ const OperationRecord: React.FC = () => {
             {/* サマリー */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#e5e7eb', flexShrink: 0 }}>
               {[
-                { val: `${detailActivities.filter(a => ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積込回数' },
-                { val: `${detailActivities.filter(a => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積降回数' },
                 { val: operation.driverName || '-', lbl: '運転手' },
                 { val: customerName || '-', lbl: '客先' },
+                { val: `${detailActivities.filter(a => ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積込回数' },
+                { val: `${detailActivities.filter(a => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積降回数' },
               ].map(({ val, lbl }) => (
                 <div key={lbl} style={{ background: '#f9fafb', padding: '5px 8px', textAlign: 'center' }}>
                   <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{val}</div>
@@ -1448,15 +1448,18 @@ const OperationRecord: React.FC = () => {
                   FUELING: '給油', FUEL: '給油',
                   BREAK: '休憩', BREAK_START: '休憩開始', BREAK_END: '休憩終了',
                 };
+                // ③ ボタンアイコンと統一
                 const ICONS: Record<string, string> = {
-                  LOADING: '📦', LOADING_START: '🚛', LOADING_COMPLETE: '✅',
-                  UNLOADING: '📤', UNLOADING_START: '🏗️', UNLOADING_COMPLETE: '✅',
+                  LOADING: '📍', LOADING_START: '🚛', LOADING_COMPLETE: '✅',
+                  UNLOADING: '📍', UNLOADING_START: '📍', UNLOADING_COMPLETE: '✅',
                   FUELING: '⛽', FUEL: '⛽',
-                  BREAK: '☕', BREAK_START: '☕', BREAK_END: '▶️',
+                  BREAK: '☕', BREAK_START: '☕', BREAK_END: '☕',
                 };
-                const iconBg  = isL ? '#e6eefa' : isU ? '#faeadd' : isF ? '#e6f4ea' : isB ? '#eeedfe' : '#f3f4f6';
+                // ④ ボタンカラーと同系統の背景色
+                // LOADING:blue(#2196F3) / UNLOADING:green(#4CAF50) / BREAK:purple(#9C27B0) / FUEL:amber(#FFC107)
+                const iconBg  = isL ? '#E3F2FD' : isU ? '#E8F5E9' : isF ? '#FFFDE7' : isB ? '#F3E5F5' : '#f3f4f6';
                 const badgeBg = iconBg;
-                const badgeFg = isL ? '#185fa5' : isU ? '#8a3a1a' : isF ? '#276128' : isB ? '#3c3489' : '#6b7280';
+                const badgeFg = isL ? '#1565C0' : isU ? '#2E7D32' : isF ? '#F57F17' : isB ? '#6A1B9A' : '#6b7280';
                 const label   = LABELS[act.activityType] || act.activityType;
                 const icon    = ICONS[act.activityType] || '•';
                 const timeStr = act.startTime ? new Date(act.startTime).toTimeString().slice(0, 5) : '--:--';
@@ -1525,7 +1528,7 @@ const OperationRecord: React.FC = () => {
                       display: 'flex', alignItems: 'center', gap: 6,
                       flexShrink: 0, paddingTop: 6,
                     }}>
-                      <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: '0.02em' }}>
+                      <span style={{ fontSize: 22, color: '#9ca3af', letterSpacing: '0.02em', fontWeight: 500 }}>
                         {timeStr}
                       </span>
                       <span style={{ fontSize: 13, color: '#d1d5db' }}>✏️</span>
