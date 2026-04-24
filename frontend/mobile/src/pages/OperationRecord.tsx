@@ -935,12 +935,16 @@ const OperationRecord: React.FC = () => {
 
       // 🔧 修正: GPS座標を積降完了記録に追加
       // 🆕 新API呼び出し: 積降完了
+      // window.selectedUnloadingLocation から locationId を取得して送信
+      const selectedUnloading = (window as any).selectedUnloadingLocation;
       await apiService.completeUnloadingAtLocation(currentOperationId, {
         endTime: new Date(),
         latitude: currentPosition?.coords.latitude,
         longitude: currentPosition?.coords.longitude,
         accuracy: currentPosition?.coords.accuracy,
-        notes: '積降完了'
+        notes: '積降完了',
+        // 🔧 修正: locationId を必ず送信する
+        locationId: selectedUnloading?.id || undefined,
       });
 
       console.log('✅ 積降完了');

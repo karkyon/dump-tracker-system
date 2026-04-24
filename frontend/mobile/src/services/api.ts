@@ -140,6 +140,7 @@ export interface StartUnloadingRequest {
  * 🆕 積降完了リクエスト
  */
 export interface CompleteUnloadingRequest {
+  locationId?: string;       // 🔧 積降場所ID（追加）
   itemId?: string;           // 品目ID（省略時は積込品目を使用）
   quantity?: number;         // 積降量（オプション）
   endTime?: Date | string;   // 終了時刻（省略時は現在時刻）
