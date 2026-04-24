@@ -250,10 +250,12 @@ export const useOperationStore = create<OperationState>()(
       },
 
       // 🆕 積降場所設定
-      setUnloadingLocation: (location) => {
-        console.log('[Operation Store] 📍 SET UNLOADING LOCATION:', location);
-        set({ unloadingLocation: location });
-        
+      setUnloadingLocation: (location, locationId) => {
+        console.log('[Operation Store] 📍 SET UNLOADING LOCATION:', location, locationId ?? '(id省略)');
+        set({ 
+          unloadingLocation: location,
+          ...(locationId ? { unloadingLocationId: locationId } : {})
+        });
         const currentState = get();
         console.log('[Operation Store] 📊 Full state after setUnloadingLocation:', currentState);
       },
