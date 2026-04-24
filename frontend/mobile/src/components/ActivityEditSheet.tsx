@@ -121,34 +121,30 @@ const MiniMap: React.FC<{ accentColor: string }> = ({ accentColor }) => (
   </div>
 );
 
-// 種別ごとのカラー定義
-// color        : ヘッダー背景・アクセント（濃色）
-// colorLight   : ヘッダー下部グラデーション（少し明るめ）
-// bannerBg     : バナー背景色
-// bannerText   : バナー文字色
-// bannerBorder : バナー左ボーダー色
+// 種別ごとのカラー定義（OperationRecord のトレードカラーに統一）
+// 積込: 青  #2196F3 / 積降: 緑  #4CAF50 / 給油: オレンジ #FF9800 / 休憩: 紫  #9C27B0
 const ACTIVITY_CONFIG: Record<string, {
   label: string; color: string; colorLight: string; badge: string;
   bannerBg: string; bannerText: string; bannerBorder: string;
 }> = {
-  // 積込: 青系
-  LOADING:            { label: '積込 編集', color: '#1a4a91', colorLight: '#2e5fa8', badge: '積込到着',  bannerBg: '#e8f0fc', bannerText: '#1a4a91', bannerBorder: '#2e5fa8' },
-  LOADING_START:      { label: '積込 編集', color: '#1a4a91', colorLight: '#2e5fa8', badge: '積込到着',  bannerBg: '#e8f0fc', bannerText: '#1a4a91', bannerBorder: '#2e5fa8' },
-  LOADING_COMPLETE:   { label: '積込 編集', color: '#1a4a91', colorLight: '#2e5fa8', badge: '積込完了',  bannerBg: '#e8f0fc', bannerText: '#1a4a91', bannerBorder: '#2e5fa8' },
-  // 積降: 焦茶・オレンジ系
-  UNLOADING:          { label: '積降 編集', color: '#6b2d08', colorLight: '#9a4010', badge: '積降完了',  bannerBg: '#fbeee8', bannerText: '#7c3a0a', bannerBorder: '#c96b2a' },
-  UNLOADING_START:    { label: '積降 編集', color: '#6b2d08', colorLight: '#9a4010', badge: '積降到着',  bannerBg: '#fbeee8', bannerText: '#7c3a0a', bannerBorder: '#c96b2a' },
-  UNLOADING_COMPLETE: { label: '積降 編集', color: '#6b2d08', colorLight: '#9a4010', badge: '積降完了',  bannerBg: '#fbeee8', bannerText: '#7c3a0a', bannerBorder: '#c96b2a' },
-  // 給油: 深緑系
-  FUELING:            { label: '給油 編集', color: '#1a5228', colorLight: '#2e6e3a', badge: '給油',      bannerBg: '#e8f5ec', bannerText: '#1a5228', bannerBorder: '#3a7d44' },
-  FUEL:               { label: '給油 編集', color: '#1a5228', colorLight: '#2e6e3a', badge: '給油',      bannerBg: '#e8f5ec', bannerText: '#1a5228', bannerBorder: '#3a7d44' },
-  // 休憩: 深紫系
-  BREAK:              { label: '休憩 編集', color: '#352880', colorLight: '#4a3a9e', badge: '休憩',      bannerBg: '#eeedfe', bannerText: '#352880', bannerBorder: '#7c6de0' },
-  BREAK_START:        { label: '休憩 編集', color: '#352880', colorLight: '#4a3a9e', badge: '休憩開始',  bannerBg: '#eeedfe', bannerText: '#352880', bannerBorder: '#7c6de0' },
-  BREAK_END:          { label: '休憩 編集', color: '#352880', colorLight: '#4a3a9e', badge: '休憩終了',  bannerBg: '#eeedfe', bannerText: '#352880', bannerBorder: '#7c6de0' },
+  // 積込: 青系 #2196F3
+  LOADING:            { label: '積込 編集', color: '#1565C0', colorLight: '#2196F3', badge: '積込到着',  bannerBg: '#E3F2FD', bannerText: '#1565C0', bannerBorder: '#2196F3' },
+  LOADING_START:      { label: '積込 編集', color: '#1565C0', colorLight: '#2196F3', badge: '積込到着',  bannerBg: '#E3F2FD', bannerText: '#1565C0', bannerBorder: '#2196F3' },
+  LOADING_COMPLETE:   { label: '積込 編集', color: '#1565C0', colorLight: '#2196F3', badge: '積込完了',  bannerBg: '#E3F2FD', bannerText: '#1565C0', bannerBorder: '#2196F3' },
+  // 積降: 緑系 #4CAF50
+  UNLOADING:          { label: '積降 編集', color: '#2E7D32', colorLight: '#4CAF50', badge: '積降完了',  bannerBg: '#E8F5E9', bannerText: '#2E7D32', bannerBorder: '#4CAF50' },
+  UNLOADING_START:    { label: '積降 編集', color: '#2E7D32', colorLight: '#4CAF50', badge: '積降到着',  bannerBg: '#E8F5E9', bannerText: '#2E7D32', bannerBorder: '#4CAF50' },
+  UNLOADING_COMPLETE: { label: '積降 編集', color: '#2E7D32', colorLight: '#4CAF50', badge: '積降完了',  bannerBg: '#E8F5E9', bannerText: '#2E7D32', bannerBorder: '#4CAF50' },
+  // 給油: オレンジ系 #FF9800
+  FUELING:            { label: '給油 編集', color: '#E65100', colorLight: '#FF9800', badge: '給油',      bannerBg: '#FFF3E0', bannerText: '#E65100', bannerBorder: '#FF9800' },
+  FUEL:               { label: '給油 編集', color: '#E65100', colorLight: '#FF9800', badge: '給油',      bannerBg: '#FFF3E0', bannerText: '#E65100', bannerBorder: '#FF9800' },
+  // 休憩: 紫系 #9C27B0
+  BREAK:              { label: '休憩 編集', color: '#6A1B9A', colorLight: '#9C27B0', badge: '休憩',      bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' },
+  BREAK_START:        { label: '休憩 編集', color: '#6A1B9A', colorLight: '#9C27B0', badge: '休憩開始',  bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' },
+  BREAK_END:          { label: '休憩 編集', color: '#6A1B9A', colorLight: '#9C27B0', badge: '休憩終了',  bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' },
 };
 
-const getCfg = (t: string) => ACTIVITY_CONFIG[t] || { label: '編集', color: '#5048b8', colorLight: '#6058c8', badge: t, bannerBg: '#eeedfe', bannerText: '#5048b8', bannerBorder: '#7c6de0' };
+const getCfg = (t: string) => ACTIVITY_CONFIG[t] || { label: '編集', color: '#5048b8', colorLight: '#7c6de0', badge: t, bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' };
 const isLoad  = (t: string) => ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(t);
 const isUnl   = (t: string) => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(t);
 const isFuel  = (t: string) => ['FUELING','FUEL'].includes(t);
