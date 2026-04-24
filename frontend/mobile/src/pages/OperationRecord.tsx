@@ -1439,14 +1439,24 @@ const OperationRecord: React.FC = () => {
                 <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>アクティビティなし</div>
               ) : (() => {
                 // BREAK_START + BREAK_END → 単一 BREAK にマージ
+                // sequenceNumber でソートしてからインデックスでペアリング（順序依存バグ修正）
+                const sorted = [...detailActivities].sort(
+                  (a: any, b: any) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0)
+                );
                 const merged: any[] = [];
                 const usedIds = new Set<string>();
-                for (const act of detailActivities) {
+                for (let _i = 0; _i < sorted.length; _i++) {
+                  const act = sorted[_i];
                   if (usedIds.has(act.id)) continue;
                   if (['BREAK_START', 'BREAK'].includes(act.activityType)) {
-                    const paired = detailActivities.find(
-                      a => a.activityType === 'BREAK_END' && a.sequenceNumber > act.sequenceNumber
-                    );
+                    // インデックスで次の BREAK_END を探す
+                    let paired: any = null;
+                    for (let _j = _i + 1; _j < sorted.length; _j++) {
+                      if (sorted[_j].activityType === 'BREAK_END') {
+                        paired = sorted[_j];
+                        break;
+                      }
+                    }
                     if (paired) usedIds.add(paired.id);
                     merged.push({
                       ...act,
@@ -1454,11 +1464,7 @@ const OperationRecord: React.FC = () => {
                       endTime: paired?.startTime ?? act.endTime,
                     });
                   } else if (act.activityType === 'BREAK_END') {
-                    // BREAK_START と対になっている場合はスキップ済み
-                    if (!usedIds.has(act.id)) {
-                      // 対応する START がなかった孤立 END → 単体表示
-                      merged.push({ ...act, activityType: 'BREAK' });
-                    }
+                    // 孤立 BREAK_END もスキップ（START と必ずペアとして扱う）
                   } else {
                     merged.push(act);
                   }
