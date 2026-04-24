@@ -54,21 +54,14 @@ const VehicleManagement: React.FC = () => {
     currentMileage: 0,
     status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE',
     notes: '',
+    inspectionExpiry: '',  // REQ-007: 車検期限
     region: '' as TransportRegion | '',  // 🆕 P4-03: 管轄区域（地方運輸局）
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // 車種のオプション
-  const vehicleModelOptions = [
-    { value: 'エルフ', label: 'エルフ (いすゞ)' },
-    { value: 'プロフィア', label: 'プロフィア (日野)' },
-    { value: 'ファイター', label: 'ファイター (三菱ふそう)' },
-    { value: 'デュトロ', label: 'デュトロ (日野)' },
-    { value: 'GIGA', label: 'GIGA (いすゞ)' },
-  ];
-
-  // 製造元のオプション
+  // REQ-005/006: Select→Input化により vehicleModelOptions は削除済み
+  // 製造元のオプション（検索フィルター用）
   const manufacturerOptions = [
     { value: 'いすゞ', label: 'いすゞ' },
     { value: '日野', label: '日野' },
@@ -267,6 +260,7 @@ const VehicleManagement: React.FC = () => {
       currentMileage: 0,
       status: 'ACTIVE',
       notes: '',
+      inspectionExpiry: '',  // REQ-007
       region: '',  // 🆕 P4-03
     });
     setFormErrors({});
@@ -320,7 +314,7 @@ const VehicleManagement: React.FC = () => {
     const payload = {
       ...formData,
       region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
-      inspectionExpiry: formData.inspectionExpiry || null,  // REQ-007: 空文字を null に変換
+      inspectionExpiry: formData.inspectionExpiry || undefined,  // REQ-007: 空文字を undefined に変換
     };
     const success = await createVehicle(payload);
 
@@ -339,7 +333,7 @@ const VehicleManagement: React.FC = () => {
     const payload = {
       ...formData,
       region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
-      inspectionExpiry: formData.inspectionExpiry || null,  // REQ-007: 空文字を null に変換
+      inspectionExpiry: formData.inspectionExpiry || undefined,  // REQ-007: 空文字を undefined に変換
     };
     const success = await updateVehicle(selectedVehicleId, payload);
 

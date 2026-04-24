@@ -28,6 +28,9 @@ interface VehicleData {
   model: string;
   manufacturer: string;
   currentMileage: number;
+  capacity?: number;         // REQ-004: 積載量
+  capacityTons?: number;     // REQ-004: 積載量(別名)
+  inspectionExpiry?: string; // REQ-007: 車検期限
   status: string;
   notes?: string;
 }
