@@ -41,6 +41,7 @@ export interface OperationState {
   loadingLocationLat: number | null;   // 🆕 積込場所緯度
   loadingLocationLng: number | null;   // 🆕 積込場所経度
   unloadingLocation: string | null;
+  unloadingLocationId: string | null;
   customerId: string | null;      // 🆕 客先ID
   customerName: string | null;    // 🆕 客先名
   
@@ -74,7 +75,7 @@ export interface OperationState {
   incrementBreakCount: () => void;              // 🔧 休憩回数インクリメント (2026-02-01)
   setLoadingLocation: (location: string) => void;
   setLoadingLocationWithCoords: (location: string, lat: number, lng: number) => void; // 🆕
-  setUnloadingLocation: (location: string) => void;
+  setUnloadingLocation: (location: string, locationId?: string) => void;
   setCustomerInfo: (info: { customerId: string; customerName: string }) => void; // 🆕
   
   completeOperation: () => void;
@@ -108,6 +109,7 @@ export const useOperationStore = create<OperationState>()(
       loadingLocationLat: null,   // 🆕
       loadingLocationLng: null,   // 🆕
       unloadingLocation: null,
+  unloadingLocationId: null,
       customerId: null,           // 🆕
       customerName: null,         // 🆕
 
