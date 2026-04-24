@@ -1420,7 +1420,7 @@ const OperationRecord: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#e5e7eb', flexShrink: 0 }}>
               {[
                 { val: operation.driverName || '-', lbl: '運転手' },
-                { val: customerName || '-', lbl: '客先' },
+                { val: operation.vehicleName || '-', lbl: '車番' },
                 { val: `${detailActivities.filter(a => ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積込回数' },
                 { val: `${detailActivities.filter(a => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積降回数' },
               ].map(({ val, lbl }) => (
@@ -1494,7 +1494,7 @@ const OperationRecord: React.FC = () => {
                     {/* 中央: ラベル + 場所 + 品目 */}
                     <div style={{ flex: 1, minWidth: 0, paddingTop: 5, paddingBottom: isLast ? 0 : 8 }}>
                       <span style={{
-                        fontSize: 10, fontWeight: 600,
+                        fontSize: 18, fontWeight: 600,
                         padding: '2px 8px', borderRadius: 10,
                         background: badgeBg, color: badgeFg,
                       }}>
@@ -1528,7 +1528,7 @@ const OperationRecord: React.FC = () => {
                       display: 'flex', alignItems: 'center', gap: 6,
                       flexShrink: 0, paddingTop: 6,
                     }}>
-                      <span style={{ fontSize: 22, color: '#9ca3af', letterSpacing: '0.02em', fontWeight: 500 }}>
+                      <span style={{ fontSize: 18, color: '#9ca3af', letterSpacing: '0.02em', fontWeight: 500 }}>
                         {timeStr}
                       </span>
                       <span style={{ fontSize: 13, color: '#d1d5db' }}>✏️</span>
