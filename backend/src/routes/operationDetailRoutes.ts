@@ -279,7 +279,7 @@ router.post('/', requireManager, operationDetailController.createOperationDetail
  *       403:
  *         description: 権限エラー
  */
-router.put('/:id', requireManager, validateId, operationDetailController.updateOperationDetail);
+router.put('/:id', requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as any), validateId, operationDetailController.updateOperationDetail);
 
 /**
  * @swagger

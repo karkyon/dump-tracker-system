@@ -743,7 +743,7 @@ const OperationRecord: React.FC = () => {
           }));
 
           // operationStoreにも保存
-          operationStore.setUnloadingLocation(registeredLocation.name);
+          operationStore.setUnloadingLocation(registeredLocation.name, registeredLocation.id);
           operationStore.setPhase('AT_UNLOADING');
 
           // ✅ 【修正】積降開始ボタンが参照する window.selectedUnloadingLocation を設定
