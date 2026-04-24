@@ -29,6 +29,7 @@ export interface OperationState {
   vehicleId: string | null;
   vehicleNumber: string | null;
   vehicleType: string | null;
+  vehicleCapacity: number | null;  // REQ-004: 車両積載量
   driverId: string | null;
   driverName: string | null;
   startMileage: number | null;
@@ -58,6 +59,7 @@ export interface OperationState {
     vehicleNumber: string;
     vehicleType: string;
     startMileage: number;
+    capacity?: number;  // REQ-004
   }) => void;
   
   setDriverInfo: (info: {
@@ -94,6 +96,7 @@ export const useOperationStore = create<OperationState>()(
       vehicleId: null,
       vehicleNumber: null,
       vehicleType: null,
+      vehicleCapacity: null,  // REQ-004
       driverId: null,
       driverName: null,
       startMileage: null,
@@ -121,6 +124,7 @@ export const useOperationStore = create<OperationState>()(
           vehicleNumber: info.vehicleNumber,
           vehicleType: info.vehicleType,
           startMileage: info.startMileage,
+          vehicleCapacity: info.capacity ?? null,  // REQ-004
           status: 'IDLE'
         });
         
@@ -274,6 +278,7 @@ export const useOperationStore = create<OperationState>()(
           vehicleId: null,
           vehicleNumber: null,
           vehicleType: null,
+          vehicleCapacity: null,  // REQ-004
           driverId: null,
           driverName: null,
           startMileage: null,
@@ -309,6 +314,7 @@ export const useOperationStore = create<OperationState>()(
           vehicleId: state.vehicleId,
           vehicleNumber: state.vehicleNumber,
           vehicleType: state.vehicleType,
+          vehicleCapacity: state.vehicleCapacity,  // REQ-004
           driverId: state.driverId,
           driverName: state.driverName,
           startMileage: state.startMileage,

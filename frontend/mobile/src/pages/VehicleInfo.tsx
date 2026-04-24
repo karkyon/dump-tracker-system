@@ -38,6 +38,8 @@ interface VehicleDisplay {
   vehicleNumber: string;  // 表示用(車番)
   vehicleType: string;
   currentMileage: number;
+  capacity?: number;       // REQ-004: 積載量
+  inspectionExpiry?: string; // REQ-007: 車検期限 (ISO date string)
   status: string;          // 🆕 車両ステータス追加 (ACTIVE / MAINTENANCE / INACTIVE / RETIRED)
   lastDriver?: string;
   lastOperationDate?: string;
@@ -157,6 +159,8 @@ const VehicleInfo: React.FC = () => {
             vehicleNumber: v.plateNumber,  // 車番(ナンバープレート)
             vehicleType: v.vehicleType || v.model || '未設定',  // 🆕 フォールバック追加
             currentMileage: v.currentMileage,
+            capacity: v.capacity ?? v.capacityTons ?? undefined,  // REQ-004
+            inspectionExpiry: v.inspectionExpiry ?? undefined,  // REQ-007
             status: v.status,  // 🆕 ステータスをそのまま保持
             lastDriver: lastDriver || '未割当',
             lastOperationDate: lastOperationDate || '－'
@@ -234,6 +238,20 @@ const VehicleInfo: React.FC = () => {
     if (selected) {
       setVehicleInfo(selected);
       setStartMileage(selected.currentMileage.toString());
+      // REQ-007: 車検期限60日以内警告
+      if (selected.inspectionExpiry) {
+        const expiry = new Date(selected.inspectionExpiry);
+        const today = new Date();
+        const diffDays = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) {
+          toast.error(`⚠️ この車両は車検が切れています（${expiry.toLocaleDateString('ja-JP')}期限）`, { duration: 8000 });
+        } else if (diffDays <= 60) {
+          toast(`⚠️ 車検期限まで残り${diffDays}日です（${expiry.toLocaleDateString('ja-JP')}期限）`, {
+            duration: 6000,
+            icon: '🔔',
+          });
+        }
+      }
     } else {
       setVehicleInfo(null);
       setStartMileage('');
@@ -280,7 +298,8 @@ const VehicleInfo: React.FC = () => {
         vehicleId: selectedVehicleId,
         vehicleNumber: vehicleInfo.vehicleNumber,
         vehicleType: vehicleInfo.vehicleType,
-        startMileage: parseInt(startMileage)
+        startMileage: parseInt(startMileage),
+        capacity: vehicleInfo.capacity,  // REQ-004: 積載量をStoreに保存
       });
       
       if (user) {

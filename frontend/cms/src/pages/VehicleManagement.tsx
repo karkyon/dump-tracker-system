@@ -292,6 +292,7 @@ const VehicleManagement: React.FC = () => {
       currentMileage: vehicle.currentMileage || 0,
       status: vehicle.status,
       notes: vehicle.notes || '',
+      inspectionExpiry: vehicle.inspectionExpiry ? (typeof vehicle.inspectionExpiry === 'string' ? vehicle.inspectionExpiry.split('T')[0] : new Date(vehicle.inspectionExpiry).toISOString().split('T')[0]) : '',  // REQ-007
       region: (vehicle.region as TransportRegion) || '',  // 🆕 P4-03
     });
     setCapacityInput(String(vehicle.capacity ?? ''));
@@ -319,6 +320,7 @@ const VehicleManagement: React.FC = () => {
     const payload = {
       ...formData,
       region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
+      inspectionExpiry: formData.inspectionExpiry || null,  // REQ-007: 空文字を null に変換
     };
     const success = await createVehicle(payload);
 
@@ -337,6 +339,7 @@ const VehicleManagement: React.FC = () => {
     const payload = {
       ...formData,
       region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
+      inspectionExpiry: formData.inspectionExpiry || null,  // REQ-007: 空文字を null に変換
     };
     const success = await updateVehicle(selectedVehicleId, payload);
 
@@ -479,27 +482,23 @@ const VehicleManagement: React.FC = () => {
             required
           />
           
-          <Select
+          <Input
             label="モデル"
-            options={[
-              { value: '', label: 'モデルを選択してください' },
-              ...vehicleModelOptions,
-            ]}
+            type="text"
             value={formData.model}
             onChange={(e) => setFormData({ ...formData, model: e.target.value })}
             error={formErrors.model}
+            placeholder="例: エルフ、プロフィア、ファイター"
             required
           />
 
-          <Select
+          <Input
             label="製造元"
-            options={[
-              { value: '', label: '製造元を選択してください' },
-              ...manufacturerOptions,
-            ]}
+            type="text"
             value={formData.manufacturer}
             onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
             error={formErrors.manufacturer}
+            placeholder="例: いすゞ、日野、三菱ふそう"
             required
           />
 
@@ -579,6 +578,14 @@ const VehicleManagement: React.FC = () => {
             </p>
           </div>
 
+          <Input
+            label="車検期限"
+            type="date"
+            value={formData.inspectionExpiry}
+            onChange={(e) => setFormData({ ...formData, inspectionExpiry: e.target.value })}
+            placeholder="車検期限を選択（任意）"
+          />
+
           <div className="md:col-span-2">
             <Input
               label="備考"
@@ -614,21 +621,23 @@ const VehicleManagement: React.FC = () => {
             required
           />
           
-          <Select
+          <Input
             label="モデル"
-            options={vehicleModelOptions}
+            type="text"
             value={formData.model}
             onChange={(e) => setFormData({ ...formData, model: e.target.value })}
             error={formErrors.model}
+            placeholder="例: エルフ、プロフィア、ファイター"
             required
           />
 
-          <Select
+          <Input
             label="製造元"
-            options={manufacturerOptions}
+            type="text"
             value={formData.manufacturer}
             onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
             error={formErrors.manufacturer}
+            placeholder="例: いすゞ、日野、三菱ふそう"
             required
           />
 
@@ -706,6 +715,13 @@ const VehicleManagement: React.FC = () => {
               実績報告書の地域別集計に使用します（任意）
             </p>
           </div>
+
+          <Input
+            label="車検期限"
+            type="date"
+            value={formData.inspectionExpiry}
+            onChange={(e) => setFormData({ ...formData, inspectionExpiry: e.target.value })}
+          />
 
           <div className="md:col-span-2">
             <Input

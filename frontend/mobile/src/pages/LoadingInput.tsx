@@ -66,6 +66,7 @@ const LoadingInput: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const operationStore = useOperationStore();
+  const vehicleCapacity = operationStore.vehicleCapacity;  // REQ-004
 
   // D4から渡された位置情報（またはD5a廃止後のstate引き継ぎ）
   const locationState = location.state as LocationState | undefined;
@@ -94,7 +95,7 @@ const LoadingInput: React.FC = () => {
     itemName: '',
     customItemName: '',
     cargoConfirmed: false,
-    quantity: undefined,
+    quantity: vehicleCapacity ?? undefined,  // REQ-004: 車両積載量をデフォルト値に
     notes: undefined,
   });
 
