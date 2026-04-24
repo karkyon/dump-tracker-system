@@ -86,7 +86,9 @@ const ItemManagement: React.FC = () => {
 
   const handleAddItem = () => {
     setEditingItem(null);
-    setFormData({ ...DEFAULT_FORM_DATA, displayOrder: items.length + 1 });
+    // REQ-009: 区分内の件数+1 を初期表示順とする（全件数ではなく区分内連番）
+    const sameTypeCount = items.filter((i: Item) => i.itemType === DEFAULT_FORM_DATA.itemType).length;
+    setFormData({ ...DEFAULT_FORM_DATA, displayOrder: sameTypeCount + 1 });
     setIsModalOpen(true);
   };
 
@@ -109,10 +111,15 @@ const ItemManagement: React.FC = () => {
     }
   };
 
-  const handleMoveUp = async (_item: Item, index: number) => {
+  const handleMoveUp = async (item: Item, index: number) => {
     if (index === 0) return;
-    // 配列内で入れ替えてから全件連番付け直し
-    const reordered = [...displayItems];
+    // REQ-009: 同一 itemType の全品目を displayOrder 順に並べて入れ替え → 区分内 1〜N で連番付け直し
+    // ※ displayItems は検索フィルター後のため、検索中でも正しく動作するよう全品目から取得する
+    const sameTypeItems = [...items]
+      .filter((i: Item) => i.itemType === item.itemType)
+      .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+    // displayItems 内の index は sameTypeItems でも同じ位置になる（区分タブ選択中のみ↑↓有効）
+    const reordered = [...sameTypeItems];
     const tmp = reordered[index - 1];
     reordered[index - 1] = reordered[index];
     reordered[index] = tmp;
@@ -122,11 +129,14 @@ const ItemManagement: React.FC = () => {
     else toast.error('表示順の変更に失敗しました');
   };
 
-  const handleMoveDown = async (_item: Item, index: number) => {
-    // REQ-009: displayItems はフィルター後リストなのでグループ内末尾チェックが正しく機能する
-    if (index === displayItems.length - 1) return;
-    // 配列内で入れ替えてから全件連番付け直し
-    const reordered = [...displayItems];
+  const handleMoveDown = async (item: Item, index: number) => {
+    // REQ-009: 同一 itemType の全品目を displayOrder 順に並べて入れ替え → 区分内 1〜N で連番付け直し
+    const sameTypeItems = [...items]
+      .filter((i: Item) => i.itemType === item.itemType)
+      .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+    // 末尾チェックも sameTypeItems の長さで判定（区分内の末尾）
+    if (index === sameTypeItems.length - 1) return;
+    const reordered = [...sameTypeItems];
     const tmp = reordered[index + 1];
     reordered[index + 1] = reordered[index];
     reordered[index] = tmp;
@@ -153,14 +163,18 @@ const ItemManagement: React.FC = () => {
       });
 
       if (success) {
-        // 編集対象を除外した配列を作成し、指定位置に挿入して全件連番付け直し
-        const withoutEdited = items.filter((i: Item) => i.id !== editingItem.id);
+        // REQ-009: 同一 itemType 内のみで挿入・連番付け直し（区分内独立連番）
+        // 編集後の itemType（区分変更があった場合は新区分）を基準にする
+        const targetItemType = formData.itemType;
+        const sameTypeItems = items
+          .filter((i: Item) => i.id !== editingItem.id && i.itemType === targetItemType)
+          .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
         const targetIndex = Math.min(
           Math.max(0, (formData.displayOrder || 1) - 1),
-          withoutEdited.length
+          sameTypeItems.length
         );
-        withoutEdited.splice(targetIndex, 0, { ...editingItem, displayOrder: formData.displayOrder });
-        const renumbered = withoutEdited.map((i: Item, idx: number) => ({ id: i.id, order: idx + 1 }));
+        sameTypeItems.splice(targetIndex, 0, { ...editingItem, itemType: targetItemType, displayOrder: formData.displayOrder });
+        const renumbered = sameTypeItems.map((i: Item, idx: number) => ({ id: i.id, order: idx + 1 }));
         await updateItemOrder(renumbered);
         handleCloseModal();
       }
@@ -209,7 +223,7 @@ const ItemManagement: React.FC = () => {
             </button>
             <button
               onClick={() => handleMoveDown(item, index)}
-              disabled={index === displayItems.length - 1}
+              disabled={index === items.filter((i: Item) => i.itemType === item.itemType).length - 1}
               className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
             >
               <ChevronDown className="w-3 h-3" />
