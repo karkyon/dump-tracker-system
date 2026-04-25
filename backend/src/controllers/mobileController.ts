@@ -342,7 +342,12 @@ export class MobileController {
           address: req.body.endPosition.address
         } : undefined,
         notes: req.body.notes,
-        endOdometer: req.body.endOdometer // ✅ 修正: PostTripInspectionが送るフィールド名に合わせる
+        endOdometer: req.body.endOdometer, // ✅ 修正: PostTripInspectionが送るフィールド名に合わせる
+        // ✅ Fix-S11-6: フロント(useGPS)が計算した走行距離をフォールバックとして受け取る
+        // endOdometer/startOdometer が未設定の場合、フロント計算値をtotalDistanceKmに使用
+        ...(req.body.totalDistanceKm !== undefined && {
+          totalDistanceKm: Number(req.body.totalDistanceKm)
+        })
       };
 
       const endResult = await this.tripService.endTrip(tripId, endTripData);

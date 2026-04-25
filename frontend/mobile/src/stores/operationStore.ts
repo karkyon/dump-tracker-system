@@ -26,6 +26,7 @@ export type OperationPhase =
 export interface OperationState {
   // 運行情報
   operationId: string | null;
+  totalDistanceKm?: number | null;  // ✅ Fix-S11-8: GPS累積走行距離
   vehicleId: string | null;
   vehicleNumber: string | null;
   vehicleType: string | null;
@@ -78,7 +79,8 @@ export interface OperationState {
   setLoadingLocation: (location: string) => void;
   setLoadingLocationWithCoords: (location: string, lat: number, lng: number) => void; // 🆕
   setUnloadingLocation: (location: string, locationId?: string) => void;
-  setCustomerInfo: (info: { customerId: string; customerName: string }) => void; // 🆕
+  setCustomerInfo: (info: { customerId: string; customerName: string }) => void;
+  setTotalDistanceKm: (km: number) => void;  // ✅ Fix-S11-8 // 🆕
   
   completeOperation: () => void;
   
@@ -115,6 +117,7 @@ export const useOperationStore = create<OperationState>()(
   unloadingLocationId: null,
       customerId: null,           // 🆕
       customerName: null,         // 🆕
+      totalDistanceKm: null,      // ✅ Fix-S11-8
 
       // Actions
       setVehicleInfo: (info) => {
@@ -253,6 +256,12 @@ export const useOperationStore = create<OperationState>()(
         set({ customerId: info.customerId, customerName: info.customerName });
       },
 
+      // ✅ Fix-S11-8: GPS累積走行距離セット
+      setTotalDistanceKm: (km) => {
+        console.log('[Operation Store] 🛣️ SET TOTAL DISTANCE KM:', km);
+        set({ totalDistanceKm: km });
+      },
+
       // 🆕 積降場所設定
       setUnloadingLocation: (location, locationId) => {
         console.log('[Operation Store] 📍 SET UNLOADING LOCATION:', location, locationId ?? '(id省略)');
@@ -328,6 +337,7 @@ export const useOperationStore = create<OperationState>()(
           loadingLocation: state.loadingLocation,
           customerId: state.customerId,
           customerName: state.customerName,
+          totalDistanceKm: state.totalDistanceKm, // ✅ Fix-S11-8
           loadingLocationLat: state.loadingLocationLat,   // 🆕
           loadingLocationLng: state.loadingLocationLng,   // 🆕
           unloadingLocation: state.unloadingLocation

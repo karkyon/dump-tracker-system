@@ -48,7 +48,9 @@ const PostTripInspection: React.FC = () => {
     vehicleNumber, 
     vehicleType,
     driverId,
-    resetOperation
+    resetOperation,
+    // ✅ Fix-S11-8: フロント累積走行距離をendOperation送信に含める
+    totalDistanceKm: storedTotalDistanceKm
   } = useOperationStore();
   
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>([]);
@@ -310,7 +312,12 @@ const PostTripInspection: React.FC = () => {
         endOdometer,
         endFuelLevel: endFuelLevel ?? undefined,
         endPosition,             // 🆕 GPS座標送信
-        notes: notes || ''
+        notes: notes || '',
+        // ✅ Fix-S11-8: フロント(useGPS)累積走行距離をバックエンドに送信
+        // endOdometer/startOdometer 未設定の場合のtotalDistanceKmフォールバックとして使用
+        ...(storedTotalDistanceKm !== undefined && storedTotalDistanceKm !== null && {
+          totalDistanceKm: Number(storedTotalDistanceKm)
+        })
       });
 
       if (!endResponse.success) {

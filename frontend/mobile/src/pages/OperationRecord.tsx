@@ -135,6 +135,14 @@ const OperationRecord: React.FC = () => {
     totalDistance
   } = useGPS();
 
+  // ✅ Fix-S11-8: GPS累積走行距離をoperationStoreに同期（運行終了時のフォールバック用）
+  // totalDistance は上の useGPS() から取得後、変化時にstoreへ保存
+  useEffect(() => {
+    if (totalDistance > 0 && operationStore.operationId) {
+      operationStore.setTotalDistanceKm(totalDistance);
+    }
+  }, [totalDistance]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // operationStoreから運行IDを取得して状態に反映
   // 🔧 修正: 運行ID未設定時の処理を改善（エラー抑制）
   useEffect(() => {

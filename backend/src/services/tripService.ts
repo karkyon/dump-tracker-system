@@ -476,10 +476,16 @@ class TripService {
         updateData.totalDistanceKm = request.endOdometer - Number(operation.startOdometer);
       }
 
-      // ✅ 修正(課題4): オドメーター未提供の場合、GPS距離をフォールバックとして使用
-      if (!updateData.totalDistanceKm && statistics.totalDistance > 0) {
-        updateData.totalDistanceKm = statistics.totalDistance;
-        logger.info('✅ [endTrip] GPS距離をtotalDistanceKmとして適用', { totalDistance: statistics.totalDistance });
+      // ✅ 修正(課題4) + Fix-S11-6: オドメーター未提供の場合のフォールバック優先度
+      // 優先度: 1.オドメーター差分 > 2.フロント送信値 > 3.バックエンドGPS再計算値
+      if (!updateData.totalDistanceKm) {
+        if ((request as any).totalDistanceKm && (request as any).totalDistanceKm > 0) {
+          updateData.totalDistanceKm = (request as any).totalDistanceKm;
+          logger.info('✅ [endTrip] フロント計算GPS距離を適用', { totalDistanceKm: (request as any).totalDistanceKm });
+        } else if (statistics.totalDistance > 0) {
+          updateData.totalDistanceKm = statistics.totalDistance;
+          logger.info('✅ [endTrip] バックエンドGPS再計算距離を適用', { totalDistance: statistics.totalDistance });
+        }
       }
 
       // ✅ 燃料消費量の自動計算
@@ -1933,7 +1939,11 @@ class TripService {
             Number(curr.latitude),
             Number(curr.longitude)
           );
-          totalDistance += distance;
+          // ✅ Fix-S11-3: 10m(0.01km)未満はGPS揺れノイズとして加算しない
+          // useGPS.ts側のMIN_DISTANCE_METERS=10mと同一ロジックをバックエンドにも適用
+          if (distance >= 0.01) {
+            totalDistance += distance;
+          }
         }
       }
 

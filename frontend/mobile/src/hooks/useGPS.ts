@@ -194,7 +194,9 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
         accuracy: position.coords.accuracy,
         heading: metadata.heading,
         speed: metadata.speed,
-        timestamp: new Date(position.timestamp).toISOString()
+        timestamp: new Date(position.timestamp).toISOString(),
+        // ✅ Fix-S11-7: 累積走行距離をバックエンドに送信（endOperation時のフォールバック用）
+        totalDistanceKm: metadata.totalDistance
       };
       await mobileApi.updateGPSLocation(gpsData);
       console.log('✅ GPS data sent successfully');
