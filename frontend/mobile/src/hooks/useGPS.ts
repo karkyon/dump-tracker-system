@@ -180,6 +180,11 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
 
   const sendGPSData = async (position: GeolocationPosition, metadata: GPSMetadata) => {
     if (!options.enableLogging || !options.operationId) return;
+    // ✅ Fix-4A: accuracy > 100m の座標はバックエンドに送信しない（屋内誤差防止）
+    if (position.coords.accuracy > 100) {
+      console.warn(`⚠️ [Fix-4A] GPS送信スキップ: 精度不足 accuracy=${position.coords.accuracy.toFixed(0)}m (上限:100m)`);
+      return;
+    }
     try {
       const gpsData = {
         operationId: options.operationId,
@@ -207,6 +212,13 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
 
     if (!isValidCoordinate(coords.latitude, coords.longitude)) {
       console.warn('⚠️ Invalid coordinates received:', coords);
+      return;
+    }
+
+    // ✅ Fix-4B: accuracy > 150m の座標は位置更新・距離計算・pathCoordinatesに使用しない
+    // テスト環境や屋内での誤った走行距離（数百km）を防ぐためのガード
+    if (coords.accuracy > 150) {
+      console.warn(`⚠️ [Fix-4B] GPS位置更新スキップ: 精度不足 accuracy=${coords.accuracy.toFixed(0)}m (上限:150m) — この座標は記録しません`);
       return;
     }
 

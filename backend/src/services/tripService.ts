@@ -1597,12 +1597,14 @@ class TripService {
         throw new NotFoundError('運行が見つかりません');
       }
 
-      const whereClause: any = {};
+      // ✅ Fix-3: whereClause が空 {} だと全運行のGPSログが混入する致命的バグを修正
+      // tripId(=operationId) でフィルタリングし、当該運行のログのみ取得する
+      const whereClause: any = { operations: { id: tripId } };
       const gpsLogs = await this.gpsLogService.findMany({
         where: whereClause,
         orderBy: { recordedAt: 'asc' },
         skip: options.limit ? 0 : undefined,
-        take: options.limit || 100
+        take: options.limit || 500
       });
 
       const logsArray = Array.isArray(gpsLogs) ? gpsLogs : [];

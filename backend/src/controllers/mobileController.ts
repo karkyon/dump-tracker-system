@@ -490,6 +490,17 @@ export class MobileController {
       const results = await Promise.all(
         gpsData.map(async (coord: any) => {
           try {
+            // ✅ Fix-1: 精度バリデーション — accuracy > 150m はDB保存スキップ
+            const accuracyValue = coord.accuracy ? Number(coord.accuracy) : null;
+            if (accuracyValue !== null && accuracyValue > 150) {
+              logger.warn('GPS精度不足のため保存スキップ (logGpsPosition)', {
+                accuracy: accuracyValue,
+                lat: coord.latitude,
+                lng: coord.longitude
+              });
+              return null;
+            }
+
             // ✅ 修正: undefinedを渡さないように条件分岐
             const createData: any = {
               latitude: new Decimal(coord.latitude),
@@ -497,13 +508,15 @@ export class MobileController {
               altitude: coord.altitude ? new Decimal(coord.altitude) : undefined,
               speedKmh: coord.speed ? new Decimal(coord.speed) : undefined,
               heading: coord.heading ? new Decimal(coord.heading) : undefined,
-              accuracyMeters: coord.accuracy ? new Decimal(coord.accuracy) : undefined,
+              accuracyMeters: accuracyValue !== null ? new Decimal(accuracyValue) : undefined,
               recordedAt: new Date(coord.timestamp || Date.now())
             };
 
-            // tripIdがある場合のみoperationsを追加
-            if (coord.tripId) {
-              createData.operations = { connect: { id: coord.tripId } };
+            // ✅ Fix-1: operationId(フロント送信キー) と tripId(旧キー) の両方に対応
+            const linkedOperationId_log = coord.operationId || coord.tripId;
+            if (linkedOperationId_log) {
+              createData.operations = { connect: { id: linkedOperationId_log } };
+              logger.debug('GPS logGpsPosition operationId紐付け', { linkedOperationId_log });
             }
 
             // vehicleIdがある場合のみvehiclesを追加
@@ -640,6 +653,17 @@ export class MobileController {
       const results = await Promise.all(
         gpsLogs.map(async (log: any) => {
           try {
+            // ✅ Fix-2: 精度バリデーション — accuracy > 150m はDB保存スキップ
+            const accuracyVal = log.accuracy ? Number(log.accuracy) : null;
+            if (accuracyVal !== null && accuracyVal > 150) {
+              logger.warn('GPS精度不足のため保存スキップ (uploadGpsLogs)', {
+                accuracy: accuracyVal,
+                lat: log.latitude,
+                lng: log.longitude
+              });
+              return null;
+            }
+
             // ✅ 修正: undefinedを渡さないように条件分岐
             const createData: any = {
               latitude: new Decimal(log.latitude),
@@ -647,13 +671,15 @@ export class MobileController {
               altitude: log.altitude ? new Decimal(log.altitude) : undefined,
               speedKmh: log.speed ? new Decimal(log.speed) : undefined,
               heading: log.heading ? new Decimal(log.heading) : undefined,
-              accuracyMeters: log.accuracy ? new Decimal(log.accuracy) : undefined,
+              accuracyMeters: accuracyVal !== null ? new Decimal(accuracyVal) : undefined,
               recordedAt: new Date(log.timestamp)
             };
 
-            // tripIdがある場合のみoperationsを追加
-            if (log.tripId) {
-              createData.operations = { connect: { id: log.tripId } };
+            // ✅ Fix-2: operationId(フロント送信キー) と tripId(旧キー) の両方に対応
+            const linkedOperationId_upload = log.operationId || log.tripId;
+            if (linkedOperationId_upload) {
+              createData.operations = { connect: { id: linkedOperationId_upload } };
+              logger.debug('GPS uploadGpsLogs operationId紐付け', { linkedOperationId_upload });
             }
 
             // vehicleIdがある場合のみvehiclesを追加
