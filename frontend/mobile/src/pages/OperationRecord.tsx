@@ -126,14 +126,21 @@ const OperationRecord: React.FC = () => {
   const [locationCandidates, setLocationCandidates] = useState<NearbyLocationResult[]>([]);
   const [dialogType, setDialogType] = useState<'LOADING' | 'UNLOADING'>('LOADING');
 
+  // ✅ BUG-031修正: enableLogging/operationId/vehicleId を useGPS に渡す
+  // これがないと sendGPSData の先頭ガードで常に return してGPS未送信になる
   const {
     currentPosition,
     isTracking,
     startTracking,
     heading,
     speed: _gpsSpeed,
-    totalDistance
-  } = useGPS();
+    totalDistance,
+    updateOptions: updateGPSOptions
+  } = useGPS({
+    enableLogging: true,
+    operationId: operationStore.operationId || undefined,
+    vehicleId: operationStore.vehicleId || undefined,
+  });
 
   // ✅ Fix-S11-8: GPS累積走行距離をoperationStoreに同期（運行終了時のフォールバック用）
   // totalDistance は上の useGPS() から取得後、変化時にstoreへ保存
@@ -142,6 +149,22 @@ const OperationRecord: React.FC = () => {
       operationStore.setTotalDistanceKm(totalDistance);
     }
   }, [totalDistance]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ✅ BUG-031補足: operationId が確定したら useGPS のオプションを更新
+  // （初回マウント時に operationId が null の場合の対応）
+  useEffect(() => {
+    if (operationStore.operationId && operationStore.vehicleId) {
+      updateGPSOptions({
+        enableLogging: true,
+        operationId: operationStore.operationId,
+        vehicleId: operationStore.vehicleId,
+      });
+      console.log('✅ [BUG-031] useGPS オプション更新:', {
+        operationId: operationStore.operationId,
+        vehicleId: operationStore.vehicleId
+      });
+    }
+  }, [operationStore.operationId, operationStore.vehicleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // operationStoreから運行IDを取得して状態に反映
   // 🔧 修正: 運行ID未設定時の処理を改善（エラー抑制）

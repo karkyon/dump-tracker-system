@@ -284,8 +284,8 @@ const PostTripInspection: React.FC = () => {
         const position = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 5000
+            timeout: 15000,   // ✅ BUG-033: GPS_CONFIG.TIMEOUT と同一値
+            maximumAge: 0     // ✅ BUG-033: キャッシュ無効（Fix-5A と同一設定）
           });
         });
         endPosition = {

@@ -308,6 +308,11 @@ const OperationMain: React.FC = () => {
 
   // バックエンドにGPS位置を送信
   const sendGPSToBackend = async (position: GPSPosition) => {
+    // ✅ BUG-032修正: accuracy フィルタ追加（useGPS.ts の Fix-4A/4B と同一閾値）
+    if (position.accuracy > 100) {
+      console.warn(`⚠️ [BUG-032] GPS送信スキップ: accuracy=${position.accuracy.toFixed(0)}m > 100m`);
+      return;
+    }
     try {
       await apiService.updateGPSLocation({
         latitude: position.latitude,
