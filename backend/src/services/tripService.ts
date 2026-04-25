@@ -481,11 +481,31 @@ class TripService {
       if (!updateData.totalDistanceKm) {
         if ((request as any).totalDistanceKm && (request as any).totalDistanceKm > 0) {
           updateData.totalDistanceKm = (request as any).totalDistanceKm;
-          logger.info('✅ [endTrip] フロント計算GPS距離を適用', { totalDistanceKm: (request as any).totalDistanceKm });
+          logger.info('🛣️ [GPS-DIST] フロント計算GPS距離をtotalDistanceKmに採用', {
+            source: 'frontend_useGPS',
+            totalDistanceKm: (request as any).totalDistanceKm
+          });
         } else if (statistics.totalDistance > 0) {
           updateData.totalDistanceKm = statistics.totalDistance;
-          logger.info('✅ [endTrip] バックエンドGPS再計算距離を適用', { totalDistance: statistics.totalDistance });
+          logger.info('🛣️ [GPS-DIST] バックエンドGPS再計算距離をtotalDistanceKmに採用', {
+            source: 'backend_recalc',
+            totalDistance: statistics.totalDistance
+          });
+        } else {
+          logger.warn('🛣️ [GPS-DIST] ⚠️ totalDistanceKm 計算不能 — GPS記録なし・オドメーターなし', {
+            operationId: tripId,
+            endOdometerProvided: !!request.endOdometer,
+            frontendValueProvided: !!(request as any).totalDistanceKm,
+            backendCalcResult: statistics.totalDistance
+          });
         }
+      } else {
+        logger.info('🛣️ [GPS-DIST] オドメーター差分からtotalDistanceKmを算出', {
+          source: 'odometer_diff',
+          totalDistanceKm: updateData.totalDistanceKm,
+          endOdometer: request.endOdometer,
+          startOdometer: (operation as any).startOdometer
+        });
       }
 
       // ✅ 燃料消費量の自動計算
@@ -1929,6 +1949,8 @@ class TripService {
       const logsArray = Array.isArray(gpsLogs) ? gpsLogs : [];
 
       let totalDistance = 0;
+      let skippedNoise = 0;
+      let skippedCount = 0;
       for (let i = 1; i < logsArray.length; i++) {
         const prev = logsArray[i - 1];
         const curr = logsArray[i];
@@ -1940,12 +1962,22 @@ class TripService {
             Number(curr.longitude)
           );
           // ✅ Fix-S11-3: 10m(0.01km)未満はGPS揺れノイズとして加算しない
-          // useGPS.ts側のMIN_DISTANCE_METERS=10mと同一ロジックをバックエンドにも適用
           if (distance >= 0.01) {
             totalDistance += distance;
+          } else {
+            skippedNoise += distance;
+            skippedCount++;
           }
         }
       }
+      // ✅ Log-BE-2: GPS距離計算サマリーログ
+      logger.info('🛣️ [GPS-DIST] バックエンドGPS距離計算完了', {
+        operationId,
+        gpsLogCount: logsArray.length,
+        totalDistanceKm: totalDistance.toFixed(3),
+        skippedNoiseSegments: skippedCount,
+        skippedNoiseKm: skippedNoise.toFixed(4)
+      });
 
       const firstLog = logsArray[0];
       const lastLog = logsArray[logsArray.length - 1];

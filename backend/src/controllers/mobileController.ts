@@ -492,16 +492,33 @@ export class MobileController {
         ? req.body.coordinates
         : [req.body];
 
+      // ✅ Log-BE-1: GPS受信ログ（検証用）
+      logger.info('🛰️ [GPS-RX] GPS受信', {
+        count: gpsData.length,
+        firstCoord: gpsData[0] ? {
+          lat: gpsData[0].latitude,
+          lng: gpsData[0].longitude,
+          accuracy: gpsData[0].accuracy,
+          operationId: gpsData[0].operationId || gpsData[0].tripId || null,
+          vehicleId: gpsData[0].vehicleId || null,
+          timestamp: gpsData[0].timestamp
+        } : null,
+        userId: req.user?.userId
+      });
+
       const results = await Promise.all(
         gpsData.map(async (coord: any) => {
           try {
             // ✅ Fix-1: 精度バリデーション — accuracy > 150m はDB保存スキップ
             const accuracyValue = coord.accuracy ? Number(coord.accuracy) : null;
             if (accuracyValue !== null && accuracyValue > 150) {
-              logger.warn('GPS精度不足のため保存スキップ (logGpsPosition)', {
+              logger.warn('🛰️ [GPS-SKIP] 精度不足スキップ (logGpsPosition)', {
                 accuracy: accuracyValue,
+                threshold: 150,
                 lat: coord.latitude,
-                lng: coord.longitude
+                lng: coord.longitude,
+                operationId: coord.operationId || coord.tripId || null,
+                timestamp: coord.timestamp
               });
               return null;
             }
@@ -529,7 +546,16 @@ export class MobileController {
               createData.vehicles = { connect: { id: coord.vehicleId } };
             }
 
-            return await this.gpsLogService.create(createData);
+            const saved = await this.gpsLogService.create(createData);
+            // ✅ Log-BE-1: GPS保存成功ログ
+            logger.debug('🛰️ [GPS-SAVE] GPS保存完了', {
+              id: saved?.id,
+              operationId: (createData.operations as any)?.connect?.id || null,
+              lat: Number(createData.latitude),
+              lng: Number(createData.longitude),
+              accuracy: accuracyValue
+            });
+            return saved;
           } catch (error) {
             logger.error('個別GPSログ作成エラー', { error, coord });
             return null;

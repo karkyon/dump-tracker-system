@@ -277,6 +277,15 @@ const winstonLogger = winston.createLogger({
     }),
     new winston.transports.File({
       filename: path.join(logDir, 'combined.log')
+    }),
+    // ✅ Log-BE-3: GPS専用ログファイル（GPSカテゴリのみ）
+    new winston.transports.File({
+      filename: path.join(logDir, 'gps.log'),
+      level: 'debug',
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+        winston.format.json()
+      )
     })
   ]
 });

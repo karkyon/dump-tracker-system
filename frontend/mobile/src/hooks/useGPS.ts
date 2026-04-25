@@ -22,6 +22,7 @@ import {
   isValidCoordinate 
 } from '../utils/helpers';
 import { apiService as mobileApi } from '../services/api';
+import { logGPSEvent } from '../utils/gpsLogger'; // ✅ Log-FE-1
 import { toast } from 'react-hot-toast';
 
 // GPSログデータ型定義
@@ -183,6 +184,11 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     // ✅ Fix-4A: accuracy > 100m の座標はバックエンドに送信しない（屋内誤差防止）
     if (position.coords.accuracy > 100) {
       console.warn(`⚠️ [Fix-4A] GPS送信スキップ: 精度不足 accuracy=${position.coords.accuracy.toFixed(0)}m (上限:100m)`);
+      logGPSEvent({ type: 'ACCURACY_FILTER',
+        lat: position.coords.latitude, lng: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        detail: { threshold: 100, stage: 'sendGPSData' }
+      });
       return;
     }
     try {
@@ -200,6 +206,14 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       };
       await mobileApi.updateGPSLocation(gpsData);
       console.log('✅ GPS data sent successfully');
+      logGPSEvent({ type: 'API_SUCCESS',
+        lat: position.coords.latitude, lng: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        speed: metadata.speed,
+        totalDistanceKm: metadata.totalDistance,
+        operationId: options.operationId,
+        detail: { totalDistanceKm: gpsData.totalDistanceKm }
+      });
     } catch (error) {
       console.error('❌ GPS データ送信エラー:', error);
     }
@@ -221,6 +235,11 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     // テスト環境や屋内での誤った走行距離（数百km）を防ぐためのガード
     if (coords.accuracy > 150) {
       console.warn(`⚠️ [Fix-4B] GPS位置更新スキップ: 精度不足 accuracy=${coords.accuracy.toFixed(0)}m (上限:150m) — この座標は記録しません`);
+      logGPSEvent({ type: 'ACCURACY_FILTER',
+        lat: coords.latitude, lng: coords.longitude,
+        accuracy: coords.accuracy,
+        detail: { threshold: 150, stage: 'handlePositionUpdate' }
+      });
       return;
     }
 
@@ -398,6 +417,12 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
         setTotalDistance(prev => {
           const newTotal = prev + distance;
           console.log(`🛣️ 総走行距離: ${newTotal.toFixed(3)}km`);
+          logGPSEvent({ type: 'DISTANCE_ADD',
+            lat: newPosition.coords.latitude, lng: newPosition.coords.longitude,
+            accuracy: currentAccuracy, speed: smoothedSpeed,
+            distanceDeltaKm: distance, totalDistanceKm: newTotal,
+            operationId: options.operationId
+          });
           return newTotal;
         });
         
