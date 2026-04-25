@@ -20,6 +20,7 @@ import logger from '../utils/logger';
 
 // 🎯 完成済みservices層との密連携
 import { getDebugService } from '../services/debugService';
+import { DatabaseService } from '../utils/database';
 
 // 🎯 types/からの統一型定義インポート
 import type { AuthenticatedRequest } from '../types/auth';
@@ -438,6 +439,205 @@ logger.info('✅ routes/debugRoutes.ts 完全修正版 統合完了', {
   middleware: 'auth + asyncHandler + DEBUG integrated',
   timestamp: new Date().toISOString()
 });
+
+
+
+// ============================================================
+// ✅ GPS Inspector API (ADMIN専用) — Session 11
+// ============================================================
+
+router.get(
+  '/gps/recent-operations',
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const limit = Math.min(parseInt(String(req.query.limit || '20')), 50);
+    const prisma = DatabaseService.getInstance();
+    const operations = await prisma.operation.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true, operationNumber: true, status: true,
+        actualStartTime: true, actualEndTime: true,
+        totalDistanceKm: true, startOdometer: true, endOdometer: true,
+        vehicles: { select: { plateNumber: true, model: true } },
+        usersOperationsDriverIdTousers: { select: { name: true } },
+        _count: { select: { gpsLogs: true } }
+      }
+    });
+    return sendSuccess(res as any, operations.map((op: any) => ({
+      id: op.id, operationNumber: op.operationNumber, status: op.status,
+      actualStartTime: op.actualStartTime, actualEndTime: op.actualEndTime,
+      totalDistanceKm: op.totalDistanceKm ? Number(op.totalDistanceKm) : null,
+      startOdometer: op.startOdometer ? Number(op.startOdometer) : null,
+      endOdometer: op.endOdometer ? Number(op.endOdometer) : null,
+      gpsLogCount: op._count.gpsLogs,
+      vehiclePlate: op.vehicles?.plateNumber ?? null,
+      driverName: op.usersOperationsDriverIdTousers?.name ?? null
+    })), '最近の運行一覧を取得しました');
+  })
+);
+
+router.get(
+  '/gps/operation/:operationId',
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const { operationId } = req.params as { operationId: string };
+    const prisma = DatabaseService.getInstance();
+
+    const operation = await prisma.operation.findUnique({
+      where: { id: operationId },
+      include: {
+        vehicles: { select: { id: true, plateNumber: true, model: true, currentMileage: true } },
+        usersOperationsDriverIdTousers: { select: { id: true, name: true, username: true } },
+        customer: { select: { id: true, name: true } }
+      }
+    });
+    if (!operation) {
+      return sendError(res as any, '運行が見つかりません', 404);
+    }
+
+    const gpsLogs = await prisma.gpsLog.findMany({
+      where: { operationId },
+      orderBy: { recordedAt: 'asc' },
+      select: {
+        id: true, latitude: true, longitude: true,
+        accuracyMeters: true, speedKmh: true, heading: true,
+        altitude: true, recordedAt: true, createdAt: true,
+        operationId: true, vehicleId: true
+      }
+    });
+
+    const nullOpCount = await prisma.gpsLog.count({ where: { operationId: null } });
+
+    const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2
+        + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    };
+
+    let totalKm = 0;
+    let noiseKm = 0;
+    const logsWithDelta = gpsLogs.map((log: any, i: number) => {
+      const prev = gpsLogs[i - 1] as any;
+      let deltaKm = 0;
+      let isNoise = false;
+      if (prev) {
+        deltaKm = haversineKm(
+          Number(prev.latitude), Number(prev.longitude),
+          Number(log.latitude),  Number(log.longitude)
+        );
+        isNoise = deltaKm < 0.01;
+        if (!isNoise) totalKm += deltaKm; else noiseKm += deltaKm;
+      }
+      return {
+        id: log.id,
+        latitude: Number(log.latitude),
+        longitude: Number(log.longitude),
+        accuracyMeters: log.accuracyMeters ? Number(log.accuracyMeters) : null,
+        speedKmh:       log.speedKmh       ? Number(log.speedKmh)       : null,
+        heading:        log.heading        ? Number(log.heading)        : null,
+        altitude:       log.altitude       ? Number(log.altitude)       : null,
+        recordedAt:   log.recordedAt,
+        operationId:  log.operationId,
+        vehicleId:    log.vehicleId,
+        deltaKm:       parseFloat(deltaKm.toFixed(5)),
+        isNoise,
+        cumulativeKm:  parseFloat(totalKm.toFixed(3))
+      };
+    });
+
+    const accVals = gpsLogs
+      .map((l: any) => (l.accuracyMeters ? Number(l.accuracyMeters) : null))
+      .filter((v: number | null): v is number => v !== null);
+
+    const accuracyStats = accVals.length > 0 ? {
+      min:     String(Math.min(...accVals).toFixed(1)),
+      max:     String(Math.max(...accVals).toFixed(1)),
+      avg:     String((accVals.reduce((s: number, v: number) => s + v, 0) / accVals.length).toFixed(1)),
+      over100m: accVals.filter((v: number) => v > 100).length,
+      over150m: accVals.filter((v: number) => v > 150).length,
+    } : null;
+
+    return sendSuccess(res as any, {
+      operation: {
+        id: operation.id,
+        operationNumber: operation.operationNumber,
+        status: operation.status,
+        actualStartTime: operation.actualStartTime,
+        actualEndTime: operation.actualEndTime,
+        totalDistanceKm: operation.totalDistanceKm ? Number(operation.totalDistanceKm) : null,
+        startOdometer:   operation.startOdometer   ? Number(operation.startOdometer)   : null,
+        endOdometer:     operation.endOdometer     ? Number(operation.endOdometer)     : null,
+        vehicle: operation.vehicles,
+        driver:  operation.usersOperationsDriverIdTousers,
+        customer: operation.customer
+      },
+      gpsLogs: logsWithDelta,
+      diagnostics: {
+        totalLogs: gpsLogs.length,
+        logsWithOperationId:    gpsLogs.filter((l: any) =>  l.operationId).length,
+        logsWithoutOperationId: gpsLogs.filter((l: any) => !l.operationId).length,
+        nullOperationCountInDB: nullOpCount,
+        accuracyStats,
+        distanceCalc: {
+          totalDistanceKm:   parseFloat(totalKm.toFixed(3)),
+          noiseSkippedKm:    parseFloat(noiseKm.toFixed(5)),
+          noiseSegments:     logsWithDelta.filter((l: any) => l.isNoise).length,
+          dbTotalDistanceKm: operation.totalDistanceKm ? Number(operation.totalDistanceKm) : null,
+        },
+        filters: {
+          fix4A_sendThreshold:    '100m (フロント送信スキップ)',
+          fix4B_updateThreshold:  '150m (フロント距離計算スキップ)',
+          fix1_dbSaveThreshold:   '150m (バックエンドDB保存スキップ)',
+          fixS11_3_noiseFilter:   '10m未満 (バックエンド距離計算スキップ)',
+          fix5A_maximumAge:       '0ms (キャッシュ無効)',
+          fix5C_minDistance:      '10m (フロント最小移動距離)',
+          bug031_enableLogging:   'enableLogging=true (useGPS必須オプション)',
+        }
+      }
+    }, 'GPS診断データ取得完了');
+  })
+);
+
+router.get(
+  '/gps/logs',
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const lines = Math.min(parseInt(String(req.query.lines || '200')), 1000);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodePath = require('path') as typeof import('path');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    const logPath = nodePath.join(process.cwd(), 'logs', 'gps.log');
+
+    if (!fs.existsSync(logPath)) {
+      return sendSuccess(res as any, {
+        entries: [], totalLines: 0, returnedLines: 0,
+        message: 'gps.logが存在しません。dt-restart後に運行を実行してください。',
+        logPath
+      });
+    }
+
+    const content = fs.readFileSync(logPath, 'utf-8');
+    const allLines = content.split('\n').filter((l: string) => l.trim());
+    const recentLines = allLines.slice(-lines);
+    const entries = recentLines.map((line: string) => {
+      try { return JSON.parse(line) as object; }
+      catch { return { raw: line }; }
+    });
+
+    return sendSuccess(res as any, {
+      totalLines: allLines.length,
+      returnedLines: recentLines.length,
+      logPath,
+      entries
+    });
+  })
+);
+
 
 export default router;
 

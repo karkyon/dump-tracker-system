@@ -101,6 +101,13 @@ export const NAVIGATION_ITEMS = [
     path: '/settings',
     icon: 'Settings'
   },
+  {
+    id: 'gps-inspector',
+    name: 'GPS Inspector',
+    path: '/gps-inspector',
+    icon: 'Satellite',
+    adminOnly: true
+  },
   // デバッグメニュー（管理者専用）
   {
     id: 'debug',

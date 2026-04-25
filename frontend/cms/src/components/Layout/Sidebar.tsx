@@ -24,6 +24,7 @@ import {
   Bug,
   AlertTriangle,
   Building2,
+  Satellite,
 } from 'lucide-react';
 import { NAVIGATION_ITEMS } from '../../utils/constants';
 import { useAuthStore } from '../../store/authStore';  // ✅ 認証ストア追加
@@ -49,6 +50,7 @@ const iconMap: Record<string, LucideIcon> = {
   Bug:          Bug,
   AlertTriangle: AlertTriangle,
   Building2: Building2,
+  Satellite: Satellite,
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
