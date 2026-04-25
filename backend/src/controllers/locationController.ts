@@ -552,7 +552,14 @@ class LocationController {
     if (!value) return undefined;
 
     const types = Array.isArray(value) ? value : [value];
-    const validTypes: LocationType[] = ['DEPOT', 'DESTINATION', 'REST_AREA', 'FUEL_STATION'];
+    // ✅ Fix-B: PICKUP / DELIVERY / BOTH を追加
+    // 修正前は DEPOT/DESTINATION/REST_AREA/FUEL_STATION のみで
+    // CMS登録時に使用する PICKUP/DELIVERY/BOTH が全てフィルタ除外され
+    // モバイルの近隣地点検索が常に0件になっていた
+    const validTypes: LocationType[] = [
+      'DEPOT', 'DESTINATION', 'REST_AREA', 'FUEL_STATION',
+      'PICKUP', 'DELIVERY', 'BOTH'   // ✅ Fix-B: CMS登録タイプを追加
+    ];
 
     return types
       .filter((t: string) => validTypes.includes(t as LocationType))

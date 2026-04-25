@@ -447,37 +447,16 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       //          Edge の Tracking Prevention による localStorage ブロック対策
       // =====================================================================
       if (routeGpsLogs.length > 0) {
-        // インターバル設定（localStorage から読めれば使用、ブロックされたらデフォルト5分）
-        let intervalMinutes = 5;
-        try {
-          const rawSettings = localStorage.getItem('dump_tracker_gps_track_settings');
-          if (rawSettings) {
-            const parsed = JSON.parse(rawSettings);
-            intervalMinutes = parsed.intervalMinutes ?? 5;
-          }
-        } catch {
-          // localStorage が Tracking Prevention でブロックされた場合はデフォルト値を使用
-          console.info('ℹ️ [Map Debug] localStorage unavailable, using default interval (5min)');
-        }
-
-        const intervalMs = intervalMinutes * 60 * 1000;
-
-        // インターバルフィルター: 前のポイントから指定時間以上経過したもののみ残す
-        const filtered: typeof routeGpsLogs = [];
-        let lastTime = 0;
-        for (const log of routeGpsLogs) {
-          const t = new Date(log.recordedAt).getTime();
-          if (filtered.length === 0 || t - lastTime >= intervalMs) {
-            filtered.push(log);
-            lastTime = t;
-          }
-        }
-
-        console.log(`📡 [Map Debug] routeGpsLogs: ${routeGpsLogs.length}件 → フィルタ後: ${filtered.length}件 (interval: ${intervalMinutes}分)`);
+        // ✅ Fix-A: インターバルフィルターを廃止し全GPS点を描画
+        // 理由: デフォルト5分間隔フィルタにより数件しか描画されず
+        //       「三角形軌跡」になっていた。DBにある全点を描画する。
+        // 「描画インターバル設定」はシステム設定で引き続き保持するが
+        // ここでは使用せず常に全点描画とする。
+        console.log(`📡 [Map Debug] routeGpsLogs全点描画: ${routeGpsLogs.length}件`);
 
         // 走行軌跡ライン（青色・視認しやすく）
         new google.maps.Polyline({
-          path: filtered.map(p => ({ lat: p.latitude, lng: p.longitude })),
+          path: routeGpsLogs.map(p => ({ lat: p.latitude, lng: p.longitude })),
           geodesic: true,
           strokeColor: '#2563EB',  // blue-600
           strokeOpacity: 0.75,
@@ -486,7 +465,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         });
 
         // 走行軌跡ポイント（小さい青ドット）
-        filtered.forEach(log => {
+        routeGpsLogs.forEach(log => {
           new google.maps.Marker({
             position: { lat: log.latitude, lng: log.longitude },
             map: map,
@@ -502,7 +481,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           });
         });
 
-        console.log('✅ [Map Debug] 走行軌跡描画完了:', filtered.length, '点');
+        console.log('✅ [Map Debug] 走行軌跡描画完了:', routeGpsLogs.length, '点');
       } else {
         console.log('ℹ️ [Map Debug] routeGpsLogs なし - 走行軌跡描画スキップ');
       }
