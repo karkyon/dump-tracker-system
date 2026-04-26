@@ -79,6 +79,7 @@ const GpsInspector: React.FC = () => {
   const [logLoading, setLogLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'db'|'log'|'compare'>('db');
   const [showAllLogs, setShowAllLogs] = useState(false);
+  const [showOpList, setShowOpList] = useState(false); // 運行一覧の折り畳み制御
   const [error, setError] = useState('');
 
   // 最近の運行一覧取得
@@ -204,11 +205,18 @@ const GpsInspector: React.FC = () => {
           </button>
         </div>
 
-        {/* 最近の運行リスト */}
+        {/* 最近の運行リスト — 折り畳み対応 */}
         {recentOps.length > 0 && (
           <div className="mt-3">
-            <p className="text-xs text-gray-500 mb-2">最近の運行一覧（クリックで選択）:</p>
-            <div className="overflow-x-auto">
+            <button
+              onClick={() => setShowOpList(prev => !prev)}
+              className="flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-800 mb-2 select-none"
+            >
+              <span>{showOpList ? '▼' : '▶'}</span>
+              <span>最近の運行一覧（クリックで選択）: {recentOps.length}件</span>
+              <span className="text-gray-400">{showOpList ? '（クリックで閉じる）' : '（クリックで開く）'}</span>
+            </button>
+            {showOpList && <div className="overflow-x-auto">
               <table className="text-xs w-full border-collapse">
                 <thead>
                   <tr className="bg-gray-50">
@@ -246,7 +254,7 @@ const GpsInspector: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
           </div>
         )}
       </div>
