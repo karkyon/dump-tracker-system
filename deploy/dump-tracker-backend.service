@@ -1,0 +1,17 @@
+[Unit]
+Description=Dump Tracker Backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=karkyon_dump
+WorkingDirectory=/home/karkyon_dump/projects/dump-tracker/backend
+ExecStart=/home/karkyon_dump/.nvm/versions/node/v20.19.6/bin/node dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/karkyon_dump/projects/dump-tracker/backend/logs/combined.log
+StandardError=append:/home/karkyon_dump/projects/dump-tracker/backend/logs/combined.log
+Environment=NODE_ENV=staging
+
+[Install]
+WantedBy=multi-user.target
