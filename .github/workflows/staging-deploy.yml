@@ -62,7 +62,7 @@ jobs:
             sudo -u postgres psql dump_tracker_staging -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             rm -rf /tmp/backend-deploy
             rm -rf /tmp/backend-deploy
-            nohup bash -c 'sleep 3 && pkill -f "ts-node src/index.ts" 2>/dev/null; sleep 2; cd ~/projects/dump-tracker/backend && nohup npx ts-node src/index.ts >> logs/combined.log 2>&1 &' > /tmp/restart.log 2>&1 &
+            nohup bash -c 'sleep 3 && pkill -f "ts-node src/index.ts" 2>/dev/null; sleep 2; cd ~/projects/dump-tracker/backend && nohup node dist/index.js >> logs/combined.log 2>&1 &' > /tmp/restart.log 2>&1 &
             disown
             echo "✅ Backend restart scheduled"
 
