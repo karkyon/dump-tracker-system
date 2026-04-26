@@ -50,7 +50,9 @@ const PostTripInspection: React.FC = () => {
     driverId,
     resetOperation,
     // ✅ Fix-S11-8: フロント累積走行距離をendOperation送信に含める
-    totalDistanceKm: storedTotalDistanceKm
+    totalDistanceKm: storedTotalDistanceKm,
+    // ✅ BUG-044: 開始時走行距離（逆転チェック用）
+    startMileage
   } = useOperationStore();
   
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>([]);
@@ -233,6 +235,20 @@ const PostTripInspection: React.FC = () => {
       // ============================================
       if (!endOdometer) {
         toast.error('運行終了時の走行距離を入力してください');
+        return;
+      }
+
+      // ✅ BUG-044: 開始時走行距離との逆転チェック
+      if (startMileage !== null && startMileage !== undefined && endOdometer <= startMileage) {
+        toast.error(
+          `終了時の走行距離（${endOdometer} km）が開始時（${startMileage} km）以下です。\n正しい値を入力してください。`,
+          { duration: 6000 }
+        );
+        console.error('[D8] ❌ BUG-044: オドメーター逆転検知', {
+          startMileage,
+          endOdometer,
+          diff: endOdometer - startMileage
+        });
         return;
       }
 
@@ -524,16 +540,40 @@ const PostTripInspection: React.FC = () => {
               <span className="text-red-600">*</span> 運行終了時の走行距離 (km)
             </span>
           </label>
+          {/* ✅ BUG-044: 開始時距離の参考表示 */}
+          {startMileage !== null && startMileage !== undefined && (
+            <div className="mb-2 px-3 py-2 bg-amber-100 rounded-lg text-sm text-amber-800 font-medium">
+              📍 運行開始時の走行距離: <strong>{startMileage.toLocaleString()} km</strong>
+              　→ 終了時はこの値より大きい値を入力してください
+            </div>
+          )}
           <input
             type="number"
             step="0.1"
             value={endOdometer || ''}
-            onChange={(e) => setEndOdometer(e.target.value ? parseFloat(e.target.value) : null)}
-            placeholder="例: 12567.5"
-            className="w-full px-4 py-3 text-lg font-semibold border-2 border-amber-300 rounded-lg
-              focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200
-              transition-all duration-200"
+            onChange={(e) => {
+              const val = e.target.value ? parseFloat(e.target.value) : null;
+              setEndOdometer(val);
+            }}
+            placeholder={startMileage ? `${startMileage} より大きい値` : '例: 12567.5'}
+            className={`w-full px-4 py-3 text-lg font-semibold border-2 rounded-lg
+              focus:outline-none focus:ring-2 transition-all duration-200
+              ${endOdometer !== null && startMileage !== null && startMileage !== undefined && endOdometer <= startMileage
+                ? 'border-red-400 focus:border-red-500 focus:ring-red-200 bg-red-50'
+                : 'border-amber-300 focus:border-amber-500 focus:ring-amber-200'
+              }`}
           />
+          {/* ✅ BUG-044: リアルタイム逆転エラー表示 */}
+          {endOdometer !== null && startMileage !== null && startMileage !== undefined && endOdometer <= startMileage && (
+            <p className="text-xs text-red-600 font-bold mt-1">
+              ⚠️ 終了距離（{endOdometer} km）が開始距離（{startMileage} km）以下です！正しい値を入力してください。
+            </p>
+          )}
+          {endOdometer !== null && startMileage !== null && startMileage !== undefined && endOdometer > startMileage && (
+            <p className="text-xs text-green-600 font-bold mt-1">
+              ✅ 走行距離: {(endOdometer - startMileage).toFixed(1)} km
+            </p>
+          )}
           <p className="text-xs text-gray-600 mt-2">
             ※ 開始時からの走行距離を自動計算するため、正確な値を入力してください
           </p>
@@ -584,7 +624,7 @@ const PostTripInspection: React.FC = () => {
         <div className="space-y-3">
           <button
             onClick={handleComplete}
-            disabled={isLoading || !allChecked || !endOdometer}
+            disabled={isLoading || !allChecked || !endOdometer || (startMileage !== null && startMileage !== undefined && endOdometer !== null && endOdometer <= startMileage)}
             className="w-full bg-gradient-to-r from-green-500 to-green-600 
               hover:from-green-600 hover:to-green-700 
               disabled:from-gray-400 disabled:to-gray-500

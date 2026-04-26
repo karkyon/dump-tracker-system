@@ -352,6 +352,34 @@ export class MobileController {
         });
       }
 
+      // ✅ BUG-044: バックエンド側でも startOdometer との逆転チェック
+      // フロント未通過の場合（API直接呼び出し等）の防衛コード
+      if (validEndOdometer !== undefined) {
+        const currentOp = await (async () => {
+          try {
+            const prisma = (this as any).tripService?.operationService?.prisma
+              || require('../utils/database').DatabaseService.getInstance();
+            return await prisma.operation.findUnique({
+              where: { id: tripId },
+              select: { startOdometer: true }
+            });
+          } catch { return null; }
+        })();
+        if (currentOp?.startOdometer !== null && currentOp?.startOdometer !== undefined) {
+          const startOdo = Number(currentOp.startOdometer);
+          if (validEndOdometer <= startOdo) {
+            logger.warn('🛣️ [BUG-044] ❌ endOdometer が startOdometer 以下のため拒否', {
+              startOdometer: startOdo, endOdometer: validEndOdometer, tripId
+            });
+            sendError(res,
+              `終了走行距離(${validEndOdometer}km)が開始走行距離(${startOdo}km)以下です。正しい値を入力してください。`,
+              400, 'ODOMETER_REVERSED'
+            );
+            return;
+          }
+        }
+      }
+
       const endTripData: EndTripRequest = {
         endTime: req.body.endTime ? new Date(req.body.endTime) : new Date(),
         endLocation: req.body.endPosition ? { // ✅ 修正: endPosition → endLocation
