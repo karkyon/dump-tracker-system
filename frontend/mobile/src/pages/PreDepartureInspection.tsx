@@ -48,6 +48,7 @@ const PreDepartureInspection: React.FC = () => {
     startOperation 
   } = useOperationStore();
   const customerId = useOperationStore(s => s.customerId);
+  const startMileageFromStore = useOperationStore(s => s.startMileage); // ✅ BUG-035
   
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -242,13 +243,16 @@ const PreDepartureInspection: React.FC = () => {
 
       // 2. 運行開始
       console.log('[D3] 運行開始API呼び出し');
+      // ✅ BUG-034修正: デフォルト座標を送らない（GPS未取得時はnullを送る）
+      // ✅ BUG-035修正: startOdometer を送信してDBに保存
       const operationResponse = await apiService.startOperation({
         vehicleId,
         driverId,
-        customerId: customerId || undefined,  // ✅ 客先ID追加
-        startLatitude: 35.6812,
-        startLongitude: 139.7671,
-        startLocation: '車庫',
+        customerId: customerId || undefined,
+        // startLatitude/startLongitude は送らない (デフォルト座標は387km誤差の元凶)
+        // 実際のGPS座標は useGPS フックが運行開始後に随時送信する
+        startOdometer: startMileageFromStore || undefined,  // ✅ BUG-035: startOdometer追加
+        startLocation: '出発地点',
         cargoInfo: ''
       });
 

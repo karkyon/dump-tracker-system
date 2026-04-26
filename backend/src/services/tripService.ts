@@ -193,8 +193,10 @@ class TripService {
           ? new Date(request.actualStartTime)
           : request.actualStartTime,
         notes: request.notes,
-        customerId: request.customerId  // 🆕 客先ID
-      };
+        customerId: request.customerId,  // 🆕 客先ID
+        // ✅ BUG-035: startOdometer を引き継ぎ
+        ...(request.startOdometer !== undefined && { startOdometer: request.startOdometer })
+      } as any;
       logger.info('✅ [LINE 12] リクエストマッピング完了', { startTripRequest });
 
       // 運行開始（operationService 呼び出し）
@@ -478,20 +480,34 @@ class TripService {
 
       // ✅ 修正(課題4) + Fix-S11-6: オドメーター未提供の場合のフォールバック優先度
       // 優先度: 1.オドメーター差分 > 2.フロント送信値 > 3.バックエンドGPS再計算値
+      // ✅ BUG-036修正: GPS再計算距離の妥当性チェック（デフォルト座標由来の異常距離を除外）
+      const MAX_REASONABLE_DISTANCE_KM = 200; // 200km超は異常値と判定
+      const isValidGpsCalcDistance = statistics.totalDistance > 0
+        && statistics.totalDistance < MAX_REASONABLE_DISTANCE_KM;
+      
       if (!updateData.totalDistanceKm) {
-        if ((request as any).totalDistanceKm && (request as any).totalDistanceKm > 0) {
+        if ((request as any).totalDistanceKm && (request as any).totalDistanceKm > 0
+            && (request as any).totalDistanceKm < MAX_REASONABLE_DISTANCE_KM) {
           updateData.totalDistanceKm = (request as any).totalDistanceKm;
           logger.info('🛣️ [GPS-DIST] フロント計算GPS距離をtotalDistanceKmに採用', {
             source: 'frontend_useGPS',
             totalDistanceKm: (request as any).totalDistanceKm
           });
-        } else if (statistics.totalDistance > 0) {
+        } else if (isValidGpsCalcDistance) {
           updateData.totalDistanceKm = statistics.totalDistance;
           logger.info('🛣️ [GPS-DIST] バックエンドGPS再計算距離をtotalDistanceKmに採用', {
             source: 'backend_recalc',
             totalDistance: statistics.totalDistance
           });
         } else {
+          if (statistics.totalDistance >= MAX_REASONABLE_DISTANCE_KM) {
+            logger.warn('🛣️ [GPS-DIST] ⚠️ バックエンドGPS再計算距離が異常値のためスキップ', {
+              totalDistance: statistics.totalDistance,
+              threshold: MAX_REASONABLE_DISTANCE_KM,
+              operationId: tripId,
+              cause: 'デフォルト座標(35.6812/139.7671)が混入している可能性あり'
+            });
+          }
           logger.warn('🛣️ [GPS-DIST] ⚠️ totalDistanceKm 計算不能 — GPS記録なし・オドメーターなし', {
             operationId: tripId,
             endOdometerProvided: !!request.endOdometer,

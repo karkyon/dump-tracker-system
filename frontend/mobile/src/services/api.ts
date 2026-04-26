@@ -54,8 +54,9 @@ export interface LoginResponse {
 export interface StartOperationRequest {
   vehicleId: string;
   driverId: string;
-  startLatitude: number;
-  startLongitude: number;
+  startLatitude?: number;   // ✅ BUG-034: オプション化（デフォルト座標送信廃止）
+  startLongitude?: number;  // ✅ BUG-034: オプション化
+  startOdometer?: number;   // ✅ BUG-035: 開始オドメーター追加
   startLocation?: string;
   cargoInfo?: string;
   customerId?: string;   // 🆕 客先ID

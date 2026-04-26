@@ -263,7 +263,13 @@ export class MobileController {
         driverId: req.user.userId,
         actualStartTime: new Date(),
         notes: req.body.notes,
-        startLocation: req.body.startLatitude && req.body.startLongitude ? {
+        // ✅ BUG-035: startOdometer をDBに保存（VehicleInfo.tsxで入力した値）
+        startOdometer: req.body.startOdometer ? Number(req.body.startOdometer) : undefined,
+        // ✅ BUG-034修正: startLatitude/Longitude が送られた場合のみGPS記録
+        // デフォルト座標(35.6812/139.7671)が送られていないか精度チェック
+        startLocation: req.body.startLatitude && req.body.startLongitude
+          && !(Math.abs(Number(req.body.startLatitude) - 35.6812) < 0.001
+               && Math.abs(Number(req.body.startLongitude) - 139.7671) < 0.001) ? {
           latitude: req.body.startLatitude,
           longitude: req.body.startLongitude,
           accuracy: req.body.gpsAccuracy || 10,

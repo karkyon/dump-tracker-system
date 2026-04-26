@@ -141,16 +141,16 @@ const SystemSettings: React.FC = () => {
     enableUserActionLogging:   true,
   });
 
-  // ✅ GPS走行軌跡表示設定（localStorage永続化）
+  // ✅ GPS走行軌跡記録設定（localStorage永続化）
   const [gpsTrackSettings, setGpsTrackSettings] = useState<{
-    showTrack: boolean;
-    intervalMinutes: number;
+    enableRecording: boolean;
+    intervalSeconds: number;
   }>(() => {
     try {
       const raw = localStorage.getItem(GPS_TRACK_KEY);
-      return raw ? JSON.parse(raw) : { showTrack: false, intervalMinutes: 5 };
+      return raw ? JSON.parse(raw) : { enableRecording: true, intervalSeconds: 3 };
     } catch {
-      return { showTrack: false, intervalMinutes: 5 };
+      return { enableRecording: true, intervalSeconds: 3 };
     }
   });
 
@@ -696,59 +696,65 @@ const SystemSettings: React.FC = () => {
             />
           </div>
 
-          {/* GPS走行軌跡表示設定カード */}
+          {/* GPS走行軌跡記録設定カード */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-2">GPS走行軌跡表示設定</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-2">GPS走行軌跡記録設定</h2>
 
             <div className="space-y-4">
-              {/* 走行軌跡を表示するトグル */}
+              {/* 走行軌跡を記録するトグル */}
               <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">走行軌跡を表示する</p>
-                  <p className="text-xs text-gray-500">GPSログに基づく走行ルートを地図上に描画します</p>
+                  <p className="text-sm font-medium text-gray-900">走行軌跡を記録する</p>
+                  <p className="text-xs text-gray-500">インターバルで設定された間隔でGPS位置情報をサーバへ送信します</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setGpsTrackSettings({
                     ...gpsTrackSettings,
-                    showTrack: !gpsTrackSettings.showTrack,
+                    enableRecording: !gpsTrackSettings.enableRecording,
                   })}
                   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    gpsTrackSettings.showTrack ? 'bg-blue-600' : 'bg-gray-200'
+                    gpsTrackSettings.enableRecording ? 'bg-blue-600' : 'bg-gray-200'
                   }`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      gpsTrackSettings.showTrack ? 'translate-x-5' : 'translate-x-0'
+                      gpsTrackSettings.enableRecording ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
                 </button>
               </div>
 
-              {/* 描画インターバル */}
-              <div className={`${gpsTrackSettings.showTrack ? '' : 'opacity-50 pointer-events-none'}`}>
+              {/* 記録インターバル */}
+              <div className={`${gpsTrackSettings.enableRecording ? '' : 'opacity-50 pointer-events-none'}`}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  描画インターバル
+                  記録インターバル
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  何分間隔のGPS座標を描画するかを設定します。短いほど詳細になりますが表示が重くなります。
+                  設定された間隔でGPS座標をサーバへ送信します。短いほど軌跡が詳細になります。
                 </p>
                 <div className="flex items-center gap-2">
                   <select
-                    value={gpsTrackSettings.intervalMinutes}
+                    value={gpsTrackSettings.intervalSeconds}
                     onChange={(e) => setGpsTrackSettings({
                       ...gpsTrackSettings,
-                      intervalMinutes: parseInt(e.target.value),
+                      intervalSeconds: parseInt(e.target.value),
                     })}
                     className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value={1}>1分間隔</option>
-                    <option value={3}>3分間隔</option>
-                    <option value={5}>5分間隔（推奨）</option>
-                    <option value={10}>10分間隔</option>
-                    <option value={15}>15分間隔</option>
+                    <option value={1}>1秒間隔</option>
+                    <option value={3}>3秒間隔（推奨）</option>
+                    <option value={5}>5秒間隔</option>
+                    <option value={10}>10秒間隔</option>
+                    <option value={15}>15秒間隔</option>
+                    <option value={30}>30秒間隔</option>
+                    <option value={45}>45秒間隔</option>
+                    <option value={60}>60秒間隔</option>
+                    <option value={180}>3分間隔</option>
+                    <option value={300}>5分間隔</option>
+                    <option value={600}>10分間隔</option>
                   </select>
-                  <span className="text-sm text-gray-500">ごとにGPS点を表示</span>
+                  <span className="text-sm text-gray-500">ごとにGPS点を記録</span>
                 </div>
               </div>
             </div>

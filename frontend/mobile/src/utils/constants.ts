@@ -8,7 +8,23 @@
 
 export const GPS_CONFIG = {
   // GPS更新間隔（ミリ秒）
-  UPDATE_INTERVAL: parseInt(import.meta.env.VITE_GPS_UPDATE_INTERVAL || '5000', 10),
+  // ✅ Session12: CMS設定(intervalSeconds)から動的読み込み。未設定時は3秒
+  get UPDATE_INTERVAL(): number {
+    try {
+      const raw = localStorage.getItem('dump_tracker_gps_track_settings');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.intervalSeconds && typeof s.intervalSeconds === 'number') {
+          return s.intervalSeconds * 1000;
+        }
+        // 旧フォーマット互換
+        if (s.intervalMinutes && typeof s.intervalMinutes === 'number') {
+          return s.intervalMinutes * 60 * 1000;
+        }
+      }
+    } catch { /* ignore */ }
+    return parseInt(import.meta.env.VITE_GPS_UPDATE_INTERVAL || '3000', 10);
+  },
   
   // GPS高精度モード
   ENABLE_HIGH_ACCURACY: true,

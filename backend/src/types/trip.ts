@@ -60,6 +60,7 @@ export interface CreateTripRequest {
   driverId?: string;
   actualStartTime: Date | string;
   notes?: string;
+  startOdometer?: number;  // ✅ BUG-035: 運行開始オドメーター値
   // 位置情報オプション
   startLocation?: {
     latitude: number;
