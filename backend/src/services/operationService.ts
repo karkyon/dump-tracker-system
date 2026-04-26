@@ -263,11 +263,13 @@ export class OperationService {
         operationNumber,
         vehicleId: request.vehicleId,
         driverId: request.driverId,
+        customerId: (request as any).customerId,          // ✅ BUG-041補足: 客先ID
         status: 'IN_PROGRESS' as OperationStatus,
         plannedStartTime: request.plannedStartTime || new Date(),
         actualStartTime: new Date(),
         plannedEndTime: request.plannedEndTime,
         notes: request.notes,
+        startOdometer: (request as any).startOdometer,   // ✅ BUG-041補足: startOdometerをDB保存
         createdAt: new Date(),
         updatedAt: new Date()
       };
