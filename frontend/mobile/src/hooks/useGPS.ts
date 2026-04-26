@@ -157,6 +157,11 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   const currentPositionRef = useRef<Position | null>(null);
   // BUG-020: iOS バックグラウンド復帰時のGPS再開用ref
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  // ✅ Session12: setIntervalでGPS送信を確実にインターバル制御
+  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 最新のGPS位置とmetadataを保持するref（setInterval内で参照するためref必須）
+  const latestPositionRef = useRef<GeolocationPosition | null>(null);
+  const latestMetadataRef = useRef<GPSMetadata | null>(null);
   const isTrackingRef = useRef<boolean>(false);
 
   const evaluateQuality = (acc: number): 'high' | 'medium' | 'low' | 'poor' => {
@@ -505,11 +510,15 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       createdAt: new Date()
     };
 
-    if (now - lastGPSUpdateRef.current > GPS_CONFIG.UPDATE_INTERVAL) {
-      setGpsLogs(prev => [...prev, gpsLog]);
-      sendGPSData(position, metadata);
-      lastGPSUpdateRef.current = now;
-    }
+    // ✅ Session12: 最新位置・metadataをrefに保存（setIntervalから参照）
+    latestPositionRef.current = position;
+    latestMetadataRef.current = metadata;
+    // GPS Logはローカル配列に追加（表示用）
+    setGpsLogs(prev => {
+      const next = [...prev, gpsLog];
+      return next.slice(-500); // 最大500件保持
+    });
+    // ※ 実際の送信は startGPSInterval の setInterval が担当
 
     previousPositionRef.current = currentPositionRef.current;
     currentPositionRef.current = newPosition;
@@ -555,6 +564,30 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     options.onError?.(error);
   };
 
+  // ✅ Session12: setInterval方式でGPS送信を確実制御
+  const startGPSInterval = useCallback(() => {
+    if (gpsIntervalRef.current) {
+      clearInterval(gpsIntervalRef.current);
+    }
+    const intervalMs = GPS_CONFIG.UPDATE_INTERVAL; // getterなので毎回最新値
+    console.log(`⏱️ [GPS-INTERVAL] GPS送信インターバル開始: ${intervalMs}ms (${intervalMs/1000}秒)`);
+    gpsIntervalRef.current = setInterval(() => {
+      const pos = latestPositionRef.current;
+      const meta = latestMetadataRef.current;
+      if (pos && meta) {
+        sendGPSData(pos, meta);
+      }
+    }, intervalMs);
+  }, []);
+
+  const stopGPSInterval = useCallback(() => {
+    if (gpsIntervalRef.current) {
+      clearInterval(gpsIntervalRef.current);
+      gpsIntervalRef.current = null;
+      console.log('⏹️ [GPS-INTERVAL] GPS送信インターバル停止');
+    }
+  }, []);
+
   const startTracking = useCallback(async (): Promise<void> => {
     if (!navigator.geolocation) {
       const errorMsg = 'このデバイスは位置情報をサポートしていません';
@@ -588,6 +621,8 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       );
       watchIdRef.current = watchId;
       startTimeRef.current = Date.now();
+    // ✅ Session12: setInterval GPS送信開始
+    startGPSInterval();
       lastGPSUpdateRef.current = Date.now();
       setIsTracking(true);
       isTrackingRef.current = true; // BUG-020: ref経由でvisibilitychangeから参照
@@ -718,6 +753,7 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       startTracking();
     }
     return () => {
+      stopGPSInterval(); // ✅ Session12
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
