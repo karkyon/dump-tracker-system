@@ -652,6 +652,8 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   }, [isTracking, options]);
 
   const stopTracking = useCallback(() => {
+    // ✅ BUG-040修正: setIntervalも確実に停止する
+    stopGPSInterval();
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;

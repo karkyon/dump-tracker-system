@@ -232,7 +232,8 @@ export interface StartTripOperationRequest {
   plannedRoute?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   notes?: string;
-  customerId?: string;  // 🆕 客先ID
+  customerId?: string;    // 🆕 客先ID
+  startOdometer?: number; // ✅ BUG-041修正: startOdometerをDB保存するため追加
 }
 
 // =====================================
@@ -654,11 +655,13 @@ export class OperationService {
         operationNumber: operationNumber,  // ✅ 修正: 生成した運行番号を明示的に指定
         vehicleId: request.vehicleId,      // ✅ 修正: 直接IDを指定
         driverId: request.driverId,        // ✅ 修正: 直接IDを指定
+        customerId: request.customerId,    // ✅ BUG-041修正: 客先ID
         status: 'IN_PROGRESS' as const,
         plannedStartTime: request.plannedStartTime || new Date(),
         actualStartTime: new Date(),       // ✅ 追加: 実際の開始時刻を設定
         plannedEndTime: request.plannedEndTime,
         notes: request.notes,
+        startOdometer: request.startOdometer, // ✅ BUG-041修正: startOdometerをDB保存
         createdAt: new Date(),
         updatedAt: new Date()
       };

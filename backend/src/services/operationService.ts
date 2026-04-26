@@ -81,6 +81,8 @@ export interface StartOperationRequest {
   plannedStartTime?: Date;
   plannedEndTime?: Date;
   notes?: string;
+  startOdometer?: number;  // ✅ BUG-041修正: startOdometerをDB保存するため追加
+  customerId?: string;     // ✅ BUG-041修正: customerId型定義追加
 }
 
 export interface EndOperationRequest {

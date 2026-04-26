@@ -132,6 +132,7 @@ const OperationRecord: React.FC = () => {
     currentPosition,
     isTracking,
     startTracking,
+    stopTracking,    // ✅ BUG-039修正: GPS停止用
     heading,
     speed: _gpsSpeed,
     totalDistance,
@@ -1177,6 +1178,10 @@ const OperationRecord: React.FC = () => {
     if (!window.confirm('降車時点検を実施します。よろしいですか?')) {
       return;
     }
+    // ✅ BUG-039修正: 降車時点検に遷移する前にGPS追跡を完全停止
+    // stopTracking()内でstopGPSInterval()+clearWatch()+isTrackingRef=false が実行される
+    stopTracking();
+    console.log('🛑 [BUG-039] 運行終了前GPS追跡停止完了');
     // 降車時点検画面に遷移
     navigate('/post-trip-inspection');
   };
