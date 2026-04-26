@@ -61,14 +61,9 @@ jobs:
             sudo -u postgres psql dump_tracker_staging -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo -u postgres psql dump_tracker_staging -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             # systemdサービスとして起動（自動再起動・VM再起動対応）
-            sudo cp /tmp/backend-deploy/dump-tracker-backend.service /etc/systemd/system/ 2>/dev/null || true
-            sudo systemctl daemon-reload 2>/dev/null || true
-            sudo systemctl enable dump-tracker-backend 2>/dev/null || true
-            pkill -f "node dist/index.js" 2>/dev/null || true
-            sleep 2
-            sudo systemctl restart dump-tracker-backend 2>/dev/null || true
+            sudo systemctl restart dump-tracker-backend
             sleep 3
-            sudo systemctl is-active dump-tracker-backend && echo "✅ systemd起動OK" || (nohup node dist/index.js >> logs/combined.log 2>&1 & disown && echo "✅ nohup起動OK")
+            sudo systemctl is-active dump-tracker-backend && echo "OK"
             rm -rf /tmp/backend-deploy
 
       # ===========================
