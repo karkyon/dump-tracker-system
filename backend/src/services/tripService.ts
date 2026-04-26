@@ -474,8 +474,23 @@ class TripService {
       };
 
       // ✅ 距離の自動計算
+      // ✅ BUG-043修正: マイナス距離の排除 + 逆転検知
       if (request.endOdometer && operation.startOdometer) {
-        updateData.totalDistanceKm = request.endOdometer - Number(operation.startOdometer);
+        const startOdo = Number(operation.startOdometer);
+        const endOdo   = Number(request.endOdometer);
+        const diff     = endOdo - startOdo;
+        if (diff > 0 && diff < 5000) {
+          // 正常範囲: 0超〜5000km未満
+          updateData.totalDistanceKm = diff;
+        } else {
+          // 逆転 or 異常値 → オドメーター差分は使わずフォールバックへ
+          logger.warn('🛣️ [GPS-DIST] ⚠️ BUG-043: オドメーター差分が異常値のためスキップ', {
+            startOdometer: startOdo,
+            endOdometer:   endOdo,
+            diff,
+            reason: diff <= 0 ? '逆転(endOdo <= startOdo)' : '差分が5000km超の異常値'
+          });
+        }
       }
 
       // ✅ 修正(課題4) + Fix-S11-6: オドメーター未提供の場合のフォールバック優先度

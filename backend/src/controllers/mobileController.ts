@@ -340,6 +340,18 @@ export class MobileController {
         return;
       }
 
+      // ✅ BUG-043修正: endOdometer のバリデーション（マイナスや文字列を除外）
+      const rawEndOdometer = req.body.endOdometer;
+      const validEndOdometer = rawEndOdometer !== undefined && rawEndOdometer !== null
+        && !isNaN(Number(rawEndOdometer)) && Number(rawEndOdometer) > 0
+        ? Number(rawEndOdometer)
+        : undefined;
+      if (rawEndOdometer !== undefined && validEndOdometer === undefined) {
+        logger.warn('🛣️ [BUG-043] endOdometer が無効値のためスキップ', {
+          rawEndOdometer, tripId
+        });
+      }
+
       const endTripData: EndTripRequest = {
         endTime: req.body.endTime ? new Date(req.body.endTime) : new Date(),
         endLocation: req.body.endPosition ? { // ✅ 修正: endPosition → endLocation
@@ -348,7 +360,7 @@ export class MobileController {
           address: req.body.endPosition.address
         } : undefined,
         notes: req.body.notes,
-        endOdometer: req.body.endOdometer, // ✅ 修正: PostTripInspectionが送るフィールド名に合わせる
+        endOdometer: validEndOdometer, // ✅ BUG-043修正: バリデーション済み値を使用
         // ✅ Fix-S11-6: フロント(useGPS)が計算した走行距離をフォールバックとして受け取る
         // endOdometer/startOdometer が未設定の場合、フロント計算値をtotalDistanceKmに使用
         ...(req.body.totalDistanceKm !== undefined && {
