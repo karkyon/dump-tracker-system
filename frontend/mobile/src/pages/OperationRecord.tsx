@@ -1626,10 +1626,60 @@ const OperationRecord: React.FC = () => {
                           {new Date(act.endTime).toTimeString().slice(0, 5)}
                         </div>
                       )}
-                      {isL && (act.customerName || detailOperationCustomerName || act.itemName) && (
+                      {isL && (() => {
+                          // ✅ BUG-051完全修正: NOTE(客先変更)アクティビティを時系列解析して
+                          // この積込時点での正確な客先名を逆算する
+                          const getCustomerAtTime = (loadingSeq: number): string => {
+                            // NOTE アクティビティから客先変更履歴を収集（sequenceNumber昇順）
+                            const changeHistory: { seq: number; to: string }[] = [];
+                            for (const a of [...detailActivities].sort(
+                              (x: any, y: any) => (x.sequenceNumber ?? 0) - (y.sequenceNumber ?? 0)
+                            )) {
+                              if ((a.activityType === 'NOTE' || a.activityType === 'OTHER') && a.notes) {
+                                // "客先変更: XXX → YYY" パターンを解析
+                                const m = String(a.notes).match(/客先変更[:：]\s*.+?[→\-]+\s*(.+)/);
+                                if (m && m[1]) {
+                                  changeHistory.push({ seq: a.sequenceNumber ?? 0, to: m[1].trim() });
+                                }
+                              }
+                            }
+                            // この積込より前（seq<=loadingSeq）の最後の客先変更を取得
+                            let currentCustomer = detailOperationCustomerName || '';
+                            for (const ch of changeHistory) {
+                              if (ch.seq <= loadingSeq) {
+                                currentCustomer = ch.to;
+                              }
+                            }
+                            return currentCustomer;
+                          };
+                          const resolvedCustomer = act.customerName || getCustomerAtTime(act.sequenceNumber ?? 0);
+                          return resolvedCustomer || act.itemName;
+                        })() && (
                         <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>
-                          {/* ✅ BUG-051完全修正: act.customerNameを優先、なければAPIの運行客先名をfallback（storeは使わない） */}
-                          {act.customerName || detailOperationCustomerName || ''}
+                          {/* ✅ BUG-051完全修正: NOTE(客先変更)履歴を時系列解析して積込時点の客先名を特定 */}
+                          {(() => {
+                            const getCustomerAtTime = (loadingSeq: number): string => {
+                              const changeHistory: { seq: number; to: string }[] = [];
+                              for (const a of [...detailActivities].sort(
+                                (x: any, y: any) => (x.sequenceNumber ?? 0) - (y.sequenceNumber ?? 0)
+                              )) {
+                                if ((a.activityType === 'NOTE' || a.activityType === 'OTHER') && a.notes) {
+                                  const m = String(a.notes).match(/客先変更[:：]\s*.+?[→\-]+\s*(.+)/);
+                                  if (m && m[1]) {
+                                    changeHistory.push({ seq: a.sequenceNumber ?? 0, to: m[1].trim() });
+                                  }
+                                }
+                              }
+                              let currentCustomer = detailOperationCustomerName || '';
+                              for (const ch of changeHistory) {
+                                if (ch.seq <= loadingSeq) {
+                                  currentCustomer = ch.to;
+                                }
+                              }
+                              return currentCustomer;
+                            };
+                            return act.customerName || getCustomerAtTime(act.sequenceNumber ?? 0) || '';
+                          })()}
                           {act.itemName ? (
                             <span> ／ <span style={{ color: '#374151', fontWeight: 500 }}>{act.itemName}</span></span>
                           ) : null}
