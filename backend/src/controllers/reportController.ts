@@ -33,6 +33,7 @@ import {
 } from '../services/annualTransportReportService';
 
 import logger from '../utils/logger';
+import { DatabaseService } from '../utils/database';
 
 import fs from 'fs';
 import path from 'path';
