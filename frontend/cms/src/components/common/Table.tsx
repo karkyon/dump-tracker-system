@@ -117,8 +117,12 @@ function Table<T extends Record<string, any>>({
                 {columns.map((column) => (
                   <td
                     key={String(column.key)}
-                    className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
-                    style={{ width: column.width }}
+                    className={`px-3 py-3 text-sm text-gray-900 ${
+                      String(column.key) === 'actions'
+                        ? 'sticky right-0 bg-white shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.08)] z-10'
+                        : 'overflow-hidden'
+                    }`}
+                    style={{ width: column.width, maxWidth: column.width }}
                   >
                     {column.render
                       ? column.render(getValue(item, column.key), item, index)

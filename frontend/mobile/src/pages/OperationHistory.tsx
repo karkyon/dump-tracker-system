@@ -50,6 +50,9 @@ interface PaginationInfo {
 // =====================================
 // OperationHistory コンポーネント
 // =====================================
+
+
+
 const OperationHistory: React.FC = () => {
   useTLog('OPERATION_HISTORY', '運行履歴');
 
@@ -150,8 +153,9 @@ const OperationHistory: React.FC = () => {
   const formatDate = (dateStr: string): string => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    const days = ['日', '月', '火', '水', '木', '金', '土'];
-    return `${date.getMonth() + 1}/${date.getDate()}(${days[date.getDay()]})`;
+    // ✅ JST変換
+    const jstDate = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short' });
+    return jstDate;
   };
 
   const formatDuration = (minutes: number): string => {
@@ -294,7 +298,7 @@ const OperationHistory: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
                   <span className="font-semibold text-gray-800">
-                    {formatDate(operation.date)}
+                    {formatDate(operation.date ?? '')}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

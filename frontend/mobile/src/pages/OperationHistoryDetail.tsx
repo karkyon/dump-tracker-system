@@ -89,6 +89,9 @@ const ACTIVITY_LABELS: Record<string, { label: string; color: string; icon: stri
 // =====================================
 // OperationHistoryDetail コンポーネント
 // =====================================
+
+
+
 const OperationHistoryDetail: React.FC = () => {
   useTLog('OPERATION_HISTORY_DETAIL', '運行履歴詳細');
 
@@ -134,13 +137,19 @@ const OperationHistoryDetail: React.FC = () => {
   const formatDate = (dateStr: string): string => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    const days = ['日', '月', '火', '水', '木', '金', '土'];
-    return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}(${days[date.getDay()]})`;
+    // ✅ JST変換
+    const jstStr = date.toLocaleDateString('ja-JP', {
+      timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short'
+    });
+    return jstStr;
   };
 
   const formatTime = (isoStr: string | null): string => {
     if (!isoStr) return '--:--';
-    return new Date(isoStr).toTimeString().slice(0, 5);
+    // ✅ JST変換
+    return new Date(isoStr).toLocaleTimeString('ja-JP', {
+      timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false
+    });
   };
 
   const formatDuration = (minutes: number): string => {
@@ -196,7 +205,7 @@ const OperationHistoryDetail: React.FC = () => {
           </button>
           <div>
             <h1 className="text-xl font-bold">運行記録詳細</h1>
-            <p className="text-blue-100 text-sm">{formatDate(detail.date)}</p>
+            <p className="text-blue-100 text-sm">{formatDate(detail.date ?? '')}</p>
           </div>
           <div className="ml-auto">
             {getStatusBadge(detail.status)}
@@ -254,7 +263,7 @@ const OperationHistoryDetail: React.FC = () => {
           <div className="flex items-center justify-between mb-4 px-2">
             <div className="text-center">
               <div className="text-xs text-gray-500 mb-1">出発</div>
-              <div className="text-xl font-bold text-gray-800">{formatTime(detail.startTime)}</div>
+              <div className="text-xl font-bold text-gray-800">{formatTime(detail.startTime ?? '')}</div>
             </div>
             <div className="flex-1 mx-4 relative">
               <div className="border-t-2 border-dashed border-gray-200" />
@@ -266,7 +275,7 @@ const OperationHistoryDetail: React.FC = () => {
             <div className="text-center">
               <div className="text-xs text-gray-500 mb-1">帰着</div>
               <div className="text-xl font-bold text-gray-800">
-                {detail.endTime ? formatTime(detail.endTime) : '運行中'}
+                {detail.endTime ? formatTime(detail.endTime ?? '') : '運行中'}
               </div>
             </div>
           </div>
@@ -332,7 +341,7 @@ const OperationHistoryDetail: React.FC = () => {
                             {actInfo.label}
                           </span>
                           <span className="text-xs text-gray-400">
-                            {formatTime(activity.startTime)}
+                            {formatTime(activity.startTime ?? '')}
                           </span>
                         </div>
                         {activity.locationName && (
@@ -372,7 +381,7 @@ const OperationHistoryDetail: React.FC = () => {
                         {fuel.fuelAmount.toFixed(1)}L
                       </span>
                       <span className="text-sm text-gray-500">
-                        {formatTime(fuel.recordedAt)}
+                        {formatTime(fuel.recordedAt ?? '')}
                       </span>
                     </div>
                     {fuel.stationName && (

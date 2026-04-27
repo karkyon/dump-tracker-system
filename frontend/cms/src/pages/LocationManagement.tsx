@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { useMasterStore } from '../store/masterStore';
 import { Location } from '../types';
 import Button from '../components/common/Button';
-import Input, { Select } from '../components/common/Input';
+// Input/Select は不使用のため削除
 import Table, { ActionButtons } from '../components/common/Table';
 import { ConfirmDialog } from '../components/common/Modal';
 import LocationFormModal from '../components/location/LocationFormModal';
@@ -30,8 +30,48 @@ const LocationManagement: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  // ✅ BUG-DELETE-LOCAL: 削除済みIDをローカルで管理（論理削除でも画面から即消す）
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  // ✅ ソート状態
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // ✅ ソートハンドラ
+  const handleSort = (key: string) => {
+    if (sortBy === key) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(key);
+      setSortDirection('asc');
+    }
+  };
+
+  // ✅ フィルタリング + ソート
+  const filteredLocations = React.useMemo(() => {
+    const base = Array.isArray(locations) ? locations.filter(location => {
+      if (deletedIds.has(location.id)) return false;
+      const matchesSearch = !searchTerm ||
+        (location.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
+        (location.address?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
+      const matchesType = !typeFilter ||
+        (typeFilter === 'PICKUP' ? (location.locationType === 'PICKUP' || location.locationType === 'DEPOT') :
+         typeFilter === 'DELIVERY' ? (location.locationType === 'DELIVERY' || (location.locationType as string) === 'DESTINATION') :
+         (location.locationType as string) === typeFilter);
+      return matchesSearch && matchesType;
+    }) : [];
+    return [...base].sort((a, b) => {
+      let aVal = (a as any)[sortBy] ?? '';
+      let bVal = (b as any)[sortBy] ?? '';
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [locations, searchTerm, typeFilter, sortBy, sortDirection, deletedIds]);
+
 
   interface LocationFormData {
     name: string;
@@ -64,40 +104,37 @@ const LocationManagement: React.FC = () => {
     }
   }, [locationError, clearErrors]);
 
-  // フィルタリング処理
-  const filteredLocations = Array.isArray(locations) ? locations.filter(location => {
-    const matchesSearch = !searchTerm ||
-      (location.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-      location.address?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
-    
-    const matchesType = !typeFilter || location.locationType === typeFilter;
-    
-    return matchesSearch && matchesType;
-  }) : [];
 
   console.log('[LocationManagement] Filtered locations:', filteredLocations.length);
 
-  // テーブルの列定義
+  // テーブルの列定義（幅固定・省略・ソート対応・操作列常時表示）
   const columns = [
     {
       key: 'name',
       header: '場所名',
       sortable: true,
-      width: '140px',
+      width: '160px',
+      render: (value: string) => (
+        <span className="block text-sm font-medium max-w-[150px] truncate" title={value || ''}>
+          {value || '-'}
+        </span>
+      ),
     },
     {
       key: 'address',
       header: '住所',
       sortable: true,
-      width: '240px',
+      width: '260px',
       render: (value: string) => (
-        <span className="text-sm">{value || '-'}</span>
+        <span className="block text-sm max-w-[250px] truncate text-gray-600" title={value || ''}>
+          {value || '-'}
+        </span>
       ),
     },
     {
       key: 'locationType',
       header: '場所種別',
-      width: '90px',
+      width: '96px',
       render: (value: string) => {
         const config: Record<string, { label: string; className: string }> = {
           PICKUP:      { label: '積込',      className: 'bg-blue-100 text-blue-800' },
@@ -114,22 +151,27 @@ const LocationManagement: React.FC = () => {
         );
       },
     },
-    // GPS座標情報列は非表示（列幅を節約するため削除）
     {
       key: 'registrationMethod',
       header: '登録方法',
+      width: '96px',
       render: (value: string, location: Location) => {
-        // registration_method カラムが存在しないため special_instructions で判定
-        // バックエンド登録時: '管理者から登録' or 'モバイルからクイック登録'
-        const isAdmin =
-          value === 'admin' ||
-          (location as any).specialInstructions === '管理者から登録' ||
-          (location as any).special_instructions === '管理者から登録';
+        // ✅ 登録方法判定:
+        // CMS画面から登録 → specialInstructions が空 or 'CMS登録' or registrationMethod='admin'
+        // モバイルアプリから登録 → specialInstructions に '管理者から登録' 以外の値
+        //   (createQuickLocation経由では specialInstructions = 'モバイルからクイック登録' が設定される)
+        const sp = (location as any).specialInstructions || (location as any).special_instructions || '';
+        const isMobile =
+          sp.includes('モバイル') ||
+          sp.includes('アプリ') ||
+          sp.includes('クイック') ||
+          value === 'mobile' ||
+          value === 'app';
         return (
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            isMobile ? 'bg-orange-100 text-orange-800' : 'bg-purple-100 text-purple-800'
           }`}>
-            {isAdmin ? '管理者から' : 'アプリから'}
+            {isMobile ? 'アプリから' : 'CMSから'}
           </span>
         );
       },
@@ -137,11 +179,13 @@ const LocationManagement: React.FC = () => {
     {
       key: 'createdAt',
       header: '登録日',
+      width: '100px',
       render: (value: string) => formatDate(value),
     },
     {
       key: 'actions',
       header: '操作',
+      width: '80px',
       render: (_: any, location: Location) => (
         <ActionButtons
           onEdit={() => handleEdit(location)}
@@ -237,9 +281,12 @@ const LocationManagement: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!selectedLocationId) return;
 
-    const success = await deleteLocation(selectedLocationId);
+    const idToDelete = selectedLocationId;
+    const success = await deleteLocation(idToDelete);
 
     if (success) {
+      // ✅ BUG-DELETE-LOCAL: 削除済みIDをローカルで記録（論理削除でも即時非表示）
+      setDeletedIds(prev => new Set([...prev, idToDelete]));
       toast.success('場所を削除しました');
       setShowDeleteDialog(false);
       setSelectedLocationId(null);
@@ -272,35 +319,36 @@ const LocationManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* 検索・フィルター */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center">
-              <Search className="h-5 w-5 text-gray-400" />
+      {/* 検索・フィルター（1行レイアウト） */}
+      <div className="bg-white shadow rounded-lg p-4">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 min-w-0">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
             </div>
-            <Input
+            <input
               type="text"
               placeholder="客先名、場所名、住所で検索..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="block w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md
+                focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          
-          <Select
-            label="場所種別"
-            options={[
-              { value: '', label: 'すべての種別' },
-              { value: 'PICKUP', label: '積込（CMS登録）' },
-              { value: 'DEPOT', label: '積込（アプリ登録）' },
-              { value: 'DELIVERY', label: '積降（CMS登録）' },
-              { value: 'DESTINATION', label: '積降（アプリ登録）' },
-              { value: 'BOTH', label: '積込・積降（両方）' },
-            ]}
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-sm text-gray-500 whitespace-nowrap">場所種別</span>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="text-sm border border-gray-300 rounded-md px-2 py-2
+                focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">すべての種別</option>
+              <option value="PICKUP">積込</option>
+              <option value="DELIVERY">積降</option>
+              <option value="BOTH">積込・積降（両方）</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -310,6 +358,9 @@ const LocationManagement: React.FC = () => {
         columns={columns}
         loading={locationLoading}
         emptyMessage="場所が見つかりません"
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSort={handleSort}
       />
 
       {/* 新規作成モーダル（新しいLocationFormModal） */}
