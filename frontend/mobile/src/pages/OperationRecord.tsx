@@ -122,6 +122,8 @@ const OperationRecord: React.FC = () => {
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
   // ✅ BUG-051完全修正: APIレスポンスの運行客先名を保持（storeのcustomerNameに依存しない）
   const [detailOperationCustomerName, setDetailOperationCustomerName] = useState<string | null>(null);
+  // ✅ BUG-051最終修正: NOTE含む全アクティビティ（客先変更履歴参照用）
+  const [detailAllActivities, setDetailAllActivities] = useState<any[]>([]);
 
   // 🆕 地点選択ダイアログの状態（D5/D6新仕様）
   const [locationDialogVisible, setLocationDialogVisible] = useState(false);
@@ -845,6 +847,9 @@ const OperationRecord: React.FC = () => {
         setDetailOperationCustomerName(detail.customerName);
       }
       if (detail?.activities && Array.isArray(detail.activities)) {
+        // ✅ BUG-051最終修正: NOTE含む全件を保存（客先変更履歴の参照用）
+        setDetailAllActivities(detail.activities);
+        // 表示用はNOTE/OTHERを除く
         setDetailActivities(detail.activities.filter((a: any) =>
           !['NOTE', 'OTHER'].includes(a.activityType || '')
         ));
@@ -1632,7 +1637,7 @@ const OperationRecord: React.FC = () => {
                           const getCustomerAtTime = (loadingSeq: number): string => {
                             // NOTE アクティビティから客先変更履歴を収集（sequenceNumber昇順）
                             const changeHistory: { seq: number; to: string }[] = [];
-                            for (const a of [...detailActivities].sort(
+                            for (const a of [...detailAllActivities].sort(
                               (x: any, y: any) => (x.sequenceNumber ?? 0) - (y.sequenceNumber ?? 0)
                             )) {
                               if ((a.activityType === 'NOTE' || a.activityType === 'OTHER') && a.notes) {
@@ -1660,7 +1665,7 @@ const OperationRecord: React.FC = () => {
                           {(() => {
                             const getCustomerAtTime = (loadingSeq: number): string => {
                               const changeHistory: { seq: number; to: string }[] = [];
-                              for (const a of [...detailActivities].sort(
+                              for (const a of [...detailAllActivities].sort(
                                 (x: any, y: any) => (x.sequenceNumber ?? 0) - (y.sequenceNumber ?? 0)
                               )) {
                                 if ((a.activityType === 'NOTE' || a.activityType === 'OTHER') && a.notes) {
