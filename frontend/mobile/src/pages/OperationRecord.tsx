@@ -1368,7 +1368,7 @@ const OperationRecord: React.FC = () => {
         </div>
         <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '18px', fontWeight: 'bold', opacity: 1.0 }}>
-            🚛 {operation.vehicleName || operationStore.vehicleNumber || ''}
+            {operation.vehicleName || operationStore.vehicleNumber || ''}
           </span>
           <span style={{ fontSize: '15px', opacity: 0.85 }}>
             {operation.driverName || authStore.user?.name || ''}
@@ -1620,10 +1620,10 @@ const OperationRecord: React.FC = () => {
                           {new Date(act.endTime).toTimeString().slice(0, 5)}
                         </div>
                       )}
-                      {isL && (act.customerName || act.itemName) && (
+                      {isL && (act.customerName || customerName || act.itemName) && (
                         <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>
-                          {/* ✅ BUG-051修正: act.customerName を優先。なければ空文字（全件共有のcustomerNameは使わない） */}
-                          {act.customerName || ''}
+                          {/* ✅ BUG-051修正: act.customerName を優先。なければ運行全体のcustomerName（store）をfallback */}
+                          {act.customerName || customerName || ''}
                           {act.itemName ? (
                             <span> ／ <span style={{ color: '#374151', fontWeight: 500 }}>{act.itemName}</span></span>
                           ) : null}
