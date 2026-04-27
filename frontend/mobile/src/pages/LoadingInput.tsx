@@ -563,49 +563,74 @@ const LoadingInput: React.FC = () => {
             return (
               <div style={{ marginBottom: '12px' }}>
                 {grouped.map(group => (
-                  <div key={group.label} style={{ marginBottom: '12px' }}>
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      color: '#9ca3af',
-                      letterSpacing: '0.05em',
-                      marginBottom: '6px',
-                      paddingBottom: '4px',
-                      borderBottom: '1px solid #f3f4f6',
-                    }}>
-                      {group.label}
+                  <React.Fragment key={group.label}>
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        color: '#9ca3af',
+                        letterSpacing: '0.05em',
+                        marginBottom: '6px',
+                        paddingBottom: '4px',
+                        borderBottom: '1px solid #f3f4f6',
+                      }}>
+                        {group.label}
+                      </div>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '8px',
+                      }}>
+                        {group.items.map(item => {
+                          const isSelected = formData.selectedItemIds.includes(item.id);
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => handleItemToggle(item.id)}
+                              style={{
+                                padding: '10px 6px',
+                                fontSize: '14px',
+                                fontWeight: isSelected ? 'bold' : 'normal',
+                                color: isSelected ? 'white' : '#374151',
+                                background: isSelected
+                                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                  : 'white',
+                                border: `2px solid ${isSelected ? '#667eea' : '#d1d5db'}`,
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                textAlign: 'center',
+                              }}
+                            >
+                                  {isSelected ? `✓ ${item.name}` : item.name}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: '8px',
-                    }}>
-                      {group.items.map(item => {
-                        const isSelected = formData.selectedItemIds.includes(item.id);
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => handleItemToggle(item.id)}
-                            style={{
-                              padding: '10px 6px',
-                              fontSize: '14px',
-                              fontWeight: isSelected ? 'bold' : 'normal',
-                              color: isSelected ? 'white' : '#374151',
-                              background: isSelected
-                                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                                : 'white',
-                              border: `2px solid ${isSelected ? '#667eea' : '#d1d5db'}`,
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              textAlign: 'center',
-                            }}
-                          >
-                            {isSelected ? `✓ ${item.name}` : item.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    {/* 廃棄物グループの直下に電子マニフェストリンクを表示 */}
+                    {group.key === 'WASTE' && (
+                      <div style={{
+                        margin: '-4px 0 12px 0',
+                        padding: '10px 14px',
+                        background: '#fef3c7',
+                        border: '1px solid #f59e0b',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        color: '#78350f',
+                        fontWeight: '600',
+                      }}>
+                        📋 産業廃棄物マニフェストはこちら →{' '}
+                        <a
+                          href="https://webpage.e-reverse.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#1d4ed8', textDecoration: 'underline', fontWeight: '700' }}
+                        >
+                          e-reverse.com
+                        </a>
+                      </div>
+                    )}
+                  </React.Fragment>
                 ))}
               </div>
             );
