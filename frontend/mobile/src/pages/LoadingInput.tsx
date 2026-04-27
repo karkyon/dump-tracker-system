@@ -21,6 +21,31 @@ import {
 import apiService from '../services/api';
 import { useOperationStore } from '../stores/operationStore';
 
+/** システム設定APIから大区分表示順を取得 */
+async function fetchCategoryOrder(): Promise<('RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined)[]> {
+  const DEFAULT: ('RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined)[] =
+    ['RECYCLED_MATERIAL', 'VIRGIN_MATERIAL', 'WASTE', undefined];
+  try {
+    const apiBase = (window as any).__API_BASE_URL__
+      || (import.meta as any).env?.VITE_API_BASE_URL
+      || 'https://dump-tracker.ddns.net/api/v1';
+    const token = localStorage.getItem('auth_token');
+    const res = await fetch(`${apiBase}/settings/system`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return DEFAULT;
+    const json = await res.json();
+    const raw = json.data?.item_group_order;
+    if (!raw) return DEFAULT;
+    const order: string[] = JSON.parse(raw);
+    // WASTE の後ろに undefined(その他) を追加
+    const typed = order.filter(k =>
+      ['RECYCLED_MATERIAL','VIRGIN_MATERIAL','WASTE'].includes(k)
+    ) as ('RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE')[];
+    return [...typed, undefined];
+  } catch { return DEFAULT; }
+}
+
 // ============================================================
 // 型定義
 // ============================================================
@@ -83,7 +108,7 @@ const LoadingInput: React.FC = () => {
   // ---- 品目マスタ ----
   const [items, setItems] = useState<Item[]>([]);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
-  // 大項目グループ順序（CMS品目管理のdisplayOrderを元に動的取得）
+  // 大項目グループ順序（CMSのシステム設定 item_group_order から取得）
   const [groupOrder, setGroupOrder] = useState<('RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined)[]>(
     ['RECYCLED_MATERIAL', 'VIRGIN_MATERIAL', 'WASTE', undefined]
   );
@@ -152,24 +177,19 @@ const LoadingInput: React.FC = () => {
   // ------------------------------------------------------------
   // 品目マスタ取得
   // ------------------------------------------------------------
+  // API から大区分表示順を取得
+  useEffect(() => {
+    fetchCategoryOrder().then(setGroupOrder);
+  }, []);
+
   useEffect(() => {
     const fetchItems = async () => {
       try {
         setIsLoadingItems(true);
         const response = await apiService.getItems();
         if (response.success && response.data) {
-          const data: Item[] = response.data;
-          setItems(data);
-          // 大項目グループ順序を動的計算（各typeの最小displayOrderでソート）
-          const orderMap = new Map<string | undefined, number>();
-          data.forEach((it) => {
-            const cur = orderMap.get(it.itemType) ?? 999;
-            if ((it.displayOrder ?? 999) < cur) orderMap.set(it.itemType, it.displayOrder ?? 999);
-          });
-          const typeKeys: ('RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined)[] =
-            ['RECYCLED_MATERIAL', 'VIRGIN_MATERIAL', 'WASTE', undefined];
-          typeKeys.sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999));
-          setGroupOrder(typeKeys);
+          setItems(response.data);
+          // groupOrder は fetchCategoryOrder() で取得済み
         }
       } catch (error) {
         console.error('品目取得エラー:', error);

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { Plus, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, ChevronUp, ChevronDown, Save, GripVertical } from 'lucide-react';
 import Button from '../components/common/Button';
 import Table, { ActionButtons } from '../components/common/Table';
 import Input from '../components/common/Input';
@@ -13,8 +13,57 @@ import { toast } from 'react-hot-toast';
 import { Item } from '../types';
 
 // =====================================
+// API設定
+// =====================================
+
+const API_BASE = (() => {
+  try {
+    return (window as any).__API_BASE_URL__
+      || import.meta.env.VITE_API_BASE_URL
+      || 'https://dumptracker-s.ddns.net/api/v1';
+  } catch { return 'https://dumptracker-s.ddns.net/api/v1'; }
+})();
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token');
+  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+/** 大区分表示順をAPI経由で保存 (key=item_group_order) */
+async function saveGroupOrder(order: string[]): Promise<void> {
+  await fetch(`${API_BASE}/settings/system`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify([{ key: 'item_group_order', value: JSON.stringify(order) }]),
+  });
+}
+
+/** 大区分表示順をAPI経由で取得 */
+async function fetchGroupOrder(): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_BASE}/settings/system`, { headers: getAuthHeaders() });
+    if (!res.ok) return DEFAULT_GROUP_ORDER;
+    const json = await res.json();
+    const raw = json.data?.item_group_order;
+    if (!raw) return DEFAULT_GROUP_ORDER;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_GROUP_ORDER;
+  } catch { return DEFAULT_GROUP_ORDER; }
+}
+
+// =====================================
 // 定数定義
 // =====================================
+
+/** 大区分のデフォルト表示順 */
+const DEFAULT_GROUP_ORDER = ['RECYCLED_MATERIAL', 'VIRGIN_MATERIAL', 'WASTE'];
+
+/** 大区分ラベルマップ */
+const GROUP_LABEL_MAP: Record<string, string> = {
+  RECYCLED_MATERIAL: '再生材',
+  VIRGIN_MATERIAL: 'バージン材',
+  WASTE: '廃棄物',
+};
 
 /** 品目区分の選択肢とラベルマッピング（単一箇所で管理） */
 const ITEM_TYPE_OPTIONS: { value: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE'; label: string }[] = [
@@ -70,6 +119,46 @@ const ItemManagement: React.FC = () => {
     fetchItems();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // =====================================
+  // 大区分表示順 state
+  // =====================================
+  const [groupOrder, setGroupOrder] = React.useState<string[]>(DEFAULT_GROUP_ORDER);
+  const [groupOrderSaving, setGroupOrderSaving] = React.useState(false);
+
+  // 初回: APIから大区分表示順を取得
+  React.useEffect(() => {
+    fetchGroupOrder().then(setGroupOrder);
+  }, []);
+
+  /** 大区分を上に移動 */
+  const handleGroupMoveUp = (idx: number) => {
+    if (idx === 0) return;
+    const next = [...groupOrder];
+    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+    setGroupOrder(next);
+  };
+
+  /** 大区分を下に移動 */
+  const handleGroupMoveDown = (idx: number) => {
+    if (idx === groupOrder.length - 1) return;
+    const next = [...groupOrder];
+    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+    setGroupOrder(next);
+  };
+
+  /** 大区分表示順を保存 */
+  const handleSaveGroupOrder = async () => {
+    setGroupOrderSaving(true);
+    try {
+      await saveGroupOrder(groupOrder);
+      toast.success('大区分の表示順を保存しました');
+    } catch {
+      toast.error('保存に失敗しました');
+    } finally {
+      setGroupOrderSaving(false);
+    }
+  };
 
   // REQ-009: 検索 + 区分フィルタリング + 表示順ソート
   const displayItems = [...items]
@@ -258,6 +347,58 @@ const ItemManagement: React.FC = () => {
           <Plus className="w-4 h-4 mr-2" />
           新規品目追加
         </Button>
+      </div>
+
+      {/* ===== 大区分表示順設定 ===== */}
+      <div className="bg-white shadow rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-1">
+              <GripVertical className="w-4 h-4 text-gray-400" />
+              品目大区分の表示順（mobileアプリの品目選択画面に反映）
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">↑↓ボタンで並べ替えて「保存」を押してください</p>
+          </div>
+          <button
+            onClick={handleSaveGroupOrder}
+            disabled={groupOrderSaving}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save className="w-3.5 h-3.5" />
+            {groupOrderSaving ? '保存中...' : '保存'}
+          </button>
+        </div>
+        <div className="flex gap-3">
+          {groupOrder.map((key, idx) => (
+            <div
+              key={key}
+              className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 min-w-[120px]"
+            >
+              <span className="text-xs text-gray-400 font-bold w-4 text-center">{idx + 1}</span>
+              <span className="flex-1 text-sm font-medium text-gray-700 text-center">
+                {GROUP_LABEL_MAP[key] ?? key}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <button
+                  onClick={() => handleGroupMoveUp(idx)}
+                  disabled={idx === 0}
+                  className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
+                  title="上へ"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleGroupMoveDown(idx)}
+                  disabled={idx === groupOrder.length - 1}
+                  className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
+                  title="下へ"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="bg-white shadow rounded-lg">
