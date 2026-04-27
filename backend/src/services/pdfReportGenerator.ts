@@ -95,6 +95,21 @@ export interface InspCheckItem {
   measure: string;     // 措置
 }
 
+/** ⑤d: "X時間YY分" → "XX分" に変換（分のみ表示） */
+function toMinutesOnly(duration: string): string {
+  if (!duration) return '';
+  // "X時間YY分" パターン
+  const m1 = duration.match(/(\d+)時間(\d+)分/);
+  if (m1) {
+    const h = parseInt(m1[1] ?? '0', 10);
+    const min = parseInt(m1[2] ?? '0', 10);
+    return String(h * 60 + min) + '分';
+  }
+  // 既に "XX分" パターン
+  if (/^\d+分$/.test(duration)) return duration;
+  return duration;
+}
+
 /** 帳票全体データ */
 export interface DailyDriverReportData {
   reportDate: string;             // YYYY-MM-DD
@@ -322,7 +337,9 @@ function drawHeaderRow(
 
   // 曜日
   const dowLblW = 30; cell(doc, cx, y, dowLblW, h, '曜日', fLbl); cx += dowLblW;
-  const dowValW = 28; cell(doc, cx, y, dowValW, h, data.dayOfWeek, fVal); cx += dowValW;
+  // ⑤b: 曜日から「曜」を除去して表示
+  const dowDisplay = (data.dayOfWeek ?? '').replace('曜', '');
+  const dowValW = 28; cell(doc, cx, y, dowValW, h, dowDisplay, fVal); cx += dowValW;
 
   // 氏名
   const nameLblW = 35; cell(doc, cx, y, nameLblW, h, '氏名', fLbl); cx += nameLblW;
@@ -342,12 +359,19 @@ function drawHeaderRow(
 
   // 始（上段ラベル / 下段値）
   cell(doc, cx, y,          kiloHalfW, h / 2, '始', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg: '#F0F0F0' });
-  cell(doc, cx, y + h / 2,  kiloHalfW, h / 2, data.startOdometer, { font: fontN, fontSize: 7 });
+  // ⑤c: キロにカンマ + km単位付加
+  const fmtKm = (v: string) => {
+    if (!v) return '';
+    const n = parseFloat(v.replace(/,/g, ''));
+    if (isNaN(n)) return v;
+    return n.toLocaleString('ja-JP') + 'km';
+  };
+  cell(doc, cx, y + h / 2,  kiloHalfW, h / 2, fmtKm(data.startOdometer), { font: fontN, fontSize: 7 });
   cx += kiloHalfW;
 
   // 終（上段ラベル / 下段値）
   cell(doc, cx, y,          kiloEndW,  h / 2, '終', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg: '#F0F0F0' });
-  cell(doc, cx, y + h / 2,  kiloEndW,  h / 2, data.endOdometer, { font: fontN, fontSize: 7 });
+  cell(doc, cx, y + h / 2,  kiloEndW,  h / 2, fmtKm(data.endOdometer), { font: fontN, fontSize: 7 });
 }
 
 /**
@@ -450,14 +474,14 @@ function drawOperationRows(
       // ⑥修正: 積込時間（上段）+ 下段空行で枠線確保
       cell(doc, cx,          ry,           sub1W, subRowH, trip.loadingStartTime,  fSmall);
       cell(doc, cx + sub1W,  ry,           sub2W, subRowH, trip.loadingEndTime,    fSmall);
-      cell(doc, cx + sub1W + sub2W, ry,    sub3W, subRowH, trip.loadingDuration,   fSmall);
+      cell(doc, cx + sub1W + sub2W, ry,    sub3W, subRowH, toMinutesOnly(trip.loadingDuration),   fSmall);
       cell(doc, cx,          ry + subRowH, sub1W, subRowH, '');
       cell(doc, cx + sub1W,  ry + subRowH, sub2W, subRowH, '');
       cell(doc, cx + sub1W + sub2W, ry + subRowH, sub3W, subRowH, '');
       // ⑥修正: 積降時間（上段）+ 下段空行で枠線確保
       cell(doc, cx + halfTimeW,           ry,           sub4W, subRowH, trip.unloadingStartTime,  fSmall);
       cell(doc, cx + halfTimeW + sub4W,   ry,           sub5W, subRowH, trip.unloadingEndTime,    fSmall);
-      cell(doc, cx + halfTimeW + sub4W + sub5W, ry,     sub6W, subRowH, trip.unloadingDuration,   fSmall);
+      cell(doc, cx + halfTimeW + sub4W + sub5W, ry,     sub6W, subRowH, toMinutesOnly(trip.unloadingDuration),   fSmall);
       cell(doc, cx + halfTimeW,           ry + subRowH, sub4W, subRowH, '');
       cell(doc, cx + halfTimeW + sub4W,   ry + subRowH, sub5W, subRowH, '');
       cell(doc, cx + halfTimeW + sub4W + sub5W, ry + subRowH, sub6W, subRowH, '');

@@ -76,6 +76,15 @@ interface Report {
   createdAt: string;
   fileSize: number | null;
   errorMessage: string | null;
+  vehicleId?: string | null;
+  vehiclePlateNumber?: string | null;
+}
+
+interface VehicleWithOps {
+  id: string;
+  plateNumber: string;
+  model: string;
+  hasOps: boolean;   // 対象日に運行履歴があるか
 }
 
 interface VehicleItem {
@@ -206,13 +215,27 @@ async function apiGetReportStatus(
   };
 }
 
-async function apiFetchReports(): Promise<Report[]> {
-  const res = await fetch(`${API_BASE}/reports?limit=20&page=1`, {
+async function apiFetchReports(params?: {
+  fromDate?: string;
+  toDate?: string;
+  vehicleId?: string;
+  reportType?: string;
+}): Promise<Report[]> {
+  const qp = new URLSearchParams({ limit: '50', page: '1' });
+  if (params?.fromDate) qp.set('startDate', params.fromDate);
+  if (params?.toDate) qp.set('endDate', params.toDate);
+  if (params?.reportType) qp.set('reportType', params.reportType);
+  const res = await fetch(`${API_BASE}/reports?${qp.toString()}`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error(`レポート一覧取得エラー: ${res.status}`);
   const json = await res.json();
-  return json.data?.reports || [];
+  let reports: Report[] = json.data?.reports || [];
+  // 車両フィルターはフロント側でも絞り込み（バックエンドが未対応の場合）
+  if (params?.vehicleId) {
+    reports = reports.filter(r => r.vehicleId === params.vehicleId);
+  }
+  return reports;
 }
 
 async function apiDeleteReport(reportId: string): Promise<void> {
@@ -348,9 +371,10 @@ const ReportOutput: React.FC = () => {
   const [dailyDate, setDailyDate] = useState(
     new Date().toISOString().split('T')[0]
   );
-  const [dailyFormat, setDailyFormat] = useState<ReportFormat>('PDF');
+  // ② 出力形式はPDF固定（state不要）
+  const dailyFormat: ReportFormat = 'PDF';
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
-  const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleWithOps[]>([]);
   // dailyInclude: 廃止（チェックボックスUI削除）
 
   // 生成中レポートの追跡
@@ -360,6 +384,12 @@ const ReportOutput: React.FC = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+
+  // 生成履歴フィルター状態
+  const [filterFromDate, setFilterFromDate] = useState<string>('');
+  const [filterToDate, setFilterToDate] = useState<string>('');
+  const [filterVehicleId, setFilterVehicleId] = useState<string>('');
+  const [filterReportType, setFilterReportType] = useState<string>('DAILY_OPERATION');
 
   // ポーリング管理
   const pollingCountRef = useRef<Record<string, number>>({});
@@ -381,7 +411,12 @@ const ReportOutput: React.FC = () => {
     setIsLoadingReports(true);
     setReportError(null);
     try {
-      const list = await apiFetchReports();
+      const list = await apiFetchReports({
+        fromDate: filterFromDate || undefined,
+        toDate: filterToDate || undefined,
+        vehicleId: filterVehicleId || undefined,
+        reportType: filterReportType || undefined,
+      });
       setReports(list);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '取得エラー';
@@ -389,32 +424,59 @@ const ReportOutput: React.FC = () => {
     } finally {
       setIsLoadingReports(false);
     }
-  }, []);
+  }, [filterFromDate, filterToDate, filterVehicleId, filterReportType]);
 
   useEffect(() => {
     fetchReports();
-  }, [fetchReports]);
+  }, [fetchReports, filterFromDate, filterToDate, filterVehicleId, filterReportType]);
 
-  // 車両一覧を取得（日報集計単位=車両）
-  useEffect(() => {
-    const fetchVehicles = async () => {
+  // 車両一覧 + 対象日の運行チェック
+  const fetchVehiclesWithOpsCheck = async (targetDate: string) => {
+    try {
+      // 全車両取得
+      const vRes = await fetch(`${API_BASE}/vehicles?limit=100`, { headers: getAuthHeaders() });
+      if (!vRes.ok) return;
+      const vJson = await vRes.json();
+      const rawData = vJson.data?.data?.vehicles ?? vJson.data?.vehicles ?? vJson.data?.data ?? vJson.data ?? [];
+      const allVehicles: VehicleItem[] = Array.isArray(rawData)
+        ? rawData.map((v: any) => ({ id: v.id, plateNumber: v.plateNumber ?? v.plate_number ?? '', model: v.model ?? '' }))
+        : [];
+
+      // 対象日に運行のある車両ID一覧を取得
+      let activeVehicleIds: Set<string> = new Set();
       try {
-        const res = await fetch(`${API_BASE}/vehicles?limit=100`, {
-          headers: getAuthHeaders(),
-        });
-        if (!res.ok) return;
-        const json = await res.json();
-        const rawData = json.data?.data?.vehicles ?? json.data?.vehicles ?? json.data?.data ?? json.data ?? [];
-        const list: VehicleItem[] = Array.isArray(rawData)
-          ? rawData.map((v: any) => ({ id: v.id, plateNumber: v.plateNumber ?? v.plate_number ?? '', model: v.model ?? '' }))
-          : [];
-        setVehicles(list);
-      } catch (err) {
-        console.error('[ReportOutput] 車両取得エラー:', err);
+        const opsRes = await fetch(
+          `${API_BASE}/reports/daily-operation/available-vehicles?date=${targetDate}`,
+          { headers: getAuthHeaders() }
+        );
+        if (opsRes.ok) {
+          const opsJson = await opsRes.json();
+          const ids: string[] = opsJson.data?.vehicleIds ?? [];
+          activeVehicleIds = new Set(ids);
+        }
+      } catch {
+        // エンドポイント未実装時は全車両アクティブ扱い
+        allVehicles.forEach(v => activeVehicleIds.add(v.id));
       }
-    };
-    fetchVehicles();
-  }, []);
+
+      const list: VehicleWithOps[] = allVehicles.map(v => ({
+        ...v,
+        hasOps: activeVehicleIds.size === 0 || activeVehicleIds.has(v.id),
+      }));
+      setVehicles(list);
+
+      // 現在選択中の車両が非アクティブになったらリセット
+      if (selectedVehicleId && !activeVehicleIds.has(selectedVehicleId) && activeVehicleIds.size > 0) {
+        setSelectedVehicleId('');
+      }
+    } catch (err) {
+      console.error('[ReportOutput] 車両取得エラー:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchVehiclesWithOpsCheck(dailyDate);
+  }, [dailyDate]); // eslint-disable-line
 
   // =====================================
   // ポーリング処理
@@ -622,25 +684,20 @@ const ReportOutput: React.FC = () => {
               >
                 <option value="">── 全車両（指定なし）──</option>
                 {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.plateNumber}（{v.model}）
+                  <option key={v.id} value={v.id} disabled={!v.hasOps}
+                    style={{ color: v.hasOps ? undefined : '#9ca3af' }}>
+                    {v.plateNumber}（{v.model}）{v.hasOps ? '' : ' ─ 運行なし'}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* 出力形式 */}
+            {/* 出力形式（現在はPDFのみ） */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">出力形式</label>
-              <select
-                value={dailyFormat}
-                onChange={(e) => setDailyFormat(e.target.value as ReportFormat)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="PDF">PDF</option>
-                <option value="EXCEL">Excel</option>
-                <option value="CSV">CSV</option>
-              </select>
+              <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700 text-sm">
+                PDF（現在対応形式）
+              </div>
             </div>
 
             {/* 生成ボタン */}
@@ -902,6 +959,51 @@ const ReportOutput: React.FC = () => {
 
       {/* 生成履歴 */}
       <div className="bg-white shadow rounded-lg">
+        {/* ④ フィルターUI */}
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 rounded-t-lg">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">対象日（開始）</label>
+              <input type="date" value={filterFromDate}
+                onChange={e => setFilterFromDate(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">対象日（終了）</label>
+              <input type="date" value={filterToDate}
+                onChange={e => setFilterToDate(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">車両</label>
+              <select value={filterVehicleId} onChange={e => setFilterVehicleId(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">全車両</option>
+                {vehicles.map(v => (
+                  <option key={v.id} value={v.id}>{v.plateNumber}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">帳票種別</label>
+              <select value={filterReportType} onChange={e => setFilterReportType(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">すべて</option>
+                <option value="DAILY_OPERATION">日次運行報告書</option>
+                <option value="ANNUAL_TRANSPORT_REPORT">貨物自動車運送事業実績報告書</option>
+              </select>
+            </div>
+            <button onClick={() => { setFilterFromDate(''); setFilterToDate(''); setFilterVehicleId(''); setFilterReportType('DAILY_OPERATION'); }}
+              className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-100"
+            >
+              リセット
+            </button>
+          </div>
+        </div>
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
             <FileText className="w-5 h-5 text-gray-500" />
@@ -950,6 +1052,9 @@ const ReportOutput: React.FC = () => {
                       {report.startDate
                         ? new Date(report.startDate).toLocaleDateString('ja-JP')
                         : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {report.vehiclePlateNumber || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {report.format}

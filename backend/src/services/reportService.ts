@@ -385,8 +385,10 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
         // 前のローディングが未完了なら閉じる
         cycles.push(current);
       }
+      // ⑤a: detail に付加された _opCustomerName を contractorName として使用
+      const contractorName: string = (d as any)._opCustomerName ?? '';
       current = {
-        contractorName: '',
+        contractorName,
         loadingLocation: locationName,
         unloadingLocation: '',
         itemName,
@@ -1603,29 +1605,44 @@ class ReportService {
     const endOdo = endOdoVal != null ? fmtNum(endOdoVal, 0) : '';
 
     // 運行詳細から TripCycleRow 構築
-    const allDetailsList = operations.map((op: any) => op.operationDetails ?? []);
+    // ⑤a: allDetailsList に operationのcustomer情報を付加
+    const allDetailsList: any[][] = operations.map((op: any) => {
+      const opCustomerName: string = op.customer?.name ?? '';
+      return (op.operationDetails ?? []).map((d: any) => ({ ...d, _opCustomerName: opCustomerName }));
+    });
     const cycles = buildTripCycles(allDetailsList);
+    // ⑤a: 各サイクルの contractorName を対応する客先名で補完
+    // buildTripCyclesはdetailの_opCustomerNameを参照するよう内部で対応済み
 
-    // 給油データ（FUELING activity_type から取得）
-    let fuelLiters = '';
-    let fuelOdometerKm = '';
+    // ⑤e: 給油データ複数対応 — 複数給油イベントを配列で収集
+    interface FuelRecord { liters: string; odometerKm: string; }
+    const fuelRecords: FuelRecord[] = [];
     for (const op of operations) {
       for (const d of (op.operationDetails ?? [])) {
         const at = d.activityType ?? '';
         if (at === 'FUELING' || at === 'FUEL') {
-          if (!fuelLiters && d.quantityTons) {
-            fuelLiters = fmtNum(d.quantityTons, 1);
+          const liters = d.quantityTons ? fmtNum(d.quantityTons, 1) : '';
+          // 給油時キロ: notes に "XXkm" 形式で入っている場合 or startOdometer代替
+          let kmVal = '';
+          if (d.notes) {
+            const km = String(d.notes).match(/(\d[\d,]*)\s*km/i);
+            if (km) kmVal = km[1] ?? '';
           }
-      if (!fuelOdometerKm && d.actualStartTime) {
-            // 給油時のオドメーターはstartOdometerで代替
-          }
+          if (!kmVal && op.startOdometer) kmVal = fmtNum(op.startOdometer, 0);
+          fuelRecords.push({ liters, odometerKm: kmVal });
         }
       }
-      // operation.fuelConsumedLiters があればそちらを使う
-      if (!fuelLiters && op.fuelConsumedLiters) {
-        fuelLiters = fmtNum(op.fuelConsumedLiters, 1);
+      // operation.fuelConsumedLiters: 個別イベントがない場合のフォールバック
+      if (fuelRecords.length === 0 && op.fuelConsumedLiters) {
+        fuelRecords.push({
+          liters: fmtNum(op.fuelConsumedLiters, 1),
+          odometerKm: op.startOdometer ? fmtNum(op.startOdometer, 0) : '',
+        });
       }
     }
+    // pdfReportGenerator が受け取る fuelLiters/fuelOdometerKm は配列文字列 ("|" 区切り)
+    const fuelLiters = fuelRecords.map(r => r.liters).filter(Boolean).join('|') || '';
+    const fuelOdometerKm = fuelRecords.map(r => r.odometerKm).filter(Boolean).join('|') || '';
 
     // 全inspection_records を統合
     const allInspRecords: any[] = [];
