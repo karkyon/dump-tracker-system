@@ -89,6 +89,7 @@ export interface LocationInfo {
   contactEmail?: string;
   operatingHours?: string;
   accessInstructions?: string;
+  specialInstructions?: string; // ✅ 登録方法判定用
   notes?: string;
   isActive: boolean;
   createdAt?: string | Date;
@@ -115,6 +116,7 @@ export interface LocationWithDetails extends LocationInfo {
   statistics?: LocationStatistics;
   tags?: string[];
   metadata?: Record<string, any>;
+  specialInstructions?: string; // ✅ 登録方法判定用
 }
 
 // =====================================

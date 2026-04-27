@@ -670,6 +670,7 @@ class LocationServiceWrapper {
       contactEmail: location.contactEmail ?? undefined,
       operatingHours: location.operatingHours ?? undefined,
       accessInstructions: location.accessRestrictions ?? undefined,
+      specialInstructions: location.specialInstructions ?? undefined,  // ✅ 登録方法判定用
       isActive: location.isActive ?? true,
       operationCount: location._count?.operationDetails,
       createdAt: location.createdAt?.toISOString() || new Date().toISOString(),
