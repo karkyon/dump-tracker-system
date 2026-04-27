@@ -1612,6 +1612,15 @@ class ReportService {
 
     // 運行詳細から TripCycleRow 構築
     // ⑤a: allDetailsList に operationのcustomer情報を付加
+    // デバッグ: 客先名・キロ確認
+    for (const op of operations) {
+      logger.info('[ReportService] operation debug', {
+        opId: op.id,
+        customerId: op.customerId ?? 'NULL',
+        customerName: op.customer?.name ?? 'NULL',
+        startOdometer: op.startOdometer ?? 'NULL',
+      });
+    }
     const allDetailsList: any[][] = operations.map((op: any) => {
       const opCustomerName: string = op.customer?.name ?? '';
       return (op.operationDetails ?? []).map((d: any) => ({ ...d, _opCustomerName: opCustomerName }));
@@ -1700,7 +1709,7 @@ class ReportService {
         loadingCondition: c.loadingCondition,
         loadingStartTime: c.loadingStartTime,
         loadingEndTime: c.loadingEndTime || c.unloadingStartTime,  // ⑤修正: 積込終了=積降移動開始時刻
-       loadingDuration: calcTimeDuration(c.loadingStartTime, c.loadingEndTime),     // NEW(D)
+       loadingDuration: calcTimeDuration(c.loadingStartTime, c.loadingEndTime || c.unloadingStartTime),  // ⑤fix: 積込終了なければ積降開始で代替
        unloadingStartTime: c.unloadingStartTime ?? '',                               // NEW(D)
        unloadingEndTime: c.unloadingEndTime ?? '',                                   // NEW(D)
        unloadingDuration: calcTimeDuration(c.unloadingStartTime ?? '', c.unloadingEndTime ?? ''), // NEW(D)
