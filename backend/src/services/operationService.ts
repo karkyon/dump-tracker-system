@@ -263,17 +263,21 @@ export class OperationService {
         operationNumber,
         vehicleId: request.vehicleId,
         driverId: request.driverId,
-        customerId: (request as any).customerId,          // ✅ BUG-041補足: 客先ID
+        customerId: request.customerId,          // 客先ID
         status: 'IN_PROGRESS' as OperationStatus,
         plannedStartTime: request.plannedStartTime || new Date(),
         actualStartTime: new Date(),
         plannedEndTime: request.plannedEndTime,
         notes: request.notes,
-        startOdometer: (request as any).startOdometer,   // ✅ BUG-041補足: startOdometerをDB保存
+        startOdometer: request.startOdometer,   // 開始走行距離
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      logger.info('✅ [LINE 15] 運行データ準備完了', { operationData });
+      logger.info('✅ [LINE 15] 運行データ準備完了', {
+        operationData,
+        customerId: request.customerId ?? 'UNDEFINED',
+        startOdometer: request.startOdometer ?? 'UNDEFINED',
+      });
 
       // 運行作成
       logger.info('🚀 [LINE 16] 運行レコード作成開始（Prisma INSERT）');
