@@ -120,6 +120,8 @@ const OperationRecord: React.FC = () => {
   const [detailCustomers, setDetailCustomers] = useState<{ id: string; name: string }[]>([]);
   const [detailItems, setDetailItems] = useState<{ id: string; name: string }[]>([]);
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
+  // ✅ BUG-051完全修正: APIレスポンスの運行客先名を保持（storeのcustomerNameに依存しない）
+  const [detailOperationCustomerName, setDetailOperationCustomerName] = useState<string | null>(null);
 
   // 🆕 地点選択ダイアログの状態（D5/D6新仕様）
   const [locationDialogVisible, setLocationDialogVisible] = useState(false);
@@ -838,6 +840,10 @@ const OperationRecord: React.FC = () => {
     try {
       const res = await (apiService as any).getOperationDetail(opId);
       const detail = res?.data ?? res;
+      // ✅ BUG-051完全修正: 運行全体の客先名をstateに保存（storeのcustomerNameに依存しない）
+      if (detail?.customerName) {
+        setDetailOperationCustomerName(detail.customerName);
+      }
       if (detail?.activities && Array.isArray(detail.activities)) {
         setDetailActivities(detail.activities.filter((a: any) =>
           !['NOTE', 'OTHER'].includes(a.activityType || '')
@@ -1501,7 +1507,7 @@ const OperationRecord: React.FC = () => {
               ))}
             </div>
             {/* リスト */}
-            <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#fff', WebkitOverflowScrolling: 'touch' }}>
               <div style={{ fontSize: 9, fontWeight: 500, color: '#6b7280', padding: '5px 10px 2px', letterSpacing: '.05em', textTransform: 'uppercase', borderBottom: '0.5px solid #e5e7eb' }}>運行内容 — タップで編集</div>
               {detailLoading ? (
                 <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>読み込み中...</div>
@@ -1620,10 +1626,10 @@ const OperationRecord: React.FC = () => {
                           {new Date(act.endTime).toTimeString().slice(0, 5)}
                         </div>
                       )}
-                      {isL && (act.customerName || customerName || act.itemName) && (
+                      {isL && (act.customerName || detailOperationCustomerName || act.itemName) && (
                         <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>
-                          {/* ✅ BUG-051修正: act.customerName を優先。なければ運行全体のcustomerName（store）をfallback */}
-                          {act.customerName || customerName || ''}
+                          {/* ✅ BUG-051完全修正: act.customerNameを優先、なければAPIの運行客先名をfallback（storeは使わない） */}
+                          {act.customerName || detailOperationCustomerName || ''}
                           {act.itemName ? (
                             <span> ／ <span style={{ color: '#374151', fontWeight: 500 }}>{act.itemName}</span></span>
                           ) : null}
