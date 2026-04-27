@@ -95,6 +95,14 @@ export interface InspCheckItem {
   measure: string;     // 措置
 }
 
+/** ⑤c: キロ数値にカンマ区切り + km単位付加 */
+function fmtKm(v: string): string {
+  if (!v) return '';
+  const n = parseFloat(v.replace(/,/g, ''));
+  if (isNaN(n)) return v;
+  return n.toLocaleString('ja-JP') + 'km';
+}
+
 /** ⑤d: "X時間YY分" → "XX分" に変換（分のみ表示） */
 function toMinutesOnly(duration: string): string {
   if (!duration) return '';
@@ -359,13 +367,6 @@ function drawHeaderRow(
 
   // 始（上段ラベル / 下段値）
   cell(doc, cx, y,          kiloHalfW, h / 2, '始', { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg: '#F0F0F0' });
-  // ⑤c: キロにカンマ + km単位付加
-  const fmtKm = (v: string) => {
-    if (!v) return '';
-    const n = parseFloat(v.replace(/,/g, ''));
-    if (isNaN(n)) return v;
-    return n.toLocaleString('ja-JP') + 'km';
-  };
   cell(doc, cx, y + h / 2,  kiloHalfW, h / 2, fmtKm(data.startOdometer), { font: fontN, fontSize: 7 });
   cx += kiloHalfW;
 
@@ -544,7 +545,13 @@ function drawFuelSection(
   const fuelLblW = 40;
   cell(doc, cx, y, fuelLblW, rowH, '給油量', fLabel); cx += fuelLblW;
   const fuelValW = 45;
-  cell(doc, cx, y, fuelValW, rowH, data.fuelLiters, fVal); cx += fuelValW;
+  // ⑤e: 複数給油対応（"|"区切りを改行表示）
+  const fuelLitersLines = data.fuelLiters ? data.fuelLiters.split('|') : [];
+  const fuelKmLines     = data.fuelOdometerKm ? data.fuelOdometerKm.split('|') : [];
+  const fuelDisplay    = fuelLitersLines.slice(0,2).join('\n') || '';
+  const fuelKmDisplay  = fuelKmLines.slice(0,2).join('\n') || '';
+  // ⑤e: 複数給油は改行で表示（lineBreakはcell型非対応のため通常表示）
+  cell(doc, cx, y, fuelValW, rowH, fuelDisplay, fVal); cx += fuelValW;
   const fuelUnitW = 16;
   cell(doc, cx, y, fuelUnitW, rowH, 'ℓ', fLabel); cx += fuelUnitW;
 
@@ -552,7 +559,7 @@ function drawFuelSection(
   const fuelKmLblW = 50;
   cell(doc, cx, y, fuelKmLblW, rowH, '給油時キロ', fLabel); cx += fuelKmLblW;
   const fuelKmValW = 35;
-  cell(doc, cx, y, fuelKmValW, rowH, data.fuelOdometerKm, fVal); cx += fuelKmValW;
+  cell(doc, cx, y, fuelKmValW, rowH, fuelKmDisplay, fVal); cx += fuelKmValW;
   const fuelKmUnitW = 18;
   cell(doc, cx, y, fuelKmUnitW, rowH, 'km', fLabel); cx += fuelKmUnitW;
 

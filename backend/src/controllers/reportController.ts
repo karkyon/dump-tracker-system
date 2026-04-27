@@ -194,6 +194,35 @@ export const getReportById = asyncHandler(async (req: AuthenticatedRequest, res:
 // =====================================
 
 /**
+ * 対象日に運行のある車両ID一覧取得
+ * GET /api/v1/reports/daily-operation/available-vehicles?date=YYYY-MM-DD
+ */
+export const getAvailableVehiclesForDate = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) return sendError(res, '認証が必要です', 401, ERROR_CODES.UNAUTHORIZED);
+  const { date } = req.query;
+  if (!date) return sendError(res, 'dateパラメータが必要です', 400, ERROR_CODES.VALIDATION_ERROR);
+
+  const db = DatabaseService.getInstance();
+  const targetDate = new Date(date as string);
+  const startOfDay = new Date(targetDate); startOfDay.setHours(0,0,0,0);
+  const endOfDay   = new Date(targetDate); endOfDay.setHours(23,59,59,999);
+
+  const ops = await db.operation.findMany({
+    where: {
+      OR: [
+        { actualStartTime:  { gte: startOfDay, lte: endOfDay } },
+        { plannedStartTime: { gte: startOfDay, lte: endOfDay } },
+      ],
+    },
+    select: { vehicleId: true },
+    distinct: ['vehicleId'],
+  });
+
+  const vehicleIds = ops.map((o: any) => o.vehicleId).filter(Boolean);
+  return sendSuccess(res, { vehicleIds, date }, '対象日の運行車両一覧を取得しました');
+});
+
+/**
  * 日次運行レポート生成(統合版)
  * POST /api/v1/reports/daily-operation
  * 権限制御: 管理者・マネージャー・ドライバー
@@ -900,6 +929,7 @@ export const getReportTemplates = asyncHandler(async (req: AuthenticatedRequest,
 export default {
   getAllReports,
   getReportById,
+  getAvailableVehiclesForDate,
   generateDailyOperationReport,
   generateMonthlyOperationReport,
   generateVehicleUtilizationReport,

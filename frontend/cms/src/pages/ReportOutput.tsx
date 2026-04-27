@@ -231,9 +231,13 @@ async function apiFetchReports(params?: {
   if (!res.ok) throw new Error(`レポート一覧取得エラー: ${res.status}`);
   const json = await res.json();
   let reports: Report[] = json.data?.reports || [];
-  // 車両フィルターはフロント側でも絞り込み（バックエンドが未対応の場合）
+  // ④ 車両フィルター: vehicleId または metadata.vehicleId で絞り込み
   if (params?.vehicleId) {
-    reports = reports.filter(r => r.vehicleId === params.vehicleId);
+    reports = reports.filter(r =>
+      r.vehicleId === params!.vehicleId ||
+      (r as any).metadata?.vehicleId === params!.vehicleId ||
+      (r as any).parameters?.vehicleId === params!.vehicleId
+    );
   }
   return reports;
 }
@@ -703,7 +707,7 @@ const ReportOutput: React.FC = () => {
             {/* 生成ボタン */}
             <button
               onClick={handleGenerateDailyReport}
-              disabled={isAnyGenerating}
+              disabled={isAnyGenerating || vehicles.filter(v => v.hasOps).length === 0}
               className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {isAnyGenerating ? (
@@ -718,6 +722,11 @@ const ReportOutput: React.FC = () => {
                 </>
               )}
             </button>
+            {vehicles.length > 0 && vehicles.filter(v => v.hasOps).length === 0 && (
+              <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-2">
+                ⚠️ 対象日（{dailyDate}）に運行履歴のある車両がありません。日報は生成できません。
+              </p>
+            )}
           </div>
         </div>
 
@@ -1018,7 +1027,7 @@ const ReportOutput: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                {['帳票名', '対象期間', '形式', '生成日時', 'サイズ', 'ステータス', '操作'].map((h) => (
+                {['帳票名', '対象期間', '対象車両', '形式', '生成日時', 'サイズ', 'ステータス', '操作'].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -1031,14 +1040,14 @@ const ReportOutput: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoadingReports ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     <RefreshCw className="w-5 h-5 animate-spin inline mr-2" />
                     読み込み中...
                   </td>
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     生成履歴はありません
                   </td>
                 </tr>

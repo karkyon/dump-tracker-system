@@ -110,6 +110,15 @@ router.get(
  * 権限: 全ロール（個人データ制限あり）
  * 機能: 3層統合データ（ユーザー・車両・点検）による総合分析
  */
+/**
+ * 対象日に運行のある車両ID一覧取得
+ * GET /api/v1/reports/daily-operation/available-vehicles?date=YYYY-MM-DD
+ */
+router.get(
+  '/daily-operation/available-vehicles',
+  reportController.getAvailableVehiclesForDate
+);
+
 router.post(
   '/daily-operation',
   reportController.generateDailyOperationReport
