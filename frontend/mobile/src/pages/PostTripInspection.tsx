@@ -607,15 +607,15 @@ const PostTripInspection: React.FC = () => {
         {/* 備考欄 */}
         <div className="bg-white rounded-xl shadow-md p-5 mb-6">
           <label className="block text-sm font-bold text-gray-700 mb-3">
-            備考・特記事項
+            📝 点検メモ・特記事項（気になった点・軽微な問題）
           </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            placeholder="運行中の気づきや特記事項があれば記入してください"
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg 
-              focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200
+            placeholder="例: 左後タイヤの摩耗が進んでいる、ブレーキの効きがやや甘い など&#10;問題なければ空欄のままでOKです"
+            className="w-full px-4 py-3 border-2 border-yellow-200 rounded-lg 
+              focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200
               resize-none transition-all duration-200"
           />
         </div>

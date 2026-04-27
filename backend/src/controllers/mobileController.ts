@@ -1132,8 +1132,31 @@ export class MobileController {
         includeCurrentLocation: false
       });
 
+      // 各車両の最新完了運行からドライバー名・日付を取得
+      const db = DatabaseService.getInstance();
+      const vehiclesWithLastDriver = await Promise.all(
+        (result.data || []).map(async (v: any) => {
+          try {
+            const lastOp = await db.operation.findFirst({
+              where: { vehicleId: v.id, status: { in: ['COMPLETED', 'IN_PROGRESS'] } },
+              orderBy: { actualStartTime: 'desc' },
+              include: { usersOperationsDriverIdTousers: { select: { name: true } } }
+            });
+            return {
+              ...v,
+              lastDriver: lastOp?.usersOperationsDriverIdTousers?.name ?? null,
+              lastOperationDate: lastOp?.actualStartTime
+                ? new Date(lastOp.actualStartTime).toISOString().split('T')[0]
+                : null,
+            };
+          } catch {
+            return { ...v, lastDriver: null, lastOperationDate: null };
+          }
+        })
+      );
+
       const mobileResponse = {
-        vehicles: result.data || [],
+        vehicles: vehiclesWithLastDriver,
         pagination: {
           page: paginationQuery.page,
           pageSize: paginationQuery.limit,

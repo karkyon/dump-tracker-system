@@ -17,6 +17,7 @@ const RefuelRecord: React.FC = () => {
 
   const navigate = useNavigate();
   const operationStore = useOperationStore();
+  const startMileage = operationStore.startMileage;  // 🆕 運行開始時走行距離
 
   // 🔧 修正: 文字列型に変更（0固定問題解決）
   const [fuelAmount, setFuelAmount] = useState<string>('');      // 給油量（文字列）
@@ -24,6 +25,8 @@ const RefuelRecord: React.FC = () => {
   const [fuelStation, setFuelStation] = useState<string>('');    // 給油所名
   const [notes, setNotes] = useState<string>('');                // メモ
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // 🆕 BUG-050: 給油時走行距離
+  const [mileageAtRefuel, setMileageAtRefuel] = useState<string>('');
 
   /**
    * 🆕 数値をカンマ区切りに変換
@@ -91,6 +94,9 @@ const RefuelRecord: React.FC = () => {
       // 金額の数値変換（任意）
       const fuelCostNum = fuelCost ? parseNumberFromComma(fuelCost) : undefined;
 
+      // 🆕 給油時走行距離の数値変換
+      const mileageAtRefuelNum = mileageAtRefuel ? parseInt(mileageAtRefuel.replace(/,/g, ''), 10) : undefined;
+
       // 🆕 GPS座標取得
       let gpsCoords: { latitude?: number; longitude?: number; accuracy?: number } = {};
       try {
@@ -120,12 +126,18 @@ const RefuelRecord: React.FC = () => {
       });
 
       // API呼び出し
+      // 🆕 走行距離をnotesに付加（reportService.tsがnotesの"XXkm"パターンを解析）
+      const combinedNotes = [
+        notes || '',
+        mileageAtRefuelNum ? `走行距離:${mileageAtRefuelNum}km` : ''
+      ].filter(Boolean).join(' ') || undefined;
+
       await apiService.recordFuel(currentOperationId, {
         fuelAmount: fuelAmountNum,
         fuelCost: fuelCostNum,
         fuelStation: fuelStation || undefined,
         ...gpsCoords,          // 🆕 GPS座標追加
-        notes: notes || undefined
+        notes: combinedNotes
       });
 
       console.log('✅ 給油記録保存完了');
@@ -205,6 +217,33 @@ const RefuelRecord: React.FC = () => {
             <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
               ※ 任意項目です
             </div>
+          </div>
+
+          {/* 🆕 給油時走行距離 */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+              給油時走行距離（km）
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={mileageAtRefuel}
+              onChange={(e) => setMileageAtRefuel(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '16px',
+                boxSizing: 'border-box' as const
+              }}
+              placeholder={startMileage ? `現在: ${startMileage.toLocaleString()}km以上` : '例: 12,450'}
+            />
+            {startMileage && mileageAtRefuel && parseInt(mileageAtRefuel) > startMileage && (
+              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                本日走行: {(parseInt(mileageAtRefuel) - startMileage).toLocaleString()} km
+              </div>
+            )}
           </div>
 
           {/* 給油所名 */}

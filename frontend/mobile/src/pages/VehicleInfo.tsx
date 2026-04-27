@@ -138,25 +138,8 @@ const VehicleInfo: React.FC = () => {
           throw new Error('車両データの形式が不正です');
         }
         
-        // ✅ APIレスポンスを表示用データに変換
+        // ✅ APIレスポンスを表示用データに変換（lastDriver/lastOperationDateをAPIから直接取得）
         const vehicleList: VehicleDisplay[] = apiVehicles.map((v: VehicleData) => {
-          // notesから運転手名と最終運行日を抽出(存在する場合)
-          let lastDriver: string | undefined;
-          let lastOperationDate: string | undefined;
-          
-          if (v.notes) {
-            const driverMatch = v.notes.match(/運転手[:：]\s*([^\s/]+)/);
-            const dateMatch = v.notes.match(/最終運行[:：]\s*(\d{4}-\d{2}-\d{2})/);
-            
-            // ✅ 修正: undefinedチェックを追加
-            if (driverMatch && driverMatch[1]) {
-              lastDriver = driverMatch[1];
-            }
-            if (dateMatch && dateMatch[1]) {
-              lastOperationDate = dateMatch[1];
-            }
-          }
-          
           return {
             id: v.id,  // ✅ UUID形式のIDをそのまま使用
             vehicleNumber: v.plateNumber,  // 車番(ナンバープレート)
@@ -165,8 +148,9 @@ const VehicleInfo: React.FC = () => {
             capacity: v.capacity ?? v.capacityTons ?? undefined,  // REQ-004
             inspectionExpiry: v.inspectionExpiry ?? undefined,  // REQ-007
             status: v.status,  // 🆕 ステータスをそのまま保持
-            lastDriver: lastDriver || '未割当',
-            lastOperationDate: lastOperationDate || '－'
+            // ✅ BUG-048修正: notesテキスト解析を廃止→APIから直接取得
+            lastDriver: (v as any).lastDriver ?? '未割当',
+            lastOperationDate: (v as any).lastOperationDate ?? '－'
           };
         });
         

@@ -55,6 +55,8 @@ const PreDepartureInspection: React.FC = () => {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCriticalError, setIsCriticalError] = useState(false);
+  // 🆕 BUG-049: 点検メモ欄（軽微な問題を記録）
+  const [inspectionMemo, setInspectionMemo] = useState('');
 
   // 画面初期化
   useEffect(() => {
@@ -231,7 +233,7 @@ const PreDepartureInspection: React.FC = () => {
         inspectorId: driverId,
         inspectionType: 'PRE_TRIP',
         results: inspectionResults,
-        notes: '乗車前点検完了'
+        notes: inspectionMemo.trim() ? `乗車前点検完了 / メモ: ${inspectionMemo.trim()}` : '乗車前点検完了'
       });
 
       if (!inspectionResponse.success) {
@@ -504,6 +506,25 @@ const PreDepartureInspection: React.FC = () => {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 🆕 BUG-049: 点検メモ欄（軽微な問題を記録） */}
+        <div className="bg-white rounded-2xl shadow-md p-4 mb-6 animate-fade-in">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            📝 点検メモ（気になった点・軽微な問題があれば記載）
+          </label>
+          <textarea
+            value={inspectionMemo}
+            onChange={(e) => setInspectionMemo(e.target.value)}
+            rows={3}
+            placeholder="例: 左前タイヤの空気圧がやや低め、エンジン音に軽微な異音あり など&#10;問題なければ空欄のままでOKです"
+            className="w-full px-4 py-3 bg-gray-50 border-2 border-yellow-200 rounded-xl
+              focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent
+              transition-all duration-200 text-gray-800 resize-none text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            ※ 問題なければ空欄のままでOKです
+          </p>
         </div>
 
         {/* ボタン群 */}

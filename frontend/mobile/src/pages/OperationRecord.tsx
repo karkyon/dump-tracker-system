@@ -1366,8 +1366,13 @@ const OperationRecord: React.FC = () => {
             {currentTime.toLocaleTimeString('ja-JP')}
           </div>
         </div>
-        <div style={{ marginTop: '8px', fontSize: '14px', opacity: 0.9 }}>
-          {operation.operationNumber} - {operation.vehicleName}
+        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '18px', fontWeight: 'bold', opacity: 1.0 }}>
+            🚛 {operation.vehicleName || operationStore.vehicleNumber || ''}
+          </span>
+          <span style={{ fontSize: '15px', opacity: 0.85 }}>
+            {operation.driverName || authStore.user?.name || ''}
+          </span>
         </div>
         {/* REQ-011: 客先名 + 切替ボタン */}
         <div style={{
@@ -1615,9 +1620,10 @@ const OperationRecord: React.FC = () => {
                           {new Date(act.endTime).toTimeString().slice(0, 5)}
                         </div>
                       )}
-                      {isL && (act.customerName || customerName || act.itemName) && (
+                      {isL && (act.customerName || act.itemName) && (
                         <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>
-                          {act.customerName || customerName || ''}
+                          {/* ✅ BUG-051修正: act.customerName を優先。なければ空文字（全件共有のcustomerNameは使わない） */}
+                          {act.customerName || ''}
                           {act.itemName ? (
                             <span> ／ <span style={{ color: '#374151', fontWeight: 500 }}>{act.itemName}</span></span>
                           ) : null}
