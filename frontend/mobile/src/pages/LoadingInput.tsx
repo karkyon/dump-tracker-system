@@ -623,7 +623,7 @@ const LoadingInput: React.FC = () => {
                           lineHeight: '1.7',
                           fontWeight: '600',
                         }}>
-                          注意: 産業廃棄物マニフェストを登録する場合は、
+                          📋 産業廃棄物マニフェストを登録する場合は、
                           <a
                             href="https://webpage.e-reverse.com"
                             target="_blank"
