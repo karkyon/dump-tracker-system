@@ -610,24 +610,35 @@ const LoadingInput: React.FC = () => {
                     {/* 廃棄物グループの直下に電子マニフェストリンクを表示 */}
                     {group.key === 'WASTE' && (
                       <div style={{
-                        margin: '-4px 0 12px 0',
-                        padding: '10px 14px',
-                        background: '#fef3c7',
-                        border: '1px solid #f59e0b',
-                        borderRadius: '8px',
-                        fontSize: '13px',
-                        color: '#78350f',
-                        fontWeight: '600',
+                        margin: '4px 0 16px 0',
+                        padding: '14px 16px',
+                        background: '#fffbeb',
+                        border: '2px solid #f59e0b',
+                        borderRadius: '10px',
                       }}>
-                        📋 産業廃棄物マニフェストはこちら →{' '}
-                        <a
-                          href="https://webpage.e-reverse.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: '#1d4ed8', textDecoration: 'underline', fontWeight: '700' }}
-                        >
-                          e-reverse.com
-                        </a>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '15px',
+                          color: '#78350f',
+                          lineHeight: '1.7',
+                          fontWeight: '600',
+                        }}>
+                          注意: 産業廃棄物マニフェストを登録する場合は、
+                          <a
+                            href="https://webpage.e-reverse.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: '#1d4ed8',
+                              textDecoration: 'underline',
+                              fontWeight: '700',
+                              fontSize: '16px',
+                            }}
+                          >
+                            こちら
+                          </a>
+                          からログインしてください。
+                        </p>
                       </div>
                     )}
                   </React.Fragment>
