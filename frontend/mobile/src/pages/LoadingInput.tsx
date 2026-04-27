@@ -83,6 +83,10 @@ const LoadingInput: React.FC = () => {
   // ---- 品目マスタ ----
   const [items, setItems] = useState<Item[]>([]);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
+  // 大項目グループ順序（CMS品目管理のdisplayOrderを元に動的取得）
+  const [groupOrder, setGroupOrder] = useState<('RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined)[]>(
+    ['RECYCLED_MATERIAL', 'VIRGIN_MATERIAL', 'WASTE', undefined]
+  );
 
   // ---- フォームデータ ----
   const [formData, setFormData] = useState<FormData>({
@@ -154,7 +158,18 @@ const LoadingInput: React.FC = () => {
         setIsLoadingItems(true);
         const response = await apiService.getItems();
         if (response.success && response.data) {
-          setItems(response.data);
+          const data: Item[] = response.data;
+          setItems(data);
+          // 大項目グループ順序を動的計算（各typeの最小displayOrderでソート）
+          const orderMap = new Map<string | undefined, number>();
+          data.forEach((it) => {
+            const cur = orderMap.get(it.itemType) ?? 999;
+            if ((it.displayOrder ?? 999) < cur) orderMap.set(it.itemType, it.displayOrder ?? 999);
+          });
+          const typeKeys: ('RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined)[] =
+            ['RECYCLED_MATERIAL', 'VIRGIN_MATERIAL', 'WASTE', undefined];
+          typeKeys.sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999));
+          setGroupOrder(typeKeys);
         }
       } catch (error) {
         console.error('品目取得エラー:', error);
@@ -506,13 +521,17 @@ const LoadingInput: React.FC = () => {
               品目を読み込み中...
             </div>
           ) : (() => {
-            // 区分定義（表示順）
-            const TYPE_GROUPS: { key: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined; label: string }[] = [
-              { key: 'RECYCLED_MATERIAL', label: '再生材' },
-              { key: 'VIRGIN_MATERIAL',   label: 'バージン材' },
-              { key: 'WASTE',             label: '廃棄物' },
-              { key: undefined,           label: 'その他' },
-            ];
+            // 区分定義（CMSの品目displayOrderから動的に決定）
+            const TYPE_LABEL_MAP: Record<string, string> = {
+              RECYCLED_MATERIAL: '再生材',
+              VIRGIN_MATERIAL: 'バージン材',
+              WASTE: '廃棄物',
+            };
+            const TYPE_GROUPS: { key: 'RECYCLED_MATERIAL' | 'VIRGIN_MATERIAL' | 'WASTE' | undefined; label: string }[] =
+              groupOrder.map(k => ({
+                key: k,
+                label: k ? (TYPE_LABEL_MAP[k] ?? k) : 'その他',
+              }));
             // 区分ごとにグループ化してソート
             const grouped = TYPE_GROUPS.map(group => ({
               ...group,
@@ -752,32 +771,7 @@ const LoadingInput: React.FC = () => {
                注意: 「運行開始」ボタンを押すと、GPS位置と共に積込記録が登録され、積降場所への移動フェーズに移行します。
             </p>
           </div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '14px',
-              color: '#78350f',
-              lineHeight: '1.7',
-              fontWeight: '600',
-              paddingLeft: '34px',
-            }}
-          >
-            注意: 産業廃棄物マニフェストを登録する場合は、
-            <a
-              href="https://webpage.e-reverse.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: '#1d4ed8',
-                textDecoration: 'underline',
-                fontWeight: '700',
-                fontSize: '15px',
-              }}
-            >
-              こちら
-            </a>
-            からログインしてください。
-          </p>
+          {/* マニフェストリンクは廃棄物グループ直下に移動 */}
         </div>
 
       </main>

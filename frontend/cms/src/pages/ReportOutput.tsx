@@ -78,10 +78,10 @@ interface Report {
   errorMessage: string | null;
 }
 
-interface DriverUser {
+interface VehicleItem {
   id: string;
-  name: string;
-  username: string;
+  plateNumber: string;
+  model: string;
 }
 
 interface GeneratingReport {
@@ -349,8 +349,8 @@ const ReportOutput: React.FC = () => {
     new Date().toISOString().split('T')[0]
   );
   const [dailyFormat, setDailyFormat] = useState<ReportFormat>('PDF');
-  const [selectedDriverId, setSelectedDriverId] = useState<string>('');
-  const [drivers, setDrivers] = useState<DriverUser[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
+  const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   // dailyInclude: 廃止（チェックボックスUI削除）
 
   // 生成中レポートの追跡
@@ -395,26 +395,25 @@ const ReportOutput: React.FC = () => {
     fetchReports();
   }, [fetchReports]);
 
-  // 運転手一覧を取得
+  // 車両一覧を取得（日報集計単位=車両）
   useEffect(() => {
-    const fetchDrivers = async () => {
+    const fetchVehicles = async () => {
       try {
-        const res = await fetch(`${API_BASE}/users?role=DRIVER&limit=100`, {
+        const res = await fetch(`${API_BASE}/vehicles?limit=100`, {
           headers: getAuthHeaders(),
         });
         if (!res.ok) return;
         const json = await res.json();
-        // レスポンス構造の正規化
-        const rawData = json.data?.data?.users ?? json.data?.users ?? json.data ?? [];
-        const list: DriverUser[] = Array.isArray(rawData)
-          ? rawData.map((u: any) => ({ id: u.id, name: u.name ?? u.username, username: u.username }))
+        const rawData = json.data?.data?.vehicles ?? json.data?.vehicles ?? json.data?.data ?? json.data ?? [];
+        const list: VehicleItem[] = Array.isArray(rawData)
+          ? rawData.map((v: any) => ({ id: v.id, plateNumber: v.plateNumber ?? v.plate_number ?? '', model: v.model ?? '' }))
           : [];
-        setDrivers(list);
+        setVehicles(list);
       } catch (err) {
-        console.error('[ReportOutput] ドライバー取得エラー:', err);
+        console.error('[ReportOutput] 車両取得エラー:', err);
       }
     };
-    fetchDrivers();
+    fetchVehicles();
   }, []);
 
   // =====================================
@@ -484,7 +483,7 @@ const ReportOutput: React.FC = () => {
       const result = await apiGenerateDailyReport({
         date: dailyDate,
         format: dailyFormat,
-        driverId: selectedDriverId || undefined,
+        vehicleId: selectedVehicleId || undefined,
       });
 
       const newGenerating: GeneratingReport = {
@@ -611,20 +610,20 @@ const ReportOutput: React.FC = () => {
               />
             </div>
 
-            {/* 運転手選択 */}
+            {/* 車両選択（集計単位=車両） */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                運転手 <span className="text-gray-400 text-xs">（未選択の場合は当日の全運行を集計）</span>
+                車両 <span className="text-gray-400 text-xs">（未選択の場合は当日の全運行を集計）</span>
               </label>
               <select
-                value={selectedDriverId}
-                onChange={(e) => setSelectedDriverId(e.target.value)}
+                value={selectedVehicleId}
+                onChange={(e) => setSelectedVehicleId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">── 全員（指定なし）──</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}（{d.username}）
+                <option value="">── 全車両（指定なし）──</option>
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.plateNumber}（{v.model}）
                   </option>
                 ))}
               </select>
