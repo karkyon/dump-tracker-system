@@ -152,21 +152,31 @@ const LocationManagement: React.FC = () => {
       },
     },
     {
-      key: 'registrationMethod',
+      key: 'specialInstructions',   // ✅ DBの実フィールドを直接参照
       header: '登録方法',
       width: '96px',
       render: (value: string, location: Location) => {
-        // ✅ 登録方法判定:
-        // CMS画面から登録 → specialInstructions が空 or 'CMS登録' or registrationMethod='admin'
-        // モバイルアプリから登録 → specialInstructions に '管理者から登録' 以外の値
-        //   (createQuickLocation経由では specialInstructions = 'モバイルからクイック登録' が設定される)
-        const sp = (location as any).specialInstructions || (location as any).special_instructions || '';
+        // ✅ 登録方法判定（確実版）:
+        // quickAddLocation → specialInstructions = 'モバイルからクイック登録' がDBに保存される
+        // CMS登録 → specialInstructions が null/空/undefined
+        //
+        // value = specialInstructions の値（Tableコンポーネントが location.specialInstructions を渡す）
+        // location オブジェクトからも参照（型が合わない場合のフォールバック）
+        const sp = value ||
+          (location as any).specialInstructions ||
+          (location as any).special_instructions || '';
+        
+        // locationType でのフォールバック判定:
+        // DEPOT / DESTINATION → 旧モバイル登録型（以前の実装）
+        const lt = location.locationType as string;
+        const isOldMobileType = lt === 'DEPOT' || lt === 'DESTINATION';
+        
         const isMobile =
           sp.includes('モバイル') ||
           sp.includes('アプリ') ||
           sp.includes('クイック') ||
-          value === 'mobile' ||
-          value === 'app';
+          isOldMobileType;
+          
         return (
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
             isMobile ? 'bg-orange-100 text-orange-800' : 'bg-purple-100 text-purple-800'
