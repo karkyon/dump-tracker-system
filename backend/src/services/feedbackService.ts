@@ -3,7 +3,7 @@
 // Firebase Firestore読取・ステータス更新・Backlog連携
 
 import logger from '../utils/logger';
-import { getFirestore, getStorage } from '../lib/firebase-admin';
+import { getFirestore as getFirestoreAsync, getStorage as getStorageAsync } from '../lib/firebase-admin';
 import * as admin from 'firebase-admin';
 
 // =============================================
@@ -156,7 +156,7 @@ export class FeedbackService {
 
   // 一覧取得
   async list(filter: FeedbackFilter): Promise<{ items: FeedbackDocument[]; total: number; stats: FeedbackStats }> {
-    const db = getFirestore();
+    const db = await getFirestoreAsync();
     const page = filter.page || 1;
     const limit = filter.limit || 20;
     const allItems: FeedbackDocument[] = [];
@@ -214,7 +214,7 @@ export class FeedbackService {
 
   // 詳細取得（Storage署名付きURL生成）
   async getById(id: string): Promise<FeedbackDocument | null> {
-    const db = getFirestore();
+    const db = await getFirestoreAsync();
     for (const col of this.COLLECTIONS) {
       const snap = await db.collection(col).doc(id).get();
       if (snap.exists) {
@@ -223,7 +223,7 @@ export class FeedbackService {
         // 署名付きURL生成
         if (fb.photoPaths && fb.photoPaths.length > 0) {
           try {
-            const bucket = getStorage().bucket();
+            const bucket = (await getStorageAsync()).bucket();
             const urls: string[] = [];
             for (const p of fb.photoPaths) {
               const [url] = await bucket.file(p).getSignedUrl({
@@ -247,7 +247,7 @@ export class FeedbackService {
 
   // ステータス更新
   async updateStatus(id: string, status: FeedbackStatus, changedBy: string): Promise<void> {
-    const db = getFirestore();
+    const db = await getFirestoreAsync();
     for (const col of this.COLLECTIONS) {
       const docRef = db.collection(col).doc(id);
       const snap = await docRef.get();
@@ -270,7 +270,7 @@ export class FeedbackService {
 
   // 管理者メモ更新
   async updateNotes(id: string, notes: string, updatedBy: string): Promise<void> {
-    const db = getFirestore();
+    const db = await getFirestoreAsync();
     for (const col of this.COLLECTIONS) {
       const docRef = db.collection(col).doc(id);
       const snap = await docRef.get();
@@ -360,7 +360,7 @@ export class FeedbackService {
     logger.info('Backlog チケット起票完了', { issueKey: data.issueKey, summary: data.summary });
 
     // Firestoreに連携情報を保存
-    const db = getFirestore();
+    const db = await getFirestoreAsync();
     for (const col of this.COLLECTIONS) {
       const docRef = db.collection(col).doc(id);
       const snap = await docRef.get();
@@ -380,7 +380,7 @@ export class FeedbackService {
 
   // Backlog連携解除
   async unlinkBacklog(id: string): Promise<void> {
-    const db = getFirestore();
+    const db = await getFirestoreAsync();
     for (const col of this.COLLECTIONS) {
       const docRef = db.collection(col).doc(id);
       const snap = await docRef.get();
