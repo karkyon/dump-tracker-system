@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { AlertTriangle, Building2, Save, Settings, Trash2, Upload, Download } from 'lucide-react';
+import { AlertTriangle, Building2, Link2, Save, Settings, Trash2, Upload, Download } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { API_BASE_URL } from '../utils/constants';
@@ -100,6 +100,52 @@ const SystemSettings: React.FC = () => {
   useTLog('SYSTEM_SETTINGS', 'システム設定');
 
   const [activeTab, setActiveTab] = useState('general');
+  // =============================================
+  // 🆕 連携設定 State
+  // =============================================
+  const [integrationSettings, setIntegrationSettings] = useState<any>(null);
+  const [firebaseFile, setFirebaseFile] = useState<any>(null);
+  const [firebaseUploading, setFirebaseUploading] = useState(false);
+  const [firebaseSaved, setFirebaseSaved] = useState(false);
+  const [firebaseError, setFirebaseError] = useState<any>(null);
+
+  const fetchIntegrationSettings = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/settings/system/integration`, { headers: getAuthHeaders() });
+      if (!res.ok) return;
+      const json = await res.json();
+      setIntegrationSettings(json.data);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchIntegrationSettings(); }, [fetchIntegrationSettings]);
+
+  const handleSaveFirebaseSettings = async () => {
+    if (!firebaseFile) return;
+    setFirebaseUploading(true); setFirebaseError(null); setFirebaseSaved(false);
+    try {
+      const text = await firebaseFile.text();
+      const res = await fetch(`${API_BASE_URL}/settings/system/integration/firebase`, {
+        method: 'PUT', headers: getAuthHeaders(),
+        body: JSON.stringify({ serviceAccountJson: text }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || `エラー: ${res.status}`);
+      setFirebaseSaved(true); setFirebaseFile(null);
+      setTimeout(() => setFirebaseSaved(false), 5000);
+      await fetchIntegrationSettings();
+    } catch (e: any) { setFirebaseError(e.message || 'アップロードに失敗しました'); }
+    finally { setFirebaseUploading(false); }
+  };
+
+  const handleDeleteFirebaseSettings = async () => {
+    if (!confirm('Firebase設定を削除しますか？フィードバック機能が使用できなくなります。')) return;
+    try {
+      await fetch(`${API_BASE_URL}/settings/system/integration/firebase`, { method: 'DELETE', headers: getAuthHeaders() });
+      await fetchIntegrationSettings();
+    } catch { /* ignore */ }
+  };
+
 
   // =====================================
   // 一般設定 state（localStorage 永続化）
@@ -172,7 +218,7 @@ const SystemSettings: React.FC = () => {
   const [operationSettingSaved, setOperationSettingSaved]   = useState(false);
 
   // 🆕 システム設定読み込み
-  React.useEffect(() => {
+  useEffect(() => {
     fetchSystemSettings()
       .then(data => {
         if (data.departure_alert_distance_m) {
@@ -217,6 +263,7 @@ const SystemSettings: React.FC = () => {
     { id: 'operation', label: '運行設定',   icon: Settings      },  // 🆕 離脱検知距離等
     { id: 'business',  label: '事業者情報', icon: Building2     },
     { id: 'logs',      label: 'ログ管理',   icon: AlertTriangle },
+    { id: 'integration', label: '連携設定',   icon: Link2 },
   ];
 
   // =====================================
@@ -1116,6 +1163,99 @@ const SystemSettings: React.FC = () => {
           </div>
         </div>
       )}
+      {/* =====================================================
+          連携設定タブ
+      ===================================================== */}
+      {activeTab === 'integration' && (
+        <div className="space-y-6">
+          {/* Firebase */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">🔥 Firebase 連携設定</h2>
+                <p className="text-sm text-gray-500 mt-1">フィードバック管理で使用するFirebase Admin SDKのサービスアカウント設定</p>
+              </div>
+              {integrationSettings?.firebase?.configured && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✅ 設定済み</span>
+              )}
+            </div>
+            {integrationSettings?.firebase?.configured && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4 text-sm">
+                <div className="font-semibold text-green-800 mb-1">現在の設定</div>
+                <div className="text-green-700">プロジェクトID: {integrationSettings.firebase.projectId}</div>
+                <div className="text-green-700">Storage: {integrationSettings.firebase.storageBucket}</div>
+              </div>
+            )}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  サービスアカウント JSON ファイル <span className="text-red-500">*</span>
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Firebase Console → プロジェクト設定 → サービスアカウント → 「新しい秘密鍵の生成」でダウンロードしたJSONファイルをアップロード
+                </p>
+                <div
+                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${firebaseFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}`}
+                  onClick={() => document.getElementById('firebase-json-input')?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFirebaseFile(f); }}
+                >
+                  <input id="firebase-json-input" type="file" accept=".json" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) setFirebaseFile(f); e.target.value = ''; }} />
+                  {firebaseFile ? (
+                    <div className="text-green-700">
+                      <div className="text-2xl mb-1">📄</div>
+                      <div className="font-medium">{firebaseFile.name}</div>
+                      <div className="text-xs mt-1">{(firebaseFile.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                  ) : (
+                    <div className="text-gray-400">
+                      <Upload className="w-8 h-8 mx-auto mb-2" />
+                      <div className="text-sm">クリックまたはドラッグ&ドロップ</div>
+                      <div className="text-xs mt-1">JSON ファイルのみ</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {firebaseError && <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">❌ {firebaseError}</div>}
+              {firebaseSaved && <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-700">✅ Firebase設定を保存しました</div>}
+              <div className="flex gap-3">
+                <Button onClick={handleSaveFirebaseSettings} disabled={!firebaseFile || firebaseUploading}>
+                  <Upload className="w-4 h-4 mr-2" />{firebaseUploading ? 'アップロード中...' : 'JSONをアップロード'}
+                </Button>
+                {integrationSettings?.firebase?.configured && (
+                  <Button variant="secondary" onClick={handleDeleteFirebaseSettings}>
+                    <Trash2 className="w-4 h-4 mr-2" />設定を削除
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Backlog */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-2">🎫 Backlog 連携設定</h2>
+            <p className="text-sm text-gray-500 mb-4">フィードバックのBacklog起票に使用する接続設定（サーバーの .env で管理）</p>
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-4 space-y-2 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <span className="text-gray-500 font-medium">スペースキー</span>
+                <span className="font-mono">{integrationSettings?.backlog?.spaceKey || '未設定'}</span>
+                <span className="text-gray-500 font-medium">プロジェクトキー</span>
+                <span className="font-mono">{integrationSettings?.backlog?.projectKey || '未設定'}</span>
+                <span className="text-gray-500 font-medium">プロジェクトID</span>
+                <span className="font-mono">{integrationSettings?.backlog?.projectId || '未設定'}</span>
+                <span className="text-gray-500 font-medium">APIキー</span>
+                {integrationSettings?.backlog?.apiKeyConfigured
+                  ? <span className="text-green-600">✅ 設定済み（.envで管理）</span>
+                  : <span className="text-red-500">❌ 未設定 — backend/.env に BACKLOG_API_KEY を追加</span>
+                }
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">※ Backlog APIキー等の機密情報はサーバーの .env ファイルで管理しています</p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
