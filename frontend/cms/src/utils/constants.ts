@@ -102,6 +102,13 @@ export const NAVIGATION_ITEMS = [
     icon: 'Settings'
   },
   {
+    id: 'feedback',
+    name: 'フィードバック管理',
+    path: '/feedback',
+    icon: 'MessageSquare',
+    adminOnly: true,  // ADMIN / MANAGER のみ
+  },
+    {
     id: 'gps-inspector',
     name: 'GPS Inspector',
     path: '/gps-inspector',

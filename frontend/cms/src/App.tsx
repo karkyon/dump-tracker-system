@@ -23,6 +23,8 @@ import OperationDebug from './pages/OperationDebug';
 import AccidentRecordManagement from './pages/AccidentRecordManagement';
 import CustomerManagement from './pages/CustomerManagement';
 import GpsInspector from './pages/GpsInspector';
+import FeedbackList from './pages/FeedbackList';
+import FeedbackDetail from './pages/FeedbackDetail';
 
 // エラーバウンダリコンポーネント
 class ErrorBoundary extends React.Component<
@@ -263,6 +265,10 @@ const App: React.FC = () => {
 
               {/* デバッグルート追加（管理者専用） */}
               <Route path="debug/operations" element={<OperationDebug />} />
+              {/* フィードバック管理（ADMIN専用） */}
+              <Route path="feedback" element={<FeedbackList />} />
+              <Route path="feedback/:id" element={<FeedbackDetail />} />
+
               {/* GPS Inspector（管理者専用） */}
               <Route path="gps-inspector" element={<GpsInspector />} />
               

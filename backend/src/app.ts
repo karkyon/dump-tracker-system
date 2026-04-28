@@ -364,6 +364,15 @@ export class ExpressApp {
       logger.error('❌ デバッグルート読み込み失敗', error);
     }
 
+
+    // フィードバック管理ルート（ADMIN専用）
+    try {
+      const feedbackRoutes = require('./routes/feedbackRoutes').default || require('./routes/feedbackRoutes');
+      this.app.use('/api/v1/feedback', feedbackRoutes);
+      logger.info('✅ フィードバック管理APIルート登録完了: /api/v1/feedback');
+    } catch (error) {
+      logger.error('❌ feedbackRoutes 読み込み失敗', error);
+    }
     // 🎯 モバイルAPI統合
     if (mobileRoutes) {
       this.app.use('/api/mobile', mobileRoutes);

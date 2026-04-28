@@ -654,6 +654,13 @@ const businessRoutes = [
     requireAuth: false,
     description: '客先マスタ管理'
   },
+  {
+    name: 'feedbackRoutes',
+    path: '/feedback',
+    priority: 'normal' as const,
+    requireAuth: true,
+    description: 'フィードバック管理（ADMIN専用）',
+  },
   // =====================================
   // 🆕 P2-07: 貨物運送事業者設定ルート（実績報告書ヘッダー用）
   // =====================================
