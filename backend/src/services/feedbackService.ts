@@ -16,27 +16,27 @@ export type FeedbackApp = 'mobile' | 'cms';
 export interface FeedbackDocument {
   id: string;
   app: FeedbackApp;
-  name?: string;
+  name?: string | null;
   reportType: string;
   screen: string;
-  operation?: string;
-  frequency?: string;
+  operation?: string | null;
+  frequency?: string | null;
   what: string;
-  expected?: string;
-  steps?: string;
+  expected?: string | null;
+  steps?: string | null;
   severity: number;
-  device?: string;
-  extra?: string;
+  device?: string | null;
+  extra?: string | null;
   photoPaths?: string[];
   createdAt: Date;
   status: FeedbackStatus;
-  adminNotes?: string;
-  adminNotesUpdatedAt?: Date;
-  adminNotesUpdatedBy?: string;
-  backlogIssueId?: string;
-  backlogIssueKey?: string;
-  backlogLinkedAt?: Date;
-  backlogLinkedBy?: string;
+  adminNotes?: string | null;
+  adminNotesUpdatedAt?: Date | null;
+  adminNotesUpdatedBy?: string | null;
+  backlogIssueId?: string | null;
+  backlogIssueKey?: string | null;
+  backlogLinkedAt?: Date | null;
+  backlogLinkedBy?: string | null;
   statusHistory?: StatusHistory[];
 }
 
@@ -70,16 +70,45 @@ export interface FeedbackStats {
 }
 
 // =============================================
-// ラベル定数
+// Backlog プロジェクト固有定数
+// DUMPTRACKER2026 プロジェクト
 // =============================================
 
+// issueType ID（curl で確認済み）
+const BACKLOG_ISSUE_TYPE_IDS = {
+  BUG:     4127519,  // バグ（赤）
+  TASK:    4127520,  // タスク（青）
+  REQUEST: 4127521,  // 要望（水色）
+  OTHER:   4127522,  // その他（オレンジ）
+} as const;
+
+// フィードバック種別 → Backlog issueType マッピング
+const REPORT_TYPE_TO_ISSUE_TYPE: Record<string, number> = {
+  bug:     BACKLOG_ISSUE_TYPE_IDS.BUG,      // 🐛 バグ・不具合 → バグ
+  odd:     BACKLOG_ISSUE_TYPE_IDS.BUG,      // ⚠️ 動作おかしい → バグ
+  data:    BACKLOG_ISSUE_TYPE_IDS.BUG,      // 📊 データ誤り  → バグ
+  improve: BACKLOG_ISSUE_TYPE_IDS.REQUEST,  // 💡 改善要望   → 要望
+  feature: BACKLOG_ISSUE_TYPE_IDS.REQUEST,  // ✨ 新機能提案 → 要望
+  good:    BACKLOG_ISSUE_TYPE_IDS.OTHER,    // 👍 良かった点 → その他
+};
+
+// Backlog 標準優先度 ID
+// 2=高, 3=中, 4=低
+const SEVERITY_TO_PRIORITY: Record<number, number> = {
+  0: 2,  // 🔴 業務停止 → 高
+  1: 2,  // 🟠 業務支障 → 高
+  2: 3,  // 🟡 不便     → 中
+  3: 4,  // 🟢 軽微     → 低
+};
+
+// ラベル定数
 const REPORT_TYPE_LABELS: Record<string, string> = {
-  bug: 'バグ・不具合',
-  odd: '動作がおかしい',
+  bug:     'バグ・不具合',
+  odd:     '動作がおかしい',
   improve: '改善要望',
   feature: '新機能提案',
-  data: 'データの誤り',
-  good: '良かった点',
+  data:    'データの誤り',
+  good:    '良かった点',
 };
 
 const SEVERITY_LABELS: Record<number, string> = {
@@ -89,13 +118,6 @@ const SEVERITY_LABELS: Record<number, string> = {
   3: '🟢 軽微・提案',
 };
 
-const BACKLOG_PRIORITY_MAP: Record<number, number> = {
-  0: 2, // 緊急
-  1: 3, // 高
-  2: 3, // 中
-  3: 4, // 低
-};
-
 // =============================================
 // FeedbackService クラス
 // =============================================
@@ -103,56 +125,47 @@ const BACKLOG_PRIORITY_MAP: Record<number, number> = {
 export class FeedbackService {
   private readonly COLLECTIONS = ['feedback_mobile', 'feedback_cms'] as const;
 
-  // ------------------------------------------
-  // Firestoreドキュメントを型変換
-  // ------------------------------------------
   private docToFeedback(id: string, data: admin.firestore.DocumentData, app: FeedbackApp): FeedbackDocument {
     return {
       id,
       app,
-      name: data.name || null,
-      reportType: data.reportType,
-      screen: data.screen,
-      operation: data.operation || null,
-      frequency: data.frequency || null,
-      what: data.what,
-      expected: data.expected || null,
-      steps: data.steps || null,
-      severity: data.severity,
-      device: data.device || null,
-      extra: data.extra || null,
-      photoPaths: data.photoPaths || [],
-      createdAt: data.createdAt?.toDate?.() || new Date(),
-      status: data.status || 'new',
-      adminNotes: data.adminNotes || null,
-      adminNotesUpdatedAt: data.adminNotesUpdatedAt?.toDate?.() || null,
-      adminNotesUpdatedBy: data.adminNotesUpdatedBy || null,
-      backlogIssueId: data.backlogIssueId || null,
-      backlogIssueKey: data.backlogIssueKey || null,
-      backlogLinkedAt: data.backlogLinkedAt?.toDate?.() || null,
-      backlogLinkedBy: data.backlogLinkedBy || null,
-      statusHistory: data.statusHistory || [],
+      name: data['name'] || null,
+      reportType: String(data['reportType'] || ''),
+      screen: String(data['screen'] || ''),
+      operation: data['operation'] || null,
+      frequency: data['frequency'] || null,
+      what: String(data['what'] || ''),
+      expected: data['expected'] || null,
+      steps: data['steps'] || null,
+      severity: Number(data['severity'] ?? 3),
+      device: data['device'] || null,
+      extra: data['extra'] || null,
+      photoPaths: Array.isArray(data['photoPaths']) ? data['photoPaths'] : [],
+      createdAt: data['createdAt']?.toDate?.() || new Date(),
+      status: (data['status'] as FeedbackStatus) || 'new',
+      adminNotes: data['adminNotes'] || null,
+      adminNotesUpdatedAt: data['adminNotesUpdatedAt']?.toDate?.() || null,
+      adminNotesUpdatedBy: data['adminNotesUpdatedBy'] || null,
+      backlogIssueId: data['backlogIssueId'] || null,
+      backlogIssueKey: data['backlogIssueKey'] || null,
+      backlogLinkedAt: data['backlogLinkedAt']?.toDate?.() || null,
+      backlogLinkedBy: data['backlogLinkedBy'] || null,
+      statusHistory: Array.isArray(data['statusHistory']) ? data['statusHistory'] : [],
     };
   }
 
-  // ------------------------------------------
   // 一覧取得
-  // ------------------------------------------
   async list(filter: FeedbackFilter): Promise<{ items: FeedbackDocument[]; total: number; stats: FeedbackStats }> {
     const db = getFirestore();
     const page = filter.page || 1;
     const limit = filter.limit || 20;
-
     const allItems: FeedbackDocument[] = [];
 
-    // mobile と cms 両方のコレクションから取得
     for (const col of this.COLLECTIONS) {
       const appType: FeedbackApp = col === 'feedback_mobile' ? 'mobile' : 'cms';
       if (filter.app && filter.app !== appType) continue;
 
       let query: admin.firestore.Query = db.collection(col);
-
-      // フィルタ適用
       if (filter.reportType) query = query.where('reportType', '==', filter.reportType);
       if (filter.severity !== undefined && filter.severity !== null) {
         query = query.where('severity', '==', filter.severity);
@@ -168,14 +181,11 @@ export class FeedbackService {
       const snapshot = await query.get();
       for (const doc of snapshot.docs) {
         const fb = this.docToFeedback(doc.id, doc.data(), appType);
-        // キーワードフィルタ（Firestoreでは全文検索不可のためクライアント側）
         if (filter.keyword) {
           const kw = filter.keyword.toLowerCase();
-          if (
-            !fb.what.toLowerCase().includes(kw) &&
-            !fb.screen.toLowerCase().includes(kw) &&
-            !(fb.name || '').toLowerCase().includes(kw)
-          ) continue;
+          if (!fb.what.toLowerCase().includes(kw) &&
+              !fb.screen.toLowerCase().includes(kw) &&
+              !(fb.name || '').toLowerCase().includes(kw)) continue;
         }
         allItems.push(fb);
       }
@@ -185,14 +195,11 @@ export class FeedbackService {
     const sortBy = filter.sortBy || 'createdAt';
     const sortOrder = filter.sortOrder || 'desc';
     allItems.sort((a, b) => {
-      let av: any = a[sortBy as keyof FeedbackDocument];
-      let bv: any = b[sortBy as keyof FeedbackDocument];
-      if (av instanceof Date) av = av.getTime();
-      if (bv instanceof Date) bv = bv.getTime();
+      const av = sortBy === 'severity' ? a.severity : a.createdAt.getTime();
+      const bv = sortBy === 'severity' ? b.severity : b.createdAt.getTime();
       return sortOrder === 'asc' ? av - bv : bv - av;
     });
 
-    // 統計
     const stats: FeedbackStats = {
       total: allItems.length,
       new: allItems.filter(i => i.status === 'new').length,
@@ -201,76 +208,57 @@ export class FeedbackService {
       wontfix: allItems.filter(i => i.status === 'wontfix').length,
     };
 
-    // ページネーション
     const start = (page - 1) * limit;
-    const items = allItems.slice(start, start + limit);
-
-    return { items, total: allItems.length, stats };
+    return { items: allItems.slice(start, start + limit), total: allItems.length, stats };
   }
 
-  // ------------------------------------------
-  // 詳細取得（署名付きStorage URL生成含む）
-  // ------------------------------------------
+  // 詳細取得（Storage署名付きURL生成）
   async getById(id: string): Promise<FeedbackDocument | null> {
     const db = getFirestore();
-
     for (const col of this.COLLECTIONS) {
-      const docRef = db.collection(col).doc(id);
-      const snap = await docRef.get();
+      const snap = await db.collection(col).doc(id).get();
       if (snap.exists) {
         const appType: FeedbackApp = col === 'feedback_mobile' ? 'mobile' : 'cms';
         const fb = this.docToFeedback(id, snap.data()!, appType);
-
-        // 署名付きURL生成（photoPaths → photoUrls）
+        // 署名付きURL生成
         if (fb.photoPaths && fb.photoPaths.length > 0) {
           try {
             const bucket = getStorage().bucket();
             const urls: string[] = [];
             for (const p of fb.photoPaths) {
-              const file = bucket.file(p);
-              const [url] = await file.getSignedUrl({
+              const [url] = await bucket.file(p).getSignedUrl({
                 action: 'read',
-                expires: Date.now() + 60 * 60 * 1000, // 1時間
+                expires: Date.now() + 60 * 60 * 1000,
               });
               urls.push(url);
             }
             (fb as any).photoUrls = urls;
-          } catch (e) {
-            logger.warn('Storage署名URL生成失敗', { id, error: String(e) });
+          } catch {
             (fb as any).photoUrls = [];
           }
         } else {
           (fb as any).photoUrls = [];
         }
-
         return fb;
       }
     }
     return null;
   }
 
-  // ------------------------------------------
   // ステータス更新
-  // ------------------------------------------
   async updateStatus(id: string, status: FeedbackStatus, changedBy: string): Promise<void> {
     const db = getFirestore();
-
     for (const col of this.COLLECTIONS) {
       const docRef = db.collection(col).doc(id);
       const snap = await docRef.get();
       if (snap.exists) {
-        const prev = snap.data()?.status || 'new';
-        const historyEntry: StatusHistory = {
-          from: prev,
-          to: status,
-          changedAt: new Date(),
-          changedBy,
-        };
+        const prev = String(snap.data()?.['status'] || 'new');
         await docRef.update({
           status,
           statusHistory: admin.firestore.FieldValue.arrayUnion({
-            ...historyEntry,
-            changedAt: admin.firestore.Timestamp.fromDate(historyEntry.changedAt),
+            from: prev, to: status,
+            changedAt: admin.firestore.Timestamp.now(),
+            changedBy,
           }),
         });
         logger.info('フィードバック ステータス更新', { id, from: prev, to: status, changedBy });
@@ -280,12 +268,9 @@ export class FeedbackService {
     throw new Error(`フィードバック ID=${id} が見つかりません`);
   }
 
-  // ------------------------------------------
   // 管理者メモ更新
-  // ------------------------------------------
   async updateNotes(id: string, notes: string, updatedBy: string): Promise<void> {
     const db = getFirestore();
-
     for (const col of this.COLLECTIONS) {
       const docRef = db.collection(col).doc(id);
       const snap = await docRef.get();
@@ -302,22 +287,23 @@ export class FeedbackService {
     throw new Error(`フィードバック ID=${id} が見つかりません`);
   }
 
-  // ------------------------------------------
-  // Backlog起票
-  // ------------------------------------------
+  // =============================================
+  // Backlog 起票
+  // issueType: reportTypeから自動判別
+  // priority:  severityから自動判別
+  // =============================================
   async linkBacklog(
     id: string,
     linkedBy: string,
     customTitle?: string,
     customBody?: string
   ): Promise<{ issueId: string; issueKey: string }> {
-    const apiKey = process.env.BACKLOG_API_KEY;
-    const spaceKey = process.env.BACKLOG_SPACE_KEY || 'jadeworks';
-    const projectId = process.env.BACKLOG_PROJECT_ID;
+    const apiKey = process.env['BACKLOG_API_KEY'];
+    const spaceKey = process.env['BACKLOG_SPACE_KEY'] || 'jadeworks';
+    const projectId = process.env['BACKLOG_PROJECT_ID'];
 
-    if (!apiKey || !projectId) {
-      throw new Error('BACKLOG_API_KEY または BACKLOG_PROJECT_ID が設定されていません');
-    }
+    if (!apiKey) throw new Error('BACKLOG_API_KEY が .env に設定されていません');
+    if (!projectId) throw new Error('BACKLOG_PROJECT_ID が .env に設定されていません');
 
     const fb = await this.getById(id);
     if (!fb) throw new Error(`フィードバック ID=${id} が見つかりません`);
@@ -325,18 +311,23 @@ export class FeedbackService {
     const shortId = id.substring(0, 6);
     const reportLabel = REPORT_TYPE_LABELS[fb.reportType] || fb.reportType;
     const severityLabel = SEVERITY_LABELS[fb.severity] || String(fb.severity);
-    const priorityId = BACKLOG_PRIORITY_MAP[fb.severity] || 3;
 
-    // issueTypeId: バグ=1, 要望=2 (プロジェクトによる)
-    const issueTypeId = ['bug', 'odd', 'data'].includes(fb.reportType)
-      ? parseInt(process.env.BACKLOG_ISSUE_TYPE_BUG || '1', 10)
-      : parseInt(process.env.BACKLOG_ISSUE_TYPE_REQUEST || '2', 10);
+    // issueTypeId: フィードバック種別から自動決定
+    // 環境変数で上書き可能（未設定時はコード定数を使用）
+    const issueTypeId = parseInt(process.env[`BACKLOG_ISSUE_TYPE_${fb.reportType.toUpperCase()}`] || '', 10) ||
+      REPORT_TYPE_TO_ISSUE_TYPE[fb.reportType] ||
+      BACKLOG_ISSUE_TYPE_IDS.OTHER;
+
+    // priorityId: 影響度から自動決定
+    const priorityId = SEVERITY_TO_PRIORITY[fb.severity] ?? 3;
 
     const title = customTitle ||
       `[FB-${shortId}][${reportLabel}] ${fb.screen} - ${fb.what.substring(0, 40)}`;
 
     const body = customBody || this.buildBacklogBody(fb, reportLabel, severityLabel, shortId);
 
+    // Backlog REST API v2 呼び出し
+    // 重要: projectId は POST (新規作成) にのみ含める
     const url = `https://${spaceKey}.backlog.com/api/v2/issues?apiKey=${apiKey}`;
     const payload = {
       projectId: parseInt(projectId, 10),
@@ -345,6 +336,14 @@ export class FeedbackService {
       priorityId,
       description: body,
     };
+
+    logger.info('Backlog API 起票リクエスト', {
+      url: `https://${spaceKey}.backlog.com/api/v2/issues`,
+      projectId: payload.projectId,
+      issueTypeId,
+      issueTypeName: Object.entries(BACKLOG_ISSUE_TYPE_IDS).find(([, v]) => v === issueTypeId)?.[0] || 'unknown',
+      priorityId,
+    });
 
     const res = await fetch(url, {
       method: 'POST',
@@ -357,9 +356,10 @@ export class FeedbackService {
       throw new Error(`Backlog API エラー: ${res.status} ${errText}`);
     }
 
-    const data = await res.json() as { id: number; issueKey: string };
+    const data = await res.json() as { id: number; issueKey: string; summary: string };
+    logger.info('Backlog チケット起票完了', { issueKey: data.issueKey, summary: data.summary });
 
-    // Firestoreにも保存
+    // Firestoreに連携情報を保存
     const db = getFirestore();
     for (const col of this.COLLECTIONS) {
       const docRef = db.collection(col).doc(id);
@@ -375,13 +375,10 @@ export class FeedbackService {
       }
     }
 
-    logger.info('Backlog チケット起票完了', { id, issueKey: data.issueKey, linkedBy });
     return { issueId: String(data.id), issueKey: data.issueKey };
   }
 
-  // ------------------------------------------
   // Backlog連携解除
-  // ------------------------------------------
   async unlinkBacklog(id: string): Promise<void> {
     const db = getFirestore();
     for (const col of this.COLLECTIONS) {
@@ -400,11 +397,14 @@ export class FeedbackService {
     throw new Error(`フィードバック ID=${id} が見つかりません`);
   }
 
-  // ------------------------------------------
   // Backlog本文自動生成
-  // ------------------------------------------
-  private buildBacklogBody(fb: FeedbackDocument, reportLabel: string, severityLabel: string, shortId: string): string {
-    return [
+  private buildBacklogBody(
+    fb: FeedbackDocument,
+    reportLabel: string,
+    severityLabel: string,
+    shortId: string
+  ): string {
+    const lines = [
       '## フィードバック詳細',
       '',
       `**報告種類:** ${reportLabel}`,
@@ -415,7 +415,7 @@ export class FeedbackService {
       `**影響度:** ${severityLabel}`,
       `**使用端末:** ${fb.device || '（未記入）'}`,
       `**報告者:** ${fb.name || '匿名'}`,
-      `**報告日時:** ${fb.createdAt.toISOString()}`,
+      `**報告日時:** ${fb.createdAt.toLocaleString('ja-JP')}`,
       '',
       '## 問題内容',
       fb.what,
@@ -431,8 +431,9 @@ export class FeedbackService {
       '',
       '---',
       '*Dump Tracker フィードバックシステムより自動起票*',
-      `*Firebase Document ID: ${fb.id}*`,
-    ].join('\n');
+      `*Firebase Document ID: ${fb.id} (短縮: FB-${shortId})*`,
+    ];
+    return lines.join('\n');
   }
 }
 
