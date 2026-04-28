@@ -7,8 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import {
-  MessageSquare, RefreshCw, Download, Filter,
-  AlertCircle, Clock, CheckCircle, XCircle,
+  MessageSquare, RefreshCw, Download,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/constants';
@@ -48,12 +47,12 @@ interface FeedbackStats {
 // =============================================
 
 const REPORT_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
-  bug:     { label: '🐛 バグ',   color: 'bg-red-100 text-red-700' },
+  bug:     { label: '🐛 バグ',    color: 'bg-red-100 text-red-700' },
   odd:     { label: '⚠️ おかしい', color: 'bg-orange-100 text-orange-700' },
-  improve: { label: '💡 改善',   color: 'bg-purple-100 text-purple-700' },
-  feature: { label: '✨ 新機能', color: 'bg-blue-100 text-blue-700' },
-  data:    { label: '📊 データ', color: 'bg-yellow-100 text-yellow-700' },
-  good:    { label: '👍 良い',   color: 'bg-green-100 text-green-700' },
+  improve: { label: '💡 改善',    color: 'bg-purple-100 text-purple-700' },
+  feature: { label: '✨ 新機能',  color: 'bg-blue-100 text-blue-700' },
+  data:    { label: '📊 データ',  color: 'bg-yellow-100 text-yellow-700' },
+  good:    { label: '👍 良い',    color: 'bg-green-100 text-green-700' },
 };
 
 const SEVERITY_CONFIG: Record<number, { label: string; color: string }> = {
@@ -64,10 +63,10 @@ const SEVERITY_CONFIG: Record<number, { label: string; color: string }> = {
 };
 
 const STATUS_CONFIG: Record<FeedbackStatus, { label: string; color: string }> = {
-  new:         { label: '🔴 新規',  color: 'bg-red-50 text-red-700 border border-red-200' },
+  new:         { label: '🔴 新規',   color: 'bg-red-50 text-red-700 border border-red-200' },
   in_progress: { label: '🟠 対応中', color: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
-  resolved:    { label: '✅ 完了',  color: 'bg-green-50 text-green-700 border border-green-200' },
-  wontfix:     { label: '⚫ 却下',  color: 'bg-gray-100 text-gray-600 border border-gray-200' },
+  resolved:    { label: '✅ 完了',   color: 'bg-green-50 text-green-700 border border-green-200' },
+  wontfix:     { label: '⚫ 却下',   color: 'bg-gray-100 text-gray-600 border border-gray-200' },
 };
 
 // =============================================
@@ -84,10 +83,9 @@ function authHeaders(): Record<string, string> {
 // =============================================
 
 const FeedbackList: React.FC = () => {
-  useTLog('FeedbackList');
+  useTLog('FEEDBACK_LIST', 'フィードバック管理一覧');
   const navigate = useNavigate();
 
-  // State
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [stats, setStats] = useState<FeedbackStats>({ total: 0, new: 0, in_progress: 0, resolved: 0, wontfix: 0 });
   const [loading, setLoading] = useState(false);
@@ -95,7 +93,6 @@ const FeedbackList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
 
-  // Filter state
   const [filterApp, setFilterApp] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
@@ -103,15 +100,12 @@ const FeedbackList: React.FC = () => {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
+  // sortOrderはAPIに渡すが setter は fetchData 内部でのみ使用（'desc'固定）
   const [sortBy, setSortBy] = useState<'createdAt' | 'severity'>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const sortOrder = 'desc';
 
-  // Bulk select
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // ------------------------------------------
-  // データ取得
-  // ------------------------------------------
   const fetchData = useCallback(async (pg = page) => {
     setLoading(true);
     try {
@@ -142,12 +136,9 @@ const FeedbackList: React.FC = () => {
     }
   }, [filterApp, filterType, filterSeverity, filterStatus, filterDateFrom, filterDateTo, filterKeyword, sortBy, sortOrder, page, limit]);
 
-  useEffect(() => { fetchData(1); setPage(1); }, [filterApp, filterType, filterSeverity, filterStatus, filterDateFrom, filterDateTo, filterKeyword, sortBy, sortOrder]);
+  useEffect(() => { fetchData(1); setPage(1); }, [filterApp, filterType, filterSeverity, filterStatus, filterDateFrom, filterDateTo, filterKeyword, sortBy]);
   useEffect(() => { fetchData(page); }, [page]);
 
-  // ------------------------------------------
-  // 一括ステータス変更
-  // ------------------------------------------
   const bulkUpdateStatus = async (status: FeedbackStatus) => {
     if (selected.size === 0) return;
     try {
@@ -168,9 +159,6 @@ const FeedbackList: React.FC = () => {
     }
   };
 
-  // ------------------------------------------
-  // CSV エクスポート
-  // ------------------------------------------
   const exportCsv = () => {
     const headers = ['ID', 'アプリ', '種類', '影響度', '画面', '内容', '報告者', '日時', 'ステータス', 'Backlog'];
     const rows = items.map(i => [
@@ -232,11 +220,11 @@ const FeedbackList: React.FC = () => {
       {/* サマリーカード */}
       <div className="grid grid-cols-5 gap-3">
         {([
-          { key: 'total',       label: '合計',   num: stats.total,       color: 'border-l-primary-500',  numColor: 'text-primary-600' },
-          { key: 'new',         label: '新規',   num: stats.new,         color: 'border-l-red-500',      numColor: 'text-red-600' },
-          { key: 'in_progress', label: '対応中', num: stats.in_progress, color: 'border-l-yellow-500',   numColor: 'text-yellow-600' },
-          { key: 'resolved',    label: '完了',   num: stats.resolved,    color: 'border-l-green-500',    numColor: 'text-green-600' },
-          { key: 'wontfix',     label: '却下',   num: stats.wontfix,     color: 'border-l-gray-400',     numColor: 'text-gray-500' },
+          { key: 'total',       label: '合計',   num: stats.total,       color: 'border-l-primary-500', numColor: 'text-primary-600' },
+          { key: 'new',         label: '新規',   num: stats.new,         color: 'border-l-red-500',     numColor: 'text-red-600' },
+          { key: 'in_progress', label: '対応中', num: stats.in_progress, color: 'border-l-yellow-500',  numColor: 'text-yellow-600' },
+          { key: 'resolved',    label: '完了',   num: stats.resolved,    color: 'border-l-green-500',   numColor: 'text-green-600' },
+          { key: 'wontfix',     label: '却下',   num: stats.wontfix,     color: 'border-l-gray-400',    numColor: 'text-gray-500' },
         ] as const).map(c => (
           <div
             key={c.key}
@@ -273,7 +261,7 @@ const FeedbackList: React.FC = () => {
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">影響度</label>
             <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)} className="h-8 border border-gray-300 rounded text-sm px-2 bg-white focus:outline-none focus:border-primary-500">
               <option value="">すべて</option>
-              {[0,1,2,3].map(n => (
+              {[0, 1, 2, 3].map(n => (
                 <option key={n} value={String(n)}>{SEVERITY_CONFIG[n].label}</option>
               ))}
             </select>
@@ -330,14 +318,12 @@ const FeedbackList: React.FC = () => {
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-700">
-            フィードバック一覧 — {total}件中 {Math.min((page-1)*limit+1, total)}〜{Math.min(page*limit, total)}件表示
+            フィードバック一覧 — {total}件中 {Math.min((page - 1) * limit + 1, total)}〜{Math.min(page * limit, total)}件表示
           </span>
-          <div className="flex gap-2 items-center">
-            <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="h-7 border border-gray-300 rounded text-xs px-1.5 bg-white">
-              <option value="createdAt">新しい順</option>
-              <option value="severity">影響度（高い順）</option>
-            </select>
-          </div>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="h-7 border border-gray-300 rounded text-xs px-1.5 bg-white">
+            <option value="createdAt">新しい順</option>
+            <option value="severity">影響度（高い順）</option>
+          </select>
         </div>
 
         {loading ? (
@@ -439,16 +425,15 @@ const FeedbackList: React.FC = () => {
           </div>
         )}
 
-        {/* ページネーション */}
         {totalPages > 1 && (
           <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
             <span className="text-xs text-gray-500">全{total}件 / {page}/{totalPages}ページ</span>
             <div className="flex gap-1">
               {([
-                { icon: <ChevronsLeft className="h-3.5 w-3.5" />, action: () => setPage(1),          disabled: page === 1 },
-                { icon: <ChevronLeft  className="h-3.5 w-3.5" />, action: () => setPage(p => p - 1), disabled: page === 1 },
-                { icon: <ChevronRight className="h-3.5 w-3.5" />, action: () => setPage(p => p + 1), disabled: page === totalPages },
-                { icon: <ChevronsRight className="h-3.5 w-3.5" />, action: () => setPage(totalPages), disabled: page === totalPages },
+                { icon: <ChevronsLeft className="h-3.5 w-3.5" />,  action: () => setPage(1),              disabled: page === 1 },
+                { icon: <ChevronLeft  className="h-3.5 w-3.5" />,  action: () => setPage(p => p - 1),    disabled: page === 1 },
+                { icon: <ChevronRight className="h-3.5 w-3.5" />,  action: () => setPage(p => p + 1),    disabled: page === totalPages },
+                { icon: <ChevronsRight className="h-3.5 w-3.5" />, action: () => setPage(totalPages),    disabled: page === totalPages },
               ] as const).map((btn, i) => (
                 <button
                   key={i}

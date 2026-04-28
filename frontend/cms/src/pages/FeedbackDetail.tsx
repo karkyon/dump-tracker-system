@@ -7,11 +7,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import {
-  ArrowLeft, MessageSquare, ExternalLink, Save, Link, Link2Off,
-  Clock, CheckCircle, XCircle, AlertCircle,
+  ArrowLeft, MessageSquare, ExternalLink, Save, Link, Link2Off, AlertCircle,
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/constants';
-import { useAuthStore } from '../store/authStore';
 
 // =============================================
 // 型定義
@@ -59,26 +57,26 @@ interface FeedbackDetail {
 // =============================================
 
 const REPORT_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
-  bug:     { label: '🐛 バグ・不具合', color: 'bg-red-100 text-red-700' },
+  bug:     { label: '🐛 バグ・不具合',  color: 'bg-red-100 text-red-700' },
   odd:     { label: '⚠️ 動作がおかしい', color: 'bg-orange-100 text-orange-700' },
-  improve: { label: '💡 改善要望',      color: 'bg-purple-100 text-purple-700' },
-  feature: { label: '✨ 新機能提案',    color: 'bg-blue-100 text-blue-700' },
-  data:    { label: '📊 データの誤り',  color: 'bg-yellow-100 text-yellow-700' },
-  good:    { label: '👍 良かった点',    color: 'bg-green-100 text-green-700' },
+  improve: { label: '💡 改善要望',       color: 'bg-purple-100 text-purple-700' },
+  feature: { label: '✨ 新機能提案',     color: 'bg-blue-100 text-blue-700' },
+  data:    { label: '📊 データの誤り',   color: 'bg-yellow-100 text-yellow-700' },
+  good:    { label: '👍 良かった点',     color: 'bg-green-100 text-green-700' },
 };
 
 const SEVERITY_CONFIG: Record<number, { label: string; color: string }> = {
-  0: { label: '🔴 業務停止 — 今すぐ対応してほしい', color: 'bg-red-100 text-red-700 border border-red-300' },
+  0: { label: '🔴 業務停止 — 今すぐ対応してほしい',            color: 'bg-red-100 text-red-700 border border-red-300' },
   1: { label: '🟠 業務に支障 — なんとかなっているが困っている', color: 'bg-orange-100 text-orange-700 border border-orange-300' },
-  2: { label: '🟡 不便 — 業務は続けられる', color: 'bg-yellow-100 text-yellow-700 border border-yellow-300' },
-  3: { label: '🟢 軽微・提案 — 感想・要望レベル', color: 'bg-green-100 text-green-700 border border-green-300' },
+  2: { label: '🟡 不便 — 業務は続けられる',                    color: 'bg-yellow-100 text-yellow-700 border border-yellow-300' },
+  3: { label: '🟢 軽微・提案 — 感想・要望レベル',              color: 'bg-green-100 text-green-700 border border-green-300' },
 };
 
 const STATUS_CONFIG: Record<FeedbackStatus, { label: string; color: string }> = {
-  new:         { label: '🔴 新規',  color: 'bg-red-50 text-red-700 border border-red-200' },
+  new:         { label: '🔴 新規',   color: 'bg-red-50 text-red-700 border border-red-200' },
   in_progress: { label: '🟠 対応中', color: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
-  resolved:    { label: '✅ 完了',  color: 'bg-green-50 text-green-700 border border-green-200' },
-  wontfix:     { label: '⚫ 却下',  color: 'bg-gray-100 text-gray-600 border border-gray-200' },
+  resolved:    { label: '✅ 完了',   color: 'bg-green-50 text-green-700 border border-green-200' },
+  wontfix:     { label: '⚫ 却下',   color: 'bg-gray-100 text-gray-600 border border-gray-200' },
 };
 
 const PRIORITY_MAP: Record<number, string> = { 0: '緊急 🔴', 1: '高 🟠', 2: '中 🟡', 3: '低 🟢' };
@@ -102,10 +100,9 @@ function formatDate(iso?: string) {
 // =============================================
 
 const FeedbackDetail: React.FC = () => {
-  useTLog('FeedbackDetail');
+  useTLog('FEEDBACK_DETAIL', 'フィードバック管理詳細');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
 
   const [fb, setFb] = useState<FeedbackDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,15 +111,11 @@ const FeedbackDetail: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
 
-  // Backlog起票UI
   const [showBacklogPanel, setShowBacklogPanel] = useState(false);
   const [backlogTitle, setBacklogTitle] = useState('');
   const [backlogBody, setBacklogBody] = useState('');
   const [linkingBacklog, setLinkingBacklog] = useState(false);
 
-  // ------------------------------------------
-  // データ取得
-  // ------------------------------------------
   const fetchDetail = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -141,7 +134,6 @@ const FeedbackDetail: React.FC = () => {
 
   useEffect(() => { fetchDetail(); }, [fetchDetail]);
 
-  // Backlog起票プレビュー自動生成
   useEffect(() => {
     if (!fb || !showBacklogPanel) return;
     const shortId = fb.id.substring(0, 6);
@@ -178,17 +170,12 @@ const FeedbackDetail: React.FC = () => {
     ].join('\n'));
   }, [fb, showBacklogPanel]);
 
-  // ------------------------------------------
-  // ステータス更新
-  // ------------------------------------------
   const updateStatus = async (status: FeedbackStatus) => {
     if (!id) return;
     setSavingStatus(true);
     try {
       const res = await fetch(`${API_BASE_URL}/feedback/${id}/status`, {
-        method: 'PATCH',
-        headers: authHeaders(),
-        body: JSON.stringify({ status }),
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.success(`ステータスを「${STATUS_CONFIG[status].label}」に変更しました`);
@@ -200,17 +187,12 @@ const FeedbackDetail: React.FC = () => {
     }
   };
 
-  // ------------------------------------------
-  // メモ保存
-  // ------------------------------------------
   const saveNotes = async () => {
     if (!id) return;
     setSavingNotes(true);
     try {
       const res = await fetch(`${API_BASE_URL}/feedback/${id}/notes`, {
-        method: 'PATCH',
-        headers: authHeaders(),
-        body: JSON.stringify({ notes }),
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ notes }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.success('メモを保存しました');
@@ -222,17 +204,12 @@ const FeedbackDetail: React.FC = () => {
     }
   };
 
-  // ------------------------------------------
-  // Backlog起票
-  // ------------------------------------------
   const submitBacklog = async () => {
     if (!id) return;
     setLinkingBacklog(true);
     try {
       const res = await fetch(`${API_BASE_URL}/feedback/${id}/backlog`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ title: backlogTitle, body: backlogBody }),
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ title: backlogTitle, body: backlogBody }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
@@ -249,9 +226,6 @@ const FeedbackDetail: React.FC = () => {
     }
   };
 
-  // ------------------------------------------
-  // Backlog連携解除
-  // ------------------------------------------
   const unlinkBacklog = async () => {
     if (!id || !window.confirm('Backlog連携を解除しますか？')) return;
     try {
@@ -264,9 +238,6 @@ const FeedbackDetail: React.FC = () => {
     }
   };
 
-  // ------------------------------------------
-  // レンダリング
-  // ------------------------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400">
@@ -317,7 +288,6 @@ const FeedbackDetail: React.FC = () => {
               📅 {formatDate(fb.createdAt)} &nbsp;·&nbsp; 👤 {fb.name || '匿名'} &nbsp;·&nbsp; 📱 {fb.device || '—'}
             </p>
           </div>
-          {/* ステータス変更ボタン */}
           <div className="flex flex-col gap-1.5 flex-shrink-0">
             <p className="text-xs text-gray-500 font-semibold">ステータス変更：</p>
             <div className="flex gap-1.5 flex-wrap">
@@ -363,13 +333,16 @@ const FeedbackDetail: React.FC = () => {
                 { label: '操作内容', value: fb.operation || '—' },
                 { label: '発生頻度', value: fb.frequency || '—' },
                 { label: '使用端末', value: fb.device || '—' },
-                { label: '影響度', value: <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${sv.color}`}>{sv.label}</span>, full: true },
               ].map((field, i) => (
-                <div key={i} className={`p-3 ${(field as any).full ? 'col-span-2' : ''}`}>
+                <div key={i} className="p-3">
                   <div className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">{field.label}</div>
                   <div className="text-sm text-gray-800">{field.value}</div>
                 </div>
               ))}
+              <div className="p-3 col-span-2">
+                <div className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">影響度</div>
+                <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${sv.color}`}>{sv.label}</span>
+              </div>
             </div>
           </div>
 
@@ -395,18 +368,20 @@ const FeedbackDetail: React.FC = () => {
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 text-sm font-semibold text-gray-700">📷 スクリーンショット（{fb.photoPaths.length}枚）</div>
               <div className="flex gap-3 flex-wrap p-4">
                 {(fb.photoUrls && fb.photoUrls.length > 0 ? fb.photoUrls : fb.photoPaths).map((url, i) => (
-                  <div key={i} className="w-24 h-24 rounded border-2 border-gray-200 overflow-hidden cursor-pointer hover:border-primary-400 transition-colors flex items-center justify-center bg-gray-50"
-                    onClick={() => setPhotoIndex(i)}>
+                  <div
+                    key={i}
+                    className="w-24 h-24 rounded border-2 border-gray-200 overflow-hidden cursor-pointer hover:border-primary-400 transition-colors flex items-center justify-center bg-gray-50"
+                    onClick={() => setPhotoIndex(i)}
+                  >
                     {fb.photoUrls && fb.photoUrls[i]
-                      ? <img src={url} alt={`Screenshot ${i+1}`} className="w-full h-full object-cover" />
-                      : <div className="text-center text-gray-400 text-xs"><div className="text-2xl">🖼️</div><div>{i+1}</div></div>
+                      ? <img src={url} alt={`Screenshot ${i + 1}`} className="w-full h-full object-cover" />
+                      : <div className="text-center text-gray-400 text-xs"><div className="text-2xl">🖼️</div><div>{i + 1}</div></div>
                     }
                   </div>
                 ))}
               </div>
             </div>
           )}
-
         </div>
 
         {/* サイドカラム */}
@@ -443,11 +418,12 @@ const FeedbackDetail: React.FC = () => {
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 text-sm font-semibold text-gray-700">🎫 Backlog連携</div>
             <div className="p-3">
               {fb.backlogIssueKey ? (
-                // 連携済み
                 <div className="space-y-2">
                   <div className="bg-blue-50 border border-blue-200 rounded p-3">
                     <div className="text-xl font-extrabold text-blue-700 font-mono">{fb.backlogIssueKey}</div>
-                    <div className="text-xs text-gray-500 mt-1">連携日時: {formatDate(fb.backlogLinkedAt)}<br />連携者: {fb.backlogLinkedBy}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      連携日時: {formatDate(fb.backlogLinkedAt)}<br />連携者: {fb.backlogLinkedBy}
+                    </div>
                     <a
                       href={`https://jadeworks.backlog.com/view/${fb.backlogIssueKey}`}
                       target="_blank" rel="noopener noreferrer"
@@ -461,7 +437,6 @@ const FeedbackDetail: React.FC = () => {
                   </button>
                 </div>
               ) : showBacklogPanel ? (
-                // 起票パネル
                 <div className="space-y-2">
                   <div>
                     <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">件名</label>
@@ -469,7 +444,7 @@ const FeedbackDetail: React.FC = () => {
                       className="w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:border-primary-500" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">優先度（影響度から自動）</label>
+                    <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">優先度</label>
                     <div className="text-sm font-semibold">{PRIORITY_MAP[fb.severity]}</div>
                   </div>
                   <div>
@@ -486,7 +461,6 @@ const FeedbackDetail: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                // 未連携
                 <div className="text-center py-4">
                   <div className="text-3xl mb-2">🎫</div>
                   <p className="text-xs text-gray-500 mb-3">Backlogチケットに<br />まだ起票されていません</p>
@@ -526,7 +500,6 @@ const FeedbackDetail: React.FC = () => {
             </div>
           )}
 
-          {/* ナビゲーション */}
           <button onClick={() => navigate('/feedback')} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50">
             <ArrowLeft className="h-4 w-4" /> 一覧に戻る
           </button>
