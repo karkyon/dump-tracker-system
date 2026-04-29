@@ -6,16 +6,26 @@ import { feedbackService, FeedbackFilter, FeedbackStatus } from '../services/fee
 import logger from '../utils/logger';
 import type { AuthenticatedRequest } from '../types';
 
-// noUncheckedIndexedAccess: true のため req.params[key] は string|undefined
-// 明示的に string 確定させるヘルパー
 function str(v: string | undefined): string { return v ?? ''; }
-
-// req.user は optional なので chain で undefined になりうる → String() で確定
 function actor(req: AuthenticatedRequest): string {
   return String(req.user?.username ?? req.user?.userId ?? 'unknown');
 }
 
+// Firebase接続タイムアウト付きラッパー（10秒）
+async function withFirebaseTimeout<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    fn(),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Firebase タイムアウト (10秒): ${label}`)), 10000)
+    ),
+  ]);
+}
+
+const EMPTY_STATS = { total: 0, new: 0, in_progress: 0, resolved: 0, wontfix: 0 };
+
 export const listFeedback = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  logger.info('📋 [feedbackController] listFeedback 開始', { userId: req.user?.userId });
+
   const filter: FeedbackFilter = {
     app: (req.query['app'] as any) || undefined,
     reportType: str(req.query['reportType'] as string | undefined) || undefined,
@@ -29,20 +39,28 @@ export const listFeedback = asyncHandler(async (req: AuthenticatedRequest, res: 
     sortBy: (req.query['sortBy'] as any) || 'createdAt',
     sortOrder: (req.query['sortOrder'] as any) || 'desc',
   };
-  logger.info('フィードバック一覧取得', { filter, userId: req.user?.userId });
+
+  logger.info('📋 [feedbackController] filter確定、Firebase呼び出し開始', { filter });
+
   let result;
   try {
-    result = await feedbackService.list(filter);
+    result = await withFirebaseTimeout(
+      () => feedbackService.list(filter),
+      'feedbackService.list'
+    );
+    logger.info('📋 [feedbackController] Firebase取得成功', { total: result.total });
   } catch (e: any) {
-    logger.error('feedbackService.list エラー', { error: String(e) });
+    logger.error('📋 [feedbackController] Firebase取得失敗', { error: String(e), stack: e?.stack });
+    // エラーでも空リストを返してUIをブロックしない
     res.json({
       success: true,
       data: [],
-      meta: { total: 0, page: filter.page, limit: filter.limit, stats: { total: 0, new: 0, in_progress: 0, resolved: 0, wontfix: 0 } },
-      message: `Firebaseに接続できません: ${e.message || String(e)}`,
+      meta: { total: 0, page: filter.page, limit: filter.limit, stats: EMPTY_STATS },
+      message: `Firebase接続エラー: ${e.message || String(e)}`,
     });
     return;
   }
+
   res.json({
     success: true,
     data: result.items,
@@ -53,8 +71,15 @@ export const listFeedback = asyncHandler(async (req: AuthenticatedRequest, res: 
 
 export const getFeedback = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const id = str(req.params['id']);
-  logger.info('フィードバック詳細取得', { id, userId: req.user?.userId });
-  const fb = await feedbackService.getById(id);
+  logger.info('📋 [feedbackController] getFeedback', { id });
+  let fb;
+  try {
+    fb = await withFirebaseTimeout(() => feedbackService.getById(id), 'getById');
+  } catch (e: any) {
+    logger.error('📋 [feedbackController] getById失敗', { error: String(e) });
+    sendNotFound(res, 'Feedback');
+    return;
+  }
   if (!fb) { sendNotFound(res, 'Feedback'); return; }
   res.json({ success: true, data: fb, message: 'フィードバック詳細を取得しました' });
 });
@@ -66,33 +91,26 @@ export const updateFeedbackStatus = asyncHandler(async (req: AuthenticatedReques
     sendError(res, '無効なステータス値です', 400, 'INVALID_STATUS');
     return;
   }
-  const changedBy = actor(req);
-  logger.info('フィードバック ステータス更新', { id, status, changedBy });
-  await feedbackService.updateStatus(id, status as FeedbackStatus, changedBy);
+  await feedbackService.updateStatus(id, status as FeedbackStatus, actor(req));
   res.json({ success: true, message: `ステータスを「${status}」に更新しました` });
 });
 
 export const updateFeedbackNotes = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const id = str(req.params['id']);
   const { notes } = req.body as { notes: string };
-  const updatedBy = actor(req);
-  logger.info('フィードバック メモ更新', { id, updatedBy });
-  await feedbackService.updateNotes(id, notes || '', updatedBy);
+  await feedbackService.updateNotes(id, notes || '', actor(req));
   res.json({ success: true, message: '管理者メモを保存しました' });
 });
 
 export const linkBacklog = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const id = str(req.params['id']);
   const { title, body } = req.body as { title?: string; body?: string };
-  const linkedBy = actor(req);
-  logger.info('Backlog起票', { id, linkedBy });
-  const result = await feedbackService.linkBacklog(id, linkedBy, title, body);
+  const result = await feedbackService.linkBacklog(id, actor(req), title, body);
   res.json({ success: true, data: result, message: `Backlog チケット ${result.issueKey} を起票しました` });
 });
 
 export const unlinkBacklog = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const id = str(req.params['id']);
-  logger.info('Backlog連携解除', { id, userId: req.user?.userId });
   await feedbackService.unlinkBacklog(id);
   res.json({ success: true, message: 'Backlog連携を解除しました' });
 });
