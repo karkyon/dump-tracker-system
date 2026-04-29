@@ -158,7 +158,7 @@ const safeImportAndRegisterRoute = (
 
     // 認証要求時の自動適用
     if (options.requireAuth) {
-      router.use(path, authenticateToken, routeHandler);
+      router.use(path, authenticateToken(), routeHandler);
     } else {
       router.use(path, routeHandler);
     }
@@ -658,7 +658,7 @@ const businessRoutes = [
     name: 'feedbackRoutes',
     path: '/feedback',
     priority: 'normal' as const,
-    requireAuth: true,
+    requireAuth: false,
     description: 'フィードバック管理（ADMIN専用）',
   },
   // =====================================
