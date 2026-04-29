@@ -321,8 +321,10 @@ export class FeedbackService {
     // priorityId: 影響度から自動決定
     const priorityId = SEVERITY_TO_PRIORITY[fb.severity] ?? 3;
 
+    const typePrefix = this.getTypePrefix(fb.reportType);
+    const issueId = `[${typePrefix}-FB-${shortId}]`;
     const title = customTitle ||
-      `[FB-${shortId}][${reportLabel}] ${fb.screen} - ${fb.what.substring(0, 40)}`;
+      `${issueId}[${this.getCategory(fb.app)}] ${fb.screen} - ${fb.what.substring(0, 50)}`;
 
     const body = customBody || this.buildBacklogBody(fb, reportLabel, severityLabel, shortId);
 
@@ -397,44 +399,100 @@ export class FeedbackService {
     throw new Error(`フィードバック ID=${id} が見つかりません`);
   }
 
-  // Backlog本文自動生成
+
+  // カテゴリ（アプリ種別）
+  private getCategory(app: FeedbackApp): string {
+    return app === 'mobile' ? 'Mobile' : 'CMS';
+  }
+
+  // 種別プレフィックス（既存チケット形式に合わせる）
+  private getTypePrefix(reportType: string): string {
+    const map: Record<string, string> = {
+      bug:     'BUG',
+      odd:     'BUG',
+      data:    'BUG',
+      improve: 'REQ',
+      feature: 'REQ',
+      good:    'OTHER',
+    };
+    return map[reportType] || 'OTHER';
+  }
+
+  // Backlog本文自動生成（既存チケットスタイル準拠）
   private buildBacklogBody(
     fb: FeedbackDocument,
     reportLabel: string,
     severityLabel: string,
     shortId: string
   ): string {
+    const category = this.getCategory(fb.app);
+    const typePrefix = this.getTypePrefix(fb.reportType);
+    const issueId = `FB-${shortId}`;
+
     const lines = [
-      '## フィードバック詳細',
+      `## ${issueId} | ${fb.screen} - ${fb.what.substring(0, 60)}`,
       '',
-      `**報告種類:** ${reportLabel}`,
-      `**アプリ種別:** ${fb.app === 'mobile' ? 'モバイルアプリ' : 'CMS管理画面'}`,
+      '---',
+      '',
+      '### 概要',
+      '',
+      fb.what,
+      '',
+      '---',
+      '',
+      '### 問題の詳細',
+      '',
+      `**カテゴリ:** ${category}`,
+      `**種別:** ${reportLabel}（${typePrefix}）`,
+      `**影響度:** ${severityLabel}`,
       `**発生画面:** ${fb.screen}`,
       `**操作内容:** ${fb.operation || '（未記入）'}`,
       `**発生頻度:** ${fb.frequency || '（未記入）'}`,
-      `**影響度:** ${severityLabel}`,
       `**使用端末:** ${fb.device || '（未記入）'}`,
       `**報告者:** ${fb.name || '匿名'}`,
       `**報告日時:** ${fb.createdAt.toLocaleString('ja-JP')}`,
       '',
-      '## 問題内容',
+      '**現象:**',
       fb.what,
       '',
-      '## 期待する動作',
-      fb.expected || '（未記入）',
-      '',
-      '## 再現手順',
-      fb.steps || '（未記入）',
-      '',
-      '## 補足',
-      fb.extra || '（なし）',
+      fb.expected ? `**期待する動作:**\n${fb.expected}` : '',
       '',
       '---',
+      '',
+      '### 根本原因',
+      '',
+      '（調査中 — 管理者メモを参照）',
+      '',
+      fb.extra ? `**補足情報:**\n${fb.extra}` : '',
+      '',
+      '---',
+      '',
+      '### 解決策・修正内容',
+      '',
+      '（未着手）',
+      '',
+      '---',
+      '',
+      '### 解決状況',
+      '',
+      '⬜ **未対応**',
+      '',
+      '---',
+      '',
+      '### テストケース',
+      '',
+      fb.steps ? `**再現手順:**\n${fb.steps}` : '（未記入）',
+      '',
+      '---',
+      '',
       '*Dump Tracker フィードバックシステムより自動起票*',
-      `*Firebase Document ID: ${fb.id} (短縮: FB-${shortId})*`,
-    ];
+      `*Firebase Document ID: ${fb.id}*`,
+      `*カテゴリ: ${category} | 種別: ${typePrefix} | 影響度: ${fb.severity}*`,
+    ].filter(line => line !== undefined && line !== null);
+
     return lines.join('\n');
   }
+
 }
 
 export const feedbackService = new FeedbackService();
