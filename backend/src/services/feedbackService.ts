@@ -69,6 +69,36 @@ export interface FeedbackStats {
   wontfix: number;
 }
 
+
+// =============================================
+// Backlog Webhook ペイロード型
+// =============================================
+export interface BacklogWebhookPayload {
+  type: number;          // 2=課題更新, 3=コメント追加
+  content: {
+    issue?: {
+      issueKey: string;
+      summary?: string;
+      status?: { name: string };
+    };
+    changes?: Array<{
+      field: string;
+      old_value?: string;
+      new_value?: string;
+    }>;
+    comment?: {
+      content: string;
+    };
+  };
+  createdUser?: {
+    name: string;
+    mailAddress?: string;
+  };
+  project?: {
+    projectKey: string;
+  };
+}
+
 // =============================================
 // Backlog プロジェクト固有定数
 // DUMPTRACKER2026 プロジェクト
@@ -399,6 +429,136 @@ export class FeedbackService {
     throw new Error(`フィードバック ID=${id} が見つかりません`);
   }
 
+
+  // =============================================
+  // Backlog Webhook 処理
+  // Backlog側でのステータス変更・コメントをFirestoreに反映
+  // =============================================
+
+  // Backlogステータス名 → FeedbackStatus マッピング
+  private backlogStatusToFeedback(statusName: string): FeedbackStatus | null {
+    const map: Record<string, FeedbackStatus> = {
+      '未対応':   'new',
+      '処理中':   'in_progress',
+      '処理済み': 'resolved',
+      '完了':     'resolved',
+      '却下':     'wontfix',
+      'Open':     'new',
+      'In Progress': 'in_progress',
+      'Resolved': 'resolved',
+      'Closed':   'resolved',
+    };
+    return map[statusName] || null;
+  }
+
+  async processBacklogWebhook(payload: BacklogWebhookPayload): Promise<{ updated: boolean; detail: string }> {
+    const { type, content } = payload;
+    logger.info('🔔 Backlog Webhook 受信', { type, issueKey: content?.issue?.issueKey });
+
+    // issueKeyからFirestoreドキュメントを検索
+    const issueKey = content?.issue?.issueKey;
+    if (!issueKey) {
+      return { updated: false, detail: 'issueKey なし' };
+    }
+
+    const db = await getFirestoreAsync();
+    let targetDocRef: admin.firestore.DocumentReference | null = null;
+    let targetCol = '';
+
+    for (const col of this.COLLECTIONS) {
+      const snap = await db.collection(col)
+        .where('backlogIssueKey', '==', issueKey)
+        .limit(1)
+        .get();
+      if (!snap.empty) {
+        targetDocRef = snap.docs[0]!.ref;
+        targetCol = col;
+        break;
+      }
+    }
+
+    if (!targetDocRef) {
+      logger.info('🔔 Backlog Webhook: 対応するFirestoreドキュメントなし', { issueKey });
+      return { updated: false, detail: `issueKey=${issueKey} に対応するフィードバックなし` };
+    }
+
+    const updates: Record<string, any> = {};
+    const details: string[] = [];
+
+    // type=2: 課題更新（ステータス変更など）
+    if (type === 2 && content?.changes) {
+      for (const change of content.changes) {
+        // タイトル（件名）変更
+        if (change.field === 'summary' && change.new_value) {
+          updates['backlogSummary'] = change.new_value;
+          details.push(`タイトル変更: ${change.new_value.substring(0, 50)}`);
+        }
+        // ステータス変更
+        if (change.field === 'status' && change.new_value) {
+          const newStatus = this.backlogStatusToFeedback(change.new_value);
+          if (newStatus) {
+            const prevSnap = await targetDocRef.get();
+            const prevStatus = String(prevSnap.data()?.['status'] || 'new');
+            updates['status'] = newStatus;
+            updates['statusHistory'] = admin.firestore.FieldValue.arrayUnion({
+              from: prevStatus,
+              to: newStatus,
+              changedAt: admin.firestore.Timestamp.now(),
+              changedBy: `Backlog:${payload.createdUser?.name || 'unknown'}`,
+            });
+            details.push(`ステータス: ${change.old_value} → ${change.new_value}(${newStatus})`);
+          }
+        }
+        // 担当者変更
+        if (change.field === 'assignee') {
+          updates['backlogAssignee'] = change.new_value || null;
+          details.push(`担当者: ${change.new_value || '未割当'}`);
+        }
+      }
+    }
+
+    // type=3: コメント追加
+    if (type === 3 && content?.comment?.content) {
+      const comment = content.comment.content;
+      const commentBy = payload.createdUser?.name || 'Backlog';
+      const commentAt = new Date().toLocaleString('ja-JP');
+      const commentEntry = `[${commentAt}] ${commentBy}: ${comment}`;
+
+      updates['backlogLastComment'] = commentEntry;
+      updates['backlogLastCommentAt'] = admin.firestore.Timestamp.now();
+      updates['backlogCommentHistory'] = admin.firestore.FieldValue.arrayUnion({
+        content: comment,
+        author: commentBy,
+        commentedAt: admin.firestore.Timestamp.now(),
+      });
+      details.push(`コメント追加: ${comment.substring(0, 50)}`);
+
+      // コメントに解決キーワードがあればステータスも更新
+      const resolveKeywords = ['解決', '修正完了', 'resolved', 'fixed', '完了', 'done'];
+      if (resolveKeywords.some(kw => comment.toLowerCase().includes(kw))) {
+        const prevSnap = await targetDocRef.get();
+        const prevStatus = String(prevSnap.data()?.['status'] || 'new');
+        if (prevStatus !== 'resolved') {
+          updates['status'] = 'resolved';
+          updates['statusHistory'] = admin.firestore.FieldValue.arrayUnion({
+            from: prevStatus,
+            to: 'resolved',
+            changedAt: admin.firestore.Timestamp.now(),
+            changedBy: `Backlog:${commentBy}`,
+          });
+          details.push('コメントキーワードでステータスをresolvedに変更');
+        }
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await targetDocRef.update(updates);
+      logger.info('🔔 Backlog Webhook: Firestore更新完了', { issueKey, updates: Object.keys(updates), col: targetCol });
+      return { updated: true, detail: details.join(', ') };
+    }
+
+    return { updated: false, detail: 'type=' + type + ' 更新対象なし' };
+  }
 
   // カテゴリ（アプリ種別）
   private getCategory(app: FeedbackApp): string {

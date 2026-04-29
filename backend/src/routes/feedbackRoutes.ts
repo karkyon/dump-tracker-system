@@ -11,12 +11,13 @@ import {
   updateFeedbackNotes,
   linkBacklog,
   unlinkBacklog,
+  handleBacklogWebhook,
 } from '../controllers/feedbackController';
 
 const router = Router();
 
 // 全エンドポイント: 認証必須 + ADMIN/MANAGER 権限
-router.use(authenticateToken());
+router.use(authenticateToken);
 router.use(requireAdmin);
 
 // 一覧取得
