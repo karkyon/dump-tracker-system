@@ -136,8 +136,12 @@ const FeedbackList: React.FC = () => {
     }
   }, [filterApp, filterType, filterSeverity, filterStatus, filterDateFrom, filterDateTo, filterKeyword, sortBy, sortOrder, page, limit]);
 
-  useEffect(() => { fetchData(1); setPage(1); }, [filterApp, filterType, filterSeverity, filterStatus, filterDateFrom, filterDateTo, filterKeyword, sortBy]);
-  useEffect(() => { fetchData(page); }, [page]);
+  // 初回マウント + フィルター変更時
+  useEffect(() => { fetchData(1); setPage(1); }, [filterApp, filterType, filterSeverity, filterStatus, filterDateFrom, filterDateTo, filterKeyword, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ページ変更時（ただし初回は上のeffectがカバー）
+  useEffect(() => { fetchData(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 初回マウント強制実行
+  useEffect(() => { fetchData(1); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bulkUpdateStatus = async (status: FeedbackStatus) => {
     if (selected.size === 0) return;
