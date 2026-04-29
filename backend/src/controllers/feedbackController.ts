@@ -30,7 +30,19 @@ export const listFeedback = asyncHandler(async (req: AuthenticatedRequest, res: 
     sortOrder: (req.query['sortOrder'] as any) || 'desc',
   };
   logger.info('フィードバック一覧取得', { filter, userId: req.user?.userId });
-  const result = await feedbackService.list(filter);
+  let result;
+  try {
+    result = await feedbackService.list(filter);
+  } catch (e: any) {
+    logger.error('feedbackService.list エラー', { error: String(e) });
+    res.json({
+      success: true,
+      data: [],
+      meta: { total: 0, page: filter.page, limit: filter.limit, stats: { total: 0, new: 0, in_progress: 0, resolved: 0, wontfix: 0 } },
+      message: `Firebaseに接続できません: ${e.message || String(e)}`,
+    });
+    return;
+  }
   res.json({
     success: true,
     data: result.items,
