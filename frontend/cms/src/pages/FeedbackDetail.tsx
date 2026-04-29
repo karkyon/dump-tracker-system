@@ -137,37 +137,82 @@ const FeedbackDetail: React.FC = () => {
   useEffect(() => {
     if (!fb || !showBacklogPanel) return;
     const shortId = fb.id.substring(0, 6);
+
+    // 種別プレフィックス（既存チケット形式）
+    const typePrefix: Record<string, string> = {
+      bug: 'BUG', odd: 'BUG', data: 'BUG',
+      improve: 'REQ', feature: 'REQ', good: 'OTHER',
+    };
+    const prefix = typePrefix[fb.reportType] || 'OTHER';
+    const category = fb.app === 'mobile' ? 'Mobile' : 'CMS';
     const rt = REPORT_TYPE_CONFIG[fb.reportType]?.label || fb.reportType;
-    setBacklogTitle(`[FB-${shortId}][${rt}] ${fb.screen} - ${fb.what.substring(0, 40)}`);
+    const sv = SEVERITY_CONFIG[fb.severity]?.label || String(fb.severity);
+    const issueId = `[${prefix}-FB-${shortId}]`;
+
+    // タイトル: 既存チケット形式 [BUG-FB-xxxx][Mobile] 画面名 - 問題内容
+    setBacklogTitle(`${issueId}[${category}] ${fb.screen} - ${fb.what.substring(0, 50)}`);
+
+    // 本文: REQ-016スタイル準拠
     setBacklogBody([
-      '## フィードバック詳細',
+      `## FB-${shortId} | ${fb.screen} - ${fb.what.substring(0, 60)}`,
       '',
-      `**報告種類:** ${rt}`,
-      `**アプリ種別:** ${fb.app === 'mobile' ? 'モバイルアプリ' : 'CMS管理画面'}`,
+      '---',
+      '',
+      '### 概要',
+      '',
+      fb.what,
+      '',
+      '---',
+      '',
+      '### 問題の詳細',
+      '',
+      `**カテゴリ:** ${category}`,
+      `**種別:** ${rt}（${prefix}）`,
+      `**影響度:** ${sv}`,
       `**発生画面:** ${fb.screen}`,
       `**操作内容:** ${fb.operation || '（未記入）'}`,
       `**発生頻度:** ${fb.frequency || '（未記入）'}`,
-      `**影響度:** ${SEVERITY_CONFIG[fb.severity]?.label || String(fb.severity)}`,
       `**使用端末:** ${fb.device || '（未記入）'}`,
       `**報告者:** ${fb.name || '匿名'}`,
       `**報告日時:** ${formatDate(fb.createdAt)}`,
       '',
-      '## 問題内容',
+      '**現象:**',
       fb.what,
       '',
-      '## 期待する動作',
-      fb.expected || '（未記入）',
-      '',
-      '## 再現手順',
-      fb.steps || '（未記入）',
-      '',
-      '## 補足',
-      fb.extra || '（なし）',
+      fb.expected ? `**期待する動作:**\n${fb.expected}` : '',
       '',
       '---',
+      '',
+      '### 根本原因',
+      '',
+      '（調査中 — 管理者メモを参照）',
+      '',
+      fb.extra ? `**補足情報:**\n${fb.extra}` : '',
+      '',
+      '---',
+      '',
+      '### 解決策・修正内容',
+      '',
+      '（未着手）',
+      '',
+      '---',
+      '',
+      '### 解決状況',
+      '',
+      '⬜ **未対応**',
+      '',
+      '---',
+      '',
+      '### テストケース',
+      '',
+      fb.steps ? `**再現手順:**\n${fb.steps}` : '（未記入）',
+      '',
+      '---',
+      '',
       '*Dump Tracker フィードバックシステムより自動起票*',
       `*Firebase Document ID: ${fb.id}*`,
-    ].join('\n'));
+      `*カテゴリ: ${category} | 種別: ${prefix} | 影響度: ${fb.severity}*`,
+    ].filter(l => l !== undefined && l !== null).join('\n'));
   }, [fb, showBacklogPanel]);
 
   const updateStatus = async (status: FeedbackStatus) => {
