@@ -25,6 +25,7 @@ import { sendNotFound, sendSuccess } from '../utils/response';
 //          本プロジェクトは schema.camel.prisma の camelCase クライアントを使用する。
 //          DatabaseService.getInstance() が正しい camelCase クライアントを返す。
 import { DatabaseService } from '../utils/database';
+import { LocationService } from '../models/LocationModel';
 
 /**
  * 統合タイムラインイベント型定義
@@ -74,9 +75,11 @@ interface TimelineEvent {
  */
 export class OperationDetailController {
   private readonly operationDetailService: OperationDetailService;
+  private readonly locationService: LocationService;
 
   constructor() {
     this.operationDetailService = new OperationDetailService();
+    this.locationService = new LocationService();
   }
 
   /**
@@ -505,15 +508,63 @@ export class OperationDetailController {
    */
   updateOperationDetail = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
-    const { id } = req.params;  // ✅ 修正: idの型はstring
-    const data = req.body;
+    const { id } = req.params;
+    const rawData = req.body;
 
-    // ✅ 修正: undefinedチェック追加
     if (!id) {
       throw new ValidationError('IDは必須です');
     }
 
-    logger.info('運行詳細更新', { userId, id, data });
+    logger.info('運行詳細更新', { userId, id, rawData });
+
+    // ================================================================
+    // フロントエンドから送られる不正フィールドを除去して安全なDTOを構築
+    // locationName は Prismaスキーマに存在しないため除去
+    // actualStartTime/actualEndTime は文字列→Dateに変換
+    // ================================================================
+    const allowedFields = [
+      'sequenceNumber', 'activityType', 'locationId', 'itemId',
+      'plannedTime', 'actualStartTime', 'actualEndTime',
+      'quantityTons', 'notes',
+      'latitude', 'longitude', 'altitude', 'gpsAccuracyMeters', 'gpsRecordedAt'
+    ];
+
+    const data: Record<string, any> = {};
+    for (const key of allowedFields) {
+      if (rawData[key] !== undefined) {
+        data[key] = rawData[key];
+      }
+    }
+
+    // ISO文字列 → Date 変換
+    if (data.actualStartTime && typeof data.actualStartTime === 'string') {
+      data.actualStartTime = new Date(data.actualStartTime);
+    }
+    if (data.actualEndTime && typeof data.actualEndTime === 'string') {
+      data.actualEndTime = new Date(data.actualEndTime);
+    }
+    if (data.plannedTime && typeof data.plannedTime === 'string') {
+      data.plannedTime = new Date(data.plannedTime);
+    }
+    if (data.gpsRecordedAt && typeof data.gpsRecordedAt === 'string') {
+      data.gpsRecordedAt = new Date(data.gpsRecordedAt);
+    }
+
+    // locationName が送られた場合: 場所マスタを name で検索して locationId に変換
+    if (rawData.locationName && !rawData.locationId) {
+      try {
+        const locs = await this.locationService.findMany({
+          where: { name: rawData.locationName }
+        });
+        const locArr = Array.isArray(locs) ? locs : (locs as any)?.data || [];
+        if (locArr.length > 0 && locArr[0]?.id) {
+          data.locationId = locArr[0].id;
+        }
+      } catch (e) {
+        // locationName の解決に失敗しても更新は継続
+        logger.warn('locationName → locationId 解決失敗', { locationName: rawData.locationName });
+      }
+    }
 
     const operationDetail = await this.operationDetailService.update(id, data);
 

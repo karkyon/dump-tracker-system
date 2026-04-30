@@ -1487,9 +1487,9 @@ const OperationRecord: React.FC = () => {
         </div>
       )}
 
-      {/* 詳細パネル（MAPオーバーレイ）*/}
+      {/* 詳細パネル（全画面オーバーレイ - 修正: position:fixed でスクロール完全対応）*/}
       {showDetailPanel && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column' }}>
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }} />
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
             {/* ヘッダー */}
@@ -1898,6 +1898,10 @@ const OperationRecord: React.FC = () => {
           activity={editingActivity}
           operationId={operationStore.operationId || ''}
           onClose={() => setEditingActivity(null)}
+          onDeleted={(deletedId) => {
+            setDetailActivities(prev => prev.filter(a => a.id !== deletedId));
+            setEditingActivity(null);
+          }}
           onSaved={(updated) => {
             setDetailActivities(prev =>
               prev.map(a => a.id === updated.id ? { ...a, ...updated } : a)

@@ -1472,6 +1472,22 @@ class APIServiceClass {
     }
   }
 
+  /**
+   * イベント（運行詳細）削除
+   * DELETE /api/v1/operation-details/:id
+   */
+  async deleteActivityRecord(activityId: string): Promise<any> {
+    try {
+      const response = await this.axiosInstance.delete(
+        `/operation-details/${activityId}`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('deleteActivityRecord error:', error);
+      throw error;
+    }
+  }
+
   async getCustomers(): Promise<APIResponse<any>> {
     try {
       const response = await this.axiosInstance.get<APIResponse<any>>(
