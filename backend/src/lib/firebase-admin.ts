@@ -118,7 +118,13 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
 
 export async function getFirestore(): Promise<admin.firestore.Firestore> {
   const app = await getFirebaseAdmin();
-  return app.firestore();
+  const db = app.firestore();
+  // gRPC接続タイムアウト設定（デフォルトは無限待機でハングする）
+  db.settings({
+    timeout: 10000,          // 10秒でタイムアウト
+    preferRest: true,        // gRPCの代わりにREST APIを使用（ファイアウォール問題を回避）
+  });
+  return db;
 }
 
 export async function getStorage(): Promise<admin.storage.Storage> {
