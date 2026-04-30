@@ -6,9 +6,10 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { 
   User, Truck, MapPin, Package, Clock,
-  Navigation, CheckCircle, AlertCircle, TrendingUp, Edit,
+  Navigation, CheckCircle, AlertCircle, TrendingUp,
   Coffee, Fuel, Play, Square, ClipboardCheck,
-  ChevronDown, ChevronUp, XCircle
+  ChevronDown, ChevronUp, XCircle,
+  Pencil, Trash2, X, Save
 } from 'lucide-react';
 import Button from './common/Button';
 import Modal from './common/Modal';
@@ -222,6 +223,335 @@ interface OperationDetailDialogProps {
  * ✅ Google Maps実装追加
  * ✅ routeGpsLogs 走行軌跡を常時描画（localStorage依存を排除）
  */
+
+// =====================================================================
+// ✅ CmsActivityEditModal
+// CMSタイムラインからイベントを編集するモーダル（mobile ActivityEditSheet相当）
+// =====================================================================
+
+interface CmsEditEvent {
+  id: string;
+  eventType: string;
+  timestamp: string | null;
+  notes?: string | null;
+  quantityTons?: number;
+  locationName?: string;
+  locationId?: string;
+  locationLat?: number | null;
+  locationLng?: number | null;
+  itemId?: string | null;
+  itemName?: string | null;
+}
+
+interface CmsActivityEditModalProps {
+  event: CmsEditEvent | null;
+  operationId: string;
+  items: { id: string; name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+  onDeleted: (id: string) => void;
+}
+
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  LOADING: '積込', LOADING_ARRIVED: '積込(到着)', LOADING_COMPLETED: '積込(完了)',
+  UNLOADING: '積降', UNLOADING_ARRIVED: '積降(到着)', UNLOADING_COMPLETED: '積降(完了)',
+  FUELING: '給油', REFUELING: '給油',
+  BREAK_START: '休憩開始', BREAK_END: '休憩終了', BREAK: '休憩',
+  TRIP_START: '運行開始', TRIP_END: '運行終了',
+  PRE_INSPECTION: '運行前点検', POST_INSPECTION: '運行後点検',
+  TRANSPORTING: '運搬中', WAITING: '待機',
+};
+
+const isLoadEvt  = (t: string) => ['LOADING','LOADING_ARRIVED','LOADING_COMPLETED'].includes(t);
+const isUnlEvt   = (t: string) => ['UNLOADING','UNLOADING_ARRIVED','UNLOADING_COMPLETED'].includes(t);
+const isFuelEvt  = (t: string) => ['FUELING','REFUELING'].includes(t);
+const isBreakEvt = (t: string) => ['BREAK','BREAK_START','BREAK_END'].includes(t);
+
+const toHM = (iso: string | null): string => {
+  if (!iso) return '';
+  try { return new Date(iso).toTimeString().slice(0, 5); } catch { return ''; }
+};
+
+const mergeHM = (base: string | null, hhmm: string): string => {
+  if (!hhmm) return base ?? new Date().toISOString();
+  const [hStr, mStr] = hhmm.split(':');
+  const h = parseInt(hStr ?? '0', 10); const m = parseInt(mStr ?? '0', 10);
+  const d = base ? new Date(base) : new Date();
+  d.setHours(h, m, 0, 0); return d.toISOString();
+};
+
+const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
+  event, operationId: _operationId, items, onClose, onSaved, onDeleted
+}) => {
+  const [startHHMM, setStartHHMM] = React.useState('');
+  const [endHHMM,   setEndHHMM]   = React.useState('');
+  const [locationName, setLocationName] = React.useState('');
+  const [notes,     setNotes]     = React.useState('');
+  const [quantity,  setQuantity]  = React.useState('');
+  const [fuelAmt,   setFuelAmt]   = React.useState('');
+  const [fuelCost,  setFuelCost]  = React.useState('');
+  const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
+  const [saving, setSaving]   = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [confirmDel, setConfirmDel] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!event) return;
+    setStartHHMM(toHM(event.timestamp));
+    setEndHHMM('');
+    setLocationName(event.locationName ?? '');
+    setNotes(event.notes ?? '');
+    setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
+    setFuelAmt(''); setFuelCost('');
+    setSelectedItemIds(event.itemId ? [event.itemId] : []);
+    setConfirmDel(false);
+    setSaveError(null);
+  }, [event]);
+
+  if (!event) return null;
+
+  const toggleItem = (id: string) =>
+    setSelectedItemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const handleSave = async () => {
+    setSaveError(null);
+    if (!startHHMM) { setSaveError('開始時刻を入力してください'); return; }
+    setSaving(true);
+    try {
+      const body: Record<string, any> = {
+        actualStartTime: mergeHM(event.timestamp, startHHMM),
+        notes,
+        locationName: locationName || undefined,
+      };
+      if (endHHMM) body.actualEndTime = mergeHM(event.timestamp, endHHMM);
+      if (isLoadEvt(event.eventType)) {
+        if (selectedItemIds.length > 0) body.itemId = selectedItemIds[0];
+        if (quantity) body.quantityTons = parseFloat(quantity);
+        if (selectedItemIds.length > 1) {
+          const names = selectedItemIds.map(id => items.find(i => i.id === id)?.name || id).join('、');
+          body.notes = `品目: ${names}` + (notes ? ` / ${notes}` : '');
+        }
+      }
+      if (isFuelEvt(event.eventType)) {
+        if (fuelAmt) body.quantityTons = parseFloat(fuelAmt);
+        if (fuelAmt || fuelCost) body.notes = `給油 ${fuelAmt}L ¥${fuelCost} ${notes}`.trim();
+      }
+      const res = await apiClient.put(`/operation-details/${event.id}`, body);
+      if ((res as any).success || (res as any).data) {
+        onSaved();
+        onClose();
+      } else {
+        setSaveError('保存に失敗しました');
+      }
+    } catch (e: any) {
+      setSaveError(e?.response?.data?.message || e?.message || '保存に失敗しました');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDel) { setConfirmDel(true); return; }
+    setDeleting(true);
+    try {
+      await apiClient.delete(`/operation-details/${event.id}`);
+      onDeleted(event.id);
+      onClose();
+    } catch (e: any) {
+      setSaveError(e?.response?.data?.message || '削除に失敗しました');
+      setConfirmDel(false);
+    } finally { setDeleting(false); }
+  };
+
+  const accentColors: Record<string, string> = {
+    LOADING: '#1565C0', LOADING_ARRIVED: '#1565C0', LOADING_COMPLETED: '#1565C0',
+    UNLOADING: '#2E7D32', UNLOADING_ARRIVED: '#2E7D32', UNLOADING_COMPLETED: '#2E7D32',
+    FUELING: '#E65100', REFUELING: '#E65100',
+    BREAK: '#6A1B9A', BREAK_START: '#6A1B9A', BREAK_END: '#6A1B9A',
+  };
+  const accent = accentColors[event.eventType] || '#1d4ed8';
+  const label  = EVENT_TYPE_LABEL[event.eventType] || event.eventType;
+
+  return (
+    <div
+      className="fixed inset-0 z-[9900] flex items-center justify-center bg-black bg-opacity-60 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between px-5 py-3 text-white flex-shrink-0"
+          style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)` }}>
+          <span className="font-semibold text-base">{label} — 編集</span>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-white hover:bg-opacity-20 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* フォーム */}
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {saveError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />{saveError}
+            </div>
+          )}
+
+          {/* 時刻 */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: isBreakEvt(event.eventType) ? '開始時刻' : '到着時刻', value: startHHMM, set: setStartHHMM, req: true },
+              { label: isBreakEvt(event.eventType) ? '終了時刻' : '完了時刻', value: endHHMM,   set: setEndHHMM,   req: false },
+            ].map(({ label: lbl, value, set, req }) => (
+              <div key={lbl}>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                  {lbl}{req && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                <input
+                  type="time" value={value} onChange={e => set(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* 積込専用 */}
+          {isLoadEvt(event.eventType) && (<>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">積込場所名</label>
+              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
+                placeholder="例: 翠香園町ダート"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                品目 <span className="font-normal text-gray-400">（複数選択可）</span>
+              </label>
+              {items.length === 0 ? (
+                <p className="text-xs text-red-500">品目が読み込まれていません</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {items.map(item => {
+                    const sel = selectedItemIds.includes(item.id);
+                    return (
+                      <button key={item.id} type="button" onClick={() => toggleItem(item.id)}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                          sel ? 'text-white border-transparent' : 'bg-gray-100 text-gray-700 border-gray-200 hover:border-gray-400'
+                        }`}
+                        style={sel ? { background: accent, borderColor: accent } : {}}
+                      >
+                        {sel && '✓ '}{item.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedItemIds.length > 0 && (
+                <p className="text-xs mt-1" style={{ color: accent }}>
+                  選択中: {selectedItemIds.map(id => items.find(i => i.id === id)?.name || id).join('、')}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">重量（トン）</label>
+              <input type="number" inputMode="decimal" value={quantity} onChange={e => setQuantity(e.target.value)}
+                placeholder="例: 12.5" step="0.1" min="0"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+          </>)}
+
+          {/* 積降専用 */}
+          {isUnlEvt(event.eventType) && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">積降場所名</label>
+              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
+                placeholder="例: ABC建材センター"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+          )}
+
+          {/* 給油専用 */}
+          {isFuelEvt(event.eventType) && (<>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">スタンド名</label>
+              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
+                placeholder="例: ENEOS セルフ"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">給油量（L）</label>
+                <input type="number" value={fuelAmt} onChange={e => setFuelAmt(e.target.value)} placeholder="例: 35"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">金額（円）</label>
+                <input type="number" value={fuelCost} onChange={e => setFuelCost(e.target.value)} placeholder="例: 6300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+              </div>
+            </div>
+          </>)}
+
+          {/* 休憩専用 */}
+          {isBreakEvt(event.eventType) && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">場所名 <span className="font-normal text-gray-400">（任意）</span></label>
+              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
+                placeholder="例: コンビニ駐車場"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+          )}
+
+          {/* 備考（共通） */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">備考 <span className="font-normal text-gray-400">（任意）</span></label>
+            <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="メモを入力..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+          </div>
+
+          {/* 削除 */}
+          <div className="border-t border-red-100 pt-4">
+            {!confirmDel ? (
+              <button type="button" onClick={() => setConfirmDel(true)}
+                className="w-full py-2 border border-red-300 rounded-lg text-sm text-red-600 hover:bg-red-50 flex items-center justify-center gap-2 transition-colors">
+                <Trash2 className="w-4 h-4" />このイベントを削除する
+              </button>
+            ) : (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-semibold text-red-700 text-center">⚠️ 本当に削除しますか？</p>
+                <p className="text-xs text-gray-500 text-center">この操作は元に戻せません</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setConfirmDel(false)}
+                    className="py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition-colors">
+                    キャンセル
+                  </button>
+                  <button type="button" onClick={handleDelete} disabled={deleting}
+                    className="py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                    style={{ background: '#ef4444' }}>
+                    {deleting ? '削除中...' : '削除する'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* フッター */}
+        <div className="flex gap-3 px-5 py-4 border-t border-gray-200 flex-shrink-0">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            キャンセル
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="flex-[2] py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            style={{ background: saving ? '#9ca3af' : accent }}>
+            <Save className="w-4 h-4" />
+            {saving ? '保存中...' : '保存する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   operationId,
   isOpen,
@@ -278,6 +608,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   // ✅ UI制御用State
   const [showOperationTimeline, setShowOperationTimeline] = useState(true);
   const [showInspectionDetails, setShowInspectionDetails] = useState(true);
+
+  // ✅ イベント編集モーダル
+  const [editEvent, setEditEvent] = useState<CmsEditEvent | null>(null);
+  const [editItems, setEditItems] = useState<{ id: string; name: string }[]>([]);
 
   // ✅ Google Maps用State
   const mapRef = useRef<HTMLDivElement>(null);
@@ -964,11 +1298,19 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       // ✅ Step 1: 運行基本情報を先に取得
       await fetchOperationDetail();
       
-      // ✅ Step 2: 並行して他のデータを取得
+      // ✅ Step 2: 並行して他のデータを取得（items も取得して編集モーダルで使用）
       await Promise.all([
         fetchOperationActivities(),
         fetchIntegratedTimeline(operationId),
-        fetchInspectionItemDetails(operationId)
+        fetchInspectionItemDetails(operationId),
+        (async () => {
+          try {
+            const res = await apiClient.get('/items', { params: { page: 1, limit: 200 } });
+            const d: any = res;
+            const arr = d?.data?.data?.data ?? d?.data?.data ?? d?.data ?? [];
+            setEditItems(Array.isArray(arr) ? arr : []);
+          } catch { /* items 取得失敗は致命的ではない */ }
+        })(),
       ]);
       
     } catch (err) {
@@ -1265,6 +1607,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   if (!isOpen) return null;
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -1694,10 +2037,35 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     {group.groupNum > 1 && `（${group.groupNum}回目）`}
                                   </span>
                                   {group.arrivedEvent.location && (
-                                    <span className="text-xs text-gray-500 truncate">
+                                    <span className="text-xs text-gray-500 truncate flex-1">
                                       ─ {group.arrivedEvent.location.name}
                                     </span>
                                   )}
+                                  {/* ✅ 編集ボタン（グループ完了イベント優先、なければ到着イベント） */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const ev = group.completedEvent ?? group.arrivedEvent;
+                                      setEditEvent({
+                                        id: ev.id,
+                                        eventType: ev.eventType,
+                                        timestamp: ev.timestamp,
+                                        notes: ev.notes,
+                                        quantityTons: ev.quantityTons,
+                                        locationName: ev.location?.name ?? '',
+                                        locationId: ev.location?.id ?? '',
+                                        locationLat: ev.location?.latitude ?? null,
+                                        locationLng: ev.location?.longitude ?? null,
+                                        itemId: ev.items?.id ?? null,
+                                        itemName: ev.items?.name ?? null,
+                                      });
+                                    }}
+                                    className={`ml-auto flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors hover:opacity-80`}
+                                    style={{ borderColor: headerTextCls.includes('indigo') ? '#6366f1' : '#7c3aed', color: headerTextCls.includes('indigo') ? '#4f46e5' : '#6d28d9', background: 'rgba(255,255,255,0.7)' }}
+                                    title="このイベントを編集"
+                                  >
+                                    <Pencil className="w-3 h-3" /> 編集
+                                  </button>
                                 </div>
                                 {/* サブイベント */}
                                 <div className="bg-white">
@@ -1730,7 +2098,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 </div>
  
                                 <div className="flex-1">
-                                  {/* イベント種別と時刻 */}
+                                  {/* イベント種別と時刻 + 編集ボタン */}
                                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                                     <span className={`px-3 py-1 text-sm font-semibold rounded-lg inline-flex items-center gap-2 ${typeInfo.className}`}>
                                       {typeInfo.icon}
@@ -1741,6 +2109,27 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         記録時刻: {fmtTs(event.timestamp)}
                                       </span>
                                     )}
+                                    {/* ✅ 編集ボタン */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditEvent({
+                                        id: event.id,
+                                        eventType: event.eventType,
+                                        timestamp: event.timestamp,
+                                        notes: event.notes,
+                                        quantityTons: event.quantityTons,
+                                        locationName: event.location?.name ?? '',
+                                        locationId: event.location?.id ?? '',
+                                        locationLat: event.location?.latitude ?? null,
+                                        locationLng: event.location?.longitude ?? null,
+                                        itemId: event.items?.id ?? null,
+                                        itemName: event.items?.name ?? null,
+                                      })}
+                                      className="ml-auto flex items-center gap-1 px-2 py-1 border border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                                      title="このイベントを編集"
+                                    >
+                                      <Pencil className="w-3 h-3" /> 編集
+                                    </button>
                                   </div>
  
                                   {/* 場所情報 */}
@@ -2059,17 +2448,30 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
               <Button variant="outline" onClick={onClose}>
                 閉じる
               </Button>
-              <div className="flex gap-2">
-                <Button variant="outline">
-                  <Edit className="w-4 h-4 mr-2" />
-                  編集
-                </Button>
-              </div>
             </div>
           </>
         )}
       </div>
     </Modal>
+
+    {/* ✅ イベント編集モーダル */}
+    {editEvent && (
+      <CmsActivityEditModal
+        event={editEvent}
+        operationId={operationId}
+        items={editItems}
+        onClose={() => setEditEvent(null)}
+        onSaved={() => {
+          setEditEvent(null);
+          fetchIntegratedTimeline(operationId);
+        }}
+        onDeleted={(id) => {
+          setEditEvent(null);
+          setOperationDebugTimelineEvents(prev => prev.filter(e => e.id !== id));
+        }}
+      />
+    )}
+    </>
   );
 };
 

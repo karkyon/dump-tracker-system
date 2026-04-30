@@ -200,7 +200,9 @@ export class FeedbackService {
       if (filter.severity !== undefined && filter.severity !== null) {
         query = query.where('severity', '==', filter.severity);
       }
-      if (filter.status) query = query.where('status', '==', filter.status);
+      // ✅ 修正: status フィルタはFirestoreクエリから除去し、後段のメモリフィルタで適用する
+      // これによりサマリ件数（stats）が status フィルタに依存しなくなる
+      // 旧コード: if (filter.status) query = query.where('status', '==', filter.status);
       if (filter.dateFrom) {
         query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromDate(new Date(filter.dateFrom)));
       }
@@ -230,6 +232,8 @@ export class FeedbackService {
       return sortOrder === 'asc' ? av - bv : bv - av;
     });
 
+    // ✅ 修正: stats は status フィルタ適用前の全件（allItems）から計算する
+    // サマリカードの件数がフィルタ変更で変動しなくなる
     const stats: FeedbackStats = {
       total: allItems.length,
       new: allItems.filter(i => i.status === 'new').length,
@@ -238,8 +242,14 @@ export class FeedbackService {
       wontfix: allItems.filter(i => i.status === 'wontfix').length,
     };
 
+    // ✅ 修正: status フィルタをメモリ上で適用（Firestoreクエリから除去したため）
+    // テーブル表示・ページネーションは filteredItems を使用
+    const filteredItems = filter.status
+      ? allItems.filter(i => i.status === filter.status)
+      : allItems;
+
     const start = (page - 1) * limit;
-    return { items: allItems.slice(start, start + limit), total: allItems.length, stats };
+    return { items: filteredItems.slice(start, start + limit), total: filteredItems.length, stats };
   }
 
   // 詳細取得（Storage署名付きURL生成）
