@@ -161,7 +161,7 @@ jobs:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          source: "frontend/cms/dist/*"
+          source: "frontend/cms/dist/*,scripts/fix-nginx-cms.py"
           target: "/tmp/cms-deploy/"
           strip_components: 3
       
@@ -175,29 +175,9 @@ jobs:
             rm -rf ~/projects/dump-tracker/frontend/cms/dist/*
             cp -r /tmp/cms-deploy/* ~/projects/dump-tracker/frontend/cms/dist/
             chmod -R 755 ~/projects/dump-tracker/frontend/cms/dist
+            cp /tmp/cms-deploy/fix-nginx-cms.py /tmp/fix-nginx-cms.py 2>/dev/null || true
             rm -rf /tmp/cms-deploy
-            # Nginx CMS設定に /api/v1 プロキシを追加（なければ）
-            NGINX_CONF="/etc/nginx/sites-enabled/dump-tracker"
-            if ! grep -q "listen 3003" "$NGINX_CONF" 2>/dev/null; then
-              echo "⚠️ Nginx設定ファイルが見つかりません"
-            elif ! grep -A5 "listen 3003" "$NGINX_CONF" | grep -q "location /api/"; then
-              sudo sed -i '/listen 3003 ssl/,/^}/ {
-                /location \/ {/i\    location /api/ {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 120;
-        proxy_connect_timeout 120;
-    }
-
-              }' "$NGINX_CONF" 2>/dev/null || true
-              echo "✅ Nginx CMS /api/ プロキシ追加"
-            else
-              echo "✅ Nginx CMS /api/ プロキシ既存"
-            fi
+            sudo python3 /tmp/fix-nginx-cms.py 2>/dev/null || true
             sudo nginx -t && sudo systemctl reload nginx
             echo "✅ CMS deployed to Staging"
       
