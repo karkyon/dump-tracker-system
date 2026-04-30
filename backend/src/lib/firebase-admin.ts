@@ -7,6 +7,7 @@ import * as admin from 'firebase-admin';
 import logger from '../utils/logger';
 
 let firebaseApp: admin.app.App | null = null;
+let firestoreDb: admin.firestore.Firestore | null = null;
 
 /**
  * DB経由でサービスアカウントJSONを取得
@@ -91,6 +92,9 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
       credential: dbConfig.credential,
       storageBucket: dbConfig.storageBucket,
     });
+    // Firestore: preferRest=true でgRPCハングを回避（初回使用前に設定必須）
+    firestoreDb = firebaseApp.firestore();
+    firestoreDb.settings({ preferRest: true });
     logger.info('✅ Firebase Admin SDK 初期化完了（DBのシステム設定から）', {
       projectId: dbConfig.projectId,
     });
@@ -104,6 +108,9 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
       credential: envConfig.credential,
       storageBucket: envConfig.storageBucket,
     });
+    // Firestore: preferRest=true でgRPCハングを回避（初回使用前に設定必須）
+    firestoreDb = firebaseApp.firestore();
+    firestoreDb.settings({ preferRest: true });
     logger.info('✅ Firebase Admin SDK 初期化完了（環境変数から）', {
       projectId: envConfig.projectId,
     });
@@ -117,14 +124,10 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
 }
 
 export async function getFirestore(): Promise<admin.firestore.Firestore> {
-  const app = await getFirebaseAdmin();
-  const db = app.firestore();
-  // gRPC接続タイムアウト設定（デフォルトは無限待機でハングする）
-  db.settings({
-    timeout: 10000,          // 10秒でタイムアウト
-    preferRest: true,        // gRPCの代わりにREST APIを使用（ファイアウォール問題を回避）
-  });
-  return db;
+  if (firestoreDb) return firestoreDb;
+  await getFirebaseAdmin(); // 初期化（firestoreDbもセットされる）
+  if (firestoreDb) return firestoreDb;
+  throw new Error('Firestore初期化失敗');
 }
 
 export async function getStorage(): Promise<admin.storage.Storage> {
