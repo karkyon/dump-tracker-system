@@ -30,7 +30,23 @@ export const listFeedback = asyncHandler(async (req: AuthenticatedRequest, res: 
     sortOrder: (req.query['sortOrder'] as any) || 'desc',
   };
   logger.info('フィードバック一覧取得', { filter, userId: req.user?.userId });
-  const result = await feedbackService.list(filter);
+  // Firebase初期化タイムアウト保護（10秒）
+  let result: Awaited<ReturnType<typeof feedbackService.list>>;
+  try {
+    const timeout = new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error('Firebase タイムアウト')), 10000)
+    );
+    result = await Promise.race([feedbackService.list(filter), timeout]);
+  } catch (e: any) {
+    logger.warn('feedbackService.list タイムアウトまたはエラー', { error: String(e) });
+    res.json({
+      success: true,
+      data: [],
+      meta: { total: 0, page: filter.page, limit: filter.limit, stats: { total:0, new:0, in_progress:0, resolved:0, wontfix:0 } },
+      message: `Firebaseデータ取得エラー: ${e.message}`,
+    });
+    return;
+  }
   res.json({
     success: true,
     data: result.items,
