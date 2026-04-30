@@ -355,6 +355,7 @@ interface CmsEditEvent {
   itemName?: string | null;
   customerId?: string | null;
   customerName?: string | null;
+  preinspMemo?: string | null;
 }
 
 interface CmsActivityEditModalProps {
@@ -378,7 +379,8 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
 };
 
 const isLoadEvt  = (t: string) => ['LOADING','LOADING_ARRIVED','LOADING_COMPLETED'].includes(t);
-const isUnlEvt   = (t: string) => ['UNLOADING','UNLOADING_ARRIVED','UNLOADING_COMPLETED'].includes(t);
+// isUnlEvt: 個別分岐済み
+// const isUnlEvt = (t: string) => ['UNLOADING','UNLOADING_ARRIVED','UNLOADING_COMPLETED'].includes(t);
 const isFuelEvt  = (t: string) => ['FUELING','REFUELING'].includes(t);
 const isBreakEvt = (t: string) => ['BREAK','BREAK_START','BREAK_END'].includes(t);
 
@@ -419,6 +421,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   const [currentCustomerId,   setCurrentCustomerId]   = React.useState('');
   const [currentCustomerName, setCurrentCustomerName] = React.useState('');
   const [showCustomerPicker,  setShowCustomerPicker]  = React.useState(false);
+  const [preinspMemo, setPreinspMemo] = React.useState('');
   const [odometer,    setOdometer]    = React.useState('');
   const [fuelLevel,   setFuelLevel]   = React.useState('');
   const [inspMemo,    setInspMemo]    = React.useState('');
@@ -450,7 +453,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setCurrentCustomerId(event.customerId ?? '');
     setCurrentCustomerName(event.customerName ?? '');
     setShowCustomerPicker(false);
-    setOdometer(''); setFuelLevel(''); setInspMemo('');
+    setOdometer(''); setFuelLevel(''); setInspMemo(''); setPreinspMemo(event.preinspMemo ?? '');
     setConfirmDel(false);
     setSaveError(null);
   }, [event]);
@@ -496,6 +499,9 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
       if (isFuelEvt(event.eventType)) {
         if (fuelAmt) body.quantityTons = parseFloat(fuelAmt);
         if (fuelAmt || fuelCost) body.notes = `給油 ${fuelAmt}L ¥${fuelCost} ${notes}`.trim();
+      }
+      if (event.eventType === 'PRE_INSPECTION' && preinspMemo) {
+        body.notes = `点検メモ: ${preinspMemo}`;
       }
       if (isPostInsp(event.eventType)) {
         const memoLines: string[] = [];
@@ -618,8 +624,8 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
             );
           })()}
 
-          {/* 積込専用 */}
-          {isLoadEvt(event.eventType) && (<>
+          {/* ── 積込(到着): 場所名・客先・GPS地図のみ ── */}
+          {event.eventType === 'LOADING_ARRIVED' && (<>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">積込場所名</label>
               <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
@@ -636,7 +642,12 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                 <span className="text-xs text-blue-600 ml-2">変更 ▾</span>
               </button>
             </div>
-            {/* 品目: カテゴリ別グリッドチップUI（mobile LoadingInput と同等） */}
+            <CmsGpsPinMap lat={pinLat} lng={pinLng}
+              onPinMoved={(lat, lng) => { setPinLat(lat); setPinLng(lng); }} />
+          </>)}
+
+          {/* ── 積込(完了): 品目（カテゴリグリッド）・重量のみ ── */}
+          {event.eventType === 'LOADING_COMPLETED' && (<>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">
                 品目 <span className="font-normal text-gray-400">（複数選択可）</span>
@@ -645,9 +656,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                 <p className="text-xs text-red-500">品目が読み込まれていません</p>
               ) : (() => {
                 const TYPE_LABEL: Record<string, string> = {
-                  RECYCLED_MATERIAL: '再生材',
-                  VIRGIN_MATERIAL: 'バージン材',
-                  WASTE: '廃棄物',
+                  RECYCLED_MATERIAL: '再生材', VIRGIN_MATERIAL: 'バージン材', WASTE: '廃棄物',
                 };
                 const ORDER: ('RECYCLED_MATERIAL'|'VIRGIN_MATERIAL'|'WASTE'|undefined)[] =
                   ['RECYCLED_MATERIAL','VIRGIN_MATERIAL','WASTE',undefined];
@@ -677,9 +686,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                                   borderColor: sel ? '#667eea' : '#d1d5db',
                                   fontWeight: sel ? 'bold' : 'normal',
                                 }}
-                              >
-                                {sel ? `✓ ${item.name}` : item.name}
-                              </button>
+                              >{sel ? `✓ ${item.name}` : item.name}</button>
                             );
                           })}
                         </div>
@@ -687,8 +694,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                           <div className="mt-2 p-3 bg-amber-50 border-2 border-amber-300 rounded-lg text-xs text-amber-800">
                             📋 産業廃棄物マニフェストを登録する場合は、
                             <a href="https://webpage.e-reverse.com" target="_blank" rel="noopener noreferrer"
-                              className="text-blue-600 underline font-bold">こちら</a>
-                            からログインしてください。
+                              className="text-blue-600 underline font-bold">こちら</a>からログインしてください。
                           </div>
                         )}
                       </div>
@@ -708,27 +714,21 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                 placeholder="例: 12.5" step="0.1" min="0"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
             </div>
-            {/* GPS ピン調整マップ（積込） */}
-            <CmsGpsPinMap
-              lat={pinLat} lng={pinLng}
-              onPinMoved={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
-            />
           </>)}
 
-          {/* 積降専用 */}
-          {isUnlEvt(event.eventType) && (<>
+          {/* ── 積降(到着): 場所名・GPS地図 ── */}
+          {event.eventType === 'UNLOADING_ARRIVED' && (<>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">積降場所名</label>
               <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
                 placeholder="例: ABC建材センター"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
             </div>
-            {/* GPS ピン調整マップ（積降） */}
-            <CmsGpsPinMap
-              lat={pinLat} lng={pinLng}
-              onPinMoved={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
-            />
+            <CmsGpsPinMap lat={pinLat} lng={pinLng}
+              onPinMoved={(lat, lng) => { setPinLat(lat); setPinLng(lng); }} />
           </>)}
+
+          {/* ── 積降(完了): 完了時刻のみ（追加項目なし） ── */}
 
           {/* 給油専用 */}
           {isFuelEvt(event.eventType) && (<>
@@ -762,6 +762,18 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
             </div>
           )}
 
+          {/* 運行前点検専用: 点検メモ */}
+          {event.eventType === 'PRE_INSPECTION' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                📝 点検メモ <span className="font-normal text-gray-400">（気になった点・軽微な問題があれば記載）</span>
+              </label>
+              <textarea value={preinspMemo} onChange={e => setPreinspMemo(e.target.value)}
+                placeholder="気になった点・軽微な問題など..." rows={3}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none" />
+            </div>
+          )}
+
           {/* 運行後点検専用 */}
           {isPostInsp(event.eventType) && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-3">
@@ -789,15 +801,15 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
             </div>
           )}
 
-          {/* 備考（点検・運行開始終了以外） */}
-          {!isInspEvt(event.eventType) && !isTripEvt(event.eventType) && (
+          {/* 備考: 給油・休憩のみ */}
+          {isFuelEvt(event.eventType) || isBreakEvt(event.eventType) ? (
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">備考 <span className="font-normal text-gray-400">（任意）</span></label>
               <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="メモを入力..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
             </div>
-          )}
+          ) : null}
 
           {/* 削除: 点検・運行開始終了は不可 */}
           {isDeletable(event.eventType) && (
@@ -1636,7 +1648,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           try {
             const res = await apiClient.get('/customers', { params: { page: 1, limit: 200 } });
             const d: any = res;
-            const arr = d?.data?.data?.data ?? d?.data?.data ?? d?.data ?? [];
+            const arr = d?.data?.customers ?? d?.data?.data?.data ?? d?.data?.data ?? d?.data ?? [];
             setEditCustomers(Array.isArray(arr) ? arr : []);
           } catch { /* customers 取得失敗は致命的ではない */ }
         })(),
@@ -2468,6 +2480,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         itemName: event.items?.name ?? null,
                                         customerId: (event as any).customerId ?? null,
                                         customerName: (event as any).customerName ?? null,
+                                        preinspMemo: event.eventType === 'PRE_INSPECTION' ? (event.notes ?? '') : null,
                                       })}
                                       className="ml-auto flex items-center gap-1 px-2 py-1 border border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
                                       title="このイベントを編集"
