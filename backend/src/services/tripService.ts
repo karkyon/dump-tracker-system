@@ -1564,11 +1564,11 @@ class TripService {
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
-        quantityTons: activityData.quantity !== undefined ? new Decimal(activityData.quantity) : new Decimal(0),
+        quantityTons: activityData.quantity !== undefined ? Number(activityData.quantity) : 0,
         notes: activityData.notes,
-        latitude: activityData.latitude !== undefined ? new Decimal(activityData.latitude) : undefined,
-        longitude: activityData.longitude !== undefined ? new Decimal(activityData.longitude) : undefined,
-        gpsAccuracyMeters: activityData.accuracy !== undefined ? new Decimal(activityData.accuracy) : undefined,
+        latitude: activityData.latitude !== undefined ? Number(activityData.latitude) : undefined,
+        longitude: activityData.longitude !== undefined ? Number(activityData.longitude) : undefined,
+        gpsAccuracyMeters: activityData.accuracy !== undefined ? Number(activityData.accuracy) : undefined,
         gpsRecordedAt: activityData.latitude ? new Date() : undefined,
       };
       const fuelDetail = await this.operationDetailService.create(fuelDetailData);
