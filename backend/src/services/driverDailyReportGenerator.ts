@@ -170,7 +170,11 @@ function _buildOpCols(w: number) {
   ];
 }
 
-function _drawOperationSection(doc: PDFKit.PDFDocument, x: number, y: number, w: number, ops: OperationRowData[]): number {
+// ✅ BUG-054修正: 1ページあたりの最大行数
+const MAX_OPS_PER_PAGE = 8;
+
+// 運行セクション ヘッダーのみ描画
+function _drawOperationSectionHeader(doc: PDFKit.PDFDocument, x: number, y: number, w: number): number {
   const cols = _buildOpCols(w);
   const hH = 16;
   let cx = x;
@@ -181,24 +185,44 @@ function _drawOperationSection(doc: PDFKit.PDFDocument, x: number, y: number, w:
     doc.text(col.label, cx + 1, y + 3, { width: cw - 2, align: 'center' });
     cx += cw;
   });
-  y += hH;
+  return y + hH;
+}
 
+// 運行セクション（全件対応・2ページ自動改ページ）
+function _drawOperationSection(doc: PDFKit.PDFDocument, x: number, y: number, w: number, ops: OperationRowData[]): number {
+  const cols = _buildOpCols(w);
   const rH = 22;
-  for (let i = 0; i < 6; i++) {
-    const op = ops[i] || {};
+
+  // ✅ BUG-054修正: ヘッダー描画
+  y = _drawOperationSectionHeader(doc, x, y, w);
+
+  // ✅ BUG-054修正: 全件をページ分割して描画
+  const totalOps = ops.length > 0 ? ops : [{}]; // 最低1行（空行）
+  let rowsOnPage = 0;
+
+  for (let i = 0; i < totalOps.length; i++) {
+    // 1ページの最大行数を超えたら改ページしてヘッダーを再描画
+    if (rowsOnPage >= MAX_OPS_PER_PAGE && i < totalOps.length) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margins: { top: 15, bottom: 15, left: 18, right: 18 } });
+      y = 15;
+      y = _drawOperationSectionHeader(doc, x, y, w);
+      rowsOnPage = 0;
+    }
+
+    const op = totalOps[i] || {};
     const timeStr = op.loadingStartTime || op.loadingEndTime
       ? `${op.loadingStartTime || ''}～${op.loadingEndTime || ''}` : '';
     const vals = [
-      op.companyName || '',
-      op.loadingLocation || '',
-      op.unloadingLocation || '',
-      op.itemName || '',
-      op.trips !== undefined ? String(op.trips) : '',
-      op.tons !== undefined ? String(op.tons) : '',
-      op.loadingCondition || '',
+      (op as any).companyName || '',
+      (op as any).loadingLocation || '',
+      (op as any).unloadingLocation || '',
+      (op as any).itemName || '',
+      (op as any).trips !== undefined ? String((op as any).trips) : '',
+      (op as any).tons !== undefined ? String((op as any).tons) : '',
+      (op as any).loadingCondition || '',
       timeStr,
     ];
-    cx = x;
+    let cx = x;
     cols.forEach((col, ci) => {
       const cw = ci === cols.length - 1 ? x + w - cx : col.cw;
       doc.rect(cx, y, cw, rH).lineWidth(0.5).strokeColor('black').stroke();
@@ -212,6 +236,7 @@ function _drawOperationSection(doc: PDFKit.PDFDocument, x: number, y: number, w:
       cx += cw;
     });
     y += rH;
+    rowsOnPage++;
   }
   return y;
 }

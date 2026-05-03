@@ -1547,8 +1547,32 @@ class TripService {
         accuracy: fuelData.accuracy ? Number(fuelData.accuracy) : undefined
       };
 
-      // ✅ addActivityメソッドを使用（sequenceNumber自動計算）
-      const result = await this.addActivity(tripId, activityData);
+      // ✅ BUG-052修正: addActivityを経由せず直接作成（IN_PROGRESSチェックをバイパス）
+      // 給油は運行中・完了後どちらでも記録可能なため、直接operationDetailService.createを呼ぶ
+      const existingDetailsForFuel = await this.operationDetailService.findMany({
+        where: { operationId: tripId },
+        orderBy: { sequenceNumber: 'desc' },
+        take: 1
+      });
+      const fuelSeqNum = (existingDetailsForFuel?.[0]?.sequenceNumber ?? 0) + 1;
+
+      const fuelDetailData: OperationDetailCreateDTO = {
+        operationId: tripId,
+        locationId: undefined as any,
+        itemId: undefined,
+        sequenceNumber: fuelSeqNum,
+        activityType: activityData.activityType,
+        actualStartTime: activityData.startTime,
+        actualEndTime: activityData.endTime,
+        quantityTons: activityData.quantity !== undefined ? new Decimal(activityData.quantity) : new Decimal(0),
+        notes: activityData.notes,
+        latitude: activityData.latitude !== undefined ? new Decimal(activityData.latitude) : undefined,
+        longitude: activityData.longitude !== undefined ? new Decimal(activityData.longitude) : undefined,
+        gpsAccuracyMeters: activityData.accuracy !== undefined ? new Decimal(activityData.accuracy) : undefined,
+        gpsRecordedAt: activityData.latitude ? new Date() : undefined,
+      };
+      const fuelDetail = await this.operationDetailService.create(fuelDetailData);
+      const result = { data: fuelDetail };
 
       logger.info('給油記録追加完了', { tripId, detailId: result.data?.id });
 

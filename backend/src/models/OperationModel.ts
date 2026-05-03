@@ -928,17 +928,28 @@ export class OperationService {
     }
 
     if (filter.startDate || filter.endDate) {
+      // ✅ BUG-053修正: JST(+9h)境界に変換してDB検索
+      const toJstBoundary = (d: Date, endOfDay: boolean): Date => {
+        const jstOff = 9 * 60 * 60 * 1000;
+        const jstD = new Date(d.getTime() + jstOff);
+        const y = jstD.getUTCFullYear(), m = jstD.getUTCMonth(), day = jstD.getUTCDate();
+        return endOfDay
+          ? new Date(Date.UTC(y, m, day, 23, 59, 59, 999) - jstOff)
+          : new Date(Date.UTC(y, m, day, 0, 0, 0, 0) - jstOff);
+      };
+      const gteVal = filter.startDate ? toJstBoundary(filter.startDate, false) : undefined;
+      const lteVal = filter.endDate   ? toJstBoundary(filter.endDate, true)    : undefined;
       where.OR = [
         {
           plannedStartTime: {
-            ...(filter.startDate && { gte: filter.startDate }),
-            ...(filter.endDate && { lte: filter.endDate })
+            ...(gteVal && { gte: gteVal }),
+            ...(lteVal && { lte: lteVal })
           }
         },
         {
           actualStartTime: {
-            ...(filter.startDate && { gte: filter.startDate }),
-            ...(filter.endDate && { lte: filter.endDate })
+            ...(gteVal && { gte: gteVal }),
+            ...(lteVal && { lte: lteVal })
           }
         }
       ];
