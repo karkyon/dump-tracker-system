@@ -386,7 +386,12 @@ const isBreakEvt = (t: string) => ['BREAK','BREAK_START','BREAK_END'].includes(t
 
 const toHM = (iso: string | null): string => {
   if (!iso) return '';
-  try { return new Date(iso).toTimeString().slice(0, 5); } catch { return ''; }
+  try {
+    // ✅ JST変換（+9h）
+    const d = new Date(iso);
+    const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+    return `${String(jst.getUTCHours()).padStart(2,'0')}:${String(jst.getUTCMinutes()).padStart(2,'0')}`;
+  } catch { return ''; }
 };
 
 const mergeHM = (base: string | null, hhmm: string): string => {
@@ -601,17 +606,10 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
               </div>
             );
             if (isArrived) return (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">到着時刻<span className="text-red-500 ml-1">*</span></label>
-                  <input type="time" value={startHHMM} onChange={e => setStartHHMM(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">完了時刻 <span className="font-normal text-gray-400">（任意）</span></label>
-                  <input type="time" value={endHHMM} onChange={e => setEndHHMM(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">到着時刻<span className="text-red-500 ml-1">*</span></label>
+                <input type="time" value={startHHMM} onChange={e => setStartHHMM(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
               </div>
             );
             const startLabel = isFuelEvt(et) ? '給油時刻' : '記録時刻';
@@ -2421,8 +2419,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         quantityTons: group.arrivedEvent.quantityTons,
                                         locationName: group.arrivedEvent.location?.name ?? '',
                                         locationId: group.arrivedEvent.location?.id ?? '',
-                                        locationLat: group.arrivedEvent.location?.latitude ?? null,
-                                        locationLng: group.arrivedEvent.location?.longitude ?? null,
+                                        // ✅ Fix3: GPS記録座標を優先、なければ場所マスター座標
+                                        locationLat: group.arrivedEvent.gpsLocation?.latitude ?? group.arrivedEvent.location?.latitude ?? null,
+                                        locationLng: group.arrivedEvent.gpsLocation?.longitude ?? group.arrivedEvent.location?.longitude ?? null,
                                         itemId: group.arrivedEvent.items?.id ?? null,
                                         itemName: group.arrivedEvent.items?.name ?? null,
                                         customerId: (group.arrivedEvent as any).customerId ?? null,
@@ -2446,8 +2445,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         quantityTons: group.completedEvent!.quantityTons,
                                         locationName: group.completedEvent!.location?.name ?? '',
                                         locationId: group.completedEvent!.location?.id ?? '',
-                                        locationLat: group.completedEvent!.location?.latitude ?? null,
-                                        locationLng: group.completedEvent!.location?.longitude ?? null,
+                                        // ✅ Fix3: GPS記録座標を優先
+                                        locationLat: group.completedEvent!.gpsLocation?.latitude ?? group.completedEvent!.location?.latitude ?? null,
+                                        locationLng: group.completedEvent!.gpsLocation?.longitude ?? group.completedEvent!.location?.longitude ?? null,
                                         itemId: group.completedEvent!.items?.id ?? null,
                                         itemName: group.completedEvent!.items?.name ?? null,
                                         customerId: (group.completedEvent as any).customerId ?? null,
