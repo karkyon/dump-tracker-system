@@ -530,7 +530,7 @@ export class OperationDetailController {
       if (rawData.actualStartTime) data.actualStartTime = toDate(rawData.actualStartTime);
       if (rawData.notes) data.notes = rawData.notes;
       const updated = await db.operation.update({ where: { id: opId }, data });
-      return sendSuccess(res, { id: eventId, ...updated });
+      return sendSuccess(res, { eventId, ...updated });
     }
 
     // PATTERN 2: trip-end-{opId} → operations.actualEndTime
@@ -540,7 +540,7 @@ export class OperationDetailController {
       if (rawData.actualStartTime) data.actualEndTime = toDate(rawData.actualStartTime);
       if (rawData.notes) data.notes = rawData.notes;
       const updated = await db.operation.update({ where: { id: opId }, data });
-      return sendSuccess(res, { id: eventId, ...updated });
+      return sendSuccess(res, { eventId, ...updated });
     }
 
     // PATTERN 3: {uuid}-arrived → operation_details.actualStartTime
@@ -587,7 +587,7 @@ export class OperationDetailController {
         if (rawData.actualStartTime) data.startedAt = toDate(rawData.actualStartTime);
         if (rawData.notes) data.notes = rawData.notes;
         const updated = await db.inspectionRecord.update({ where: { id: eventId }, data });
-        return sendSuccess(res, { id: eventId, ...updated });
+        return sendSuccess(res, { eventId, ...updated });
       }
     } catch { /* 次へ */ }
 
