@@ -1581,7 +1581,8 @@ export class MobileController {
       const fuelRecords = fuelActivities.map((f: any) => ({
         id: f.id,
         fuelAmount: f.quantityTons ? Number(f.quantityTons) : (f.quantity_tons ? Number(f.quantity_tons) : 0),
-        fuelCost: 0,
+        // ✅ fuelCostYen 専用カラムから取得（notes parse廃止）
+        fuelCost: f.fuelCostYen ? Number(f.fuelCostYen) : (f.fuel_cost_yen ? Number(f.fuel_cost_yen) : 0),
         mileageAtRefuel: 0,
         stationName: f.locations?.name || f.location?.name || '',
         recordedAt: (f.actualStartTime || f.actual_start_time)

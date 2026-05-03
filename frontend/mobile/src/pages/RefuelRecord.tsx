@@ -125,19 +125,14 @@ const RefuelRecord: React.FC = () => {
         notes: notes || undefined
       });
 
-      // API呼び出し
-      // 🆕 走行距離をnotesに付加（reportService.tsがnotesの"XXkm"パターンを解析）
-      const combinedNotes = [
-        notes || '',
-        mileageAtRefuelNum ? `走行距離:${mileageAtRefuelNum}km` : ''
-      ].filter(Boolean).join(' ') || undefined;
-
+      // ✅ API呼び出し: notes埋め込み廃止、mileageAtRefuelを専用パラメータで送信
       await apiService.recordFuel(currentOperationId, {
         fuelAmount: fuelAmountNum,
         fuelCost: fuelCostNum,
         fuelStation: fuelStation || undefined,
-        ...gpsCoords,          // 🆕 GPS座標追加
-        notes: combinedNotes
+        mileageAtRefuel: mileageAtRefuelNum,  // ✅ 専用パラメータとして送信
+        ...gpsCoords,
+        notes: notes || undefined             // ✅ 自由記述のみ
       });
 
       console.log('✅ 給油記録保存完了');
