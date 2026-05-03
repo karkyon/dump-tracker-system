@@ -1535,8 +1535,8 @@ class TripService {
       // 🔧 CreateTripDetailRequest形式に変換
       const activityData: CreateTripDetailRequest = {
         activityType: 'FUELING' as ActivityType,
-        locationId: '' as any,
-        itemId: '' as any,
+        locationId: undefined as any,
+        itemId: undefined as any,
         startTime: fuelData.timestamp || new Date(),
         endTime: fuelData.timestamp || new Date(),
         quantity: fuelData.fuelAmount,

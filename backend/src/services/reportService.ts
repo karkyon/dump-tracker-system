@@ -1529,10 +1529,14 @@ class ReportService {
       ? new Date(params.date)
       : (report.startDate ? new Date(report.startDate) : new Date());
 
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    // ✅ JST(+9時間)で日付境界を計算
+    const _rptJstOff = 9 * 60 * 60 * 1000;
+    const _rptJstDate = new Date(targetDate.getTime() + _rptJstOff);
+    const _rptY = _rptJstDate.getUTCFullYear();
+    const _rptM = _rptJstDate.getUTCMonth();
+    const _rptD = _rptJstDate.getUTCDate();
+    const startOfDay = new Date(Date.UTC(_rptY, _rptM, _rptD, 0, 0, 0, 0) - _rptJstOff);
+    const endOfDay   = new Date(Date.UTC(_rptY, _rptM, _rptD, 23, 59, 59, 999) - _rptJstOff);
 
     // ===== DB クエリ =====
     const whereClause: any = {

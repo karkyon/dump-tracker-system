@@ -50,6 +50,15 @@ interface MobileApiStats {
 // モバイルコントローラークラス
 // =====================================
 
+
+// =====================================
+// JSTタイム変換ヘルパー（+9時間）
+// =====================================
+function toJSTTimeString(date: Date): string {
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`;
+}
+
 export class MobileController {
   private readonly authService: ReturnType<typeof getAuthService>;
   private readonly userService: ReturnType<typeof getUserService>;
@@ -1419,8 +1428,8 @@ export class MobileController {
             || `${driverData?.last_name || driverData?.lastName || ''} ${driverData?.first_name || driverData?.firstName || ''}`.trim()
             || driverData?.username
             || req.user!.name || '不明',
-          startTime: startTime ? new Date(startTime).toTimeString().slice(0, 5) : '',
-          endTime: endTime ? new Date(endTime).toTimeString().slice(0, 5) : '',
+          startTime: startTime ? toJSTTimeString(new Date(startTime)) : '',
+          endTime: endTime ? toJSTTimeString(new Date(endTime)) : '',
           customerName: trip.customer?.name || null, // ✅ 追加: 客先名
           totalDistance: trip.total_distance_km
             ? Number(trip.total_distance_km)

@@ -204,9 +204,12 @@ export const getAvailableVehiclesForDate = asyncHandler(async (req: Authenticate
   if (!date) return sendError(res, 'dateパラメータが必要です', 400, ERROR_CODES.VALIDATION_ERROR);
 
   const db = DatabaseService.getInstance();
-  const targetDate = new Date(date as string);
-  const startOfDay = new Date(targetDate); startOfDay.setHours(0,0,0,0);
-  const endOfDay   = new Date(targetDate); endOfDay.setHours(23,59,59,999);
+  // ✅ JST(+9時間)で日付境界を計算
+  const _avJstOff = 9 * 60 * 60 * 1000;
+  const _avJstDate = new Date(new Date(date as string).getTime() + _avJstOff);
+  const _avY = _avJstDate.getUTCFullYear(), _avM = _avJstDate.getUTCMonth(), _avD = _avJstDate.getUTCDate();
+  const startOfDay = new Date(Date.UTC(_avY, _avM, _avD, 0, 0, 0, 0) - _avJstOff);
+  const endOfDay   = new Date(Date.UTC(_avY, _avM, _avD, 23, 59, 59, 999) - _avJstOff);
 
   const ops = await db.operation.findMany({
     where: {

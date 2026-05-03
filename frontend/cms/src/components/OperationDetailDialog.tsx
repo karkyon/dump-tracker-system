@@ -2222,7 +2222,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 <div className="text-xs text-gray-500 mt-0.5">走行距離 (km)</div>
                               </div>
                             </div>
-                            {/* 運搬品目タグ */}
+                            {/* 運搬品目タグ＋品目別台数 */}
                             {uniqueItems.length > 0 && (
                               <div className="mt-3 flex items-center gap-2 flex-wrap">
                                 <span className="text-xs text-gray-500 flex-shrink-0">運搬品目:</span>
@@ -2233,6 +2233,29 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 ))}
                               </div>
                             )}
+                            {/* 品目別台数集計（LOADING_COMPLETEDイベントから集計） */}
+                            {(() => {
+                              const itemCountMap: Record<string, number> = {};
+                              completedLoadings.forEach(e => {
+                                if (e.items?.name) {
+                                  itemCountMap[e.items.name] = (itemCountMap[e.items.name] || 0) + 1;
+                                }
+                              });
+                              const entries = Object.entries(itemCountMap);
+                              if (entries.length === 0) return null;
+                              return (
+                                <div className="mt-2">
+                                  <span className="text-xs text-gray-500 block mb-1">品目別台数:</span>
+                                  <div className="flex flex-wrap gap-2">
+                                    {entries.map(([itemName, count]) => (
+                                      <span key={itemName} className="text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded font-bold">
+                                        {itemName}: {count}台
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
