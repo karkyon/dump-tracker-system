@@ -1271,6 +1271,19 @@ class TripService {
         quantityTons: updatedDetail.quantityTons
       });
 
+      // ✅ 複数品目: selectedItemIds が送られた場合は operation_detail_items に保存
+      if (Array.isArray((data as any).selectedItemIds) && (data as any).selectedItemIds.length > 0) {
+        const db = DatabaseService.getInstance();
+        await db.operationDetailItem.deleteMany({ where: { operationDetailId: updatedDetail.id } });
+        for (let i = 0; i < (data as any).selectedItemIds.length; i++) {
+          const sid = (data as any).selectedItemIds[i];
+          await db.operationDetailItem.create({
+            data: { operationDetailId: updatedDetail.id, itemId: sid, quantityTons: Number(data.quantity ?? 0), sequenceOrder: i }
+          });
+        }
+        logger.info('✅ [completeLoading] operationDetailItems保存完了', { count: (data as any).selectedItemIds.length });
+      }
+
       // GPS記録（オプション）
       if (data.latitude && data.longitude) {
         logger.info('🚛 [completeLoading] GPS記録開始', {

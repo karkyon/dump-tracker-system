@@ -136,15 +136,7 @@ const LoadingConfirmation: React.FC = () => {
       // 品目IDの決定
       const itemId = loadingData.itemId || undefined;
       
-      // 🆕 複数品目対応: notesに全品目を記載
-      let notesContent = loadingData.notes || '';
-      if (loadingData.selectedItemNames && loadingData.selectedItemNames.length > 0) {
-        notesContent = `品目: ${loadingData.selectedItemNames.join(', ')}${notesContent ? '\n' + notesContent : ''}`;
-      } else {
-        notesContent = `品目: ${loadingData.itemName || loadingData.customItemName}${notesContent ? '\n' + notesContent : ''}`;
-      }
-
-      // ✅ API呼び出し: recordLoadingArrival
+      // ✅ 複数品目は selectedItemIds で送信（notes 埋め込み廃止）
       const response = await apiService.recordLoadingArrival(currentOperationId, {
         locationId: loadingData.locationId,
         latitude: position.coords.latitude,
@@ -152,8 +144,9 @@ const LoadingConfirmation: React.FC = () => {
         accuracy: position.coords.accuracy,
         arrivalTime: new Date(),
         itemId: itemId,
+        selectedItemIds: (loadingData.selectedItemIds && loadingData.selectedItemIds.length > 0) ? loadingData.selectedItemIds : undefined,
         quantity: loadingData.quantity,
-        notes: notesContent
+        notes: loadingData.notes || undefined,  // ✅ 自由記述のみ
       });
 
       console.log('✅ 積込場所到着記録完了');

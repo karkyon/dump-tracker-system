@@ -352,6 +352,7 @@ export interface GPSHistoryResponse {
  * - actualEndTime は null のまま（完了時に設定）
  */
 export interface StartLoadingRequest {
+  selectedItemIds?: string[];  // ✅ 複数品目ID
   locationId: string;
   latitude?: number;
   longitude?: number;
