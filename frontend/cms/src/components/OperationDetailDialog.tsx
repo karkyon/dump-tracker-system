@@ -431,7 +431,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   event, operationId, items, customers, onClose, onSaved, onDeleted
 }) => {
   const [startHHMM, setStartHHMM] = React.useState('');
-  const [endHHMM,   setEndHHMM]   = React.useState('');
+  // endHHMM削除済み（到着編集の完了時刻フィールドなし）
   const [locationName, setLocationName] = React.useState('');
   const [notes,     setNotes]     = React.useState('');
   const [quantity,  setQuantity]  = React.useState('');
@@ -455,7 +455,6 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   React.useEffect(() => {
     if (!event) return;
     setStartHHMM(toHM(event.timestamp));
-    setEndHHMM('');
     setLocationName(event.locationName ?? '');
     setNotes(event.notes ?? '');
     setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
@@ -507,42 +506,60 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     if (!startHHMM) { setSaveError('記録時刻を入力してください'); return; }
     setSaving(true);
     try {
+      // ✅ 統合エンドポイントで全イベント種別を処理
       const body: Record<string, any> = {
         actualStartTime: mergeHM(event.timestamp, startHHMM),
-        locationName: locationName || undefined,
       };
-      if (!isInspEvt(event.eventType) && !isTripEvt(event.eventType)) {
-        body.notes = notes;
+      // 場所名（点検・運行開始終了以外）
+      if (locationName && !isInspEvt(event.eventType) && !isTripEvt(event.eventType)) {
+        body.locationName = locationName;
       }
-      if (endHHMM) body.actualEndTime = mergeHM(event.timestamp, endHHMM);
+      // GPS座標
       if (pinLat !== undefined && pinLng !== undefined) {
         body.latitude  = pinLat;
         body.longitude = pinLng;
       }
-      if (isLoadEvt(event.eventType)) {
-        if (selectedItemIds.length > 0) body.itemId = selectedItemIds[0];
-        if (quantity) body.quantityTons = parseFloat(quantity);
-        if (selectedItemIds.length > 1) {
-          const names = selectedItemIds.map(id => items.find(i => i.id === id)?.name || id).join('、');
-          body.notes = `品目: ${names}` + (notes ? ` / ${notes}` : '');
-        }
+      // 備考（点検・運行開始終了以外）
+      if (!isInspEvt(event.eventType) && !isTripEvt(event.eventType)) {
+        if (notes) body.notes = notes;
       }
+      // 積込完了 / 積降完了: 完了時刻・品目・重量
+      if (event.eventType === 'LOADING_COMPLETED' || event.eventType === 'UNLOADING_COMPLETED') {
+        body.actualEndTime = mergeHM(event.timestamp, startHHMM);
+        delete body.actualStartTime;
+        if (selectedItemIds.length > 0) {
+          body.itemId = selectedItemIds[0];
+          const names = selectedItemIds.map(id => items.find(i => i.id === id)?.name || id).join('、');
+          body.notes = `品目: ${names}`;
+        }
+        if (quantity) body.quantityTons = parseFloat(quantity);
+      }
+      // 給油
       if (isFuelEvt(event.eventType)) {
         if (fuelAmt) body.quantityTons = parseFloat(fuelAmt);
-        if (fuelAmt || fuelCost) body.notes = `給油 ${fuelAmt}L ¥${fuelCost} ${notes}`.trim();
+        body.notes = [`給油: ${fuelAmt}L`, fuelCost ? `費用: ¥${fuelCost}` : '', notes || ''].filter(Boolean).join(', ');
       }
-      if (event.eventType === 'PRE_INSPECTION' && preinspMemo) {
-        body.notes = `点検メモ: ${preinspMemo}`;
+      // 運行前点検
+      if (event.eventType === 'PRE_INSPECTION') {
+        body.notes = preinspMemo ? `点検メモ: ${preinspMemo}` : (notes || undefined);
       }
+      // 運行後点検
       if (isPostInsp(event.eventType)) {
-        const memoLines: string[] = [];
-        if (odometer)  memoLines.push(`走行距離: ${odometer}km`);
-        if (fuelLevel) memoLines.push(`燃料レベル: ${fuelLevel}L`);
-        if (inspMemo)  memoLines.push(`点検メモ: ${inspMemo}`);
-        if (memoLines.length > 0) body.notes = memoLines.join(' / ');
+        const lines: string[] = [];
+        if (odometer)  lines.push(`走行距離: ${odometer}km`);
+        if (fuelLevel) lines.push(`燃料レベル: ${fuelLevel}L`);
+        if (inspMemo)  lines.push(`点検メモ: ${inspMemo}`);
+        if (lines.length > 0) body.notes = lines.join(' / ');
       }
-      const res = await apiClient.put(`/operation-details/${event.realDetailId}`, body);
-      if ((res as any).success || (res as any).data) {
+      // ✅ 統合エンドポイント使用（event.id = 合成IDそのまま）
+      const res = await apiClient.put(`/operation-details/timeline-event/${event.id}`, body);
+      if ((res as any).success || (res as any).data || (res as any).id) {
+        // 客先変更
+        if (isLoadEvt(event.eventType) && currentCustomerId) {
+          try {
+            await apiClient.patch(`/mobile/operations/${operationId}/customer`, { customerId: currentCustomerId });
+          } catch { /* 無視 */ }
+        }
         onSaved();
         onClose();
       } else {
@@ -1679,7 +1696,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           try {
             const res = await apiClient.get('/customers', { params: { page: 1, limit: 200 } });
             const d: any = res;
-            const arr = d?.data?.customers ?? d?.data?.data?.data ?? d?.data?.data ?? d?.data ?? [];
+            const arr = d?.data?.data?.customers ?? d?.data?.customers ?? d?.data?.data?.data ?? d?.data?.data ?? d?.data ?? [];
             setEditCustomers(Array.isArray(arr) ? arr : []);
           } catch { /* customers 取得失敗は致命的ではない */ }
         })(),

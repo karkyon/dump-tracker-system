@@ -282,6 +282,9 @@ router.post('/', requireManager, operationDetailController.createOperationDetail
  */
 router.put('/:id', requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as any), validateId, operationDetailController.updateOperationDetail);
 
+// ✅ タイムラインイベント統合更新（CMS編集モーダル用）
+router.put('/timeline-event/:eventId', requireRole(['MANAGER', 'ADMIN'] as any), operationDetailController.updateTimelineEvent);
+
 /**
  * @swagger
  * /operation-details/{id}:

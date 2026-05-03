@@ -509,6 +509,110 @@ export class OperationDetailController {
     return sendSuccess(res, operationDetail);  // ✅ 修正: 第3引数削除
   });
 
+
+  /**
+   * ✅ タイムラインイベント統合更新
+   * PUT /operation-details/timeline-event/:eventId
+   * eventIdパターン別にoperations/inspection_records/operation_detailsを更新
+   */
+  updateTimelineEvent = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { eventId } = req.params;
+    const rawData = req.body;
+    if (!eventId) throw new ValidationError('eventIdは必須です');
+    logger.info('タイムラインイベント統合更新', { eventId, rawData });
+    const db = DatabaseService.getInstance();
+    const toDate = (v: any) => (v && typeof v === 'string') ? new Date(v) : (v instanceof Date ? v : undefined);
+
+    // PATTERN 1: trip-start-{opId} → operations.actualStartTime
+    if (eventId.startsWith('trip-start-')) {
+      const opId = eventId.replace('trip-start-', '');
+      const data: any = {};
+      if (rawData.actualStartTime) data.actualStartTime = toDate(rawData.actualStartTime);
+      if (rawData.notes) data.notes = rawData.notes;
+      const updated = await db.operation.update({ where: { id: opId }, data });
+      return sendSuccess(res, { id: eventId, ...updated });
+    }
+
+    // PATTERN 2: trip-end-{opId} → operations.actualEndTime
+    if (eventId.startsWith('trip-end-')) {
+      const opId = eventId.replace('trip-end-', '');
+      const data: any = {};
+      if (rawData.actualStartTime) data.actualEndTime = toDate(rawData.actualStartTime);
+      if (rawData.notes) data.notes = rawData.notes;
+      const updated = await db.operation.update({ where: { id: opId }, data });
+      return sendSuccess(res, { id: eventId, ...updated });
+    }
+
+    // PATTERN 3: {uuid}-arrived → operation_details.actualStartTime
+    if (eventId.endsWith('-arrived')) {
+      const detailId = eventId.replace(/-arrived$/, '');
+      const data: any = {};
+      if (rawData.actualStartTime) data.actualStartTime = toDate(rawData.actualStartTime);
+      if (rawData.latitude !== undefined) data.latitude = rawData.latitude;
+      if (rawData.longitude !== undefined) data.longitude = rawData.longitude;
+      if (rawData.notes !== undefined) data.notes = rawData.notes;
+      if (rawData.locationName && !rawData.locationId) {
+        try {
+          const locs = await this.locationService.findMany({ where: { name: rawData.locationName } });
+          const arr = Array.isArray(locs) ? locs : (locs as any)?.data || [];
+          if (arr[0]?.id) data.locationId = arr[0].id;
+        } catch { /* 継続 */ }
+      }
+      const updated = await this.operationDetailService.update(detailId, data);
+      if (!updated) return sendNotFound(res, '運行詳細が見つかりません');
+      return sendSuccess(res, updated);
+    }
+
+    // PATTERN 4: {uuid}-completed → operation_details.actualEndTime
+    if (eventId.endsWith('-completed')) {
+      const detailId = eventId.replace(/-completed$/, '');
+      const data: any = {};
+      const endTime = rawData.actualEndTime || rawData.actualStartTime;
+      if (endTime) data.actualEndTime = toDate(endTime);
+      if (rawData.itemId !== undefined) data.itemId = rawData.itemId;
+      if (rawData.quantityTons !== undefined) data.quantityTons = rawData.quantityTons;
+      if (rawData.notes !== undefined) data.notes = rawData.notes;
+      if (rawData.latitude !== undefined) data.latitude = rawData.latitude;
+      if (rawData.longitude !== undefined) data.longitude = rawData.longitude;
+      const updated = await this.operationDetailService.update(detailId, data);
+      if (!updated) return sendNotFound(res, '運行詳細が見つかりません');
+      return sendSuccess(res, updated);
+    }
+
+    // PATTERN 5: 純UUID → inspection_records or operation_details
+    try {
+      const insp = await db.inspectionRecord.findUnique({ where: { id: eventId } });
+      if (insp) {
+        const data: any = {};
+        if (rawData.actualStartTime) data.startedAt = toDate(rawData.actualStartTime);
+        if (rawData.notes) data.notes = rawData.notes;
+        const updated = await db.inspectionRecord.update({ where: { id: eventId }, data });
+        return sendSuccess(res, { id: eventId, ...updated });
+      }
+    } catch { /* 次へ */ }
+
+    // operation_details
+    const allowedFields = ['sequenceNumber', 'activityType', 'locationId', 'itemId',
+      'plannedTime', 'actualStartTime', 'actualEndTime', 'quantityTons', 'notes',
+      'latitude', 'longitude', 'altitude', 'gpsAccuracyMeters', 'gpsRecordedAt'];
+    const data: any = {};
+    for (const k of allowedFields) {
+      if (rawData[k] !== undefined) data[k] = rawData[k];
+    }
+    if (data.actualStartTime) data.actualStartTime = toDate(data.actualStartTime);
+    if (data.actualEndTime)   data.actualEndTime   = toDate(data.actualEndTime);
+    if (rawData.locationName && !rawData.locationId) {
+      try {
+        const locs = await this.locationService.findMany({ where: { name: rawData.locationName } });
+        const arr = Array.isArray(locs) ? locs : (locs as any)?.data || [];
+        if (arr[0]?.id) data.locationId = arr[0].id;
+      } catch { /* 継続 */ }
+    }
+    const updated = await this.operationDetailService.update(eventId, data);
+    if (!updated) return sendNotFound(res, 'イベントが見つかりません');
+    return sendSuccess(res, updated);
+  });
+
   /**
    * 運行詳細更新
    * PUT /operation-details/:id
