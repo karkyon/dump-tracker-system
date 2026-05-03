@@ -352,6 +352,7 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
 
 interface CmsEditEvent {
   id: string;
+  realDetailId: string;
   eventType: string;
   timestamp: string | null;
   notes?: string | null;
@@ -406,9 +407,16 @@ const toHM = (iso: string | null): string => {
 const mergeHM = (base: string | null, hhmm: string): string => {
   if (!hhmm) return base ?? new Date().toISOString();
   const [hStr, mStr] = hhmm.split(':');
-  const h = parseInt(hStr ?? '0', 10); const m = parseInt(mStr ?? '0', 10);
-  const d = base ? new Date(base) : new Date();
-  d.setHours(h, m, 0, 0); return d.toISOString();
+  const h = parseInt(hStr ?? '0', 10);
+  const m = parseInt(mStr ?? '0', 10);
+  const baseDate = base ? new Date(base) : new Date();
+  const jstOff = 9 * 60 * 60 * 1000;
+  const jstBase = new Date(baseDate.getTime() + jstOff);
+  const y = jstBase.getUTCFullYear();
+  const mo = jstBase.getUTCMonth();
+  const day = jstBase.getUTCDate();
+  const utcMs = Date.UTC(y, mo, day, h, m, 0, 0) - jstOff;
+  return new Date(utcMs).toISOString();
 };
 
 // ヘルパー: イベント種別判定
@@ -451,6 +459,15 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setLocationName(event.locationName ?? '');
     setNotes(event.notes ?? '');
     setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
+    if (event.eventType === 'POST_INSPECTION') {
+      const n = event.notes ?? '';
+      const odoM  = n.match(/走行距離:\s*([\d.]+)km/);
+      const fuelM = n.match(/燃料レベル:\s*([\d.]+)L/);
+      const memoM = n.match(/点検メモ:\s*(.+?)(?:\s*\/|$)/);
+      setOdometer(odoM  ? odoM[1]  : '');
+      setFuelLevel(fuelM ? fuelM[1] : '');
+      setInspMemo(memoM ? memoM[1].trim() : '');
+    } else { setOdometer(''); setFuelLevel(''); setInspMemo(''); }
     // 給油: notesから給油量・金額をパースして初期値にセット
     if (['FUELING','REFUELING'].includes(event.eventType ?? '')) {
       const n = event.notes ?? '';
@@ -524,7 +541,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         if (inspMemo)  memoLines.push(`点検メモ: ${inspMemo}`);
         if (memoLines.length > 0) body.notes = memoLines.join(' / ');
       }
-      const res = await apiClient.put(`/operation-details/${event.id}`, body);
+      const res = await apiClient.put(`/operation-details/${event.realDetailId}`, body);
       if ((res as any).success || (res as any).data) {
         onSaved();
         onClose();
@@ -540,7 +557,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     if (!confirmDel) { setConfirmDel(true); return; }
     setDeleting(true);
     try {
-      await apiClient.delete(`/operation-details/${event.id}`);
+      await apiClient.delete(`/operation-details/${event.realDetailId}`);
       onDeleted(event.id);
       onClose();
     } catch (e: any) {
@@ -2429,6 +2446,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     <button type="button"
                                       onClick={() => setEditEvent({
                                         id: group.arrivedEvent.id,
+                                        realDetailId: group.arrivedEvent.id.replace(/-arrived$|-completed$/, ''),
                                         eventType: group.arrivedEvent.eventType,
                                         timestamp: group.arrivedEvent.timestamp,
                                         notes: group.arrivedEvent.notes,
@@ -2455,6 +2473,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     <button type="button"
                                       onClick={() => setEditEvent({
                                         id: group.completedEvent!.id,
+                                        realDetailId: group.completedEvent!.id.replace(/-arrived$|-completed$/, ''),
                                         eventType: group.completedEvent!.eventType,
                                         timestamp: group.completedEvent!.timestamp,
                                         notes: group.completedEvent!.notes,
@@ -2507,14 +2526,15 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                       type="button"
                                       onClick={() => setEditEvent({
                                         id: event.id,
+                                        realDetailId: event.id.replace(/-arrived$|-completed$/, ''),
                                         eventType: event.eventType,
                                         timestamp: event.timestamp,
                                         notes: event.notes,
                                         quantityTons: event.quantityTons,
                                         locationName: event.location?.name ?? '',
                                         locationId: event.location?.id ?? '',
-                                        locationLat: event.location?.latitude ?? null,
-                                        locationLng: event.location?.longitude ?? null,
+                                        locationLat: event.gpsLocation?.latitude ?? event.location?.latitude ?? null,
+                                        locationLng: event.gpsLocation?.longitude ?? event.location?.longitude ?? null,
                                         itemId: event.items?.id ?? null,
                                         itemName: event.items?.name ?? null,
                                         customerId: (event as any).customerId ?? null,
