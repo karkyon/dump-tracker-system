@@ -133,6 +133,7 @@ export interface CreateTripDetailRequest {
 export interface CreateFuelRecordRequest {
   fuelAmount: number;
   fuelCost: number;
+  mileageAtRefuel?: number;  // ✅ 給油時走行距離（専用パラメータ）
   location?: string;
   latitude?: number;      // 🆕 追加
   longitude?: number;     // 🆕 追加

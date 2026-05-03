@@ -927,6 +927,7 @@ class APIServiceClass {
       fuelAmount: number;
       fuelCost?: number;
       fuelStation?: string;
+      mileageAtRefuel?: number;
       latitude?: number;     // 🆕 GPS緯度
       longitude?: number;    // 🆕 GPS経度
       accuracy?: number;     // 🆕 GPS測位精度（メートル）
