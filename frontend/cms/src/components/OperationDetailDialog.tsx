@@ -355,6 +355,16 @@ interface CmsEditEvent {
   realDetailId: string;
   eventType: string;
   timestamp: string | null;
+  // ✅ 複数品目リスト（LOADING/UNLOADING_COMPLETED用）
+  detailItems?: Array<{
+    id: string;
+    itemId: string;
+    itemName: string;
+    quantityTons: number;
+    sequenceOrder: number;
+  }> | null;
+  // ✅ 給油金額専用フィールド
+  fuelCostYen?: number | null;
   notes?: string | null;
   quantityTons?: number;
   locationName?: string;
@@ -459,28 +469,28 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setNotes(event.notes ?? '');
     setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
     if (event.eventType === 'POST_INSPECTION') {
-      const n = event.notes ?? '';
-      // "走行距離: XXkm / 燃料レベル: YYL / 点検メモ: ZZ" 形式からパース
-      const odoM  = n.match(/走行距離[:：]\s*([\d.]+)\s*km/);
-      const fuelM = n.match(/燃料レベル[:：]\s*([\d.]+)\s*L/);
-      const memoM = n.match(/点検メモ[:：]\s*(.+?)(?:\s*\/|$)/);
-      setOdometer(odoM  ? odoM[1]  : '');
-      setFuelLevel(fuelM ? fuelM[1] : '');
-      // 「運行後点検 (PENDING)」のような自動生成notesは表示しない
-      const autoNotePattern = /^運行[前後]点検\s*\(/;
-      setInspMemo(memoM ? memoM[1].trim() : (autoNotePattern.test(n) ? '' : n));
+      // ✅ 正しいフィールドから初期値を取得
+      // overall_notes → 点検メモ
+      const overallNotes = (event as any).overallNotes ?? '';
+      setInspMemo(overallNotes);
+      // operations.total_distance_km → 走行距離
+      setOdometer((event as any).totalDistanceKm ? String((event as any).totalDistanceKm) : '');
+      // operations.fuel_consumed_liters → 燃料
+      setFuelLevel((event as any).fuelConsumedLiters ? String((event as any).fuelConsumedLiters) : '');
     } else { setOdometer(''); setFuelLevel(''); setInspMemo(''); }
-    // 給油: notesから給油量・金額をパースして初期値にセット
+    // ✅ 給油: 専用カラムから初期値取得（notes regex解析廃止）
     if (['FUELING','REFUELING'].includes(event.eventType ?? '')) {
-      const n = event.notes ?? '';
-      const amtM  = n.match(/(\d+(?:\.\d+)?)\s*L/);
-      const costM = n.match(/[¥￥](\d+)/);
-      setFuelAmt(amtM  ? amtM[1]  : event.quantityTons ? String(event.quantityTons) : '');
-      setFuelCost(costM ? costM[1] : '');
+      setFuelAmt(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
+      setFuelCost(event.fuelCostYen ? String(event.fuelCostYen) : '');
     } else {
       setFuelAmt(''); setFuelCost('');
     }
-    setSelectedItemIds(event.itemId ? [event.itemId] : []);
+    // ✅ 複数品目: detailItems があれば優先、なければ itemId にフォールバック
+    if (event.detailItems && event.detailItems.length > 0) {
+      setSelectedItemIds(event.detailItems.map(di => di.itemId));
+    } else {
+      setSelectedItemIds(event.itemId ? [event.itemId] : []);
+    }
     setPinLat(event.locationLat != null ? event.locationLat : undefined);
     setPinLng(event.locationLng != null ? event.locationLng : undefined);
     setCurrentCustomerId(event.customerId ?? '');
@@ -531,34 +541,32 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         body.actualEndTime = mergeHM(event.timestamp, startHHMM);
         delete body.actualStartTime;
         if (selectedItemIds.length > 0) {
-          // 最初の品目をitemIdに設定
-          body.itemId = selectedItemIds[0];
-          // 全品目名をnotesに記録（タイムライン表示用）
-          const names = selectedItemIds
-            .map(id => items.find(i => i.id === id)?.name ?? id)
-            .join('、');
-          body.notes = `品目: ${names}`;
+          body.itemId = selectedItemIds[0];             // 後方互換（単一品目時）
+          body.selectedItemIds = selectedItemIds;       // ✅ 複数品目はDBの専用テーブルへ
+          // ✅ notes への品目名埋め込みは廃止
         }
         if (quantity) body.quantityTons = parseFloat(quantity);
       }
-      // 給油
+      // ✅ 給油: 専用カラムに保存（notes 埋め込み廃止）
       if (isFuelEvt(event.eventType)) {
         if (fuelAmt) body.quantityTons = parseFloat(fuelAmt);
-        body.notes = [`給油: ${fuelAmt}L`, fuelCost ? `費用: ¥${fuelCost}` : '', notes || ''].filter(Boolean).join(', ');
+        if (fuelCost) body.fuelCostYen = parseFloat(fuelCost);  // ✅ 専用カラム
+        // notes は自由記述のみ
       }
-      // 運行前点検
+      // 運行前点検: overall_notes に保存
       if (event.eventType === 'PRE_INSPECTION') {
-        // notes に保存（inspMemo フィールドは使わない）
-        body.notes = preinspMemo ? `点検メモ: ${preinspMemo}` : undefined;
-        if (body.notes === undefined) delete body.notes;
+        if (preinspMemo) body.overallNotes = preinspMemo;
+        delete body.notes;
       }
-      // 運行後点検
+      // 運行後点検: 正しいカラムに保存
       if (isPostInsp(event.eventType)) {
-        const lines: string[] = [];
-        if (odometer)  lines.push(`走行距離: ${odometer}km`);
-        if (fuelLevel) lines.push(`燃料レベル: ${fuelLevel}L`);
-        if (inspMemo)  lines.push(`点検メモ: ${inspMemo}`);
-        if (lines.length > 0) body.notes = lines.join(' / ');
+        // overall_notes → inspection_records.overall_notes
+        if (inspMemo) body.overallNotes = inspMemo;
+        // 走行距離 → operations.total_distance_km
+        if (odometer) body.totalDistanceKm = odometer;
+        // 燃料消費量 → operations.fuel_consumed_liters
+        if (fuelLevel) body.fuelConsumedLiters = fuelLevel;
+        delete body.notes; // notesには保存しない
       }
       // 客先変更があれば body に含める（timeline-event で直接DB更新）
       if (isLoadEvt(event.eventType) && currentCustomerId) {
@@ -2509,6 +2517,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         // ✅ Fix3: GPS記録座標を優先
                                         locationLat: group.completedEvent!.gpsLocation?.latitude ?? group.completedEvent!.location?.latitude ?? null,
                                         locationLng: group.completedEvent!.gpsLocation?.longitude ?? group.completedEvent!.location?.longitude ?? null,
+                                        detailItems: (group.completedEvent as any).detailItems ?? null,
                                         itemId: group.completedEvent!.items?.id ?? null,
                                         itemName: group.completedEvent!.items?.name ?? null,
                                         customerId: (group.completedEvent as any).customerId ?? null,
@@ -2557,6 +2566,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         timestamp: event.timestamp,
                                         notes: event.notes,
                                         quantityTons: event.quantityTons,
+                                        fuelCostYen: (event as any).fuelCostYen ?? null,
+                                        detailItems: (event as any).detailItems ?? null,
                                         locationName: event.location?.name ?? '',
                                         locationId: event.location?.id ?? '',
                                         locationLat: event.gpsLocation?.latitude ?? event.location?.latitude ?? null,

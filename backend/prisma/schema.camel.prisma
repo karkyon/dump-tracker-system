@@ -161,6 +161,7 @@ model Item {
   specificationFileUrl     String?           @map("specification_file_url") @db.VarChar(500)
   msdsFileUrl              String?           @map("msds_file_url") @db.VarChar(500)
   operationDetails         OperationDetail[]
+  operationDetailItems     OperationDetailItem[]  // 🆕 中間テーブルリレーション
 
   @@index([displayOrder], map: "idx_items_display_order")
   @@index([hazardous], map: "idx_items_hazardous")
@@ -255,7 +256,10 @@ model OperationDetail {
   actualStartTime   DateTime? @map("actual_start_time") @db.Timestamptz(6)
   actualEndTime     DateTime? @map("actual_end_time") @db.Timestamptz(6)
   quantityTons      Decimal   @map("quantity_tons") @db.Decimal(8, 2)
+  fuelCostYen       Decimal?  @map("fuel_cost_yen") @db.Decimal(10, 2)  // 🆕 給油金額（operation_detailsで個別管理）
   notes             String?
+  // 🆕 複数品目リレーション
+  operationDetailItems OperationDetailItem[]
   // 🆕🆕🆕 GPS位置情報フィールド（必須要件）- すべてのイベントでGPS記録
   latitude          Decimal?  @db.Decimal(10, 8)
   longitude         Decimal?  @db.Decimal(11, 8)
@@ -274,6 +278,23 @@ model OperationDetail {
   @@index([locationId], map: "idx_operation_details_location")
   @@index([operationId], map: "idx_operation_details_operation")
   @@map("operation_details")
+}
+
+/// 積込/積降完了時の複数品目・重量を管理する中間テーブル
+model OperationDetailItem {
+  id                String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  operationDetailId String          @map("operation_detail_id") @db.Uuid
+  itemId            String          @map("item_id") @db.Uuid
+  quantityTons      Decimal         @default(0) @map("quantity_tons") @db.Decimal(8, 2)
+  sequenceOrder     Int             @default(0) @map("sequence_order")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  operationDetails  OperationDetail @relation(fields: [operationDetailId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  items             Item            @relation(fields: [itemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([operationDetailId], map: "idx_operation_detail_items_detail")
+  @@index([itemId], map: "idx_operation_detail_items_item")
+  @@map("operation_detail_items")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

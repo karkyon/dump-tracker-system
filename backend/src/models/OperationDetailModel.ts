@@ -69,6 +69,7 @@ export interface OperationDetailCreateDTO {
   actualStartTime?: Date;
   actualEndTime?: Date;
   quantityTons: number;
+  fuelCostYen?: number;          // 🆕 給油金額専用カラム
   notes?: string;
   // 🆕 GPS位置情報フィールド
   latitude?: number;
@@ -87,6 +88,7 @@ export interface OperationDetailUpdateDTO {
   actualStartTime?: Date;
   actualEndTime?: Date;
   quantityTons?: number;
+  fuelCostYen?: number;          // 🆕 給油金額専用カラム
   notes?: string;
   // 🆕 GPS位置情報フィールド
   latitude?: number;
@@ -276,6 +278,7 @@ export class OperationDetailService {
         actualStartTime: data.actualStartTime,
         actualEndTime: data.actualEndTime,
         quantityTons: data.quantityTons,
+        fuelCostYen: data.fuelCostYen ?? null,  // ✅ 給油金額専用カラム
         notes: data.notes,
         // 🆕 GPS位置情報を直接保存
         latitude: data.latitude ?? null,

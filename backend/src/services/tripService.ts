@@ -1540,7 +1540,7 @@ class TripService {
         startTime: fuelData.timestamp || new Date(),
         endTime: fuelData.timestamp || new Date(),
         quantity: fuelData.fuelAmount,
-        notes: `給油: ${fuelData.fuelAmount}L, 費用: ¥${fuelData.fuelCost}${fuelData.location ? `, 場所: ${fuelData.location}` : ''}${fuelData.notes ? `, ${fuelData.notes}` : ''}`,
+        notes: fuelData.notes || undefined,  // ✅ 自由記述のみ（金額・量は専用カラム）
         // 🆕 GPS座標を operation_details に保存
         latitude: fuelData.latitude ? Number(fuelData.latitude) : undefined,
         longitude: fuelData.longitude ? Number(fuelData.longitude) : undefined,
@@ -1565,6 +1565,7 @@ class TripService {
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
         quantityTons: activityData.quantity !== undefined ? Number(activityData.quantity) : 0,
+        fuelCostYen: fuelData.fuelCost ? Number(fuelData.fuelCost) : undefined,  // ✅ 専用カラム
         notes: activityData.notes,
         latitude: activityData.latitude !== undefined ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude !== undefined ? Number(activityData.longitude) : undefined,

@@ -1641,13 +1641,9 @@ class ReportService {
         const at = (d.activityType ?? d.activity_type ?? '') as string;
         if (at === 'FUELING' || at === 'FUEL' || at === 'REFUEL') {
           const liters = d.quantityTons ? fmtNum(d.quantityTons, 1) : '';
-          // 給油時キロ: notes に "XXkm" or op.startOdometer 代替
-          let kmVal = '';
-          if (d.notes) {
-            const kmMatch = String(d.notes).match(/(\d[\d,]*)\s*km/i);
-            if (kmMatch) kmVal = kmMatch[1] ?? '';
-          }
-          if (!kmVal && op.startOdometer) kmVal = fmtNum(op.startOdometer, 0);
+          // ✅ 給油時キロ: notes regex解析廃止 → end_odometer / startOdometer から算出
+          const kmVal = op.endOdometer ? fmtNum(op.endOdometer, 0)
+                      : op.startOdometer ? fmtNum(op.startOdometer, 0) : '';
           fuelRecords.push({ liters, odometerKm: kmVal });
         }
       }

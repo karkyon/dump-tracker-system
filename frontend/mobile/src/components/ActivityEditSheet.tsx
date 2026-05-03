@@ -425,7 +425,8 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
       }
       if (isFuel(activity.activityType)) {
         if (fuelAmount) body.quantityTons = parseFloat(fuelAmount);
-        if (fuelCost)   body.notes = `給油 ${fuelAmount}L ¥${fuelCost} ${notes}`.trim();
+        if (fuelCost)   body.fuelCostYen = parseFloat(fuelCost);  // ✅ 専用カラム
+        if (notes)      body.notes = notes;  // 自由記述のみ
       }
       const res = await (apiService as any).updateActivityRecord(activity.id, body);
       if (res?.success) {

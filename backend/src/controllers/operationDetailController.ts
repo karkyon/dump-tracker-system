@@ -63,6 +63,20 @@ interface TimelineEvent {
     name: string;
     unit: string | null;  // ✅ 修正: null許容
   } | null;
+  // ✅ 給油専用フィールド
+  fuelCostYen?: number | null;
+  // ✅ 複数品目リスト
+  detailItems?: Array<{
+    id: string;
+    itemId: string;
+    itemName: string;
+    quantityTons: number;
+    sequenceOrder: number;
+  }> | null;
+  // ✅ 点検・後点検用フィールド
+  overallNotes?: string | null;
+  totalDistanceKm?: number | null;
+  fuelConsumedLiters?: number | null;
   inspectionDetails?: {
     inspectionRecordId: string;
     status: string;
@@ -170,7 +184,11 @@ export class OperationDetailController {
         where: { operationId: operationId as string },
         include: {
           locations: true,
-          items: true
+          items: true,
+          operationDetailItems: {  // ✅ 複数品目を取得
+            include: { items: true },
+            orderBy: { sequenceOrder: 'asc' }
+          }
         },
         orderBy: [
           { actualStartTime: 'asc' },
@@ -223,6 +241,8 @@ export class OperationDetailController {
             sequenceNumber: ++sequenceCounter,
             eventType: 'PRE_INSPECTION',
             timestamp: inspection.startedAt || inspection.createdAt,
+            // ✅ overall_notes を含める
+            overallNotes: inspection.overallNotes ?? null,
             gpsLocation: (inspection.latitude && inspection.longitude) ? {
               latitude: Number(inspection.latitude),
               longitude: Number(inspection.longitude),
@@ -305,6 +325,13 @@ export class OperationDetailController {
               gpsLocation: null,
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
+              detailItems: (detail.operationDetailItems || []).map((di: any) => ({
+                id: di.id,
+                itemId: di.itemId,
+                itemName: di.items?.name ?? '',
+                quantityTons: Number(di.quantityTons),
+                sequenceOrder: di.sequenceOrder,
+              })),
               notes: detail.notes || null
             });
           }
@@ -360,6 +387,7 @@ export class OperationDetailController {
             gpsLocation: gpsLocationData,
             quantityTons: Number(detail.quantityTons) || 0,
             items: itemsData,
+            fuelCostYen: detail.fuelCostYen ? Number(detail.fuelCostYen) : null,  // ✅ 給油金額
             notes: detail.notes
           });
         }
@@ -380,6 +408,10 @@ export class OperationDetailController {
             sequenceNumber: ++sequenceCounter,
             eventType: 'POST_INSPECTION',
             timestamp: inspection.startedAt || inspection.createdAt,
+            // ✅ 正しいフィールドをタイムラインイベントに含める
+            overallNotes: inspection.overallNotes ?? null,
+            totalDistanceKm: (operation as any).totalDistanceKm ?? null,
+            fuelConsumedLiters: (operation as any).fuelConsumedLiters ?? null,
             gpsLocation: (inspection.latitude && inspection.longitude) ? {
               latitude: Number(inspection.latitude),
               longitude: Number(inspection.longitude),
@@ -573,19 +605,31 @@ export class OperationDetailController {
       return sendSuccess(res, updated);
     }
 
-    // PATTERN 4: {uuid}-completed → operation_details.actualEndTime
+    // PATTERN 4: {uuid}-completed → operation_details + operationDetailItems
     if (eventId.endsWith('-completed')) {
       const detailId = eventId.replace(/-completed$/, '');
       const data: any = {};
       const endTime = rawData.actualEndTime || rawData.actualStartTime;
       if (endTime) data.actualEndTime = toDate(endTime);
-      if (rawData.itemId !== undefined) data.itemId = rawData.itemId;
+      if (rawData.itemId !== undefined) data.itemId = rawData.itemId;  // 後方互換
       if (rawData.quantityTons !== undefined) data.quantityTons = rawData.quantityTons;
       if (rawData.notes !== undefined) data.notes = rawData.notes;
       if (rawData.latitude !== undefined) data.latitude = rawData.latitude;
       if (rawData.longitude !== undefined) data.longitude = rawData.longitude;
       const updated = await this.operationDetailService.update(detailId, data);
       if (!updated) return sendNotFound(res, '運行詳細が見つかりません');
+      // ✅ 複数品目: selectedItemIds が送られた場合は operationDetailItems を再構築
+      if (Array.isArray(rawData.selectedItemIds) && rawData.selectedItemIds.length > 0) {
+        await db.operationDetailItem.deleteMany({ where: { operationDetailId: detailId } });
+        for (let i = 0; i < rawData.selectedItemIds.length; i++) {
+          const itemId = rawData.selectedItemIds[i];
+          const qty = Number(rawData.quantityTons ?? 0);
+          await db.operationDetailItem.create({
+            data: { operationDetailId: detailId, itemId, quantityTons: qty, sequenceOrder: i }
+          });
+        }
+        logger.info('✅ operationDetailItems 更新完了', { detailId, count: rawData.selectedItemIds.length });
+      }
       return sendSuccess(res, updated);
     }
 
@@ -595,7 +639,19 @@ export class OperationDetailController {
       if (insp) {
         const data: any = {};
         if (rawData.actualStartTime) data.startedAt = toDate(rawData.actualStartTime);
-        if (rawData.notes) data.notes = rawData.notes;
+        // ✅ 正しいカラムに保存
+        if (rawData.overallNotes !== undefined) data.overallNotes = rawData.overallNotes;
+        // 後点検: 走行距離・燃料は operations テーブルに保存
+        if (rawData.totalDistanceKm !== undefined || rawData.fuelConsumedLiters !== undefined) {
+          const opId = insp.operationId;
+          if (opId) {
+            const opUpdate: any = {};
+            if (rawData.totalDistanceKm !== undefined) opUpdate.totalDistanceKm = parseFloat(String(rawData.totalDistanceKm));
+            if (rawData.fuelConsumedLiters !== undefined) opUpdate.fuelConsumedLiters = parseFloat(String(rawData.fuelConsumedLiters));
+            await db.operation.update({ where: { id: opId }, data: opUpdate });
+            logger.info('後点検: operations更新完了', { opId, opUpdate });
+          }
+        }
         const updated = await db.inspectionRecord.update({ where: { id: eventId }, data });
         return sendSuccess(res, { eventId, ...updated });
       }
