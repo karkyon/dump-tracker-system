@@ -257,6 +257,7 @@ model OperationDetail {
   actualEndTime     DateTime? @map("actual_end_time") @db.Timestamptz(6)
   quantityTons      Decimal   @map("quantity_tons") @db.Decimal(8, 2)
   fuelCostYen       Decimal?  @map("fuel_cost_yen") @db.Decimal(10, 2)  // 🆕 給油金額（operation_detailsで個別管理）
+  odometerKm        Decimal?  @map("odometer_km") @db.Decimal(8, 2)           // 🆕 給油時走行距離
   notes             String?
   // 🆕 複数品目リレーション
   operationDetailItems OperationDetailItem[]

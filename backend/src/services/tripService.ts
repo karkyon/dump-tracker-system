@@ -1566,6 +1566,7 @@ class TripService {
         actualEndTime: activityData.endTime,
         quantityTons: activityData.quantity !== undefined ? Number(activityData.quantity) : 0,
         fuelCostYen: fuelData.fuelCost ? Number(fuelData.fuelCost) : undefined,  // ✅ 専用カラム
+        odometerKm: fuelData.mileageAtRefuel ? Number(fuelData.mileageAtRefuel) : undefined,  // ✅ 給油時走行距離
         notes: activityData.notes,
         latitude: activityData.latitude !== undefined ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude !== undefined ? Number(activityData.longitude) : undefined,

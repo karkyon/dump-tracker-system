@@ -1583,7 +1583,8 @@ export class MobileController {
         fuelAmount: f.quantityTons ? Number(f.quantityTons) : (f.quantity_tons ? Number(f.quantity_tons) : 0),
         // ✅ fuelCostYen 専用カラムから取得（notes parse廃止）
         fuelCost: f.fuelCostYen ? Number(f.fuelCostYen) : (f.fuel_cost_yen ? Number(f.fuel_cost_yen) : 0),
-        mileageAtRefuel: 0,
+        // ✅ odometerKm 専用カラムから取得
+        mileageAtRefuel: f.odometerKm ? Number(f.odometerKm) : (f.odometer_km ? Number(f.odometer_km) : 0),
         stationName: f.locations?.name || f.location?.name || '',
         recordedAt: (f.actualStartTime || f.actual_start_time)
           ? new Date(f.actualStartTime || f.actual_start_time).toISOString()
