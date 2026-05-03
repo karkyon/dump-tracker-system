@@ -42,6 +42,8 @@ interface TimelineEvent {
              // 🆕 積降サブイベント（モバイルの unloading/start → unloading/complete フローに対応）
              'UNLOADING_ARRIVED' | 'UNLOADING_COMPLETED';
   timestamp: Date | null;
+  customerId?: string | null;
+  customerName?: string | null;
   location?: {
     id: string;
     name: string;
@@ -139,7 +141,8 @@ export class OperationDetailController {
         where: { id: operationId as string },
         include: {
           vehicles: true,
-          usersOperationsDriverIdTousers: true
+          usersOperationsDriverIdTousers: true,
+          customer: { select: { id: true, name: true } }
         }
       });
 
@@ -281,7 +284,9 @@ export class OperationDetailController {
             gpsLocation: gpsLocationData,
             quantityTons: 0,
             items: null,
-            notes: detail.notes || null
+            notes: detail.notes || null,
+            customerId: operation?.customerId ?? null,
+            customerName: (operation as any)?.customer?.name ?? null,
           });
 
           // 🆕 積込: 積込完了イベント
@@ -318,7 +323,9 @@ export class OperationDetailController {
             gpsLocation: gpsLocationData,
             quantityTons: 0,
             items: null,
-            notes: detail.notes || null
+            notes: detail.notes || null,
+            customerId: operation?.customerId ?? null,
+            customerName: (operation as any)?.customer?.name ?? null,
           });
 
           // 🆕 積降: 積降完了イベント（actualEndTime = 積降完了時刻）

@@ -651,7 +651,14 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                 品目 <span className="font-normal text-gray-400">（複数選択可）</span>
               </label>
               {items.length === 0 ? (
-                <p className="text-xs text-red-500">品目が読み込まれていません</p>
+                <div className="text-xs text-amber-600 py-2">
+                  ⏳ 品目を読み込み中...
+                  {event.itemId && (
+                    <p className="mt-1 text-gray-600">
+                      現在選択中: <span className="font-semibold text-blue-600">{event.itemName ?? '（品目名取得中）'}</span>
+                    </p>
+                  )}
+                </div>
               ) : (() => {
                 const TYPE_LABEL: Record<string, string> = {
                   RECYCLED_MATERIAL: '再生材', VIRGIN_MATERIAL: 'バージン材', WASTE: '廃棄物',
