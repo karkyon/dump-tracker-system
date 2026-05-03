@@ -109,6 +109,7 @@ export interface RecordLoadingArrivalRequest {
   accuracy?: number;         // GPS測位精度（メートル）
   arrivalTime?: Date | string; // 到着時刻（省略時は現在時刻）
   itemId?: string;           // 品目ID（オプション）
+  selectedItemIds?: string[];  // ✅ 複数品目ID
   quantity?: number;         // 積載量（オプション）
   notes?: string;            // メモ（オプション）
 }
