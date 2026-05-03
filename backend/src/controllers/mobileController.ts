@@ -1030,14 +1030,15 @@ export class MobileController {
         return;
       }
 
-      // 運行中チェック
-      if (operation.status !== 'IN_PROGRESS') {
+      // 運行中チェック（MANAGER/ADMINはCOMPLETED状態でも変更可能）
+      const isManager = req.user.role === 'MANAGER' || req.user.role === 'ADMIN';
+      if (!isManager && operation.status !== 'IN_PROGRESS') {
         sendError(res, '運行中の運行のみ客先変更できます', 400, 'OPERATION_NOT_IN_PROGRESS');
         return;
       }
 
-      // ドライバー本人チェック
-      if (operation.driverId !== req.user.userId) {
+      // ドライバー本人チェック（MANAGER/ADMINはスキップ）
+      if (!isManager && operation.driverId !== req.user.userId) {
         sendError(res, 'この運行の客先を変更する権限がありません', 403, 'FORBIDDEN');
         return;
       }

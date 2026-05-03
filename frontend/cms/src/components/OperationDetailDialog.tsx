@@ -460,12 +460,15 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
     if (event.eventType === 'POST_INSPECTION') {
       const n = event.notes ?? '';
-      const odoM  = n.match(/走行距離:\s*([\d.]+)km/);
-      const fuelM = n.match(/燃料レベル:\s*([\d.]+)L/);
-      const memoM = n.match(/点検メモ:\s*(.+?)(?:\s*\/|$)/);
+      // "走行距離: XXkm / 燃料レベル: YYL / 点検メモ: ZZ" 形式からパース
+      const odoM  = n.match(/走行距離[:：]\s*([\d.]+)\s*km/);
+      const fuelM = n.match(/燃料レベル[:：]\s*([\d.]+)\s*L/);
+      const memoM = n.match(/点検メモ[:：]\s*(.+?)(?:\s*\/|$)/);
       setOdometer(odoM  ? odoM[1]  : '');
       setFuelLevel(fuelM ? fuelM[1] : '');
-      setInspMemo(memoM ? memoM[1].trim() : '');
+      // 「運行後点検 (PENDING)」のような自動生成notesは表示しない
+      const autoNotePattern = /^運行[前後]点検\s*\(/;
+      setInspMemo(memoM ? memoM[1].trim() : (autoNotePattern.test(n) ? '' : n));
     } else { setOdometer(''); setFuelLevel(''); setInspMemo(''); }
     // 給油: notesから給油量・金額をパースして初期値にセット
     if (['FUELING','REFUELING'].includes(event.eventType ?? '')) {
@@ -528,8 +531,12 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         body.actualEndTime = mergeHM(event.timestamp, startHHMM);
         delete body.actualStartTime;
         if (selectedItemIds.length > 0) {
+          // 最初の品目をitemIdに設定
           body.itemId = selectedItemIds[0];
-          const names = selectedItemIds.map(id => items.find(i => i.id === id)?.name || id).join('、');
+          // 全品目名をnotesに記録（タイムライン表示用）
+          const names = selectedItemIds
+            .map(id => items.find(i => i.id === id)?.name ?? id)
+            .join('、');
           body.notes = `品目: ${names}`;
         }
         if (quantity) body.quantityTons = parseFloat(quantity);
@@ -541,7 +548,9 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
       }
       // 運行前点検
       if (event.eventType === 'PRE_INSPECTION') {
-        body.notes = preinspMemo ? `点検メモ: ${preinspMemo}` : (notes || undefined);
+        // notes に保存（inspMemo フィールドは使わない）
+        body.notes = preinspMemo ? `点検メモ: ${preinspMemo}` : undefined;
+        if (body.notes === undefined) delete body.notes;
       }
       // 運行後点検
       if (isPostInsp(event.eventType)) {
@@ -551,15 +560,15 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         if (inspMemo)  lines.push(`点検メモ: ${inspMemo}`);
         if (lines.length > 0) body.notes = lines.join(' / ');
       }
+      // 客先変更があれば body に含める（timeline-event で直接DB更新）
+      if (isLoadEvt(event.eventType) && currentCustomerId) {
+        body._updateCustomer = true;
+        body.customerId = currentCustomerId;
+        body.operationId = operationId;
+      }
       // ✅ 統合エンドポイント使用（event.id = 合成IDそのまま）
       const res = await apiClient.put(`/operation-details/timeline-event/${event.id}`, body);
-      if ((res as any).success || (res as any).data || (res as any).id) {
-        // 客先変更
-        if (isLoadEvt(event.eventType) && currentCustomerId) {
-          try {
-            await apiClient.patch(`/mobile/operations/${operationId}/customer`, { customerId: currentCustomerId });
-          } catch { /* 無視 */ }
-        }
+      if ((res as any).success || (res as any).data || (res as any).id || (res as any).eventId) {
         onSaved();
         onClose();
       } else {

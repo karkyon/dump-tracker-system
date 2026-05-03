@@ -523,12 +523,22 @@ export class OperationDetailController {
     const db = DatabaseService.getInstance();
     const toDate = (v: any) => (v && typeof v === 'string') ? new Date(v) : (v instanceof Date ? v : undefined);
 
+    // PATTERN 0: 客先変更（全イベント共通で rawData.customerId があれば operations を更新）
+    if (rawData.customerId && rawData._updateCustomer) {
+      const { operationId: opIdForCust } = rawData;
+      if (opIdForCust) {
+        await db.operation.update({ where: { id: opIdForCust }, data: { customerId: rawData.customerId } });
+        logger.info('客先変更完了', { operationId: opIdForCust, customerId: rawData.customerId });
+      }
+    }
+
     // PATTERN 1: trip-start-{opId} → operations.actualStartTime
     if (eventId.startsWith('trip-start-')) {
       const opId = eventId.replace('trip-start-', '');
       const data: any = {};
       if (rawData.actualStartTime) data.actualStartTime = toDate(rawData.actualStartTime);
       if (rawData.notes) data.notes = rawData.notes;
+      if (rawData.customerId) data.customerId = rawData.customerId;
       const updated = await db.operation.update({ where: { id: opId }, data });
       return sendSuccess(res, { eventId, ...updated });
     }
