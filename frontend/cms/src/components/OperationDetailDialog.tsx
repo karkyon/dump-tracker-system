@@ -2576,7 +2576,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         itemName: event.items?.name ?? null,
                                         customerId: (event as any).customerId ?? null,
                                         customerName: (event as any).customerName ?? null,
-                                        preinspMemo: event.eventType === 'PRE_INSPECTION' ? (event.notes ?? '') : null,
+                                        preinspMemo: event.eventType === 'PRE_INSPECTION' ? ((event as any).overallNotes ?? '') : null,
                                       })}
                                       className="ml-auto flex items-center gap-1 px-2 py-1 border border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
                                       title="このイベントを編集"
