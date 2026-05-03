@@ -267,6 +267,15 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
   }, [centerLat, centerLng, onPinMoved]);
 
   React.useEffect(() => {
+    if (mapInst.current && markerInst.current && lat != null && lng != null) {
+      const pos = { lat, lng };
+      mapInst.current.panTo(pos);
+      markerInst.current.setPosition(pos);
+      onPinMoved(lat, lng);
+    }
+  }, [lat, lng]);
+
+  React.useEffect(() => {
     const tryInit = () => {
       if ((window as any).google?.maps) {
         if (mapRef.current && !mapInst.current) {
@@ -1643,7 +1652,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         fetchInspectionItemDetails(operationId),
         (async () => {
           try {
-            const res = await apiClient.get('/items', { params: { page: 1, limit: 200 } });
+            const res = await apiClient.get('/items', { params: { page: 1, limit: 100 } });
             const d: any = res;
             const arr = d?.data?.data?.data ?? d?.data?.data ?? d?.data ?? [];
             setEditItems(Array.isArray(arr) ? arr : []);
