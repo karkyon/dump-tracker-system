@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { RefreshCw, Play, Square, Trash2, Download, Filter, Terminal, AlertCircle, AlertTriangle } from 'lucide-react';
-import { apiService } from '../utils/api';
+import { apiClient } from '../utils/api';
 
 type LogLevel = 'all' | 'error' | 'warn' | 'info' | 'http' | 'debug';
 
