@@ -115,6 +115,13 @@ export const NAVIGATION_ITEMS = [
     icon: 'Satellite',
     adminOnly: true
   },
+  {
+    id: 'log-viewer',
+    name: 'ログビューア',
+    path: '/log-viewer',
+    icon: 'Bug',
+    adminOnly: true
+  },
   // デバッグメニュー（管理者専用）
   {
     id: 'debug',
