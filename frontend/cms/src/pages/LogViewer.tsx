@@ -70,7 +70,7 @@ export default function LogViewer() {
     try {
       const params = new URLSearchParams({ lines: String(lines), level });
       if (keyword) params.set('keyword', keyword);
-      const res = await apiClient.get(`/logs/recent?${params}`);
+      const res = await apiClient.get(`/logs/recent?${params}`) as any;
       const data = res.data?.data || res.data;
       const rawLogs: string[] = data?.logs || [];
       setLogs(rawLogs.map(parseLine));
@@ -97,7 +97,7 @@ export default function LogViewer() {
 
   const changeServerLogLevel = async (lv: string) => {
     try {
-      await apiClient.post('/logs/level', { level: lv });
+      await (apiClient.post('/logs/level', { level: lv }) as any);
       setCurrentLogLevel(lv);
       alert(`サーバーのログレベルを "${lv}" に変更しました`);
     } catch (e: any) { alert(`失敗: ${e.message}`); }
@@ -106,7 +106,7 @@ export default function LogViewer() {
   const clearLogs = async () => {
     if (!confirm('ログファイルをクリアしますか？')) return;
     try {
-      await apiClient.delete('/logs/clear');
+      await (apiClient.delete('/logs/clear') as any);
       setLogs([]);
       alert('クリアしました');
     } catch (e: any) { alert(`失敗: ${e.message}`); }
