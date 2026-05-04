@@ -22,7 +22,18 @@ router.get('/recent', authenticateToken, asyncHandler(async (req: Request, res: 
 
   const logPath = path.join(process.cwd(), 'logs', 'combined.log');
   try {
-    const content = fs.readFileSync(logPath, 'utf-8');
+    // ファイル末尾からN行だけ読む（大容量ログ対応）
+    const stat = fs.statSync(logPath);
+    const fileSizeMB = (stat.size / 1024 / 1024).toFixed(2);
+    const CHUNK_SIZE = Math.min(stat.size, 512 * 1024); // 末尾512KBだけ読む
+    const buf = Buffer.alloc(CHUNK_SIZE);
+    const fd = fs.openSync(logPath, 'r');
+    fs.readSync(fd, buf, 0, CHUNK_SIZE, stat.size - CHUNK_SIZE);
+    fs.closeSync(fd);
+    const rawContent = buf.toString('utf-8');
+    // 最初の行は途中から始まる可能性があるので除去
+    const firstNewline = rawContent.indexOf('\n');
+    const content = firstNewline >= 0 ? rawContent.slice(firstNewline + 1) : rawContent;
     let allLines = content.split('\n').filter(Boolean);
 
     // レベルフィルター
@@ -46,8 +57,7 @@ router.get('/recent', authenticateToken, asyncHandler(async (req: Request, res: 
     const recent = allLines.slice(-lines);
 
     // ログサイズ
-    const stat = fs.statSync(logPath);
-    const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
+    const sizeMB = fileSizeMB;
 
     return sendSuccess(res, {
       logs: recent,
