@@ -756,6 +756,15 @@ debugRoutes.forEach(route => {
 });
 
 // =====================================
+// ログビューアAPI登録
+// =====================================
+safeImportAndRegisterRoute('logRoutes', '/logs', router, {
+  priority: 'normal',
+  requireAuth: false,
+  description: 'ログビューアAPI（管理者専用）'
+});
+
+// =====================================
 // モバイル専用API登録（統合版）
 // =====================================
 
