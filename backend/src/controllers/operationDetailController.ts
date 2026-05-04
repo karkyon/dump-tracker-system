@@ -185,7 +185,10 @@ export class OperationDetailController {
         include: {
           locations: true,
           items: true,
-          // operationDetailItems: { include: { items: true }, orderBy: { sequenceOrder: 'asc' } }, // Prisma generate後に有効化
+                    operationDetailItems: {  // ✅ 複数品目を取得
+            include: { items: true },
+            orderBy: { sequenceOrder: 'asc' }
+          }
             orderBy: { sequenceOrder: 'asc' }
           }
         },
