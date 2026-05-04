@@ -189,8 +189,6 @@ export class OperationDetailController {
             include: { items: true },
             orderBy: { sequenceOrder: 'asc' }
           }
-            orderBy: { sequenceOrder: 'asc' }
-          }
         },
         orderBy: [
           { actualStartTime: 'asc' },
