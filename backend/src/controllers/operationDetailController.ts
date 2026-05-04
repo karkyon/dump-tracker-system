@@ -185,8 +185,7 @@ export class OperationDetailController {
         include: {
           locations: true,
           items: true,
-          operationDetailItems: {  // ✅ 複数品目を取得
-            include: { items: true },
+          // operationDetailItems コメントアウト済み
             orderBy: { sequenceOrder: 'asc' }
           }
         },

@@ -373,6 +373,15 @@ export class ExpressApp {
     } catch (error) {
       logger.error('❌ feedbackRoutes 読み込み失敗', error);
     }
+
+    // ログビューアAPI（管理者専用）
+    try {
+      const logRoutes = require('./routes/logRoutes').default || require('./routes/logRoutes');
+      this.app.use('/api/v1/logs', logRoutes);
+      logger.info('✅ ログAPIルート登録完了: /api/v1/logs');
+    } catch (error) {
+      logger.error('❌ logRoutes 読み込み失敗', error);
+    }
     // 🎯 モバイルAPI統合
     if (mobileRoutes) {
       this.app.use('/api/mobile', mobileRoutes);
