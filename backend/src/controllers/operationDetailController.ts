@@ -185,7 +185,7 @@ export class OperationDetailController {
         include: {
           locations: true,
           items: true,
-          // operationDetailItems コメントアウト済み
+          // operationDetailItems: { include: { items: true }, orderBy: { sequenceOrder: 'asc' } }, // Prisma generate後に有効化
             orderBy: { sequenceOrder: 'asc' }
           }
         },
