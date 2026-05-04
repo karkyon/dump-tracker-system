@@ -54,7 +54,7 @@ jobs:
             mkdir -p prisma
             cp /tmp/backend-deploy/schema.camel.prisma prisma/ 2>/dev/null || true
             export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
-            npm ci --production
+            npm ci
             npx prisma generate --schema=./prisma/schema.camel.prisma 2>/dev/null || true
             npx prisma db push --schema=./prisma/schema.camel.prisma 2>/dev/null || true
             # ✅ テーブル権限付与（db push後はownerがpostgresになる場合があるため）
