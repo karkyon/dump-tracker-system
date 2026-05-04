@@ -270,6 +270,9 @@ const App: React.FC = () => {
               <Route path="feedback" element={<FeedbackList />} />
               <Route path="feedback/:id" element={<FeedbackDetail />} />
 
+              {/* ログビューア（管理者専用） */}
+              <Route path="log-viewer" element={<LogViewer />} />
+
               {/* GPS Inspector（管理者専用） */}
               <Route path="gps-inspector" element={<GpsInspector />} />
               
@@ -298,7 +301,6 @@ const App: React.FC = () => {
                 } 
               />
             </Route>
-            <Route path="/logs" element={<LogViewer />} />
             </Routes>
 
           {/* Global Toast Notifications */}
