@@ -3,8 +3,8 @@
 // 機能: リアルタイム監視・レベルフィルター・キーワード検索・ログクリア・ダウンロード
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { RefreshCw, Play, Square, Trash2, Download, Filter, Terminal, AlertCircle, Info, AlertTriangle, Bug } from 'lucide-react';
-import { apiService } from '../services/api';
+import { RefreshCw, Play, Square, Trash2, Download, Filter, Terminal, AlertCircle, AlertTriangle } from 'lucide-react';
+import { apiService } from '../utils/api';
 
 type LogLevel = 'all' | 'error' | 'warn' | 'info' | 'http' | 'debug';
 
@@ -70,7 +70,7 @@ export default function LogViewer() {
     try {
       const params = new URLSearchParams({ lines: String(lines), level });
       if (keyword) params.set('keyword', keyword);
-      const res = await apiService.get(`/logs/recent?${params}`);
+      const res = await apiClient.get(`/logs/recent?${params}`);
       const data = res.data?.data || res.data;
       const rawLogs: string[] = data?.logs || [];
       setLogs(rawLogs.map(parseLine));
@@ -97,7 +97,7 @@ export default function LogViewer() {
 
   const changeServerLogLevel = async (lv: string) => {
     try {
-      await apiService.post('/logs/level', { level: lv });
+      await apiClient.post('/logs/level', { level: lv });
       setCurrentLogLevel(lv);
       alert(`サーバーのログレベルを "${lv}" に変更しました`);
     } catch (e: any) { alert(`失敗: ${e.message}`); }
@@ -106,7 +106,7 @@ export default function LogViewer() {
   const clearLogs = async () => {
     if (!confirm('ログファイルをクリアしますか？')) return;
     try {
-      await apiService.delete('/logs/clear');
+      await apiClient.delete('/logs/clear');
       setLogs([]);
       alert('クリアしました');
     } catch (e: any) { alert(`失敗: ${e.message}`); }
