@@ -1,5 +1,6 @@
 // frontend/cms/src/App.tsx - 完全修正版: 既存機能保持 + Layout統合 + OperationDebugルート追加
 import React, { useEffect } from 'react';
+import LogViewer from './pages/LogViewer';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
@@ -297,7 +298,8 @@ const App: React.FC = () => {
                 } 
               />
             </Route>
-          </Routes>
+            <Route path="/logs" element={<LogViewer />} />
+            </Routes>
 
           {/* Global Toast Notifications */}
           <Toaster
