@@ -1138,7 +1138,7 @@ const OperationRecord: React.FC = () => {
       toast.success('給油を記録しました');
       
       // 🆕 給油記録画面へ遷移
-      window.location.href = '/refuel-record';  // または navigate('/refuel-record')
+      navigate('/refuel-record'); // ✅ BUG-GPS-NAV: navigate統一（GPS停止しない）
       
       setIsSubmitting(false);
     } catch (error) {

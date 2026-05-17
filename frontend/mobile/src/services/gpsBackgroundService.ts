@@ -85,7 +85,7 @@ async function _sendToBackend(position: GeolocationPosition): Promise<void> {
     return;
   }
 
-  const { latitude, longitude, accuracy, altitude, speed, heading } = position.coords;
+  const { latitude, longitude, accuracy, speed, heading } = position.coords;
 
   // Fix-4A: accuracy > 100m はスキップ
   if (accuracy > 100) {
@@ -107,7 +107,6 @@ async function _sendToBackend(position: GeolocationPosition): Promise<void> {
       heading: heading ?? undefined,
       speed: speed != null ? speed * 3.6 : undefined, // m/s → km/h
       timestamp: new Date(position.timestamp).toISOString(),
-      totalDistanceKm: undefined, // バックグラウンドサービスでは累積距離は管理しない
     });
 
     _lastSentAt = Date.now();
@@ -191,7 +190,7 @@ async function _acquireWakeLock(): Promise<void> {
   try {
     _wakeLock = await (navigator as any).wakeLock.request('screen');
     console.log('[GPS-BG] 🔒 Wake Lock取得');
-    _wakeLock.addEventListener('release', () => {
+    if (_wakeLock) _wakeLock.addEventListener('release', () => {
       console.warn('[GPS-BG] ⚠️ Wake Lock解放');
       _wakeLock = null;
     });

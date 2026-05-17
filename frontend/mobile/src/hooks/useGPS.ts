@@ -23,6 +23,12 @@ import {
 } from '../utils/helpers';
 import { apiService as mobileApi } from '../services/api';
 import { logGPSEvent } from '../utils/gpsLogger'; // ✅ Log-FE-1
+import {
+  startBackgroundGPS,
+  stopBackgroundGPS,
+  updateBackgroundGPSConfig,
+  getBackgroundGPSState,
+} from '../services/gpsBackgroundService';
 import { toast } from 'react-hot-toast';
 
 // GPSログデータ型定義
@@ -184,44 +190,10 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     }
   };
 
-  const sendGPSData = async (position: GeolocationPosition, metadata: GPSMetadata) => {
-    if (!options.enableLogging || !options.operationId) return;
-    // ✅ Fix-4A: accuracy > 100m の座標はバックエンドに送信しない（屋内誤差防止）
-    if (position.coords.accuracy > 100) {
-      console.warn(`⚠️ [Fix-4A] GPS送信スキップ: 精度不足 accuracy=${position.coords.accuracy.toFixed(0)}m (上限:100m)`);
-      logGPSEvent({ type: 'ACCURACY_FILTER',
-        lat: position.coords.latitude, lng: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        detail: { threshold: 100, stage: 'sendGPSData' }
-      });
-      return;
-    }
-    try {
-      const gpsData = {
-        operationId: options.operationId,
-        vehicleId: options.vehicleId,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        heading: metadata.heading,
-        speed: metadata.speed,
-        timestamp: new Date(position.timestamp).toISOString(),
-        // ✅ Fix-S11-7: 累積走行距離をバックエンドに送信（endOperation時のフォールバック用）
-        totalDistanceKm: metadata.totalDistance
-      };
-      await mobileApi.updateGPSLocation(gpsData);
-      console.log('✅ GPS data sent successfully');
-      logGPSEvent({ type: 'API_SUCCESS',
-        lat: position.coords.latitude, lng: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        speed: metadata.speed,
-        totalDistanceKm: metadata.totalDistance,
-        operationId: options.operationId,
-        detail: { totalDistanceKm: gpsData.totalDistanceKm }
-      });
-    } catch (error) {
-      console.error('❌ GPS データ送信エラー:', error);
-    }
+  // ✅ BUG-GPS-NAV修正: GPS送信はgpsBackgroundServiceに完全移譲
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sendGPSData = async (_position: GeolocationPosition, _metadata: GPSMetadata) => {
+    // no-op: gpsBackgroundService が送信を担当
   };
 
 // 🔧 改善された位置更新処理
