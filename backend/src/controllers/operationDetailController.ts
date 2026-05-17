@@ -199,12 +199,75 @@ export class OperationDetailController {
 
       // =====================================
       // 4. GPSログを取得（走行軌跡用）
-      // ✅ 修正: db.gpsLog (camelCase) を使用
+      // ✅ take上限撤廃 → 全件取得 + 可変間引き
       // =====================================
-      const gpsLogs = await db.gpsLog.findMany({
+      const allGpsLogs = await db.gpsLog.findMany({
         where: { operationId: operationId as string },
         orderBy: { recordedAt: 'asc' },
-        take: 500
+        select: {
+          latitude: true,
+          longitude: true,
+          recordedAt: true,
+          speedKmh: true
+        }
+      });
+
+      // =====================================
+      // 4b. 可変間引き: 目標描画点数ベース
+      //   < 500件   → 全件描画
+      //   < 2000件  → 目標500点
+      //   < 5000件  → 目標1000点
+      //   < 10000件 → 目標1500点
+      //   < 20000件 → 目標2000点
+      //   20000以上 → 目標2500点
+      // イベントタイムスタンプ±30秒のGPS点は強制保持
+      // =====================================
+      const totalGpsCount = allGpsLogs.length;
+
+      const eventTimestamps: number[] = [];
+      if (operation.actualStartTime) eventTimestamps.push(new Date(operation.actualStartTime).getTime());
+      if (operation.actualEndTime)   eventTimestamps.push(new Date(operation.actualEndTime).getTime());
+      operationDetails.forEach((d: any) => {
+        if (d.actualStartTime) eventTimestamps.push(new Date(d.actualStartTime).getTime());
+        if (d.actualEndTime)   eventTimestamps.push(new Date(d.actualEndTime).getTime());
+      });
+      inspectionRecords.forEach((ir: any) => {
+        if (ir.startedAt)   eventTimestamps.push(new Date(ir.startedAt).getTime());
+        if (ir.completedAt) eventTimestamps.push(new Date(ir.completedAt).getTime());
+      });
+      const EVENT_PROTECT_MS = 30 * 1000;
+
+      const isProtected = (recordedAt: Date): boolean => {
+        const t = new Date(recordedAt).getTime();
+        return eventTimestamps.some(et => Math.abs(t - et) <= EVENT_PROTECT_MS);
+      };
+
+      let targetPoints: number;
+      if (totalGpsCount < 500)        targetPoints = totalGpsCount;
+      else if (totalGpsCount < 2000)  targetPoints = 500;
+      else if (totalGpsCount < 5000)  targetPoints = 1000;
+      else if (totalGpsCount < 10000) targetPoints = 1500;
+      else if (totalGpsCount < 20000) targetPoints = 2000;
+      else                            targetPoints = 2500;
+
+      const thinInterval = targetPoints >= totalGpsCount
+        ? 1
+        : Math.ceil(totalGpsCount / targetPoints);
+
+      const gpsLogs = thinInterval <= 1
+        ? allGpsLogs
+        : allGpsLogs.filter((log: any, idx: number) => {
+            if (idx === 0 || idx === allGpsLogs.length - 1) return true;
+            if (isProtected(log.recordedAt)) return true;
+            return idx % thinInterval === 0;
+          });
+
+      logger.info('🗺️ GPS間引き', {
+        operationId,
+        totalGpsCount,
+        targetPoints,
+        thinInterval,
+        sampledCount: gpsLogs.length
       });
 
       // =====================================
@@ -473,14 +536,15 @@ export class OperationDetailController {
           totalDistanceKm: operation.totalDistanceKm,
           notes: operation.notes
         },
-        // ✅ 追加: 走行軌跡用GPSログ（イベントPINとは別）
-        // フロントエンドの表示設定（ON/OFF・インターバル）に応じてフィルタリングして使用
+        // ✅ 走行軌跡用GPSログ（間引き済み）
+        // totalGpsCount=DB実件数, routeGpsLogs.length=描画点数
         routeGpsLogs: gpsLogs.map((log: any) => ({
           latitude: Number(log.latitude),
           longitude: Number(log.longitude),
           recordedAt: log.recordedAt,
           speedKmh: log.speedKmh ? Number(log.speedKmh) : null
-        }))
+        })),
+        totalGpsCount
       };
 
       logger.info('✅ 統合タイムライン返却', {

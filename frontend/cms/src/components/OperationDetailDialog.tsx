@@ -984,6 +984,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     recordedAt: string;
     speedKmh: number | null;
   }>>([]);
+  // ✅ DB実記録件数（間引き前の総件数）
+  const [totalGpsCount, setTotalGpsCount] = useState<number>(0);
 
   // ✅ タイムラインイベントからGPSポイントを抽出（地図表示用）
   const timelineGpsPoints = useMemo(() => {
@@ -1669,7 +1671,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         // ✅ routeGpsLogs を抽出してstateにセット
         const routeLogs = innerData.routeGpsLogs || outerData.routeGpsLogs || [];
         setRouteGpsLogs(routeLogs);
-        console.log('[OperationDetailDialog] 📡 routeGpsLogs:', routeLogs.length, '件');
+        // ✅ totalGpsCount: DB実記録件数（間引き前）
+        const rawTotal = innerData.totalGpsCount ?? outerData.totalGpsCount ?? routeLogs.length;
+        setTotalGpsCount(rawTotal);
+        console.log('[OperationDetailDialog] 📡 routeGpsLogs:', routeLogs.length, '件 / DB総件数:', rawTotal, '件');
       }
     } catch (err) {
       console.error('[OperationDetailDialog] Error fetching timeline:', err);
@@ -1740,6 +1745,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       setInspections([]);
       setOperationDebugTimelineEvents([]);
       setRouteGpsLogs([]);
+      setTotalGpsCount(0);
       setError(null);
       setActiveTab('basic');  // タブも基本情報に戻す
       // Google Mapsインスタンスをクリア（次の運行で再初期化させる）
@@ -2676,7 +2682,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                     GPSルート ({timelineGpsPoints.length > 0 ? timelineGpsPoints.length : gpsRecords.length}ポイント)
                     {routeGpsLogs.length > 0 && (
                       <span className="text-sm font-normal text-blue-600 ml-2">
-                        走行軌跡: {routeGpsLogs.length}件
+                        走行軌跡: 表示{routeGpsLogs.length}点
+                        {totalGpsCount > routeGpsLogs.length && (
+                          <span className="text-gray-400"> / 記録{totalGpsCount.toLocaleString()}点</span>
+                        )}
                       </span>
                     )}
                   </h3>
