@@ -27,6 +27,8 @@ import {
   stopBackgroundGPS,
   updateBackgroundGPSConfig,
   getBackgroundGPSState,
+  onBackgroundPosition,
+  offBackgroundPosition,
 } from '../services/gpsBackgroundService';
 import { toast } from 'react-hot-toast';
 
@@ -151,7 +153,6 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   const [gpsLogs, setGpsLogs] = useState<GPSLogData[]>([]);
   const [pathCoordinates, setPathCoordinates] = useState<PathPoint[]>([]);
   
-  const watchIdRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const lastGPSUpdateRef = useRef<number>(0);
   const headingBufferRef = useRef<number[]>([]);
@@ -160,10 +161,6 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   const accuracyHistoryRef = useRef<number[]>([]);
   const previousPositionRef = useRef<Position | null>(null);
   const currentPositionRef = useRef<Position | null>(null);
-  // BUG-020: iOS バックグラウンド復帰時のGPS再開用ref
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-  // ✅ Session12: setIntervalでGPS送信を確実にインターバル制御
-  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // 最新のGPS位置とmetadataを保持するref（setInterval内で参照するためref必須）
   const latestPositionRef = useRef<GeolocationPosition | null>(null);
   const latestMetadataRef = useRef<GPSMetadata | null>(null);
@@ -189,11 +186,6 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     }
   };
 
-  // ✅ BUG-GPS-NAV修正: GPS送信はgpsBackgroundServiceに完全移譲
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const sendGPSData = async (_position: GeolocationPosition, _metadata: GPSMetadata) => {
-    // no-op: gpsBackgroundService が送信を担当
-  };
 
 // 🔧 改善された位置更新処理
   const handlePositionUpdate = (position: GeolocationPosition) => {
@@ -504,60 +496,7 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     options.onHeadingChange?.(calculatedHeading);
   };
 
-  const handleError = (error: GeolocationPositionError) => {
-    // BUG-008修正: GeolocationPositionError は JSON.stringify すると {} になるため
-    // code / message を明示的に展開してログ出力する
-    const errorDetail = {
-      code: error.code,
-      message: error.message,
-      codeLabel:
-        error.code === error.PERMISSION_DENIED    ? 'PERMISSION_DENIED'    :
-        error.code === error.POSITION_UNAVAILABLE ? 'POSITION_UNAVAILABLE' :
-        error.code === error.TIMEOUT              ? 'TIMEOUT'              :
-        `UNKNOWN(${error.code})`
-    };
-    console.error('❌ GPS Error:', errorDetail);
 
-    let errorMessage = '位置情報の取得に失敗しました';
-    switch (error.code) {
-      case error.PERMISSION_DENIED:
-        errorMessage = '位置情報の使用が許可されていません。ブラウザの設定を確認してください。';
-        break;
-      case error.POSITION_UNAVAILABLE:
-        errorMessage = '位置情報が利用できません。GPS信号を確認してください。';
-        break;
-      case error.TIMEOUT:
-        errorMessage = '位置情報の取得がタイムアウトしました。';
-        break;
-    }
-    setError(errorMessage);
-    toast.error(errorMessage);
-    options.onError?.(error);
-  };
-
-  // ✅ Session12: setInterval方式でGPS送信を確実制御
-  const startGPSInterval = useCallback(() => {
-    if (gpsIntervalRef.current) {
-      clearInterval(gpsIntervalRef.current);
-    }
-    const intervalMs = GPS_CONFIG.UPDATE_INTERVAL; // getterなので毎回最新値
-    console.log(`⏱️ [GPS-INTERVAL] GPS送信インターバル開始: ${intervalMs}ms (${intervalMs/1000}秒)`);
-    gpsIntervalRef.current = setInterval(() => {
-      const pos = latestPositionRef.current;
-      const meta = latestMetadataRef.current;
-      if (pos && meta) {
-        sendGPSData(pos, meta);
-      }
-    }, intervalMs);
-  }, []);
-
-  const stopGPSInterval = useCallback(() => {
-    if (gpsIntervalRef.current) {
-      clearInterval(gpsIntervalRef.current);
-      gpsIntervalRef.current = null;
-      console.log('⏹️ [GPS-INTERVAL] GPS送信インターバル停止');
-    }
-  }, []);
 
   const startTracking = useCallback(async (): Promise<void> => {
     if (!navigator.geolocation) {
@@ -570,86 +509,49 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       console.warn('⚠️ GPS tracking is already active');
       return;
     }
-    const gpsOptions: PositionOptions = {
-      enableHighAccuracy: options.enableHighAccuracy ?? true,
-      timeout: options.timeout ?? GPS_CONFIG.TIMEOUT,
-      maximumAge: options.maximumAge ?? GPS_CONFIG.MAXIMUM_AGE
-    };
-    console.log('🚀 GPS追跡開始 - オプション:', gpsOptions);
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          console.log('✅ 初回GPS位置取得成功');
-          handlePositionUpdate(position);
-        },
-        handleError,
-        gpsOptions
-      );
-      const watchId = navigator.geolocation.watchPosition(
-        handlePositionUpdate,
-        handleError,
-        gpsOptions
-      );
-      watchIdRef.current = watchId;
-      startTimeRef.current = Date.now();
-    // ✅ Session12: setInterval GPS送信開始
-    startGPSInterval();
-      lastGPSUpdateRef.current = Date.now();
-      setIsTracking(true);
-      isTrackingRef.current = true; // BUG-020: ref経由でvisibilitychangeから参照
-      setIsPaused(false);
-      setError(null);
-      toast.success('GPS追跡を開始しました');
-      console.log('🛰️ GPS追跡開始 - Watch ID:', watchId);
 
-      // ✅ BUG-GPS-NAV: gpsBackgroundServiceを起動（画面遷移で破棄されない）
-      if (options.enableLogging && options.operationId) {
-        startBackgroundGPS({
-          operationId: options.operationId,
-          vehicleId: options.vehicleId,
-        }).catch((e: unknown) => console.warn('[useGPS] gpsBackgroundService起動失敗:', e));
-        console.log('[useGPS] ✅ gpsBackgroundService起動');
-      }
-      // BUG-020: Screen Wake Lock 取得（iOS画面OFFでJS停止を防ぐ）
-      if ('wakeLock' in navigator) {
-        try {
-          const wl = await (navigator as any).wakeLock.request('screen');
-          wakeLockRef.current = wl;
-          console.log('🔒 Screen Wake Lock 取得成功');
-          wl.addEventListener('release', () => {
-            console.warn('⚠️ Screen Wake Lock が解放されました');
-            wakeLockRef.current = null;
-          });
-        } catch (wlErr) {
-          console.warn('⚠️ Screen Wake Lock 取得失敗（非対応デバイス）:', wlErr);
-        }
-      }
-    } catch (err) {
-      console.error('❌ GPS追跡開始エラー:', err);
-      handleError(err as GeolocationPositionError);
-      throw err;
+    console.log('🚀 [useGPS] GPS追跡開始 - gpsBackgroundService に一本化');
+    startTimeRef.current = Date.now();
+    lastGPSUpdateRef.current = Date.now();
+    setIsTracking(true);
+    isTrackingRef.current = true;
+    setIsPaused(false);
+    setError(null);
+
+    // ✅ BUG-GPS-NAV完全統合: gpsBackgroundServiceのコールバックでUI更新
+    // watchPosition・getCurrentPosition・WakeLock・setIntervalは全て
+    // gpsBackgroundServiceが一元管理する（画面遷移でも継続）
+    onBackgroundPosition(handlePositionUpdate);
+    console.log('[useGPS] ✅ onBackgroundPosition 登録完了');
+
+    // gpsBackgroundServiceを起動（未起動の場合）
+    if (options.enableLogging && options.operationId) {
+      startBackgroundGPS({
+        operationId: options.operationId,
+        vehicleId: options.vehicleId,
+      }).catch((e: unknown) => console.warn('[useGPS] gpsBackgroundService起動失敗:', e));
+      console.log('[useGPS] ✅ gpsBackgroundService起動');
     }
+
+    // 既に位置データがある場合は即座にUI更新（画面復帰時の表示遅延防止）
+    const bgState = getBackgroundGPSState();
+    if (bgState.lastPosition) {
+      handlePositionUpdate(bgState.lastPosition);
+      console.log('[useGPS] ✅ 既存位置データでUI即時更新');
+    }
+
+    toast.success('GPS追跡を開始しました');
   }, [isTracking, options]);
 
   const stopTracking = useCallback(() => {
-    // ✅ BUG-GPS-NAV: gpsBackgroundServiceも停止（運行終了時のみ呼ばれる）
-    stopBackgroundGPS();
-    // ✅ BUG-040修正: setIntervalも確実に停止する
-    stopGPSInterval();
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
+    // ✅ BUG-GPS-NAV完全統合: gpsBackgroundServiceを停止（運行終了・ログアウト時のみ呼ぶ）
+    offBackgroundPosition(handlePositionUpdate); // コールバック解除
+    stopBackgroundGPS();                          // watchPosition・setInterval・WakeLock 全停止
     setIsTracking(false);
-    isTrackingRef.current = false; // BUG-020
+    isTrackingRef.current = false;
     setIsPaused(false);
     startTimeRef.current = null;
-    // BUG-020: Screen Wake Lock 解放
-    if (wakeLockRef.current) {
-      wakeLockRef.current.release().catch((e: any) => console.warn('Wake Lock 解放エラー:', e));
-      wakeLockRef.current = null;
-    }
-    console.log('🛑 GPS追跡停止');
+    console.log('[useGPS] 🛑 GPS追跡停止');
     toast.success('GPS追跡を停止しました');
   }, []);
 
@@ -699,69 +601,20 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
     }
   }, []);
 
-  // BUG-020: Page Visibility API — バックグラウンド復帰時にGPS追跡を再開
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && isTrackingRef.current) {
-        console.log('📱 [BUG-020] アプリ復帰検知 — GPS追跡状態を確認中...');
-
-        // watchPosition が生きているか確認（iOSではバックグラウンドで自動解除される）
-        // 既存 watchId をクリアして再登録することで確実に再開する
-        if (watchIdRef.current !== null) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-          console.log('🔄 [BUG-020] 旧 watchPosition をクリア');
-        }
-
-        const gpsOptions: PositionOptions = {
-          enableHighAccuracy: true,
-          timeout: GPS_CONFIG.TIMEOUT,
-          maximumAge: GPS_CONFIG.MAXIMUM_AGE
-        };
-
-        const newWatchId = navigator.geolocation.watchPosition(
-          handlePositionUpdate,
-          handleError,
-          gpsOptions
-        );
-        watchIdRef.current = newWatchId;
-        console.log('✅ [BUG-020] GPS追跡を再開しました - 新 Watch ID:', newWatchId);
-        toast('GPS追跡を再開しました（バックグラウンドからの復帰）', { icon: '📍', duration: 3000 });
-
-        // Screen Wake Lock も再取得（バックグラウンド移行で解放されているため）
-        if ('wakeLock' in navigator && !wakeLockRef.current) {
-          try {
-            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-            console.log('🔒 [BUG-020] Screen Wake Lock 再取得成功');
-          } catch (wlErr) {
-            console.warn('⚠️ [BUG-020] Screen Wake Lock 再取得失敗:', wlErr);
-          }
-        }
-      } else if (document.visibilityState === 'hidden') {
-        console.log('📱 [BUG-020] バックグラウンド移行検知 — GPS追跡中:', isTrackingRef.current);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []); // マウント時1回のみ登録（isTrackingRef で最新状態を参照）
+  // ✅ BUG-GPS-NAV完全統合: visibilitychange は gpsBackgroundService が一元管理
+  // BUG-020の処理はgpsBackgroundService._registerVisibilityHandler() に移行済み
+  // useGPS側での watchPosition 再登録は不要（gpsBackgroundServiceが自動再開する）
 
   useEffect(() => {
     if (options.autoStart) {
       startTracking();
     }
     return () => {
-      stopGPSInterval(); // ✅ Session12
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-      // BUG-020: アンマウント時も Wake Lock 解放
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-        wakeLockRef.current = null;
-      }
+      // ✅ BUG-GPS-NAV完全統合: アンマウント時はコールバック解除のみ
+      // watchPosition・WakeLock は gpsBackgroundService が管理するため解放しない
+      // （画面遷移でアンマウントされてもGPS継続が目的）
+      offBackgroundPosition(handlePositionUpdate);
+      console.log('[useGPS] アンマウント: onBackgroundPosition コールバック解除');
     };
   }, [options.autoStart]);
 
