@@ -21,7 +21,6 @@ import {
   smoothSpeed, 
   isValidCoordinate 
 } from '../utils/helpers';
-import { apiService as mobileApi } from '../services/api';
 import { logGPSEvent } from '../utils/gpsLogger'; // ✅ Log-FE-1
 import {
   startBackgroundGPS,
@@ -602,6 +601,15 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
       setError(null);
       toast.success('GPS追跡を開始しました');
       console.log('🛰️ GPS追跡開始 - Watch ID:', watchId);
+
+      // ✅ BUG-GPS-NAV: gpsBackgroundServiceを起動（画面遷移で破棄されない）
+      if (options.enableLogging && options.operationId) {
+        startBackgroundGPS({
+          operationId: options.operationId,
+          vehicleId: options.vehicleId,
+        }).catch((e: unknown) => console.warn('[useGPS] gpsBackgroundService起動失敗:', e));
+        console.log('[useGPS] ✅ gpsBackgroundService起動');
+      }
       // BUG-020: Screen Wake Lock 取得（iOS画面OFFでJS停止を防ぐ）
       if ('wakeLock' in navigator) {
         try {
@@ -624,6 +632,8 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
   }, [isTracking, options]);
 
   const stopTracking = useCallback(() => {
+    // ✅ BUG-GPS-NAV: gpsBackgroundServiceも停止（運行終了時のみ呼ばれる）
+    stopBackgroundGPS();
     // ✅ BUG-040修正: setIntervalも確実に停止する
     stopGPSInterval();
     if (watchIdRef.current !== null) {
@@ -671,6 +681,22 @@ export const useGPS = (initialOptions: UseGPSOptions = {}): UseGPSReturn => {
 
   const updateOptions = useCallback((newOptions: Partial<UseGPSOptions>) => {
     setOptions(prev => ({ ...prev, ...newOptions }));
+    // ✅ BUG-GPS-NAV: operationId/vehicleId確定時にgpsBackgroundServiceに通知
+    if (newOptions.operationId || newOptions.vehicleId) {
+      const state = getBackgroundGPSState();
+      if (state.isTracking) {
+        updateBackgroundGPSConfig({
+          operationId: newOptions.operationId,
+          vehicleId: newOptions.vehicleId,
+        });
+        console.log('[useGPS] 🔄 gpsBackgroundService設定更新:', newOptions.operationId);
+      } else if (newOptions.operationId) {
+        startBackgroundGPS({
+          operationId: newOptions.operationId,
+          vehicleId: newOptions.vehicleId,
+        }).catch((e: unknown) => console.warn('[useGPS] gpsBackgroundService遅延起動:', e));
+      }
+    }
   }, []);
 
   // BUG-020: Page Visibility API — バックグラウンド復帰時にGPS追跡を再開
