@@ -1858,7 +1858,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const getActivityTypeInfo = (activityType: string) => {
     const typeConfig: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
       LOADING: { label: '積込', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
-      UNLOADING: { label: '積降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      UNLOADING: { label: '荷降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-yellow-100 text-yellow-800' },
@@ -1890,7 +1890,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       PRE_INSPECTION: { label: '運行前点検', icon: <ClipboardCheck className="w-5 h-5" />, className: 'bg-blue-100 text-blue-800' },
       POST_INSPECTION: { label: '運行後点検', icon: <ClipboardCheck className="w-5 h-5" />, className: 'bg-emerald-100 text-emerald-800' },
       LOADING: { label: '積込', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
-      UNLOADING: { label: '積降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      UNLOADING: { label: '荷降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-yellow-100 text-yellow-800' },
@@ -1901,8 +1901,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       WAITING: { label: '待機', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
       LOADING_ARRIVED:    { label: '積込場所 到着', icon: <MapPin />, className: 'bg-blue-100 text-blue-800' },
       LOADING_COMPLETED:  { label: '積込完了',     icon: <CheckCircle />, className: 'bg-indigo-100 text-indigo-800' },
-      UNLOADING_ARRIVED:  { label: '積降場所 到着', icon: <MapPin />, className: 'bg-orange-100 text-orange-800' },
-      UNLOADING_COMPLETED:{ label: '積降完了',     icon: <CheckCircle />, className: 'bg-purple-100 text-purple-800' },
+      UNLOADING_ARRIVED:  { label: '荷降場所 到着', icon: <MapPin />, className: 'bg-orange-100 text-orange-800' },
+      UNLOADING_COMPLETED:{ label: '荷降完了',     icon: <CheckCircle />, className: 'bg-purple-100 text-purple-800' },
     };
 
     return typeConfig[eventType] || {
