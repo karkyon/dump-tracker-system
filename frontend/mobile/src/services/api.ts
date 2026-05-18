@@ -157,8 +157,8 @@ export interface CompleteUnloadingRequest {
  */
 export interface StartLoadingRequest {
   locationId: string;        // 積込場所ID
-  latitude: number;          // GPS緯度
-  longitude: number;         // GPS経度
+  latitude?: number;         // GPS緯度（オプション）
+  longitude?: number;        // GPS経度（オプション）
   accuracy?: number;         // GPS測位精度（メートル）
   startTime?: Date | string; // 開始時刻（省略時は現在時刻）
   notes?: string;            // メモ（オプション）
@@ -168,9 +168,12 @@ export interface StartLoadingRequest {
  * 🆕 積込完了リクエスト
  */
 export interface CompleteLoadingRequest {
-  itemId: string;            // 品目ID（必須）
+  itemId?: string;           // 品目ID（オプション: 積込完了時未確定でも可）
   quantity?: number;         // 積載量（オプション）
   endTime?: Date | string;   // 終了時刻（省略時は現在時刻）
+  latitude?: number;         // GPS緯度（オプション）
+  longitude?: number;        // GPS経度（オプション）
+  accuracy?: number;         // GPS測位精度（メートル）
   notes?: string;            // メモ（オプション）
 }
 
