@@ -749,11 +749,34 @@ export class OperationDetailController {
    */
   updateOperationDetail = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
+    const userRole = req.user!.role;
     const { id } = req.params;
     const rawData = req.body;
 
     if (!id) {
       throw new ValidationError('IDは必須です');
+    }
+
+    // REQ-021: DRIVER は自分の運行・当日の記録のみ修正可
+    if (userRole === 'DRIVER') {
+      const _db = DatabaseService.getInstance();
+      const _detail = await _db.operationDetail.findUnique({
+        where: { id },
+        include: { operations: { select: { driverId: true, actualStartTime: true, plannedStartTime: true } } }
+      });
+      if (_detail) {
+        if (_detail.operations?.driverId !== userId) {
+          return sendError(res, 'この記録を修正する権限がありません', 403, ERROR_CODES.ACCESS_DENIED);
+        }
+        const _opDate = _detail.operations?.actualStartTime || _detail.operations?.plannedStartTime;
+        if (_opDate) {
+          const _jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          const _jstOp  = new Date(new Date(_opDate).getTime() + 9 * 60 * 60 * 1000);
+          if (_jstNow.toISOString().slice(0, 10) !== _jstOp.toISOString().slice(0, 10)) {
+            return sendError(res, '本日の記録のみ修正できます', 403, ERROR_CODES.ACCESS_DENIED);
+          }
+        }
+      }
     }
 
     logger.info('運行詳細更新', { userId, id, rawData });
