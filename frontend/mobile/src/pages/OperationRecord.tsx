@@ -919,18 +919,37 @@ const OperationRecord: React.FC = () => {
   // =====================================
 
   /**
-   * ✅ 既存: 積込開始ハンドラー
+   * REQ-019: 積込開始ハンドラー（積込作業時間計測開始）
+   * POST /trips/:id/loading/start で actualStartTime を記録
    */
   const handleLoadingStart = async () => {
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません');
+      return;
+    }
+    // locationId は operationStore から取得（積込場所到着時に設定済み）
+    const loadingLocationId = operationStore.loadingLocationId
+      ?? (window as any).selectedLoadingLocation?.id
+      ?? undefined;
+    if (!loadingLocationId) {
+      toast.error('積込場所IDが取得できません。場所を再選択してください');
+      return;
+    }
     try {
       setIsSubmitting(true);
-      
-      // TODO: API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
-      toast.success('積込を開始しました');
-      
+      await retryWithBackoff(
+        () => apiService.startLoadingAtLocation(currentOperationId, {
+          locationId: loadingLocationId,
+          latitude: currentPosition?.coords.latitude,
+          longitude: currentPosition?.coords.longitude,
+          accuracy: currentPosition?.coords.accuracy,
+          notes: '積込開始（荷待ち計測開始）',
+        }),
+        3, 1000, '積込開始'
+      );
+      // フェーズはAT_LOADING維持（完了後にTO_UNLOADINGへ）
+      toast.success('積込を開始しました（作業時間の計測を開始）');
       setIsSubmitting(false);
     } catch (error) {
       console.error('積込開始エラー:', error);
@@ -940,18 +959,32 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
-   * ✅ 既存: 積込完了ハンドラー
+   * REQ-019: 積込完了ハンドラー（積込作業時間計測終了）
+   * POST /trips/:id/loading/complete で actualEndTime を記録
+   * → actualStartTime〜actualEndTime の差分が積込作業時間（荷待ち含む）
    */
   const handleLoadingComplete = async () => {
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません');
+      return;
+    }
     try {
       setIsSubmitting(true);
-      
-      // TODO: API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await retryWithBackoff(
+        () => apiService.completeLoadingAtLocation(currentOperationId, {
+          endTime: new Date(),
+          latitude: currentPosition?.coords.latitude,
+          longitude: currentPosition?.coords.longitude,
+          accuracy: currentPosition?.coords.accuracy,
+          notes: '積込完了',
+        }),
+        3, 1000, '積込完了'
+      );
+      // フェーズを積降場所移動中に更新
       setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
-      toast.success('積込が完了しました');
-      
+      operationStore.setPhase('TO_UNLOADING');
+      toast.success('積込が完了しました。積降場所へ移動してください。');
       setIsSubmitting(false);
     } catch (error) {
       console.error('積込完了エラー:', error);

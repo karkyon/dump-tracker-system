@@ -157,7 +157,7 @@ const LoadingConfirmation: React.FC = () => {
       operationStore.setPhase('TO_UNLOADING');
       
       // 🔧 修正: 積込場所情報も更新
-      operationStore.setLoadingLocation(loadingData.locationName);
+      operationStore.setLoadingLocation(loadingData.locationName, loadingData.locationId);  // REQ-019: locationId も保存
 
       // 運行ステータス更新を待つ(少し待機)
       await new Promise(resolve => setTimeout(resolve, 500));
