@@ -235,11 +235,13 @@ const VehicleManagement: React.FC = () => {
       errors.year = '有効な年式を入力してください';
     }
 
-    if (formData.capacity <= 0) {
+    // BUG-054修正: formData.capacity（非同期state旧値）ではなく parsedCapacity で判定
+    if (parsedCapacity <= 0) {
       errors.capacity = '積載量は0より大きい値を入力してください';
     }
 
-    if (formData.currentMileage < 0) {
+    // BUG-054修正: parsedMileage で判定
+    if (parsedMileage < 0) {
       errors.currentMileage = '走行距離は0以上で入力してください';
     }
 
@@ -311,8 +313,13 @@ const VehicleManagement: React.FC = () => {
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
 
+    // BUG-054修正: setFormData は非同期のため payload で parsedCapacity を直接設定
+    const _cap = capacityInput === '' ? 0 : parseFloat(capacityInput) || 0;
+    const _mil = mileageInput  === '' ? 0 : parseFloat(mileageInput)  || 0;
     const payload = {
       ...formData,
+      capacity: _cap,
+      currentMileage: _mil,
       region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
       inspectionExpiry: formData.inspectionExpiry || undefined,  // REQ-007: 空文字を undefined に変換
     };
@@ -330,8 +337,13 @@ const VehicleManagement: React.FC = () => {
   const handleSubmitEdit = async () => {
     if (!validateForm() || !selectedVehicleId) return;
 
+    // BUG-054修正: setFormData は非同期のため payload で parsedCapacity を直接設定
+    const _capE = capacityInput === '' ? 0 : parseFloat(capacityInput) || 0;
+    const _milE = mileageInput  === '' ? 0 : parseFloat(mileageInput)  || 0;
     const payload = {
       ...formData,
+      capacity: _capE,
+      currentMileage: _milE,
       region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
       inspectionExpiry: formData.inspectionExpiry || undefined,  // REQ-007: 空文字を undefined に変換
     };

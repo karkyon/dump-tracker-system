@@ -1539,10 +1539,12 @@ class ReportService {
     const endOfDay   = new Date(Date.UTC(_rptY, _rptM, _rptD, 23, 59, 59, 999) - _rptJstOff);
 
     // ===== DB クエリ =====
+    // BUG-053修正: actualEndTime OR 条件追加（日またぎ運行・startTime null 運行を捕捉）
     const whereClause: any = {
       OR: [
         { actualStartTime: { gte: startOfDay, lte: endOfDay } },
         { plannedStartTime: { gte: startOfDay, lte: endOfDay } },
+        { actualEndTime:   { gte: startOfDay, lte: endOfDay } },
       ],
     };
     if (params?.driverId) whereClause.driverId = params.driverId;
@@ -1630,6 +1632,17 @@ class ReportService {
       return (op.operationDetails ?? []).map((d: any) => ({ ...d, _opCustomerName: opCustomerName }));
     });
     const cycles = buildTripCycles(allDetailsList);
+    // BUG-053修正: デバッグログ（operations/cycles が空の場合の原因特定用）
+    logger.info('[ReportService] generateDailyOperationPDF debug', {
+      operationsCount: operations.length,
+      cyclesCount: cycles.length,
+      targetDate: targetDate.toISOString(),
+      startOfDay: startOfDay.toISOString(),
+      endOfDay: endOfDay.toISOString(),
+      driverIdFilter: params?.driverId ?? 'none',
+      vehicleIdFilter: params?.vehicleId ?? 'none',
+      allDetailsTotal: allDetailsList.reduce((s: number, d: any[]) => s + d.length, 0),
+    });
     // ⑤a: 各サイクルの contractorName を対応する客先名で補完
     // buildTripCyclesはdetailの_opCustomerNameを参照するよう内部で対応済み
 

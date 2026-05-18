@@ -1163,9 +1163,10 @@ class VehicleService {
     if (!data.manufacturer) errors.push('製造元は必須です');
 
     if (data.plateNumber) {
-      const plateRegex = /^[\u3041-\u3096\u30A0-\u30FF\u4E00-\u9FAFa-zA-Z0-9\s\-]{2,20}$/;
+      // BUG-055修正: 数字のみ車番（1507等）・スペースなし形式に対応、最小1文字
+      const plateRegex = /^[\u3041-\u3096\u30A0-\u30FF\u4E00-\u9FAF\uFF10-\uFF19a-zA-Z0-9\s\u3000\-]{1,20}$/;
       if (!plateRegex.test(data.plateNumber)) {
-        errors.push('ナンバープレートの形式が不正です（例: 大阪 500 あ 1234）');
+        errors.push('ナンバープレートの形式が不正です（例: 大阪500あ1234、1507）');
       }
     }
 
@@ -1176,8 +1177,10 @@ class VehicleService {
       }
     }
 
-    if (data.capacity && (data.capacity < 1 || data.capacity > 100)) {
-      errors.push('容量は1-100の範囲で指定してください');
+    // BUG-055修正: capacity 下限を 1→0超 に変更（0.5t等の小数点積載量を許容）
+    if (data.capacity !== undefined && data.capacity !== null
+        && (data.capacity <= 0 || data.capacity > 100)) {
+      errors.push('容量は0より大きく100以下で指定してください');
     }
 
     if (errors.length > 0) {
