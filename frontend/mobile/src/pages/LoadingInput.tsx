@@ -100,6 +100,11 @@ const LoadingInput: React.FC = () => {
   // 地点の contactPerson（担当者名）は客先名ではないため使用しない
   const resolvedClientName = operationStore.customerName || '';
 
+  // REQ-020: 写真撮影
+  const [cargoPhotoUrl, setCargoPhotoUrl] = useState<string | null>(null);
+  const [cargoPhotoBlob, setCargoPhotoBlob] = useState<Blob | null>(null);
+  const cargoInputRef = React.useRef<HTMLInputElement>(null);
+
   // ---- 客先切替ダイアログ ----
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [customerList, setCustomerList] = useState<{ id: string; name: string }[]>([]);
@@ -294,6 +299,16 @@ const LoadingInput: React.FC = () => {
   // 「運行開始」ボタンハンドラー
   // ※ 旧D5の「進む」+ 旧D5aの「運行開始」を統合
   // ============================================================
+  // REQ-020: カメラ/ファイル選択ハンドラー
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCargoPhotoBlob(file);
+    const url = URL.createObjectURL(file);
+    setCargoPhotoUrl(url);
+    toast.success('写真を選択しました');
+  };
+
   const handleStartOperation = async () => {
     // ---- バリデーション ----
     if (
@@ -367,6 +382,22 @@ const LoadingInput: React.FC = () => {
 
       console.log('✅ 積込場所到着記録完了');
       console.log('📦 API応答:', response);
+
+      // REQ-020: 写真が選択されていればアップロード
+      const _detailId = (response as any)?.data?.id ?? (response as any)?.data?.data?.id ?? null;
+      if (cargoPhotoBlob && _detailId) {
+        try {
+          await (apiService as any).uploadOperationDetailImage(
+            _detailId,
+            cargoPhotoBlob,
+            `cargo_${Date.now()}.jpg`
+          );
+          console.log('✅ REQ-020 写真アップロード完了');
+        } catch (photoErr) {
+          console.error('写真アップロード失敗（運行は継続）:', photoErr);
+          toast('写真のアップロードに失敗しましたが運行は記録されました', { icon: '⚠️' });
+        }
+      }
 
       // フェーズ更新: AT_LOADING → TO_UNLOADING
       console.log('🔄 フェーズ更新: AT_LOADING → TO_UNLOADING');
@@ -962,6 +993,54 @@ const LoadingInput: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* REQ-020: 積載物写真撮影セクション */}
+      <div style={{
+        padding: '12px 16px',
+        borderTop: '1px solid #e5e7eb',
+        background: '#f9fafb'
+      }}>
+        <p style={{ margin: '0 0 8px', fontSize: '14px', fontWeight: 'bold', color: '#374151' }}>📷 積載物写真（任意）</p>
+        {cargoPhotoUrl ? (
+          <div style={{ position: 'relative', marginBottom: '8px' }}>
+            <img
+              src={cargoPhotoUrl}
+              alt="積載物"
+              style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '8px', border: '2px solid #10b981' }}
+            />
+            <button
+              onClick={() => { setCargoPhotoUrl(null); setCargoPhotoBlob(null); }}
+              style={{
+                position: 'absolute', top: '6px', right: '6px',
+                background: 'rgba(0,0,0,0.6)', color: 'white',
+                border: 'none', borderRadius: '50%', width: '28px', height: '28px',
+                fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >✕</button>
+          </div>
+        ) : null}
+        <input
+          ref={cargoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handlePhotoChange}
+          style={{ display: 'none' }}
+        />
+        <button
+          onClick={() => cargoInputRef.current?.click()}
+          style={{
+            width: '100%', padding: '10px',
+            fontSize: '14px', fontWeight: 'bold',
+            background: cargoPhotoUrl ? '#f0fdf4' : '#fff',
+            border: `1.5px solid ${cargoPhotoUrl ? '#10b981' : '#d1d5db'}`,
+            borderRadius: '8px', cursor: 'pointer',
+            color: cargoPhotoUrl ? '#065f46' : '#6b7280'
+          }}
+        >
+          {cargoPhotoUrl ? '📷 写真を撮り直す' : '📷 写真を撮影する'}
+        </button>
+      </div>
 
       {/* ===== フッター（ボタン）===== */}
       <footer

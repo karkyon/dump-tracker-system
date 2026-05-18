@@ -20,6 +20,7 @@
  */
 
 import { Router } from 'express';
+import uploadMiddleware from '../middleware/upload';  // REQ-020
 
 // 🎯 Phase 1完了基盤の活用
 import {
@@ -315,6 +316,15 @@ router.put('/timeline-event/:eventId', requireRole(['MANAGER', 'ADMIN'] as any),
  *         description: 権限エラー
  */
 router.delete('/:id', requireAdmin, validateId, operationDetailController.deleteOperationDetail);
+
+// REQ-020: 積載物写真アップロード
+router.post(
+  '/:id/image',
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as any),
+  validateId,
+  uploadMiddleware.imageUpload.single('image'),
+  operationDetailController.uploadImage
+);
 
 /**
  * @swagger

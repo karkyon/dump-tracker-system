@@ -789,7 +789,7 @@ export class OperationDetailController {
     const allowedFields = [
       'sequenceNumber', 'activityType', 'locationId', 'itemId',
       'plannedTime', 'actualStartTime', 'actualEndTime',
-      'quantityTons', 'notes',
+      'quantityTons', 'notes', 'imageUrl',  // REQ-020
       'latitude', 'longitude', 'altitude', 'gpsAccuracyMeters', 'gpsRecordedAt'
     ];
 
@@ -1005,6 +1005,28 @@ export class OperationDetailController {
     logger.info('一括作業操作完了', { userId, results });
 
     return sendSuccess(res, results);
+  });
+
+  /**
+   * REQ-020: 積載物写真アップロード
+   * POST /operation-details/:id/image
+   * multer imageUpload.single('image') で処理済み
+   */
+  uploadImage = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    if (!id) throw new ValidationError('IDは必須です');
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) throw new ValidationError('画像ファイルが必要です');
+
+    // ファイルのURLパスを生成（/uploads/images/ 以下の相対パス）
+    const imageUrl = `/uploads/images/${file.filename}`;
+
+    logger.info('REQ-020 積載物写真アップロード', { id, filename: file.filename, imageUrl });
+
+    const updated = await this.operationDetailService.update(id, { imageUrl } as any);
+    if (!updated) return sendNotFound(res, '運行詳細が見つかりません');
+
+    return sendSuccess(res, { imageUrl }, '写真をアップロードしました');
   });
 
   /**

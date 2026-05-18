@@ -1903,6 +1903,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       LOADING_COMPLETED:  { label: '積込完了',     icon: <CheckCircle />, className: 'bg-indigo-100 text-indigo-800' },
       UNLOADING_ARRIVED:  { label: '荷降場所 到着', icon: <MapPin />, className: 'bg-orange-100 text-orange-800' },
       UNLOADING_COMPLETED:{ label: '荷降完了',     icon: <CheckCircle />, className: 'bg-purple-100 text-purple-800' },
+      // REQ-020: imageUrl は eventType ではないがフィールドとして表示
     };
 
     return typeConfig[eventType] || {
@@ -2655,6 +2656,19 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   {event.notes && (
                                     <div className="text-sm text-gray-600 mt-2">
                                       <span className="font-medium">備考:</span> {event.notes}
+                                    </div>
+                                  )}
+                                  {/* REQ-020: 積載物写真 */}
+                                  {(event as any).imageUrl && (
+                                    <div className="mt-2">
+                                      <p className="text-xs text-gray-500 mb-1">📷 積載物写真</p>
+                                      <img
+                                        src={(event as any).imageUrl}
+                                        alt="積載物写真"
+                                        className="rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                        style={{ maxWidth: '200px', maxHeight: '150px', objectFit: 'cover' }}
+                                        onClick={() => window.open((event as any).imageUrl, '_blank')}
+                                      />
                                     </div>
                                   )}
                                 </div>

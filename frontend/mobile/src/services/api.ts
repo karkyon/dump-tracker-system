@@ -1493,6 +1493,27 @@ class APIServiceClass {
     }
   }
 
+  // REQ-020: 積載物写真アップロード
+  async uploadOperationDetailImage(
+    detailId: string,
+    imageBlob: Blob,
+    filename: string = 'cargo.jpg'
+  ): Promise<APIResponse<{ imageUrl: string }>> {
+    const form = new FormData();
+    form.append('image', imageBlob, filename);
+    try {
+      const response = await this.axiosInstance.post<APIResponse<{ imageUrl: string }>>(
+        `/operation-details/${detailId}/image`,
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('写真アップロードエラー:', error);
+      throw error;
+    }
+  }
+
   // REQ-017: 客先新規作成
   async createCustomer(data: { name: string; reading?: string; address?: string; phone?: string; notes?: string }): Promise<APIResponse<any>> {
     try {

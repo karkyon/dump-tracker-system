@@ -267,6 +267,7 @@ model OperationDetail {
   altitude          Decimal?  @db.Decimal(8, 2)
   gpsAccuracyMeters Decimal?  @map("gps_accuracy_meters") @db.Decimal(5, 2)
   gpsRecordedAt     DateTime? @map("gps_recorded_at") @db.Timestamptz(6)
+  imageUrl          String?   @map("image_url") @db.VarChar(500)  // REQ-020: 積載物写真URL
   createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
   items             Item?     @relation(fields: [itemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
