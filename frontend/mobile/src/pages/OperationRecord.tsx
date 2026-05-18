@@ -941,9 +941,11 @@ const OperationRecord: React.FC = () => {
       await retryWithBackoff(
         () => apiService.startLoadingAtLocation(currentOperationId, {
           locationId: loadingLocationId,
-          latitude: currentPosition?.coords.latitude,
-          longitude: currentPosition?.coords.longitude,
-          accuracy: currentPosition?.coords.accuracy,
+          ...(currentPosition ? {
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy,
+          } : {}),
           notes: '積込開始（荷待ち計測開始）',
         }),
         3, 1000, '積込開始'
@@ -974,9 +976,6 @@ const OperationRecord: React.FC = () => {
       await retryWithBackoff(
         () => apiService.completeLoadingAtLocation(currentOperationId, {
           endTime: new Date(),
-          latitude: currentPosition?.coords.latitude,
-          longitude: currentPosition?.coords.longitude,
-          accuracy: currentPosition?.coords.accuracy,
           notes: '積込完了',
         }),
         3, 1000, '積込完了'

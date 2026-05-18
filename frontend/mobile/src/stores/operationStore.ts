@@ -40,6 +40,7 @@ export interface OperationState {
   breakCount: number;                              // 🔧 休憩回数（永続化対象）(2026-02-01)
   previousPhase: OperationPhase | null; // 🆕 休憩前のフェーズを記憶 (2025-12-28)
   loadingLocation: string | null;
+  loadingLocationId: string | null;   // REQ-019: 積込場所ID
   loadingLocationLat: number | null;   // 🆕 積込場所緯度
   loadingLocationLng: number | null;   // 🆕 積込場所経度
   unloadingLocation: string | null;
@@ -76,7 +77,7 @@ export interface OperationState {
   setPhase: (phase: OperationPhase) => void;
   savePreviousPhase: (phase: OperationPhase) => void; // 🆕 休憩前フェーズ保存 (2025-12-28)
   incrementBreakCount: () => void;              // 🔧 休憩回数インクリメント (2026-02-01)
-  setLoadingLocation: (location: string) => void;
+  setLoadingLocation: (location: string, locationId?: string | null) => void;  // REQ-019
   setLoadingLocationWithCoords: (location: string, lat: number, lng: number) => void; // 🆕
   setUnloadingLocation: (location: string, locationId?: string) => void;
   setCustomerInfo: (info: { customerId: string; customerName: string }) => void;
@@ -111,6 +112,7 @@ export const useOperationStore = create<OperationState>()(
       breakCount: 0,
       previousPhase: null,
       loadingLocation: null,
+      loadingLocationId: null,   // REQ-019
       loadingLocationLat: null,   // 🆕
       loadingLocationLng: null,   // 🆕
       unloadingLocation: null,
@@ -236,10 +238,10 @@ export const useOperationStore = create<OperationState>()(
         set({ breakCount: newCount });
       },
 
-      // 積込場所設定
-      setLoadingLocation: (location) => {
-        console.log('[Operation Store] 📍 SET LOADING LOCATION:', location);
-        set({ loadingLocation: location });
+      // 積込場所設定（REQ-019: locationId も保存）
+      setLoadingLocation: (location, locationId) => {
+        console.log('[Operation Store] 📍 SET LOADING LOCATION:', location, locationId ?? '(id省略)');
+        set({ loadingLocation: location, loadingLocationId: locationId ?? null });
         const currentState = get();
         console.log('[Operation Store] 📊 Full state after setLoadingLocation:', currentState);
       },
@@ -298,6 +300,7 @@ export const useOperationStore = create<OperationState>()(
           breakCount: 0,
           previousPhase: null,
           loadingLocation: null,
+          loadingLocationId: null,
           customerId: null,
           customerName: null,
           loadingLocationLat: null,   // 🆕
@@ -335,6 +338,7 @@ export const useOperationStore = create<OperationState>()(
           breakCount: state.breakCount,            // 🔧 休憩回数も永続化 (2026-02-01)
           previousPhase: state.previousPhase, // 🆕 休憩前フェーズも永続化 (2025-12-28)
           loadingLocation: state.loadingLocation,
+          loadingLocationId: state.loadingLocationId,  // REQ-019
           customerId: state.customerId,
           customerName: state.customerName,
           totalDistanceKm: state.totalDistanceKm, // ✅ Fix-S11-8
