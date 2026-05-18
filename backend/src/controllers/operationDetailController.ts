@@ -17,7 +17,7 @@ import {
 } from '../models/OperationDetailModel';
 import type { AuthenticatedRequest } from '../types/auth';
 import type { PaginationQuery } from '../types/common';
-import { ValidationError } from '../utils/errors';
+import { ValidationError, AuthorizationError } from '../utils/errors';
 import logger from '../utils/logger';
 import { sendNotFound, sendSuccess } from '../utils/response';
 // ✅ 修正: new PrismaClient() → DatabaseService.getInstance() に統一
