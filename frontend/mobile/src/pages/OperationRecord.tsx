@@ -1503,7 +1503,7 @@ const OperationRecord: React.FC = () => {
                 { val: operation.driverName || '-', lbl: '運転手' },
                 { val: operation.vehicleName || '-', lbl: '車番' },
                 { val: `${detailActivities.filter(a => ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積込回数' },
-                { val: `${detailActivities.filter(a => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '積降回数' },
+                { val: `${detailActivities.filter(a => ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(a.activityType)).length}回`, lbl: '荷降回数' },
               ].map(({ val, lbl }) => (
                 <div key={lbl} style={{ background: '#f9fafb', padding: '5px 8px', textAlign: 'center' }}>
                   <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{val}</div>
@@ -1558,7 +1558,7 @@ const OperationRecord: React.FC = () => {
                 const isB = ['BREAK','BREAK_START','BREAK_END'].includes(act.activityType);
                 const LABELS: Record<string, string> = {
                   LOADING: '積込', LOADING_START: '積込到着', LOADING_COMPLETE: '積込完了',
-                  UNLOADING: '積降', UNLOADING_START: '積降到着', UNLOADING_COMPLETE: '積降完了',
+                  UNLOADING: '荷降', UNLOADING_START: '荷降到着', UNLOADING_COMPLETE: '荷降完了',
                   FUELING: '給油', FUEL: '給油',
                   BREAK: '休憩', BREAK_START: '休憩開始', BREAK_END: '休憩終了',
                 };

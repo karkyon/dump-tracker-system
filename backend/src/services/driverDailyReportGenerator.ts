@@ -161,7 +161,7 @@ function _buildOpCols(w: number) {
   return [
     { label: '業　者　名',             cw: Math.round(w * 0.10) },
     { label: '積　込　場　所',          cw: Math.round(w * 0.14) },
-    { label: '積　降　場　所',          cw: Math.round(w * 0.14) },
+    { label: '荷　降　場　所',          cw: Math.round(w * 0.14) },
     { label: '品　名',                 cw: Math.round(w * 0.08) },
     { label: '台数',                   cw: Math.round(w * 0.05) },
     { label: 'トン数',                 cw: Math.round(w * 0.06) },
