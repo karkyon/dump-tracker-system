@@ -2,7 +2,7 @@
 // 客先マスタ ルート
 
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, requireRole } from '../middleware/auth';
 import { UserRole } from '@prisma/client';
 import {
   getCustomers,
@@ -21,9 +21,10 @@ router.use(authenticateToken());
 router.get('/', getCustomers);
 router.get('/:id', getCustomerById);
 
-// 作成・更新・削除（ADMIN / MANAGER のみ）
-router.post('/', createCustomer);
-router.put('/:id', updateCustomer);
-router.delete('/:id', deleteCustomer);
+// REQ-017: 客先作成は DRIVER も可能（モバイルから新規登録対応）
+router.post('/', requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]), createCustomer);
+// 更新・削除は MANAGER / ADMIN のみ
+router.put('/:id', requireRole(['MANAGER', 'ADMIN'] as UserRole[]), updateCustomer);
+router.delete('/:id', requireRole(['MANAGER', 'ADMIN'] as UserRole[]), deleteCustomer);
 
 export default router;

@@ -1490,6 +1490,17 @@ class APIServiceClass {
     }
   }
 
+  // REQ-017: 客先新規作成
+  async createCustomer(data: { name: string; reading?: string; address?: string; phone?: string; notes?: string }): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.post<APIResponse<any>>('/customers', data);
+      return response.data;
+    } catch (error) {
+      console.error('客先作成エラー:', error);
+      throw error;
+    }
+  }
+
   async getCustomers(): Promise<APIResponse<any>> {
     try {
       const response = await this.axiosInstance.get<APIResponse<any>>(

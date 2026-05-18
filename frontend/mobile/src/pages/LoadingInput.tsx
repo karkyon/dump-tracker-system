@@ -104,6 +104,10 @@ const LoadingInput: React.FC = () => {
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [customerList, setCustomerList] = useState<{ id: string; name: string }[]>([]);
   const [isCustomerChanging, setIsCustomerChanging] = useState(false);
+  // REQ-017: 新規客先登録フォーム
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
 
   // ---- 品目マスタ ----
   const [items, setItems] = useState<Item[]>([]);
@@ -164,6 +168,7 @@ const LoadingInput: React.FC = () => {
         setFormData(prev => ({ ...prev, clientName: customerName }));
         toast.success(`客先を「${customerName}」に変更しました`);
         setShowCustomerDialog(false);
+        setShowNewCustomerForm(false);
       } else {
         toast.error(res.message || '客先の変更に失敗しました');
       }
@@ -171,6 +176,30 @@ const LoadingInput: React.FC = () => {
       toast.error('客先の変更に失敗しました');
     } finally {
       setIsCustomerChanging(false);
+    }
+  };
+
+  // REQ-017: 新規客先登録ハンドラー
+  const handleCreateCustomer = async () => {
+    if (!newCustomerName.trim()) { toast.error('客先名を入力してください'); return; }
+    setIsCreatingCustomer(true);
+    try {
+      const res = await (apiService as any).createCustomer({ name: newCustomerName.trim() });
+      const created = res?.data ?? res;
+      if (created?.id) {
+        // 作成した客先を即選択
+        await handleChangeCustomer(created.id, created.name);
+        setCustomerList(prev => [...prev, { id: created.id, name: created.name }]);
+        setNewCustomerName('');
+        setShowNewCustomerForm(false);
+        toast.success(`「${created.name}」を登録しました`);
+      } else {
+        toast.error('登録に失敗しました');
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || '客先登録に失敗しました');
+    } finally {
+      setIsCreatingCustomer(false);
     }
   };
 
@@ -869,8 +898,59 @@ const LoadingInput: React.FC = () => {
                 ))}
               </div>
             )}
+            {/* REQ-017: 新規客先登録フォーム */}
+            {showNewCustomerForm ? (
+              <div style={{ marginTop: '12px', borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 'bold', color: '#374151' }}>＋ 新規客先を登録</p>
+                <input
+                  type="text"
+                  value={newCustomerName}
+                  onChange={e => setNewCustomerName(e.target.value)}
+                  placeholder="客先名を入力"
+                  style={{
+                    width: '100%', padding: '10px', fontSize: '15px',
+                    border: '1.5px solid #3b82f6', borderRadius: '8px',
+                    boxSizing: 'border-box', marginBottom: '8px'
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={handleCreateCustomer}
+                    disabled={isCreatingCustomer || !newCustomerName.trim()}
+                    style={{
+                      flex: 1, padding: '10px', fontSize: '14px',
+                      background: isCreatingCustomer ? '#93c5fd' : '#3b82f6',
+                      color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold'
+                    }}
+                  >
+                    {isCreatingCustomer ? '登録中...' : '登録して選択'}
+                  </button>
+                  <button
+                    onClick={() => { setShowNewCustomerForm(false); setNewCustomerName(''); }}
+                    style={{
+                      padding: '10px 16px', fontSize: '14px',
+                      background: '#f3f4f6', border: 'none', borderRadius: '8px', cursor: 'pointer'
+                    }}
+                  >
+                    戻る
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowNewCustomerForm(true)}
+                style={{
+                  marginTop: '12px', width: '100%', padding: '10px',
+                  fontSize: '14px', background: '#f0f9ff',
+                  border: '1.5px dashed #3b82f6', borderRadius: '8px',
+                  cursor: 'pointer', color: '#2563eb', fontWeight: 'bold'
+                }}
+              >
+                ＋ 新規客先を追加
+              </button>
+            )}
             <button
-              onClick={() => setShowCustomerDialog(false)}
+              onClick={() => { setShowCustomerDialog(false); setShowNewCustomerForm(false); setNewCustomerName(''); }}
               style={{
                 marginTop: '16px', width: '100%', padding: '12px',
                 fontSize: '15px', background: '#e0e0e0', border: 'none',
