@@ -766,14 +766,14 @@ export class OperationDetailController {
       });
       if (_detail) {
         if (_detail.operations?.driverId !== userId) {
-          return sendError(res, 'この記録を修正する権限がありません', 403, ERROR_CODES.ACCESS_DENIED);
+          throw new AuthorizationError('この記録を修正する権限がありません');
         }
         const _opDate = _detail.operations?.actualStartTime || _detail.operations?.plannedStartTime;
         if (_opDate) {
           const _jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
           const _jstOp  = new Date(new Date(_opDate).getTime() + 9 * 60 * 60 * 1000);
           if (_jstNow.toISOString().slice(0, 10) !== _jstOp.toISOString().slice(0, 10)) {
-            return sendError(res, '本日の記録のみ修正できます', 403, ERROR_CODES.ACCESS_DENIED);
+            throw new AuthorizationError('本日の記録のみ修正できます');
           }
         }
       }
