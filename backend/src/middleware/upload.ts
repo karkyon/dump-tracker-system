@@ -101,8 +101,8 @@ const ensureDirectoryExists = (dirPath: string): void => {
       logger.info(`ディレクトリ作成完了: ${dirPath}`);
     }
   } catch (error) {
-    logger.error(`ディレクトリ作成失敗: ${dirPath}`, error);
-    throw new SystemError(`ディレクトリ作成に失敗しました: ${dirPath}`);
+    // throw せず警告のみ: ルートimport失敗を防ぐ
+    logger.warn(`ディレクトリ作成失敗（継続）: ${dirPath}`, error);
   }
 };
 
