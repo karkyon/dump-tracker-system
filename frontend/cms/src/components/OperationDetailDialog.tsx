@@ -1484,9 +1484,17 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       
       if (response.success && response.data) {
         let gpsData: GpsRecord[] = [];
-        const data: any = response.data;
+        // BUG-013対応: 二重ネスト解消
+        // response.data が { success, data: Array } の場合は data.data を使う
+        const rawData: any = response.data;
+        const data: any = Array.isArray(rawData)
+          ? rawData
+          : Array.isArray(rawData?.data)
+          ? rawData.data
+          : rawData;
         
         console.log('🔍 [GPS Debug] Processing response data...');
+        console.log('🔍 [GPS Debug] rawData:', rawData);
         console.log('🔍 [GPS Debug] Is data array?', Array.isArray(data));
         
         // レスポンス構造の解析
