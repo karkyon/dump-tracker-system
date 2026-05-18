@@ -156,6 +156,24 @@ export class ExpressApp {
     // 🗜️ 圧縮ミドルウェア
     this.app.use(compression());
 
+    // 📁 REQ-020: アップロードファイル静的配信（uploads/images/）
+    // 画像URLパス /uploads/images/xxx.jpg でブラウザからアクセス可能にする
+    const uploadsPath = path.join(__dirname, '../uploads');
+    try {
+      const fsSync = require('fs');
+      if (!fsSync.existsSync(uploadsPath)) {
+        fsSync.mkdirSync(uploadsPath, { recursive: true });
+        fsSync.mkdirSync(path.join(uploadsPath, 'images'), { recursive: true });
+        logger.info('📁 uploads ディレクトリを作成しました');
+      }
+    } catch (e) { /* ディレクトリ作成失敗は無視 */ }
+    this.app.use('/uploads', express.static(uploadsPath, {
+      maxAge: '7d',
+      etag: true,
+      dotfiles: 'deny',
+    }));
+    logger.info('✅ /uploads 静的配信設定完了');
+
     // 📝 HTTPリクエストログ（Morgan）
     this.app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
       stream: {
