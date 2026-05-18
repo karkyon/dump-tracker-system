@@ -152,9 +152,11 @@ const LoadingConfirmation: React.FC = () => {
       console.log('✅ 積込場所到着記録完了');
       console.log('📦 API応答:', response);
 
-      // 🔧 修正: operationStoreのフェーズを TO_UNLOADING に更新
-      console.log('🔄 フェーズ更新: AT_LOADING → TO_UNLOADING');
-      operationStore.setPhase('TO_UNLOADING');
+      // REQ-019修正: 積込場所到着 → AT_LOADING に遷移
+      // (OperationRecord.tsx で「積込開始」「積込完了」ボタンを表示するため)
+      // TO_UNLOADING への遷移は OperationRecord.tsx の handleLoadingComplete で実施
+      console.log('🔄 フェーズ更新: TO_LOADING → AT_LOADING（積込場所到着）');
+      operationStore.setPhase('AT_LOADING');
       
       // 🔧 修正: 積込場所情報も更新
       operationStore.setLoadingLocation(loadingData.locationName, loadingData.locationId);  // REQ-019: locationId も保存
