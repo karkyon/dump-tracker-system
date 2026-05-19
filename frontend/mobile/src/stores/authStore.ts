@@ -106,8 +106,7 @@ export const useAuthStore = create<AuthState>()(
             loading: false,
             error: errorMessage
           });
-          
-          toast.error(errorMessage);
+          // toast.error はLogin.tsx useEffect(error)が一元担当するためここでは出さない
           throw new Error(errorMessage);
         }
       },

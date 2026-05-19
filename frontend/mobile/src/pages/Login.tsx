@@ -136,7 +136,7 @@ const Login: React.FC = () => {
       
     } catch (err: any) {
       console.error('Login error:', err);
-      toast.error(err.message || 'ログインに失敗しました');
+      // toast.error はuseEffect(error)が担当するため削除（多重toast防止）
     } finally {
       setIsLoading(false);
     }

@@ -314,9 +314,13 @@ class APIServiceClass {
             // refreshToken失敗 または なし → operationStoreを保持したままログイン画面へ
             // ※ operation-store(localStorage)はクリアしない。ログイン後に運行継続できるようにする。
             console.error('[API] 認証失敗 → ログイン画面へ (operationStore保持)');
-            toast.error('セッションの有効期限が切れました。再ログインが必要です。', { duration: 5000 });
-            this.clearToken();
-            setTimeout(() => { window.location.href = '/login'; }, 1200);
+            // ログインAPIへのリクエスト時はセッション切れtoastを出さない（多重toast防止）
+            const isLoginRequest = originalRequest?.url?.includes('/auth/login');
+            if (!isLoginRequest) {
+              toast.error('セッションの有効期限が切れました。再ログインが必要です。', { duration: 5000 });
+              this.clearToken();
+              setTimeout(() => { window.location.href = '/login'; }, 1200);
+            }
           } else if (status === 403) {
             toast.error('権限エラー: この操作は許可されていません');
           } else if (status === 404) {
