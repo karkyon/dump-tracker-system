@@ -10,6 +10,7 @@ import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import apiService from '../services/api';
+import { getBackgroundGPSState } from '../services/gpsBackgroundService';
 import { useOperationStore } from '../stores/operationStore';
 
 const RefuelRecord: React.FC = () => {
@@ -97,22 +98,33 @@ const RefuelRecord: React.FC = () => {
       // 🆕 給油時走行距離の数値変換
       const mileageAtRefuelNum = mileageAtRefuel ? parseInt(mileageAtRefuel.replace(/,/g, ''), 10) : undefined;
 
-      // 🆕 GPS座標取得
+      // 🆕 GPS座標取得: BGサービスの取得済み座標を使用（即時・タイムアウトなし）
       let gpsCoords: { latitude?: number; longitude?: number; accuracy?: number } = {};
       try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 5000
+        const bgState = getBackgroundGPSState();
+        if (bgState.lastPosition) {
+          gpsCoords = {
+            latitude: bgState.lastPosition.coords.latitude,
+            longitude: bgState.lastPosition.coords.longitude,
+            accuracy: bgState.lastPosition.coords.accuracy
+          };
+          console.log('📍 [RefuelRecord] BGサービス座標使用:', gpsCoords);
+        } else {
+          // フォールトトレラント: BGサービス未起動時のみ直接取得
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 10000,
+              maximumAge: 60000
+            });
           });
-        });
-        gpsCoords = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        };
-        console.log('📍 GPS座標取得成功:', gpsCoords);
+          gpsCoords = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          };
+          console.log('📍 [RefuelRecord] 直接取得GPS座標:', gpsCoords);
+        }
       } catch (gpsError) {
         console.warn('⚠️ GPS座標取得失敗（記録は続行）:', gpsError);
       }

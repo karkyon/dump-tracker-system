@@ -297,19 +297,31 @@ const PostTripInspection: React.FC = () => {
       // 🆕 GPS座標取得
       let endPosition: { latitude: number; longitude: number; accuracy?: number } | undefined;
       try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 15000,   // ✅ BUG-033: GPS_CONFIG.TIMEOUT と同一値
-            maximumAge: 0     // ✅ BUG-033: キャッシュ無効（Fix-5A と同一設定）
+        // BGサービスの取得済み座標を使用（即時・タイムアウトなし）
+        const bgState = getBackgroundGPSState();
+        if (bgState.lastPosition) {
+          endPosition = {
+            latitude: bgState.lastPosition.coords.latitude,
+            longitude: bgState.lastPosition.coords.longitude,
+            accuracy: bgState.lastPosition.coords.accuracy
+          };
+          console.log('[D8] 📍 BGサービス座標使用:', endPosition);
+        } else {
+          // フォールトトレラント: BGサービス未起動時のみ直接取得
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 10000,
+              maximumAge: 60000
+            });
           });
-        });
-        endPosition = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        };
-        console.log('[D8] 📍 GPS座標取得成功:', endPosition);
+          endPosition = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          };
+          console.log('[D8] 📍 直接取得GPS座標:', endPosition);
+        }
       } catch (gpsError) {
         console.warn('[D8] ⚠️ GPS座標取得失敗（運行終了は続行）:', gpsError);
       }
