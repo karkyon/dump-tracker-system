@@ -213,6 +213,7 @@ interface OperationDetailDialogProps {
   operationId: string;
   isOpen: boolean;
   onClose: () => void;
+  initialOperation?: any;  // 一覧から渡される初期データ（vehicles/driver補完用）
 }
 
 /**
@@ -952,7 +953,8 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
 const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   operationId,
   isOpen,
-  onClose
+  onClose,
+  initialOperation
 }) => {
   console.log('[OperationDetailDialog] Rendering:', { operationId, isOpen });
 
