@@ -19,6 +19,7 @@ import {
   PlayCircle 
 } from 'lucide-react';
 import apiService from '../services/api';
+import { getBackgroundGPSState } from '../services/gpsBackgroundService';
 import { useOperationStore } from '../stores/operationStore';
 
 /**
@@ -118,14 +119,25 @@ const LoadingConfirmation: React.FC = () => {
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
-      // GPS位置を取得
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+      // GPS位置取得: バックグラウンドGPSの最新座標を使用
+      const bgState = getBackgroundGPSState();
+      let position: GeolocationPosition;
+      if (bgState.lastPosition) {
+        position = bgState.lastPosition;
+        console.log('[LoadingConfirmation] ✅ BGサービス座標使用:', {
+          lat: position.coords.latitude, lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
         });
-      });
+      } else {
+        console.warn('[LoadingConfirmation] BGサービス座標なし → 直接取得');
+        position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: false,
+            timeout: 10000,
+            maximumAge: 60000,
+          });
+        });
+      }
 
       console.log('🚛 積込場所到着記録API呼び出し開始');
       console.log('📍 運行ID:', currentOperationId);

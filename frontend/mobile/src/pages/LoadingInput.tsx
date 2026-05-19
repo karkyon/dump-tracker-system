@@ -19,6 +19,7 @@ import {
   CheckSquare
 } from 'lucide-react';
 import apiService from '../services/api';
+import { getBackgroundGPSState } from '../services/gpsBackgroundService';
 import { useOperationStore } from '../stores/operationStore';
 
 /** システム設定APIから大区分表示順を取得 */
@@ -349,14 +350,28 @@ const LoadingInput: React.FC = () => {
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
-      // GPS位置取得
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+      // GPS位置取得: バックグラウンドGPSの最新座標を使用
+      // gpsBackgroundServiceが既に3秒ごとに取得・保持しているため再取得不要
+      const bgState = getBackgroundGPSState();
+      let position: GeolocationPosition;
+      if (bgState.lastPosition) {
+        // ✅ 通常ケース: バックグラウンドサービスの取得済み最新座標を使用
+        position = bgState.lastPosition;
+        console.log('[LoadingInput] ✅ BGサービス座標使用:', {
+          lat: position.coords.latitude, lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
         });
-      });
+      } else {
+        // ⚠️ フォールトトレラント: BGサービス未起動時のみ直接取得
+        console.warn('[LoadingInput] BGサービス座標なし → 直接取得');
+        position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: false,
+            timeout: 10000,
+            maximumAge: 60000,
+          });
+        });
+      }
 
       console.log('🚛 積込場所到着記録API呼び出し開始');
       console.log('📍 運行ID:', currentOperationId);
