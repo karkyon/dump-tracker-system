@@ -2188,22 +2188,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             : '-'}
                         </p>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">予定開始時刻</p>
-                        <p className="font-medium">
-                          {operation.plannedStartTime
-                            ? new Date(operation.plannedStartTime).toLocaleString('ja-JP')
-                            : '-'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">予定終了時刻</p>
-                        <p className="font-medium">
-                          {operation.plannedEndTime
-                            ? new Date(operation.plannedEndTime).toLocaleString('ja-JP')
-                            : '-'}
-                        </p>
-                      </div>
+                      {/* 予定開始/終了時刻は不要のため削除 */}
                       <div>
                         <p className="text-sm text-gray-500 mb-1">総走行距離</p>
                         <div className="flex items-center gap-2">
@@ -2396,7 +2381,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         // isArrived=false の場合: items・重量・手書き備考を表示
                         // ─────────────────────────────────────────────
                         // 自動生成されたデフォルト備考 → 表示しない
-                        const AUTO_NOTES = ['積込完了', '積降完了'];
+                        const AUTO_NOTES = ['積込完了', '荷降完了'];
 
                         const renderSubRow = (
                           subEvent: OperationDebugTimelineEvent,
@@ -2515,7 +2500,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   )}
                                   {group.completedEvent && renderSubRow(
                                     group.completedEvent,
-                                    isLoading ? '積込完了' : '積降完了',
+                                    isLoading ? '積込完了' : '荷降完了',
                                     completedDot,
                                     false,
                                     false,
@@ -2666,19 +2651,34 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                       <span className="font-medium">備考:</span> {event.notes}
                                     </div>
                                   )}
-                                  {/* REQ-020: 積載物写真 */}
-                                  {(event as any).imageUrl && (
-                                    <div className="mt-2">
-                                      <p className="text-xs text-gray-500 mb-1">📷 積載物写真</p>
-                                      <img
-                                        src={(event as any).imageUrl}
-                                        alt="積載物写真"
-                                        className="rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-                                        style={{ maxWidth: '200px', maxHeight: '150px', objectFit: 'cover' }}
-                                        onClick={() => window.open((event as any).imageUrl, '_blank')}
-                                      />
-                                    </div>
-                                  )}
+                                  {/* REQ-020: 積載物写真サムネ + 拡大モーダル */}
+                                  {(event as any).imageUrl && (() => {
+                                    const imgUrl = (event as any).imageUrl as string;
+                                    const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${window.location.origin}${imgUrl}`;
+                                    return (
+                                      <div className="mt-2">
+                                        <p className="text-xs text-gray-500 mb-1">📷 積載物写真</p>
+                                        <img
+                                          src={fullUrl}
+                                          alt="積載物写真"
+                                          className="rounded-lg border border-gray-200 cursor-zoom-in hover:opacity-90 transition-opacity shadow-sm"
+                                          style={{ maxWidth: '180px', maxHeight: '130px', objectFit: 'cover', display: 'block' }}
+                                          onClick={() => {
+                                            const modal = document.createElement('div');
+                                            modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+                                            const img = document.createElement('img');
+                                            img.src = fullUrl;
+                                            img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;box-shadow:0 4px 32px rgba(0,0,0,0.5)';
+                                            img.alt = '積載物写真（拡大）';
+                                            modal.appendChild(img);
+                                            modal.onclick = () => document.body.removeChild(modal);
+                                            document.body.appendChild(modal);
+                                          }}
+                                        />
+                                        <p className="text-xs text-gray-400 mt-1">クリックで拡大</p>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             </div>

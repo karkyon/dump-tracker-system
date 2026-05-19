@@ -228,7 +228,7 @@ const OperationRecord: React.FC = () => {
     }
   }, [isTracking, startTracking]);
 
-  // 🆕 距離検知: 積込/積降場所から離れたら自動フェーズ移行
+  // 🆕 距離検知: 積込/荷降場所から離れたら自動フェーズ移行
   const departureAlertFiredRef = React.useRef(false);
   useEffect(() => {
     if (!currentPosition) return;
@@ -252,7 +252,7 @@ const OperationRecord: React.FC = () => {
 
       if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
         departureAlertFiredRef.current = true;
-        toast('📦 積込場所から離れました。積降場所へ移動中に切り替えます', {
+        toast('📦 積込場所から離れました。荷降場所へ移動中に切り替えます', {
           icon: '🚛',
           duration: 4000,
           style: { background: '#FF9800', color: '#fff', fontWeight: 'bold' }
@@ -266,7 +266,7 @@ const OperationRecord: React.FC = () => {
       }
     }
 
-    // 積降場所到着中（AT_UNLOADING）に積降場所から離れたら自動的に TO_LOADING へ
+    // 荷降場所到着中（AT_UNLOADING）に荷降場所から離れたら自動的に TO_LOADING へ
     if (phase === 'AT_UNLOADING') {
       const selectedUnloading = (window as any).selectedUnloadingLocation;
       if (!selectedUnloading?.latitude || !selectedUnloading?.longitude) return;
@@ -280,13 +280,13 @@ const OperationRecord: React.FC = () => {
 
       if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
         departureAlertFiredRef.current = true;
-        toast('✅ 積降場所から離れました。次の積込場所へ移動中に切り替えます', {
+        toast('✅ 荷降場所から離れました。次の積込場所へ移動中に切り替えます', {
           icon: '🔄',
           duration: 4000,
           style: { background: '#4CAF50', color: '#fff', fontWeight: 'bold' }
         });
 
-        // 積降完了APIを自動呼び出し
+        // 荷降完了APIを自動呼び出し
         const currentOperationId = operationStore.operationId;
         if (currentOperationId) {
           apiService.completeUnloadingAtLocation(currentOperationId, {
@@ -294,8 +294,8 @@ const OperationRecord: React.FC = () => {
             latitude: currentPosition.coords.latitude,
             longitude: currentPosition.coords.longitude,
             accuracy: currentPosition.coords.accuracy,
-            notes: '自動積降完了（離脱検知）'
-          }).catch(err => console.error('自動積降完了エラー:', err));
+            notes: '自動荷降完了（離脱検知）'
+          }).catch(err => console.error('自動荷降完了エラー:', err));
         }
 
         setOperation(prev => ({ ...prev, phase: 'TO_LOADING' }));
@@ -310,7 +310,7 @@ const OperationRecord: React.FC = () => {
     }
   }, [currentPosition, operation.phase]);
 
-  // 🆕 距離検知: 積込/積降場所から離れたら自動フェーズ移行
+  // 🆕 距離検知: 積込/荷降場所から離れたら自動フェーズ移行
   useEffect(() => {
     if (!currentPosition) return;
 
@@ -333,7 +333,7 @@ const OperationRecord: React.FC = () => {
 
       if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
         departureAlertFiredRef.current = true;
-        toast('📦 積込場所から離れました。積降場所へ移動中に切り替えます', {
+        toast('📦 積込場所から離れました。荷降場所へ移動中に切り替えます', {
           icon: '🚛',
           duration: 4000,
           style: { background: '#FF9800', color: '#fff', fontWeight: 'bold' }
@@ -347,7 +347,7 @@ const OperationRecord: React.FC = () => {
       }
     }
 
-    // 積降場所到着中（AT_UNLOADING）に積降場所から離れたら自動的に TO_LOADING へ
+    // 荷降場所到着中（AT_UNLOADING）に荷降場所から離れたら自動的に TO_LOADING へ
     if (phase === 'AT_UNLOADING') {
       const selectedUnloading = (window as any).selectedUnloadingLocation;
       if (!selectedUnloading?.latitude || !selectedUnloading?.longitude) return;
@@ -361,13 +361,13 @@ const OperationRecord: React.FC = () => {
 
       if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
         departureAlertFiredRef.current = true;
-        toast('✅ 積降場所から離れました。次の積込場所へ移動中に切り替えます', {
+        toast('✅ 荷降場所から離れました。次の積込場所へ移動中に切り替えます', {
           icon: '🔄',
           duration: 4000,
           style: { background: '#4CAF50', color: '#fff', fontWeight: 'bold' }
         });
 
-        // 積降完了APIを自動呼び出し
+        // 荷降完了APIを自動呼び出し
         const currentOperationId = operationStore.operationId;
         if (currentOperationId) {
           apiService.completeUnloadingAtLocation(currentOperationId, {
@@ -375,8 +375,8 @@ const OperationRecord: React.FC = () => {
             latitude: currentPosition.coords.latitude,
             longitude: currentPosition.coords.longitude,
             accuracy: currentPosition.coords.accuracy,
-            notes: '自動積降完了（離脱検知）'
-          }).catch(err => console.error('自動積降完了エラー:', err));
+            notes: '自動荷降完了（離脱検知）'
+          }).catch(err => console.error('自動荷降完了エラー:', err));
         }
 
         setOperation(prev => ({ ...prev, phase: 'TO_LOADING' }));
@@ -496,7 +496,7 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
-   * 🆕 積降場所到着ボタンクリック（手動検索）
+   * 🆕 荷降場所到着ボタンクリック（手動検索）
    */
   const handleUnloadingArrival = async () => {
     if (!currentPosition) {
@@ -507,7 +507,7 @@ const OperationRecord: React.FC = () => {
     try {
       setIsSubmitting(true);
 
-      console.log('🔍 積降場所検索開始:', {
+      console.log('🔍 荷降場所検索開始:', {
         latitude: currentPosition.coords.latitude,
         longitude: currentPosition.coords.longitude,
         phase: 'TO_UNLOADING'
@@ -533,7 +533,7 @@ const OperationRecord: React.FC = () => {
       
       if (locations.length === 0) {
         // 🆕 近隣地点が見つからない場合 → 新規登録ダイアログを表示
-        toast('近くに登録されている積降場所が見つかりません', {
+        toast('近くに登録されている荷降場所が見つかりません', {
           icon: 'ℹ️',
           duration: 3000
         });
@@ -550,8 +550,8 @@ const OperationRecord: React.FC = () => {
       setIsSubmitting(false);
 
     } catch (error) {
-      console.error('❌ 積降場所検索エラー:', error);
-      toast.error('積降場所の検索に失敗しました');
+      console.error('❌ 荷降場所検索エラー:', error);
+      toast.error('荷降場所の検索に失敗しました');
       setIsSubmitting(false);
     }
   };
@@ -629,11 +629,11 @@ const OperationRecord: React.FC = () => {
           }
         });
       } else {
-        // 積降場所選択後は画面遷移せず地図表示のまま
-        console.log('📦 積降場所選択 - 地図画面のまま');
+        // 荷降場所選択後は画面遷移せず地図表示のまま
+        console.log('📦 荷降場所選択 - 地図画面のまま');
 
         // ✅ 修正: recordUnloadingArrival を呼び出して operation_details に UNLOADING レコードを作成
-        console.log('🚛 積降場所到着記録API呼び出し開始');
+        console.log('🚛 荷降場所到着記録API呼び出し開始');
         await apiService.recordUnloadingArrival(currentOperationId, {
           locationId: selectedLocation.location.id,
           latitude: currentPosition.coords.latitude,
@@ -641,7 +641,7 @@ const OperationRecord: React.FC = () => {
           accuracy: currentPosition.coords.accuracy,
           arrivalTime: new Date()
         });
-        console.log('✅ 積降場所到着記録完了');
+        console.log('✅ 荷降場所到着記録完了');
 
         // 状態更新
         setOperation(prev => ({
@@ -663,8 +663,8 @@ const OperationRecord: React.FC = () => {
           accuracy: currentPosition.coords.accuracy
         };
 
-        toast.success(`積降場所「${selectedLocation.location.name}」を選択しました`);
-        console.log('📍 次: 積降開始ボタンをクリックしてください');
+        toast.success(`荷降場所「${selectedLocation.location.name}」を選択しました`);
+        console.log('📍 次: 荷降開始ボタンをクリックしてください');
       }
 
       setIsSubmitting(false);
@@ -691,7 +691,7 @@ const OperationRecord: React.FC = () => {
    * - LocationRegistrationDialogから呼び出される
    * - 新規地点をAPIに登録
    * - 登録成功後、その地点を使用して到着記録
-   * - 積込場所/積降場所に応じて適切なAPIを呼び出し
+   * - 積込場所/荷降場所に応じて適切なAPIを呼び出し
    * 
    * 【処理フロー】
    * 1. バリデーション（GPS位置・運行IDの確認）
@@ -770,7 +770,7 @@ const OperationRecord: React.FC = () => {
         });
         return; // navigate後は後続のsetShowRegistrationDialog等不要
       } else if (registrationLocationType === 'UNLOADING') {
-          console.log('🚛 積降場所到着記録API呼び出し開始');
+          console.log('🚛 荷降場所到着記録API呼び出し開始');
           
           await apiService.recordUnloadingArrival(currentOperationId, {
             locationId: registeredLocation.id,
@@ -780,7 +780,7 @@ const OperationRecord: React.FC = () => {
             arrivalTime: new Date()
           });
           
-          console.log('✅ 積降場所到着記録完了');
+          console.log('✅ 荷降場所到着記録完了');
           
           // 状態更新
           setOperation(prev => ({
@@ -793,8 +793,8 @@ const OperationRecord: React.FC = () => {
           operationStore.setUnloadingLocation(registeredLocation.name, registeredLocation.id);
           operationStore.setPhase('AT_UNLOADING');
 
-          // ✅ 【修正】積降開始ボタンが参照する window.selectedUnloadingLocation を設定
-          //    （新規地点登録フローでは、この設定が抜けていたため「積降場所が選択されていません」エラーが発生していた）
+          // ✅ 【修正】荷降開始ボタンが参照する window.selectedUnloadingLocation を設定
+          //    （新規地点登録フローでは、この設定が抜けていたため「荷降場所が選択されていません」エラーが発生していた）
           (window as any).selectedUnloadingLocation = {
             id: registeredLocation.id,
             name: registeredLocation.name,
@@ -804,8 +804,8 @@ const OperationRecord: React.FC = () => {
           };
           console.log('✅ window.selectedUnloadingLocation を設定しました:', (window as any).selectedUnloadingLocation);
 
-          toast.success(`新規地点「${registeredLocation.name}」を登録し、積降場所に到着しました`);
-          console.log('📍 次: 積降開始ボタンをクリックしてください');
+          toast.success(`新規地点「${registeredLocation.name}」を登録し、荷降場所に到着しました`);
+          console.log('📍 次: 荷降開始ボタンをクリックしてください');
         }
 
       // ダイアログを閉じる
@@ -980,10 +980,10 @@ const OperationRecord: React.FC = () => {
         }),
         3, 1000, '積込完了'
       );
-      // フェーズを積降場所移動中に更新
+      // フェーズを荷降場所移動中に更新
       setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
       operationStore.setPhase('TO_UNLOADING');
-      toast.success('積込が完了しました。積降場所へ移動してください。');
+      toast.success('積込が完了しました。荷降場所へ移動してください。');
       setIsSubmitting(false);
     } catch (error) {
       console.error('積込完了エラー:', error);
@@ -993,12 +993,12 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
-   * ✅ 既存: 積降開始ハンドラー
+   * ✅ 既存: 荷降開始ハンドラー
    */
-// handleUnloadingStart は廃止（積降開始ボタン廃止・UNLOADING_IN_PROGRESS廃止）
+// handleUnloadingStart は廃止（荷降開始ボタン廃止・UNLOADING_IN_PROGRESS廃止）
 
   /**
-   * ✅ 既存: 積降完了ハンドラー
+   * ✅ 既存: 荷降完了ハンドラー
    */
   const handleUnloadingComplete = async () => {
     // 確認ダイアログ
@@ -1015,7 +1015,7 @@ const OperationRecord: React.FC = () => {
         return;
       }
 
-      console.log('📦 積降完了API呼び出し:', {
+      console.log('📦 荷降完了API呼び出し:', {
         tripId: currentOperationId
       });
 
@@ -1023,7 +1023,7 @@ const OperationRecord: React.FC = () => {
       const unloadingLocationId = operationStore.unloadingLocationId
         ?? (window as any).selectedUnloadingLocation?.id
         ?? undefined;
-      console.log('📦 積降完了 locationId:', unloadingLocationId);
+      console.log('📦 荷降完了 locationId:', unloadingLocationId);
       await retryWithBackoff(
         () => apiService.completeUnloadingAtLocation(currentOperationId, {
           locationId: unloadingLocationId,
@@ -1031,12 +1031,12 @@ const OperationRecord: React.FC = () => {
           latitude: currentPosition?.coords.latitude,
           longitude: currentPosition?.coords.longitude,
           accuracy: currentPosition?.coords.accuracy,
-          notes: '積降完了',
+          notes: '荷降完了',
         }),
-        3, 1000, '積降完了'
+        3, 1000, '荷降完了'
       );
 
-      console.log('✅ 積降完了');
+      console.log('✅ 荷降完了');
 
       // フェーズ更新: TO_LOADING（次の積込場所へ移動）
       setOperation(prev => ({
@@ -1047,12 +1047,12 @@ const OperationRecord: React.FC = () => {
       (window as any).selectedUnloadingLocation = null;
       departureAlertFiredRef.current = false;
 
-      toast.success('積降が完了しました。次の積込場所へ移動してください。');
+      toast.success('荷降が完了しました。次の積込場所へ移動してください。');
       setIsSubmitting(false);
 
     } catch (error) {
-      console.error('❌ 積降完了エラー:', error);
-      toast.error('積降完了に失敗しました');
+      console.error('❌ 荷降完了エラー:', error);
+      toast.error('荷降完了に失敗しました');
       setIsSubmitting(false);
     }
   };
@@ -1316,13 +1316,13 @@ const OperationRecord: React.FC = () => {
                 width: '100%'
               }}
             >
-              📍 積降場所到着
+              📍 荷降場所到着
             </button>
           </div>
         );
 
       case 'AT_UNLOADING':
-        // 🆕 積降開始ボタン廃止: 積降完了ボタンのみ表示（距離検知で自動移行も可）
+        // 🆕 荷降開始ボタン廃止: 荷降完了ボタンのみ表示（距離検知で自動移行も可）
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{
@@ -1333,7 +1333,7 @@ const OperationRecord: React.FC = () => {
               borderRadius: '8px',
               textAlign: 'center'
             }}>
-              📍 積降場所に到着中 — 積降が完了したら下のボタンを押してください
+              📍 荷降場所に到着中 — 積降が完了したら下のボタンを押してください
             </div>
             <button
               onClick={handleUnloadingComplete}
@@ -1350,7 +1350,7 @@ const OperationRecord: React.FC = () => {
                 width: '100%'
               }}
             >
-              ✅ 積降完了
+              ✅ 荷降完了
             </button>
           </div>
         );
@@ -1847,7 +1847,7 @@ const OperationRecord: React.FC = () => {
         onSelect={handleLocationSelected}
         onCancel={handleLocationDialogCancel}
         onCreateNew={handleCreateNewLocation}  // 🆕 ハンドラーを追加
-        title={dialogType === 'LOADING' ? '積込場所を選択' : '積降場所を選択'}
+        title={dialogType === 'LOADING' ? '積込場所を選択' : '荷降場所を選択'}
       />
 
       
@@ -1953,8 +1953,8 @@ function getPhaseLabel(phase: OperationPhase): string {
   switch (phase) {
     case 'TO_LOADING': return '積込場所へ移動中';
     case 'AT_LOADING': return '積込場所到着';
-    case 'TO_UNLOADING': return '積降場所へ移動中';
-    case 'AT_UNLOADING': return '積降場所到着';
+    case 'TO_UNLOADING': return '荷降場所へ移動中';
+    case 'AT_UNLOADING': return '荷降場所到着';
     // UNLOADING_IN_PROGRESS: 廃止
     case 'BREAK': return '休憩中';
     case 'REFUEL': return '給油中';
@@ -1990,7 +1990,7 @@ export default OperationRecord;
  * - ステータスバー（経過時間、走行距離、速度、燃料）
  * - フェーズ別ボタン表示
  * - 積込開始・完了
- * - 積降開始・完了
+ * - 荷降開始・完了
  * - 休憩開始・終了
  * - 給油記録
  * - 運行終了
@@ -2000,7 +2000,7 @@ export default OperationRecord;
  * 🆕 D5/D6新仕様追加機能
  * - GPS近隣地点自動検知を停止
  * - 「積込場所到着」ボタンクリック時に手動検索
- * - 「積降場所到着」ボタンクリック時に手動検索
+ * - 「荷降場所到着」ボタンクリック時に手動検索
  * - 複数候補地点の選択ダイアログ
  * - 新API使用（recordLoadingArrival/recordUnloadingArrival）
  * - locationId取得フロー実装

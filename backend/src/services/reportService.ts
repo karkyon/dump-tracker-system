@@ -1712,7 +1712,7 @@ class ReportService {
       vehiclePlateNumber: vehiclePlate,
       startOdometer: startOdo,
       endOdometer: endOdo,
-      trips: cycles.slice(0, 6).map((c: any) => ({
+      trips: cycles.map((c: any) => ({  // FB3修正: スライス制限撤廃（全サイクル出力）
         contractorName: c.contractorName,
         loadingLocation: c.loadingLocation,
         unloadingLocation: c.unloadingLocation,
