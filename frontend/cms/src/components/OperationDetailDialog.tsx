@@ -390,7 +390,7 @@ interface CmsActivityEditModalProps {
 
 const EVENT_TYPE_LABEL: Record<string, string> = {
   LOADING: '積込', LOADING_ARRIVED: '積込(到着)', LOADING_COMPLETED: '積込(完了)',
-  UNLOADING: '積降', UNLOADING_ARRIVED: '積降(到着)', UNLOADING_COMPLETED: '積降(完了)',
+  UNLOADING: '荷降', UNLOADING_ARRIVED: '積降(到着)', UNLOADING_COMPLETED: '積降(完了)',
   FUELING: '給油', REFUELING: '給油',
   BREAK_START: '休憩開始', BREAK_END: '休憩終了', BREAK: '休憩',
   TRIP_START: '運行開始', TRIP_END: '運行終了',
@@ -1137,7 +1137,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           PRE_INSPECTION:  { short: '前', full: '運行前点検', color: '#6366F1' },
           POST_INSPECTION: { short: '後', full: '運行後点検', color: '#8B5CF6' },
           LOADING:         { short: '積', full: '積込',       color: '#F59E0B' },
-          UNLOADING:       { short: '降', full: '積降',       color: '#F97316' },
+          UNLOADING:       { short: '降', full: '荷降',       color: '#F97316' },
           BREAK_START:     { short: '休', full: '休憩開始',   color: '#64748B' },
           BREAK_END:       { short: '再', full: '休憩終了',   color: '#64748B' },
           FUELING:         { short: '油', full: '給油',       color: '#06B6D4' },
@@ -1372,8 +1372,31 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           vehiclesId: operationData.vehicles?.id
         });
         
+        // ✅ 修正: vehicles/usersOperationsDriverIdTousers が含まれない場合の補完
+        // timeline API レスポンスの operation フィールドに含まれていない場合、
+        // フラットなレスポンスから vehicle/driver 情報を取り出す
+        const raw: any = operationData;
+        if (!raw.vehicles && !raw.usersOperationsDriverIdTousers) {
+          // 一覧から渡された selectedRecord のデータをフォールバックとして補完
+          // (OperationRecords が selectedRecord を props として渡している)
+        }
+        // vehicles/driverが取得できなかった場合、initialOperation（一覧データ）で補完
+        if (initialOperation && operationData) {
+          const op: any = operationData;
+          if (!op.vehicles && initialOperation.vehicles) {
+            op.vehicles = initialOperation.vehicles;
+          }
+          if (!op.usersOperationsDriverIdTousers && initialOperation.usersOperationsDriverIdTousers) {
+            op.usersOperationsDriverIdTousers = initialOperation.usersOperationsDriverIdTousers;
+          }
+        }
         setOperation(operationData);
-        console.log('✅ [Operation Debug] Operation state updated');
+        console.log('✅ [Operation Debug] Operation state updated', {
+          hasVehicles: !!(operationData as any).vehicles,
+          hasDriver: !!(operationData as any).usersOperationsDriverIdTousers,
+          plateNumber: (operationData as any).vehicles?.plateNumber,
+          driverName: (operationData as any).usersOperationsDriverIdTousers?.name
+        });
       } else {
         console.error('❌ [Operation Debug] Response not successful or no data');
         setError('運行記録の取得に失敗しました');
@@ -2451,7 +2474,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         return groups.map((group, gIdx) => {
                           if (group.type === 'LOADING_GROUP' || group.type === 'UNLOADING_GROUP') {
                             const isLoading     = group.type === 'LOADING_GROUP';
-                            const groupLabel    = isLoading ? '積込' : '積降';
+                            const groupLabel    = isLoading ? '積込' : '荷降';
                             const borderCls     = isLoading ? 'border-indigo-400' : 'border-purple-400';
                             const headerBg      = isLoading ? 'bg-indigo-50 border-indigo-200' : 'bg-purple-50 border-purple-200';
                             const headerTextCls = isLoading ? 'text-indigo-800' : 'text-purple-800';
@@ -2654,7 +2677,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   {/* REQ-020: 積載物写真サムネ + 拡大モーダル */}
                                   {(event as any).imageUrl && (() => {
                                     const imgUrl = (event as any).imageUrl as string;
-                                    const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${window.location.origin}${imgUrl}`;
+                                    // stagingのバックエンドURLを考慮（/uploads/ は nginx経由でバックエンドから配信）
+                                    const apiBase = (window as any).__API_BASE_URL__ || '';
+                                    const baseOrigin = apiBase ? apiBase.replace('/api/v1', '') : window.location.origin;
+                                    const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${baseOrigin}${imgUrl}`;
                                     return (
                                       <div className="mt-2">
                                         <p className="text-xs text-gray-500 mb-1">📷 積載物写真</p>

@@ -305,7 +305,8 @@ const OperationRecords: React.FC = () => {
         )}
       </div>
 
-      {selectedRecord && <OperationDetailDialog operationId={selectedRecord.id} isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} />}
+      {selectedRecord && <OperationDetailDialog operationId={selectedRecord.id}
+          initialOperation={selectedRecord} isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} />}
     </div>
   );
 };
