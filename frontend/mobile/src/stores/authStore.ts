@@ -69,8 +69,7 @@ export const useAuthStore = create<AuthState>()(
               loading: false,
               error: null
             });
-            
-            toast.success('ログインに成功しました');
+            // toast.success はLogin.tsx handleSubmitが担当（多重toast防止）
             console.log('[Auth Store] Login successful:', user);
           } else {
             throw new Error(response.error || response.message || 'ログインに失敗しました');
