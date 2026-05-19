@@ -65,6 +65,7 @@ interface TimelineEvent {
   } | null;
   // ✅ 給油専用フィールド
   fuelCostYen?: number | null;
+  imageUrl?: string | null;  // REQ-020
   // ✅ 複数品目リスト
   detailItems?: Array<{
     id: string;
@@ -388,6 +389,7 @@ export class OperationDetailController {
               gpsLocation: null,
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
+              imageUrl: detail.imageUrl || null,  // REQ-020: 積載物写真URL
               detailItems: (detail.operationDetailItems || []).map((di: any) => ({
                 id: di.id,
                 itemId: di.itemId,

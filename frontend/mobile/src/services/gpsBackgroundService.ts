@@ -216,6 +216,8 @@ function _registerVisibilityHandler(): void {
 
     if (document.visibilityState === 'visible') {
       console.log('[GPS-BG] 📱 フォアグラウンド復帰 → watchPosition再開');
+      // BUG-052修正: 復帰時は旧watchをクリアしてから再開
+      _stopWatch();
       _startWatch();
       if (!_wakeLock) await _acquireWakeLock();
     } else {

@@ -414,16 +414,16 @@ const LoadingInput: React.FC = () => {
         }
       }
 
-      // フェーズ更新: AT_LOADING → TO_UNLOADING
-      console.log('🔄 フェーズ更新: AT_LOADING → TO_UNLOADING');
-      operationStore.setPhase('TO_UNLOADING');
-      operationStore.setLoadingLocation(formData.locationName);
+      // REQ-019修正: 積込確認後はAT_LOADINGに留める（自動移動検知でTO_UNLOADINGへ移行）
+      console.log('🔄 フェーズ維持: AT_LOADING（積込確認完了・自動移動検知待ち）');
+      operationStore.setPhase('AT_LOADING');
+      operationStore.setLoadingLocation(formData.locationName, formData.locationId);
 
       // 少し待機して状態更新を確実にする
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      toast.success('積込を完了しました。積降場所へ移動してください。', {
-        duration: 3000,
+      toast.success('積み込みを確認しました。出発すると自動で「移動中」に切り替わります。', {
+        duration: 4000,
         icon: '🚛',
       });
 

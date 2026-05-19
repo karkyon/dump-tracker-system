@@ -33,6 +33,7 @@ export interface OperationRowData {
   loadingCondition?: string;
   loadingStartTime?: string;
   loadingEndTime?: string;
+  imageUrl?: string;  // REQ-020: 積載物写真URL
 }
 
 export interface InspectionCheckItem {

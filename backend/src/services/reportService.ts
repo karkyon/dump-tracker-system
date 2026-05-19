@@ -1726,6 +1726,7 @@ class ReportService {
        unloadingStartTime: c.unloadingStartTime ?? '',                               // NEW(D)
        unloadingEndTime: c.unloadingEndTime ?? '',                                   // NEW(D)
        unloadingDuration: calcTimeDuration(c.unloadingStartTime ?? '', c.unloadingEndTime ?? ''), // NEW(D)
+       imageUrl: (c as any).imageUrl || undefined,  // REQ-020
       })),
       fuelLiters,
       fuelOdometerKm,

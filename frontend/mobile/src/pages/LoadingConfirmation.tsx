@@ -167,7 +167,8 @@ const LoadingConfirmation: React.FC = () => {
       // REQ-019修正: 積込場所到着 → AT_LOADING に遷移
       // (OperationRecord.tsx で「積込開始」「積込完了」ボタンを表示するため)
       // TO_UNLOADING への遷移は OperationRecord.tsx の handleLoadingComplete で実施
-      console.log('🔄 フェーズ更新: TO_LOADING → AT_LOADING（積込場所到着）');
+      // REQ-019修正: 積込確認後はAT_LOADINGに留める（自動移動検知でTO_UNLOADINGへ移行）
+      console.log('🔄 フェーズ維持: AT_LOADING（積込確認完了・自動移動検知待ち）');
       operationStore.setPhase('AT_LOADING');
       
       // 🔧 修正: 積込場所情報も更新
@@ -176,8 +177,8 @@ const LoadingConfirmation: React.FC = () => {
       // 運行ステータス更新を待つ(少し待機)
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      toast.success(`積込を完了しました。積降場所へ移動してください。`, {
-        duration: 3000,
+      toast.success('積み込みを確認しました。出発すると自動で「移動中」に切り替わります。', {
+        duration: 4000,
         icon: '🚛'
       });
 
