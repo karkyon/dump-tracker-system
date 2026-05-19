@@ -23,6 +23,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useOperationStore } from '../stores/operationStore';
 import { apiService } from '../services/api';
+import { getBackgroundGPSState } from '../services/gpsBackgroundService';
 
 interface InspectionItem {
   id: string;
