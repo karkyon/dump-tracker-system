@@ -73,6 +73,62 @@ export interface DriverDailyReportData {
   };
 }
 
+/**
+ * REQ-020: 積載物写真ページ生成（日報末尾追加）
+ */
+function _drawCargoPhotosPage(doc: PDFKit.PDFDocument, ops: OperationRowData[]): void {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fs = require('fs') as typeof import('fs');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pathMod = require('path') as typeof import('path');
+  const photosOps = ops.filter(op => op.imageUrl);
+  if (photosOps.length === 0) return;
+
+  doc.addPage({ size: 'A4', layout: 'landscape', margins: { top: 20, bottom: 20, left: 20, right: 20 } });
+  const pageW = doc.page.width - 40;
+  let y = 20;
+  doc.font('JP').fontSize(11).fillColor('#1a1a1a');
+  doc.text('積載物写真記録', 20, y, { width: pageW, align: 'center' });
+  y += 22;
+  doc.moveTo(20, y).lineTo(20 + pageW, y).lineWidth(0.8).strokeColor('#999').stroke();
+  y += 10;
+
+  const cols = 3;
+  const cellW = Math.floor(pageW / cols);
+  const imgH = 130;
+  const labelH = 20;
+  const cellH = imgH + labelH + 10;
+  let col = 0;
+
+  for (const op of photosOps) {
+    if (!op.imageUrl) continue;
+    const x = 20 + col * cellW;
+    doc.font('JP').fontSize(7.5).fillColor('#333');
+    const labelText = [op.loadingLocation, op.itemName].filter(Boolean).join(' / ');
+    doc.text(labelText || '-', x + 2, y, { width: cellW - 6, ellipsis: true });
+    const relPath = op.imageUrl.replace(/^\/uploads\//, '');
+    const absPath = pathMod.join(process.cwd(), 'uploads', relPath);
+    try {
+      if (fs.existsSync(absPath)) {
+        doc.image(absPath, x + 2, y + labelH, { fit: [cellW - 8, imgH], align: 'center', valign: 'center' });
+      } else {
+        doc.rect(x + 2, y + labelH, cellW - 8, imgH).lineWidth(0.4).strokeColor('#ccc').stroke();
+        doc.font('JP').fontSize(8).fillColor('#aaa').text('画像なし', x + 2, y + labelH + imgH / 2 - 8, { width: cellW - 8, align: 'center' });
+      }
+    } catch { /* 画像読込失敗 */ }
+    doc.rect(x, y, cellW, cellH).lineWidth(0.3).strokeColor('#ddd').stroke();
+    col++;
+    if (col >= cols) {
+      col = 0;
+      y += cellH + 4;
+      if (y + cellH > doc.page.height - 30) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margins: { top: 20, bottom: 20, left: 20, right: 20 } });
+        y = 20;
+      }
+    }
+  }
+}
+
 export async function generateDriverDailyReport(
   data: DriverDailyReportData,
   outputPath: string
@@ -109,6 +165,9 @@ export async function generateDriverDailyReport(
 
     doc.font('JP').fontSize(7).fillColor('#333');
     doc.text('L ……… 異常なし　　× ……… 要修理調整', ML, cy + 4);
+
+    // REQ-020: 積載物写真ページ
+    _drawCargoPhotosPage(doc, data.operations);
 
     doc.end();
     stream.on('finish', () => {
