@@ -52,6 +52,7 @@ let _watchId: number | null = null;
 let _intervalId: ReturnType<typeof setInterval> | null = null;
 let _wakeLock: WakeLockSentinel | null = null;
 let _visibilityHandler: (() => void) | null = null;
+let _sendAbortController: AbortController | null = null; // ②修正: 進行中GPS送信のキャンセル用
 
 let _operationId: string | null = null;
 let _vehicleId: string | null = null;
@@ -85,6 +86,12 @@ async function _sendToBackend(position: GeolocationPosition): Promise<void> {
     return;
   }
 
+  // ②修正: 前回の送信が進行中なら中断してスキップ（キュー蓄積防止）
+  if (_sendAbortController) {
+    console.warn('[GPS-BG] ⚠️ 前回送信進行中 - スキップ');
+    return;
+  }
+
   const { latitude, longitude, accuracy, speed, heading } = position.coords;
 
   // Fix-4A: accuracy > 100m はスキップ
@@ -95,6 +102,7 @@ async function _sendToBackend(position: GeolocationPosition): Promise<void> {
     return;
   }
 
+  _sendAbortController = new AbortController();
   try {
     // apiService を動的 import してモジュール循環参照を回避
     const { apiService } = await import('./api');
@@ -120,9 +128,16 @@ async function _sendToBackend(position: GeolocationPosition): Promise<void> {
 
   } catch (err) {
     _errorCount++;
-    console.error(`[GPS-BG] ❌ 送信エラー(${_errorCount}回目):`, err);
-    logGPSEvent({ type: 'API_ERROR', lat: latitude, lng: longitude,
-      detail: { error: String(err), errorCount: _errorCount } });
+    // ②修正: AbortError は正常中断（バックグラウンド移行時）のためエラーカウントしない
+    if (err instanceof Error && err.name === 'AbortError') {
+      console.warn('[GPS-BG] ⚠️ 送信中断（バックグラウンド移行）');
+    } else {
+      console.error(`[GPS-BG] ❌ 送信エラー(${_errorCount}回目):`, err);
+      logGPSEvent({ type: 'API_ERROR', lat: latitude, lng: longitude,
+        detail: { error: String(err), errorCount: _errorCount } });
+    }
+  } finally {
+    _sendAbortController = null; // ②修正: 送信完了/失敗後にリセット
   }
 }
 
@@ -216,12 +231,24 @@ function _registerVisibilityHandler(): void {
 
     if (document.visibilityState === 'visible') {
       console.log('[GPS-BG] 📱 フォアグラウンド復帰 → watchPosition再開');
+      // ②修正: 進行中送信を中断してコントローラをリセット
+      if (_sendAbortController) {
+        _sendAbortController.abort();
+        _sendAbortController = null;
+      }
       // BUG-052修正: 復帰時は旧watchをクリアしてから再開
       _stopWatch();
       _startWatch();
       if (!_wakeLock) await _acquireWakeLock();
     } else {
-      console.log('[GPS-BG] 📱 バックグラウンド移行');
+      console.log('[GPS-BG] 📱 バックグラウンド移行 → 送信キューリセット');
+      // ②修正: バックグラウンド移行時に進行中送信を中断
+      if (_sendAbortController) {
+        _sendAbortController.abort();
+        _sendAbortController = null;
+      }
+      // ②修正: lastPositionをリセットしてインターバル送信をスキップさせる
+      _lastPosition = null;
     }
   };
   document.addEventListener('visibilitychange', _visibilityHandler);
