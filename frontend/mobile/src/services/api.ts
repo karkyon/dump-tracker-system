@@ -1506,14 +1506,23 @@ class APIServiceClass {
     const form = new FormData();
     form.append('image', imageBlob, filename);
     try {
+      // ✅ REQ-020修正: Content-Typeヘッダーを手動設定しない
+      // axiosがFormDataを検知して自動でboundary付きmultipart/form-dataを設定する
+      // 手動で設定するとboundaryが欠落しmulterが「画像ファイルが必要です」エラーを返す
       const response = await this.axiosInstance.post<APIResponse<{ imageUrl: string }>>(
         `/operation-details/${detailId}/image`,
-        form,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        form
       );
       return response.data;
     } catch (error) {
-      console.error('写真アップロードエラー:', error);
+      console.error('写真アップロードエラー詳細:', {
+        detailId,
+        filename,
+        blobSize: (imageBlob as any)?.size,
+        blobType: (imageBlob as any)?.type,
+        httpStatus: (error as any)?.response?.status,
+        serverMessage: (error as any)?.response?.data?.message,
+      });
       throw error;
     }
   }

@@ -399,7 +399,22 @@ const LoadingInput: React.FC = () => {
       console.log('📦 API応答:', response);
 
       // REQ-020: 写真が選択されていればアップロード
-      const _detailId = (response as any)?.data?.id ?? (response as any)?.data?.data?.id ?? null;
+      // recordLoadingArrival戻り値: APIResponse<ActivityRecordResponse> = { success, data: { id, ... }, message }
+      // axiosInstance.post → return response.data → { success, data: { id }, message }
+      // よって response.data.id が operationDetail の実際のID
+      const _r: any = response;
+      const _detailId: string | null =
+        _r?.data?.id ??        // 正常ケース
+        _r?.data?.data?.id ??  // BUG-013二重ネスト
+        _r?.id ??              // 直接id
+        null;
+      console.log('📷 [REQ-020] detailId取得:', {
+        detailId: _detailId,
+        hasPhoto: !!cargoPhotoBlob,
+        responseKeys: Object.keys(_r || {}),
+        dataId: _r?.data?.id,
+        blobSize: cargoPhotoBlob?.size,
+      });
       if (cargoPhotoBlob && _detailId) {
         try {
           await (apiService as any).uploadOperationDetailImage(
@@ -408,10 +423,19 @@ const LoadingInput: React.FC = () => {
             `cargo_${Date.now()}.jpg`
           );
           console.log('✅ REQ-020 写真アップロード完了');
-        } catch (photoErr) {
-          console.error('写真アップロード失敗（運行は継続）:', photoErr);
+          toast.success('積込記録と写真を登録しました', { duration: 3000, icon: '📷' });
+        } catch (photoErr: any) {
+          console.error('写真アップロード失敗詳細:', {
+            detailId: _detailId,
+            status: photoErr?.response?.status,
+            serverMsg: photoErr?.response?.data?.message,
+            errorMsg: photoErr?.message,
+          });
           toast('写真のアップロードに失敗しましたが運行は記録されました', { icon: '⚠️' });
         }
+      } else if (cargoPhotoBlob && !_detailId) {
+        console.error('❌ [REQ-020] detailIdがnullのため写真アップロードをスキップ:', { response: _r });
+        toast('写真のアップロードに失敗しましたが運行は記録されました', { icon: '⚠️' });
       }
 
       // REQ-019修正: 積込確認後はAT_LOADINGに留める（自動移動検知でTO_UNLOADINGへ移行）
