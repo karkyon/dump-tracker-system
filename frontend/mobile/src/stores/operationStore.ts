@@ -12,6 +12,7 @@ import { persist } from 'zustand/middleware';
 export type OperationPhase = 
   | 'TO_LOADING' 
   | 'AT_LOADING' 
+  | 'LOADING_IN_PROGRESS' 
   | 'TO_UNLOADING' 
   | 'AT_UNLOADING' 
   | 'BREAK' 

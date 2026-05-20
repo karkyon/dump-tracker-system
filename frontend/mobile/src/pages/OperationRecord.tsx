@@ -238,7 +238,7 @@ const OperationRecord: React.FC = () => {
 
     // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
     // 積込場所到着中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
-    if (phase === 'AT_LOADING') {
+    if (phase === 'AT_LOADING' || phase === 'LOADING_IN_PROGRESS') {
       const loadingLat = operationStore.loadingLocationLat;
       const loadingLng = operationStore.loadingLocationLng;
       if (loadingLat == null || loadingLng == null) return;
@@ -319,7 +319,7 @@ const OperationRecord: React.FC = () => {
 
     // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
     // 積込場所到着中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
-    if (phase === 'AT_LOADING') {
+    if (phase === 'AT_LOADING' || phase === 'LOADING_IN_PROGRESS') {
       const loadingLat = operationStore.loadingLocationLat;
       const loadingLng = operationStore.loadingLocationLng;
       if (loadingLat == null || loadingLng == null) return;
@@ -922,42 +922,12 @@ const OperationRecord: React.FC = () => {
    * REQ-019: 積込開始ハンドラー（積込作業時間計測開始）
    * POST /trips/:id/loading/start で actualStartTime を記録
    */
-  const handleLoadingStart = async () => {
-    const currentOperationId = operationStore.operationId;
-    if (!currentOperationId) {
-      toast.error('運行IDが見つかりません');
-      return;
-    }
-    // locationId は operationStore から取得（積込場所到着時に設定済み）
-    const loadingLocationId = operationStore.loadingLocationId
-      ?? (window as any).selectedLoadingLocation?.id
-      ?? undefined;
-    if (!loadingLocationId) {
-      toast.error('積込場所IDが取得できません。場所を再選択してください');
-      return;
-    }
-    try {
-      setIsSubmitting(true);
-      await retryWithBackoff(
-        () => apiService.startLoadingAtLocation(currentOperationId, {
-          locationId: loadingLocationId,
-          ...(currentPosition ? {
-            latitude: currentPosition.coords.latitude,
-            longitude: currentPosition.coords.longitude,
-            accuracy: currentPosition.coords.accuracy,
-          } : {}),
-          notes: '積込開始（荷待ち計測開始）',
-        }),
-        3, 1000, '積込開始'
-      );
-      // フェーズはAT_LOADING維持（完了後にTO_UNLOADINGへ）
-      toast.success('積込を開始しました（作業時間の計測を開始）');
-      setIsSubmitting(false);
-    } catch (error) {
-      console.error('積込開始エラー:', error);
-      toast.error('積込開始に失敗しました');
-      setIsSubmitting(false);
-    }
+  const handleLoadingStart = () => {
+    // ④修正: API呼び出しなし（LoadingInputで既にLOADINGレコード作成済み）
+    // フェーズをLOADING_IN_PROGRESSに変更するのみ
+    setOperation(prev => ({ ...prev, phase: 'LOADING_IN_PROGRESS' }));
+    operationStore.setPhase('LOADING_IN_PROGRESS');
+    toast.success('積込を開始しました（積込完了ボタンで次へ進んでください）');
   };
 
   /**
@@ -1278,6 +1248,12 @@ const OperationRecord: React.FC = () => {
             >
               🚛 積込開始
             </button>
+          </div>
+        );
+
+      case 'LOADING_IN_PROGRESS':
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
               onClick={handleLoadingComplete}
               disabled={isSubmitting}
@@ -1953,6 +1929,8 @@ function getPhaseLabel(phase: OperationPhase): string {
   switch (phase) {
     case 'TO_LOADING': return '積込場所へ移動中';
     case 'AT_LOADING': return '積込場所到着';
+    case 'LOADING_IN_PROGRESS': return '積込中';
+    case 'LOADING_IN_PROGRESS': return '積込中';
     case 'TO_UNLOADING': return '荷降場所へ移動中';
     case 'AT_UNLOADING': return '荷降場所到着';
     // UNLOADING_IN_PROGRESS: 廃止
@@ -1967,6 +1945,8 @@ const getPhaseColor = (phase: string): string => {
   switch (phase) {
     case 'TO_LOADING':    return '#2196F3';
     case 'AT_LOADING':    return '#4CAF50';
+    case 'LOADING_IN_PROGRESS': return '#FF9800';
+    case 'LOADING_IN_PROGRESS': return '#FF9800';
     case 'TO_UNLOADING':  return '#4CAF50';
     case 'AT_UNLOADING':  return '#FF9800';
     case 'BREAK':         return '#9C27B0';
