@@ -18,7 +18,7 @@ import {
   AlertTriangle,
   CheckSquare
 } from 'lucide-react';
-import apiService from '../services/api';
+import apiService, { retryWithBackoff } from '../services/api';
 import { getBackgroundGPSState } from '../services/gpsBackgroundService';
 import { useOperationStore } from '../stores/operationStore';
 
