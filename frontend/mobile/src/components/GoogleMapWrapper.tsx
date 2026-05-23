@@ -122,12 +122,15 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           anchor: new window.google.maps.Point(30, 40)
         };
 
-        const marker = new window.google.maps.Marker({
+        // BUG-011: google.maps.Marker(非推奨) → AdvancedMarkerElement に移行
+        const markerDiv = document.createElement('div');
+        markerDiv.innerHTML = markerSVG;
+        markerDiv.style.cssText = 'width:60px;height:80px;cursor:pointer;';
+        const marker = new window.google.maps.marker.AdvancedMarkerElement({
           map: map,
           position: centerPosition,
           title: '現在位置',
-          icon: markerIcon,
-          zIndex: 1000,
+          content: markerDiv,
         });
 
         console.log('✅ 三角マーカー作成成功');
@@ -194,7 +197,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     
     const script = document.createElement('script');
     script.id = 'google-maps-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&v=weekly`;
+    // BUG-012: loading=async で廃止APIの初期化警告を抑制
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&v=weekly&loading=async&libraries=marker`;
     script.async = true;
     script.defer = true;
     
@@ -258,14 +262,16 @@ export const updateMarkerIcon = (distance: number, speed: number, heading: numbe
     return;
   }
 
+  // BUG-011: AdvancedMarkerElement は content プロパティで SVG を更新
   const markerSVG = createCustomMarkerSVG(distance, speed, heading);
-  const markerIcon = {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
-    scaledSize: new window.google.maps.Size(60, 80),
-    anchor: new window.google.maps.Point(30, 40)
-  };
-
-  globalMarkerInstance.setIcon(markerIcon);
+  if (globalMarkerInstance.content instanceof HTMLElement) {
+    globalMarkerInstance.content.innerHTML = markerSVG;
+  } else {
+    const markerDiv = document.createElement('div');
+    markerDiv.innerHTML = markerSVG;
+    markerDiv.style.cssText = 'width:60px;height:80px;cursor:pointer;';
+    globalMarkerInstance.content = markerDiv;
+  }
 };
 
 export const updateMarkerPosition = (lat: number, lng: number) => {

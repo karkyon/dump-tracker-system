@@ -256,14 +256,16 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
       zoom: 17, disableDefaultUI: true, zoomControl: true,
     });
     const pos = existingMarker ? existingMarker.getPosition() : { lat: centerLat, lng: centerLng };
-    const marker = new g.Marker({
-      position: pos, map, draggable: true,
-      icon: { path: g.SymbolPath.CIRCLE, scale: 10,
-        fillColor: '#1d4ed8', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 }
+    // BUG-011: AdvancedMarkerElement 移行
+    const pinCmsEl = document.createElement('div');
+    pinCmsEl.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#1d4ed8;border:3px solid #fff;cursor:move;box-shadow:0 2px 6px rgba(0,0,0,.4);';
+    const marker = new (g as any).marker.AdvancedMarkerElement({
+      position: pos, map, title: 'ドラッグで位置調整',
+      content: pinCmsEl, gmpDraggable: true,
     });
-    const move = () => { const p = marker.getPosition(); if (p) onPinMoved(p.lat(), p.lng()); };
+    const move = (e: any) => { const p = e.latLng ?? marker.position; if (p) onPinMoved(typeof p.lat==='function'?p.lat():p.lat, typeof p.lng==='function'?p.lng():p.lng); };
     marker.addListener('dragend', move);
-    map.addListener('click', (e: any) => { marker.setPosition(e.latLng); onPinMoved(e.latLng.lat(), e.latLng.lng()); });
+    map.addListener('click', (e: any) => { marker.position = e.latLng; onPinMoved(e.latLng.lat(), e.latLng.lng()); });
     return { map, marker };
   }, [centerLat, centerLng, onPinMoved]);
 
@@ -1253,24 +1255,15 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           const isLast = index === activeGpsPoints.length - 1;
           const scale = isFirst || isLast ? 12 : 9;
 
-          const marker = new google.maps.Marker({
+          // BUG-011: AdvancedMarkerElement 移行
+          const evPinEl = document.createElement('div');
+          evPinEl.style.cssText = `width:${scale*2}px;height:${scale*2}px;border-radius:50%;background:${label.color};border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:bold;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.4);`;
+          evPinEl.textContent = label.short;
+          const marker = new (google.maps as any).marker.AdvancedMarkerElement({
             position: { lat: point.latitude, lng: point.longitude },
             map: map,
             title: `${point.sequenceNumber > 0 ? point.sequenceNumber + '. ' : ''}${label.full}`,
-            label: {
-              text: label.short,
-              color: '#FFFFFF',
-              fontSize: '11px',
-              fontWeight: 'bold'
-            },
-            icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: scale,
-              fillColor: label.color,
-              fillOpacity: 1,
-              strokeColor: '#FFFFFF',
-              strokeWeight: 2
-            }
+            content: evPinEl,
           });
 
           // クリックで情報ウィンドウ表示

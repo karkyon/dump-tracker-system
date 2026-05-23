@@ -40,25 +40,27 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
 
     googleMapRef.current = map;
 
-    // マーカー作成
-    const marker = new google.maps.Marker({
+    // マーカー作成 (BUG-011: AdvancedMarkerElement 移行)
+    const pinEl = document.createElement('div');
+    pinEl.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#4285F4;border:3px solid #fff;cursor:move;box-shadow:0 2px 6px rgba(0,0,0,.4);';
+    const marker = new (google.maps as any).marker.AdvancedMarkerElement({
       position: initialPosition,
       map: map,
-      draggable: true,
       title: 'ドラッグして位置を調整',
-      animation: google.maps.Animation.DROP,
+      content: pinEl,
+      gmpDraggable: true,
     });
 
     markerRef.current = marker;
 
     // マーカードラッグ終了時のイベント
-    marker.addListener('dragend', async () => {
-      const position = marker.getPosition();
-      if (!position) return;
+    marker.addListener('dragend', async (e: any) => {
+      const latLng = e.latLng ?? marker.position;
+      if (!latLng) return;
 
       const coordinates: Coordinates = {
-        lat: position.lat(),
-        lng: position.lng(),
+        lat: typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat,
+        lng: typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng,
       };
 
       setIsLoadingAddress(true);

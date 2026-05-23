@@ -144,6 +144,17 @@ export class ExpressApp {
     };
 
     this.app.use(helmet(helmetConfig));
+    // BUG-016: 追加セキュリティヘッダー（XSS・クリックジャック・情報漏洩対策）
+    this.app.use((_req, res, next) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(self), microphone=()');
+      if (this.useHttps) {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+      }
+      next();
+    });
     logger.info(`✅ Helmet設定完了 - ${this.useHttps ? 'HTTPS厳格モード' : 'HTTP開発モード'}`);
 
     // 🌐 CORS設定（包括的最適化版）

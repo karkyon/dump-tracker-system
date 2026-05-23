@@ -138,25 +138,22 @@ const GpsPinMap: React.FC<GpsPinMapProps> = ({ accentColor, initialLat, initialL
         gestureHandling: 'cooperative',
       });
       const pos = existingMarker ? existingMarker.getPosition() : { lat: defaultLat, lng: defaultLng };
-      const marker = new google.maps.Marker({
+      // BUG-011: AdvancedMarkerElement (非推奨Marker廃止対応)
+      const pinEl = document.createElement('div');
+      pinEl.style.cssText = `width:20px;height:20px;border-radius:50%;background:${accentColor};border:3px solid #fff;cursor:move;box-shadow:0 2px 6px rgba(0,0,0,.4);`;
+      const marker = new (google.maps as any).marker.AdvancedMarkerElement({
         position: pos,
         map,
-        draggable: true,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: accentColor,
-          fillOpacity: 1,
-          strokeColor: '#fff',
-          strokeWeight: 2,
-        },
+        title: 'ドラッグで位置調整',
+        content: pinEl,
+        gmpDraggable: true,
       });
-      marker.addListener('dragend', () => {
-        const p = marker.getPosition();
-        if (p) onPinMoved(p.lat(), p.lng());
+      marker.addListener('dragend', (e: any) => {
+        const p = e.latLng ?? marker.position;
+        if (p) onPinMoved(typeof p.lat === 'function' ? p.lat() : p.lat, typeof p.lng === 'function' ? p.lng() : p.lng);
       });
       map.addListener('click', (e: any) => {
-        marker.setPosition(e.latLng);
+        marker.position = e.latLng;
         onPinMoved(e.latLng.lat(), e.latLng.lng());
       });
       return { map, marker };

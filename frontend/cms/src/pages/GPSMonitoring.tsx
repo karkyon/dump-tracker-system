@@ -386,18 +386,19 @@ const GPSMonitoring: React.FC = () => {
       `;
 
       if (existingMarkers.has(vehicle.id)) {
-        // 既存マーカーを位置・アイコン更新
+        // BUG-011: AdvancedMarkerElement は position プロパティで更新
         const marker = existingMarkers.get(vehicle.id)!;
-        marker.setPosition(position);
-        marker.setIcon(cfg.markerIcon);
+        marker.position = position;
       } else {
         // 新規マーカーを作成
-        const marker = new window.google.maps.Marker({
+        // BUG-011: AdvancedMarkerElement 移行
+        const pinEl2 = document.createElement('div');
+        pinEl2.style.cssText = `width:14px;height:14px;border-radius:50%;background:${cfg.color ?? '#4285F4'};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:pointer;`;
+        const marker = new window.google.maps.marker.AdvancedMarkerElement({
           position,
           map,
           title: vehicle.vehicleNumber,
-          icon: cfg.markerIcon,
-          animation: window.google.maps.Animation.DROP,
+          content: pinEl2,
         });
 
         marker.addListener('click', () => {
