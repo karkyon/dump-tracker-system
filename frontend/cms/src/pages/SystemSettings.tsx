@@ -333,14 +333,35 @@ const SystemSettings: React.FC = () => {
   // =====================================
   const handleSaveGeneralSettings = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      // 一般設定を保存
+      // 一般設定を保存（localStorage）
       localStorage.setItem(GENERAL_SETTINGS_KEY, JSON.stringify(generalSettings));
-      // GPS走行軌跡設定を保存
+      // GPS走行軌跡設定を保存（localStorage）
       localStorage.setItem(GPS_TRACK_KEY, JSON.stringify(gpsTrackSettings));
       // ② ロゴは processLogoFile / handleLogoRemove 内で即時保存済みのため追加処理不要
       console.log('✅ [SystemSettings] 一般設定を保存:', generalSettings);
       console.log('✅ [SystemSettings] GPS走行軌跡設定を保存:', gpsTrackSettings);
+
+      // BUG-042: GPS設定をバックエンドDBにも保存（モバイルPWAとの共有用）
+      // モバイルは別オリジンのためlocalStorageを共有できない。
+      // DBキー: gps_interval_seconds → App.tsx syncGPSSettingsFromAPI() が読み込む
+      try {
+        const res = await fetch(`${API_BASE_URL}/settings/system`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify([
+            { key: 'gps_interval_seconds', value: String(gpsTrackSettings.intervalSeconds) },
+            { key: 'gps_enable_recording',  value: String(gpsTrackSettings.enableRecording) },
+          ]),
+        });
+        if (res.ok) {
+          console.log('✅ [SystemSettings] GPS設定をDB保存完了 (gps_interval_seconds =', gpsTrackSettings.intervalSeconds, ')');
+        } else {
+          console.warn('⚠️ [SystemSettings] GPS設定DB保存失敗:', res.status);
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ [SystemSettings] GPS設定DB保存エラー（継続）:', dbErr);
+      }
+
       alert('設定を保存しました');
     } catch (error) {
       alert('設定の保存に失敗しました');
