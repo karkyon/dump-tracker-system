@@ -96,7 +96,9 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
     const input = document.getElementById('map-search-input') as HTMLInputElement;
     if (!input) return;
 
-    const searchBox = new google.maps.places.SearchBox(input, {
+    // BUG-012: SearchBox は非推奨だが6月リリース時点では動作継続。
+    // 型キャストで廃止警告を抑制。
+    const searchBox = new (google.maps.places as any).SearchBox(input, {
       bounds: googleMapRef.current.getBounds() || undefined,
     });
 

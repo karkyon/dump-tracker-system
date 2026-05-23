@@ -29,11 +29,17 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     if (!window.google || !inputRef.current) return;
 
     // Google Places Autocompleteの初期化
-    autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-      componentRestrictions: { country: 'jp' },
-      fields: ['formatted_address', 'geometry', 'address_components', 'name'],
-      types: ['address'],
-    });
+    // BUG-012: Autocomplete は非推奨だが6月リリース時点では動作継続。
+    // 新 PlaceAutocompleteElement への完全移行はポストリリース対応。
+    // 現時点ではオプションを最小化して廃止警告を最小限に抑える。
+    autocompleteRef.current = new (google.maps.places as any).Autocomplete(
+      inputRef.current,
+      {
+        componentRestrictions: { country: 'jp' },
+        fields: ['formatted_address', 'geometry'],
+        types: ['address'],
+      }
+    );
 
     // 場所選択時のイベントリスナー
     const listener = autocompleteRef.current.addListener('place_changed', () => {

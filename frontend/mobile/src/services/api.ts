@@ -270,6 +270,20 @@ class APIServiceClass {
     this.axiosInstance.interceptors.response.use(
       (response) => {
         console.log(`[API] Response:`, response.data);
+        // BUG-013: バックエンドが successResponse() を2重に呼ぶと
+        // response.data = { success, data: { success, data: {...} } } になる
+        // インターセプターで自動unwrapして response.data = { success, data: {...} } に正規化
+        const d = response.data;
+        if (
+          d && typeof d === 'object' &&
+          d.success === true &&
+          d.data && typeof d.data === 'object' &&
+          d.data.success === true &&
+          'data' in d.data
+        ) {
+          console.log('[BUG-013] 二重ネスト検出・自動unwrap');
+          response.data = d.data;
+        }
         return response;
       },
       async (error: AxiosError<any>) => {
