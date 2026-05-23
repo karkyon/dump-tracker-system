@@ -19,7 +19,8 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  // BUG-011: AdvancedMarkerElement移行に伴い型をanyに変更
+  const markerRef = useRef<any>(null);
   const searchBoxRef = useRef<google.maps.places.SearchBox | null>(null);
   const [currentAddress, setCurrentAddress] = useState<string>('');
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);

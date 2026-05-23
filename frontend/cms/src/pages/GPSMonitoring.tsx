@@ -272,7 +272,8 @@ const GPSMonitoring: React.FC = () => {
   // Google Maps 用 ref
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  // BUG-011: AdvancedMarkerElement移行に伴い型をanyに変更(TS2339解消)
+  const markersRef = useRef<Map<string, any>>(new Map());
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
 
   // =====================================
