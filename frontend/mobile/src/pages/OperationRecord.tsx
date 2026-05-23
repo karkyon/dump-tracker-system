@@ -898,7 +898,11 @@ const OperationRecord: React.FC = () => {
     }
     setIsCustomerChanging(true);
     try {
-      const res = await apiService.changeOperationCustomer(currentOperationId, customerId);
+      // BUG-019: retryWithBackoff追加（客先変更API）
+      const res = await retryWithBackoff(
+        () => apiService.changeOperationCustomer(currentOperationId, customerId),
+        3, 1000, '客先変更'
+      );
       if (res.success) {
         operationStore.setCustomerInfo({ customerId, customerName });
         toast.success(`客先を「${customerName}」に変更しました`);
@@ -1130,24 +1134,9 @@ const OperationRecord: React.FC = () => {
   /**
    * ✅ 既存: 給油記録ハンドラー
    */
-  const handleRefuel = async () => {
-    try {
-      setIsSubmitting(true);
-      
-      // TODO: 給油記録API呼び出し
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      toast.success('給油を記録しました');
-      
-      // 🆕 給油記録画面へ遷移
-      navigate('/refuel-record'); // ✅ BUG-GPS-NAV: navigate統一（GPS停止しない）
-      
-      setIsSubmitting(false);
-    } catch (error) {
-      console.error('給油記録エラー:', error);
-      toast.error('給油記録に失敗しました');
-      setIsSubmitting(false);
-    }
+  const handleRefuel = () => {
+    // 給油記録画面へ遷移（実際の記録はRefuelRecord.tsx内で行う）
+    navigate('/refuel-record'); // ✅ BUG-GPS-NAV: navigate統一（GPS停止しない）
   };
 
   /**
@@ -1930,7 +1919,6 @@ function getPhaseLabel(phase: OperationPhase): string {
     case 'TO_LOADING': return '積込場所へ移動中';
     case 'AT_LOADING': return '積込場所到着';
     case 'LOADING_IN_PROGRESS': return '積込中';
-    case 'LOADING_IN_PROGRESS': return '積込中';
     case 'TO_UNLOADING': return '荷降場所へ移動中';
     case 'AT_UNLOADING': return '荷降場所到着';
     // UNLOADING_IN_PROGRESS: 廃止
@@ -1945,7 +1933,6 @@ const getPhaseColor = (phase: string): string => {
   switch (phase) {
     case 'TO_LOADING':    return '#2196F3';
     case 'AT_LOADING':    return '#4CAF50';
-    case 'LOADING_IN_PROGRESS': return '#FF9800';
     case 'LOADING_IN_PROGRESS': return '#FF9800';
     case 'TO_UNLOADING':  return '#4CAF50';
     case 'AT_UNLOADING':  return '#FF9800';

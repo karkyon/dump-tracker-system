@@ -168,7 +168,11 @@ const LoadingInput: React.FC = () => {
     }
     setIsCustomerChanging(true);
     try {
-      const res = await apiService.changeOperationCustomer(currentOperationId, customerId);
+      // BUG-019: retryWithBackoff追加（客先変更API）
+      const res = await retryWithBackoff(
+        () => apiService.changeOperationCustomer(currentOperationId, customerId),
+        3, 1000, '客先変更'
+      );
       if (res.success) {
         operationStore.setCustomerInfo({ customerId, customerName });
         setFormData(prev => ({ ...prev, clientName: customerName }));
