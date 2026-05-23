@@ -66,6 +66,14 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuthStore();
+
+  // BUG-042: ログイン後にGPS設定をAPIから同期
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      syncGPSSettingsFromAPI();
+    }
+  }, [isAuthenticated]);
+
   const operationStore = useOperationStore();
   
   useEffect(() => {

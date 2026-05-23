@@ -42,6 +42,8 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     );
 
     // 場所選択時のイベントリスナー
+    // TS18047: null チェック
+    if (!autocompleteRef.current) return;
     const listener = autocompleteRef.current.addListener('place_changed', () => {
       const place = autocompleteRef.current?.getPlace();
 
