@@ -116,13 +116,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         console.log('✅ Map作成成功');
 
         const markerSVG = createCustomMarkerSVG(0, 0, 0);
-        const markerIcon = {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
-          scaledSize: new window.google.maps.Size(60, 80),
-          anchor: new window.google.maps.Point(30, 40)
-        };
-
-        // BUG-011: google.maps.Marker(非推奨) → AdvancedMarkerElement に移行
+        // BUG-011: AdvancedMarkerElement に移行済み。markerIcon は不要なので削除(TS6133解消)
         const markerDiv = document.createElement('div');
         markerDiv.innerHTML = markerSVG;
         markerDiv.style.cssText = 'width:60px;height:80px;cursor:pointer;';
@@ -280,7 +274,8 @@ export const updateMarkerPosition = (lat: number, lng: number) => {
     return;
   }
 
-  globalMarkerInstance.setPosition({ lat, lng });
+  // BUG-011: AdvancedMarkerElement は position プロパティで更新
+  globalMarkerInstance.position = { lat, lng };
 };
 
 export const panMapToPosition = (lat: number, lng: number) => {

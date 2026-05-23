@@ -273,7 +273,8 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
     if (mapInst.current && markerInst.current && lat != null && lng != null) {
       const pos = { lat, lng };
       mapInst.current.panTo(pos);
-      markerInst.current.setPosition(pos);
+      // BUG-011: AdvancedMarkerElement は position プロパティで更新
+      markerInst.current.position = pos;
       onPinMoved(lat, lng);
     }
   }, [lat, lng]);
