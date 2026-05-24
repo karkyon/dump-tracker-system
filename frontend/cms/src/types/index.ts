@@ -76,6 +76,7 @@ export interface InspectionItem {
   name: string;
   description?: string;
   category?: 'pre' | 'post';
+  inspectionType?: 'PRE_TRIP' | 'POST_TRIP';  // バックエンドDB対応フィールド
   type?: string;
   inputType?: 'CHECKBOX' | 'TEXT' | 'NUMBER' | 'SELECT' | 'TEXTAREA';  // 追加
   order?: number;
