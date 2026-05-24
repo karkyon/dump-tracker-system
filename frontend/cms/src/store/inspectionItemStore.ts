@@ -114,9 +114,19 @@ const denormalizeInspectionItem = (item: Partial<InspectionItem>): any => {
       : item.type;
   }
   
-  // category
+  // category + inspectionType変換
+  // フロントエンドのcategory('pre'/'post')→バックエンド必須フィールドinspectionType('PRE_TRIP'/'POST_TRIP')に変換
   if (item.category !== undefined) {
     backendData.category = item.category;
+    if (item.category === 'pre') {
+      backendData.inspectionType = 'PRE_TRIP';
+    } else if (item.category === 'post') {
+      backendData.inspectionType = 'POST_TRIP';
+    }
+  }
+  // inspectionTypeが直接指定されている場合はそちらを優先
+  if (item.inspectionType !== undefined) {
+    backendData.inspectionType = item.inspectionType;
   }
   
   // 🐛 修正: order → displayOrder への変換
