@@ -292,7 +292,8 @@ const VehicleInfo: React.FC = () => {
       return false;
     }
     
-    if (!startMileage || parseInt(startMileage) <= 0) {
+    // ✅ BUG-FIX: 0km新車対応 - 空文字のみエラー（0は有効な開始距離）
+    if (startMileage === '') {
       toast.error('開始距離を入力してください');
       return false;
     }
