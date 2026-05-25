@@ -37,6 +37,7 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
       mapTypeControl: true,
       streetViewControl: false,
       fullscreenControl: true,
+      mapId: 'DEMO_MAP_ID',
     });
 
     googleMapRef.current = map;

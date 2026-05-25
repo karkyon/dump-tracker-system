@@ -254,6 +254,7 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
     const map = new g.Map(container, {
       center: { lat: centerLat, lng: centerLng },
       zoom: 17, disableDefaultUI: true, zoomControl: true,
+      mapId: 'DEMO_MAP_ID',
     });
     const pos = existingMarker ? existingMarker.getPosition() : { lat: centerLat, lng: centerLng };
     // BUG-011: AdvancedMarkerElement 移行
@@ -2467,7 +2468,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 const apiBase = (window as any).__API_BASE_URL__
                                   || import.meta.env.VITE_API_BASE_URL
                                   || '';
-                                const baseOrigin = apiBase
+                                const baseOrigin = (apiBase && apiBase.startsWith('http'))
                                   ? apiBase.replace(/\/api\/v1.*$/, '')
                                   : window.location.origin;
                                 const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${baseOrigin}${imgUrl}`;

@@ -229,7 +229,7 @@ const loadGoogleMapsScript = (callback: () => void): void => {
 
   const script = document.createElement('script');
   script.id = 'google-maps-script';
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=ja&region=JP`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker,places&language=ja&region=JP`;
   script.async = true;
   script.defer = true;
   script.onload = callback;
@@ -340,6 +340,7 @@ const GPSMonitoring: React.FC = () => {
         streetViewControl: false,
         fullscreenControl: true,
         zoomControl: true,
+        mapId: 'DEMO_MAP_ID',
       });
 
       mapInstanceRef.current = map;
