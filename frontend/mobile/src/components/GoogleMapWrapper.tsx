@@ -101,8 +101,11 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         const mapOptions: any = {
           center: centerPosition,
           zoom: 18,
-          renderingType: window.google.maps.RenderingType.VECTOR,
-          mapId: "DEMO_MAP_ID",
+          // ✅ Fix①: VITE_GOOGLE_MAP_IDが設定済みの場合のみVECTOR+mapId
+          // 未設定時はmapIdなしで初期化（RenderingType指定もしない）
+          ...(import.meta.env.VITE_GOOGLE_MAP_ID
+            ? { renderingType: window.google.maps.RenderingType.VECTOR, mapId: import.meta.env.VITE_GOOGLE_MAP_ID }
+            : {}),
           heading: 0,
           tilt: 0,
           disableDefaultUI: true,

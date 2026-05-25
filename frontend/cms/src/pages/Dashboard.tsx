@@ -116,10 +116,15 @@ const Dashboard: React.FC = () => {
                 ? opsData.operations
                 : [];
 
-          const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+          // ✅ Fix②: JST(UTC+9)基準で今日の日付を計算して比較
+          const nowJST = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          const todayStr = nowJST.toISOString().slice(0, 10); // JST YYYY-MM-DD
           todayOperations = opList.filter((op: any) => {
             const d = op.operationDate ?? op.actualStartTime ?? op.plannedStartTime ?? op.createdAt;
-            return d && String(d).startsWith(todayStr);
+            if (!d) return false;
+            // DBはUTC保存なのでJST変換して比較
+            const dJST = new Date(new Date(d).getTime() + 9 * 60 * 60 * 1000);
+            return dJST.toISOString().slice(0, 10) === todayStr;
           }).length;
 
           // 最近5件を整形
