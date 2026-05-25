@@ -49,6 +49,7 @@ interface UserState {
   deleteUser: (id: string) => Promise<boolean>;
   setFilters: (filters: Partial<FilterOptions>) => void;
   setPage: (page: number) => void;
+  setPageSize: (pageSize: number) => void;
   clearError: () => void;
   clearSelectedUser: () => void;
 }
@@ -141,7 +142,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   error: null,
   pagination: {
     page: 1,
-    pageSize: 10,
+    pageSize: 50,
     total: 0,
     totalPages: 0,
   },
@@ -528,15 +529,12 @@ export const useUserStore = create<UserState>((set, get) => ({
    */
   setPage: (page: number) => {
     console.log('[UserStore] setPage:', page);
-    
-    set({
-      pagination: {
-        ...get().pagination,
-        page,
-      },
-    });
-    
-    console.log('[UserStore] setPage完了 (fetchUsersはuseEffectが実行)');
+    set({ pagination: { ...get().pagination, page } });
+  },
+
+  setPageSize: (pageSize: number) => {
+    console.log('[UserStore] setPageSize:', pageSize);
+    set({ pagination: { ...get().pagination, pageSize, page: 1 } });
   },
 
   // ==========================================

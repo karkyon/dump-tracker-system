@@ -49,6 +49,7 @@ interface VehicleState {
   hardDeleteVehicle: (id: string) => Promise<boolean>;
   setFilters: (filters: Partial<FilterOptions>) => void;
   setPage: (page: number) => void;
+  setPageSize: (pageSize: number) => void;
   clearError: () => void;
   clearSelectedVehicle: () => void;
 }
@@ -132,7 +133,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   error: null,
   pagination: {
     page: 1,
-    pageSize: 10,
+    pageSize: 50,
     total: 0,
     totalPages: 0,
   },

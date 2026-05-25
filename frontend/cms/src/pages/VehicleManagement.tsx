@@ -31,6 +31,7 @@ const VehicleManagement: React.FC = () => {
     setFilters,
     setPage,
     clearError,
+    setPageSize,
   } = useVehicleStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -454,16 +455,17 @@ const VehicleManagement: React.FC = () => {
         emptyMessage="車両が見つかりません"
       />
 
-      {/* ページネーション */}
-      {pagination.totalPages > 1 && (
-        <Pagination
-          currentPage={pagination.page}
-          totalPages={pagination.totalPages}
-          totalItems={pagination.total}
-          pageSize={pagination.pageSize}
-          onPageChange={setPage}
-        />
-      )}
+      {/* ページネーション - 常時表示 + 表示件数セレクタ */}
+      <Pagination
+        currentPage={pagination.page}
+        totalPages={pagination.totalPages}
+        totalItems={pagination.total}
+        pageSize={pagination.pageSize}
+        onPageChange={setPage}
+        showPageSizeSelector={true}
+        onPageSizeChange={(size) => { setPageSize(size); fetchVehicles(); }}
+        pageSizeOptions={[10, 25, 50, 100]}
+      />
 
       {/* 新規作成モーダル */}
       <FormModal

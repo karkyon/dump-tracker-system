@@ -81,7 +81,7 @@ function Table<T extends Record<string, any>>({
   return (
     <div className={`bg-white shadow overflow-x-auto sm:rounded-md ${className}`}>
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+        <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
           <tr>
             {columns.map((column) => (
               <th
