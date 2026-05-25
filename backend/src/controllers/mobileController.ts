@@ -1421,7 +1421,11 @@ export class MobileController {
 
         return {
           id: trip.id,
-          date: startTime ? new Date(startTime).toISOString().split('T')[0] : '',
+          // ✅ Fix: UTCのままだと日付が1日ズレる → JST(+9h)変換してから日付取得
+          date: startTime ? (() => {
+            const d = new Date(new Date(startTime).getTime() + 9 * 60 * 60 * 1000);
+            return d.toISOString().split('T')[0];
+          })() : '',
           vehicleNumber: vehicleData?.registration_number || vehicleData?.registrationNumber
             || vehicleData?.plate_number || vehicleData?.plateNumber || '不明',
           vehicleType: vehicleData?.vehicle_type || vehicleData?.vehicleType || '',
@@ -1596,7 +1600,11 @@ export class MobileController {
 
       const detailResponse = {
         id: trip.id,
-        date: startTime ? new Date(startTime).toISOString().split('T')[0] : '',
+        // ✅ Fix: JST変換してから日付取得
+        date: startTime ? (() => {
+          const d = new Date(new Date(startTime).getTime() + 9 * 60 * 60 * 1000);
+          return d.toISOString().split('T')[0];
+        })() : '',
         status: (trip as any).status,
         vehicle: {
           id: vehicleData?.id || '',

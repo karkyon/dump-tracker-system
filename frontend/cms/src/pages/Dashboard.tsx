@@ -108,16 +108,25 @@ const Dashboard: React.FC = () => {
         const recentOps: RecentOperation[] = [];
         if (operationsRes.status === 'fulfilled') {
           const opsData = (operationsRes.value as any)?.data;
-          // ✅ 修正: /operations APIレスポンス構造に完全対応
-          // axios経由: res.data = { success, data: { operations:[...], pagination:{...} } }
-          // opsData = res.data (axios wrapper)
+          // ✅ 完全修正: /operations APIレスポンス構造
+          // axiosラッパー: operationsRes.value = { data: バックエンドレスポンス全体 }
+          // バックエンド: { success:true, data:{ operations:[...], pagination:{...} } }
+          // → opsData = { success, data:{ operations:[...] } }
+          // → opsData?.data?.operations が正解
           const opList: any[] =
-            Array.isArray(opsData?.data?.operations)  ? opsData.data.operations  :  // パターン1: data.data.operations
-            Array.isArray(opsData?.data?.data?.operations) ? opsData.data.data.operations :  // パターン2: 3重ネスト
-            Array.isArray(opsData?.operations)         ? opsData.operations        :  // パターン3: data.operations
-            Array.isArray(opsData?.data)               ? opsData.data              :  // パターン4: data配列
-            Array.isArray(opsData)                     ? opsData                   :  // パターン5: 直接配列
+            Array.isArray(opsData?.data?.operations)       ? opsData.data.operations       :
+            Array.isArray(opsData?.data?.data?.operations) ? opsData.data.data.operations  :
+            Array.isArray(opsData?.operations)             ? opsData.operations             :
+            Array.isArray(opsData?.data?.data)             ? opsData.data.data             :
+            Array.isArray(opsData?.data)                   ? opsData.data                  :
+            Array.isArray(opsData)                         ? opsData                       :
             [];
+          console.log('[Dashboard] operations API解析:', {
+            opsDataKeys: opsData ? Object.keys(opsData) : [],
+            dataKeys: opsData?.data ? Object.keys(opsData.data) : [],
+            opListLength: opList.length,
+            sample: opList[0] ? { id: opList[0].id, actualStartTime: opList[0].actualStartTime, createdAt: opList[0].createdAt } : null
+          });
 
           // ✅ Fix②: JST(UTC+9)基準で今日の日付を計算して比較
           const nowJST = new Date(Date.now() + 9 * 60 * 60 * 1000);
