@@ -1520,12 +1520,28 @@ class APIServiceClass {
     const form = new FormData();
     form.append('image', imageBlob, filename);
     try {
-      // ✅ REQ-020修正: Content-Typeヘッダーを手動設定しない
-      // axiosがFormDataを検知して自動でboundary付きmultipart/form-dataを設定する
-      // 手動で設定するとboundaryが欠落しmulterが「画像ファイルが必要です」エラーを返す
+      // ✅ REQ-020修正: axiosインスタンスのデフォルト 'Content-Type: application/json' を
+      // このリクエストだけ削除し、axiosにFormDataのboundary付きmultipart/form-dataを
+      // 自動設定させる。削除しないとmulterがboundaryを解析できず req.file が undefined になる。
       const response = await this.axiosInstance.post<APIResponse<{ imageUrl: string }>>(
         `/operation-details/${detailId}/image`,
-        form
+        form,
+        {
+          headers: {
+            'Content-Type': undefined as any,  // デフォルトのapplication/jsonを削除→axiosが自動設定
+          },
+          transformRequest: [
+            (data: any, headers: any) => {
+              // axios がデフォルトで設定する Content-Type を強制削除
+              if (headers) {
+                delete headers['Content-Type'];
+                delete headers.common?.['Content-Type'];
+                delete headers.post?.['Content-Type'];
+              }
+              return data;
+            },
+          ],
+        }
       );
       return response.data;
     } catch (error) {
