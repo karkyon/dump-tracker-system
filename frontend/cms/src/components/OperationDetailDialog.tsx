@@ -2719,8 +2719,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     const apiBase = (window as any).__API_BASE_URL__
                                       || import.meta.env.VITE_API_BASE_URL
                                       || '';
-                                    const baseOrigin = apiBase
-                                      ? apiBase.replace('/api/v1', '').replace(/\/api\/v1.*$/, '')
+                                    // ✅ Fix④: /api/v1は相対パスのためwindow.location.originを使用
+                                    const baseOrigin = (apiBase && apiBase.startsWith('http'))
+                                      ? apiBase.replace(/\/api\/v1.*$/, '')
                                       : window.location.origin;
                                     const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${baseOrigin}${imgUrl}`;
                                     return (

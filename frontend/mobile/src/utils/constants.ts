@@ -82,7 +82,7 @@ export const MAP_CONFIG = {
   DEFAULT_ZOOM: 18,
   
   // マップID（WebGL Vector Map用）
-  MAP_ID: 'DEMO_MAP_ID',
+  MAP_ID: import.meta.env.VITE_GOOGLE_MAP_ID || '',
   
   // マップ設定
   OPTIONS: {
@@ -91,8 +91,9 @@ export const MAP_CONFIG = {
     disableDefaultUI: true,
     zoomControl: true,
     gestureHandling: 'greedy' as const,
-    tiltInteractionEnabled: true,
-    headingInteractionEnabled: true
+    tiltInteractionEnabled: false,
+    headingInteractionEnabled: false,
+    rotateControl: false
   },
   
   // マーカー設定

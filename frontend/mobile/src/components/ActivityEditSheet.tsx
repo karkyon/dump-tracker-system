@@ -106,7 +106,7 @@ const TimeDial: React.FC<{
 };
 
 // ── GPS ピン調整マップ（Google Maps API + 全画面Modal） ──
-const MAPS_API_KEY = 'AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk';
+const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 declare const google: any;
 
 interface GpsPinMapProps {
@@ -179,14 +179,21 @@ const GpsPinMap: React.FC<GpsPinMapProps> = ({ accentColor, initialLat, initialL
         initMap();
         return;
       }
-      const existing = document.getElementById('gmap-script-edit');
+      // ✅ Fix③: スクリプトID統一+libraries=marker+重複防止
+      const existing = document.getElementById('google-maps-script');
       if (!existing) {
         const s = document.createElement('script');
-        s.id = 'gmap-script-edit';
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&callback=__gmapEditReady`;
+        s.id = 'google-maps-script';
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=marker&callback=__gmapEditReady`;
         s.async = true;
         (window as any).__gmapEditReady = () => initMap();
         document.head.appendChild(s);
+        return;
+      } else if (typeof google !== 'undefined' && google.maps) {
+        setTimeout(() => initMap(), 50);
+        return;
+      } else {
+        existing.addEventListener('load', () => initMap());
         return;
       }
       const t = setInterval(() => {

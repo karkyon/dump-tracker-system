@@ -63,6 +63,17 @@ jobs:
             # systemdサービスとして起動（自動再起動・VM再起動対応）
             # CORS_ORIGIN設定
             BACKEND_ENV=~/projects/dump-tracker/backend/.env
+            # ✅ Fix②: JWT有効期限を24hに設定（デフォルト15mがログアウト根本原因）
+            if grep -q "JWT_EXPIRES_IN" "$BACKEND_ENV" 2>/dev/null; then
+              sed -i 's|JWT_EXPIRES_IN=.*|JWT_EXPIRES_IN=24h|' "$BACKEND_ENV"
+            else
+              echo "JWT_EXPIRES_IN=24h" >> "$BACKEND_ENV"
+            fi
+            if grep -q "JWT_REFRESH_EXPIRES_IN" "$BACKEND_ENV" 2>/dev/null; then
+              sed -i 's|JWT_REFRESH_EXPIRES_IN=.*|JWT_REFRESH_EXPIRES_IN=30d|' "$BACKEND_ENV"
+            else
+              echo "JWT_REFRESH_EXPIRES_IN=30d" >> "$BACKEND_ENV"
+            fi
             if grep -q "CORS_ORIGIN" "$BACKEND_ENV" 2>/dev/null; then
               sed -i 's|CORS_ORIGIN=.*|CORS_ORIGIN=https://dumptracker-s.ddns.net,https://dumptracker-s.ddns.net:3003,https://dumptracker-s.ddns.net:3001|' "$BACKEND_ENV"
             else

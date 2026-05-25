@@ -393,21 +393,7 @@ const Settings: React.FC = () => {
             <h2 className="font-semibold text-gray-800">操作設定</h2>
           </div>
           <div className="p-4 space-y-4">
-            <div>
-              <label className="block text-gray-700 mb-2">
-                自動ログアウト時間
-              </label>
-              <select
-                value={settings.operation.autoLogoutMinutes}
-                onChange={(e) => updateSetting('operation', 'autoLogoutMinutes', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={15}>15分</option>
-                <option value={30}>30分</option>
-                <option value={60}>60分</option>
-              </select>
-            </div>
+            {/* ✅ Fix②: 自動ログアウト時間UI削除 - JWT=24hで管理するためUI不要 */}
 
             <label className="flex items-center justify-between">
               <span className="text-gray-700">GPS自動取得</span>

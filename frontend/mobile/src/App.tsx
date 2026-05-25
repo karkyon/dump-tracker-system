@@ -133,6 +133,12 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
     if (status === 'IN_PROGRESS') {
       // 🆕 運行中の場合: 運行記録画面に遷移
       console.log('[StateRestorer] 🚛 運行中状態を検出 - 運行記録画面に遷移');
+      // ✅ Fix②-C: ブラウザクローズ/スクリーンブランク後の再ログイン時に
+      // sessionStorageのinspection_completedが消えてOperationMainに弾かれる問題修正
+      if (!sessionStorage.getItem('inspection_completed')) {
+        sessionStorage.setItem('inspection_completed', 'true');
+        console.log('[StateRestorer] ✅ inspection_completed フラグ復元');
+      }
       console.log('[StateRestorer] 📍 復元データ:', {
         operationId,
         vehicleId,
