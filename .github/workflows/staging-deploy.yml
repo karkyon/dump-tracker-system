@@ -109,6 +109,7 @@ jobs:
           VITE_API_BASE_URL=/api/v1
           VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
           VITE_APP_ENV=staging
+          VITE_GOOGLE_MAP_ID=793b2cb3013694b0700a2152 
           EOF
       
       - name: 🏗️ Build mobile app
