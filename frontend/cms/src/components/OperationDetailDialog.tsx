@@ -1059,10 +1059,15 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       const existingScript = document.getElementById('google-maps-script');
       if (existingScript) {
         console.log('✅ [Maps Loading Debug] Google Maps script already exists');
-        existingScript.addEventListener('load', () => {
-          console.log('✅ [Maps Loading Debug] Existing script loaded');
+        if ((window as any).google?.maps) {
+          console.log('✅ [Maps Loading Debug] Already loaded, setting mapsLoaded=true');
           setMapsLoaded(true);
-        });
+        } else {
+          existingScript.addEventListener('load', () => {
+            console.log('✅ [Maps Loading Debug] Existing script loaded');
+            setMapsLoaded(true);
+          });
+        }
         return;
       }
 

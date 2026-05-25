@@ -29,7 +29,7 @@ export const useGoogleMapsLoader = (apiKey: string) => {
         }
 
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=ja&region=JP&loading=async`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places&language=ja&region=JP&loading=async`;
         script.async = true;
         script.defer = true;
 

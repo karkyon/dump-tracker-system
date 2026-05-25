@@ -218,7 +218,11 @@ const loadGoogleMapsScript = (callback: () => void): void => {
   // 既にスクリプトタグが存在
   const existingScript = document.getElementById('google-maps-script');
   if (existingScript) {
-    existingScript.addEventListener('load', callback);
+    if (window.google && window.google.maps) {
+      callback();
+    } else {
+      existingScript.addEventListener('load', callback);
+    }
     return;
   }
   // APIキー未設定

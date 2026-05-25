@@ -703,13 +703,9 @@ export class InspectionService {
         throw new ConflictError('使用中の点検項目は削除できません');
       }
 
-      // 論理削除（修正版：updatedByを削除）
-      await this.prisma.inspectionItem.update({
-        where: { id },
-        data: {
-          isActive: false,
-          updatedAt: new Date()
-        }
+      // 物理削除（マスタは完全削除。過去の点検結果名称は別途スナップショットで保持する想定）
+      await this.prisma.inspectionItem.delete({
+        where: { id }
       });
 
       logger.info('点検項目削除完了', {
