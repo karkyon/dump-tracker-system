@@ -108,25 +108,22 @@ const Dashboard: React.FC = () => {
         const recentOps: RecentOperation[] = [];
         if (operationsRes.status === 'fulfilled') {
           const opsData = (operationsRes.value as any)?.data;
-          // ✅ 完全修正: /operations APIレスポンス構造
-          // axiosラッパー: operationsRes.value = { data: バックエンドレスポンス全体 }
-          // バックエンド: { success:true, data:{ operations:[...], pagination:{...} } }
+          // ✅ 確定修正: /operations APIレスポンス構造
+          // axios経由レスポンス: operationsRes.value = axiosレスポンス
+          // → operationsRes.value.data = バックエンドのレスポンスボディ全体
+          //   = { success:true, data:{ operations:[...], pagination:{...} } }
           // → opsData = { success, data:{ operations:[...] } }
-          // → opsData?.data?.operations が正解
-          const opList: any[] =
-            Array.isArray(opsData?.data?.operations)       ? opsData.data.operations       :
-            Array.isArray(opsData?.data?.data?.operations) ? opsData.data.data.operations  :
-            Array.isArray(opsData?.operations)             ? opsData.operations             :
-            Array.isArray(opsData?.data?.data)             ? opsData.data.data             :
-            Array.isArray(opsData?.data)                   ? opsData.data                  :
-            Array.isArray(opsData)                         ? opsData                       :
-            [];
-          console.log('[Dashboard] operations API解析:', {
-            opsDataKeys: opsData ? Object.keys(opsData) : [],
-            dataKeys: opsData?.data ? Object.keys(opsData.data) : [],
-            opListLength: opList.length,
-            sample: opList[0] ? { id: opList[0].id, actualStartTime: opList[0].actualStartTime, createdAt: opList[0].createdAt } : null
-          });
+          // 正解: opsData.data.operations
+          const opList: any[] = (() => {
+            // 段階的に構造を確認してoperations配列を取得
+            if (Array.isArray(opsData?.data?.operations))       return opsData.data.operations;
+            if (Array.isArray(opsData?.data?.data?.operations)) return opsData.data.data.operations;
+            if (Array.isArray(opsData?.operations))             return opsData.operations;
+            if (Array.isArray(opsData?.data?.data))             return opsData.data.data;
+            if (Array.isArray(opsData?.data))                   return opsData.data;
+            if (Array.isArray(opsData))                         return opsData;
+            return [];
+          })();
 
           // ✅ Fix②: JST(UTC+9)基準で今日の日付を計算して比較
           const nowJST = new Date(Date.now() + 9 * 60 * 60 * 1000);

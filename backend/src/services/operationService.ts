@@ -734,12 +734,23 @@ export class OperationService {
     }
 
     if (filter.startDate || filter.endDate) {
+      // ✅ 修正: フロントから渡された日付文字列(YYYY-MM-DD)をJST境界に変換してUTCでDB検索
+      // 例: 2026-05-26 → JST 2026-05-26 00:00:00 = UTC 2026-05-25 15:00:00
+      const toJstBoundary = (dateStr: Date | string, endOfDay: boolean): Date => {
+        const jstOff = 9 * 60 * 60 * 1000;
+        const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+        const jstD = new Date(d.getTime() + jstOff);
+        const y = jstD.getUTCFullYear(), m = jstD.getUTCMonth(), day = jstD.getUTCDate();
+        return endOfDay
+          ? new Date(Date.UTC(y, m, day, 23, 59, 59, 999) - jstOff)
+          : new Date(Date.UTC(y, m, day, 0, 0, 0, 0) - jstOff);
+      };
       where.actualStartTime = {};
       if (filter.startDate) {
-        where.actualStartTime.gte = filter.startDate;
+        where.actualStartTime.gte = toJstBoundary(filter.startDate, false);
       }
       if (filter.endDate) {
-        where.actualStartTime.lte = filter.endDate;
+        where.actualStartTime.lte = toJstBoundary(filter.endDate, true);
       }
     }
 
