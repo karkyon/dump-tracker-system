@@ -1520,38 +1520,34 @@ class APIServiceClass {
     const form = new FormData();
     form.append('image', imageBlob, filename);
     try {
-      // ✅ REQ-020修正: axiosインスタンスのデフォルト 'Content-Type: application/json' を
-      // このリクエストだけ削除し、axiosにFormDataのboundary付きmultipart/form-dataを
-      // 自動設定させる。削除しないとmulterがboundaryを解析できず req.file が undefined になる。
-      const response = await this.axiosInstance.post<APIResponse<{ imageUrl: string }>>(
-        `/operation-details/${detailId}/image`,
-        form,
-        {
-          headers: {
-            'Content-Type': undefined as any,  // デフォルトのapplication/jsonを削除→axiosが自動設定
-          },
-          transformRequest: [
-            (data: any, headers: any) => {
-              // axios がデフォルトで設定する Content-Type を強制削除
-              if (headers) {
-                delete headers['Content-Type'];
-                delete headers.common?.['Content-Type'];
-                delete headers.post?.['Content-Type'];
-              }
-              return data;
-            },
-          ],
-        }
-      );
-      return response.data;
+      // ✅ REQ-020修正v2: fetch APIで直接送信
+      // axiosのデフォルトヘッダー(Content-Type: application/json)問題を完全回避。
+      // fetchにFormDataを渡すとブラウザが自動でboundary付きmultipart/form-dataを設定する。
+      // AuthorizationヘッダーのみJWTトークンを手動付与。
+      const baseURL = this.axiosInstance.defaults.baseURL || '';
+      const url = `${baseURL}/operation-details/${detailId}/image`;
+      const token = this.getToken();
+      const fetchResponse = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          // Content-Type は設定しない → fetchがFormDataを検知して自動設定
+        },
+        body: form,
+      });
+      if (!fetchResponse.ok) {
+        const errData = await fetchResponse.json().catch(() => ({ message: `HTTP ${fetchResponse.status}` }));
+        throw new Error(errData.message || `アップロード失敗: ${fetchResponse.status}`);
+      }
+      const data: APIResponse<{ imageUrl: string }> = await fetchResponse.json();
+      return data;
     } catch (error) {
       console.error('写真アップロードエラー詳細:', {
         detailId,
         filename,
         blobSize: (imageBlob as any)?.size,
         blobType: (imageBlob as any)?.type,
-        httpStatus: (error as any)?.response?.status,
-        serverMessage: (error as any)?.response?.data?.message,
+        errorMessage: (error as any)?.message,
       });
       throw error;
     }
