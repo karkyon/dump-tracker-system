@@ -67,11 +67,15 @@ export class SummaryService {
       // =====================================
       // 1. 今日の日付範囲を計算
       // =====================================
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // ✅ JST(UTC+9)で今日の日付範囲をUTCで計算
+      const nowUtc = new Date();
+      const jstOffset = 9 * 60 * 60 * 1000;
+      const nowJst = new Date(nowUtc.getTime() + jstOffset);
+      // JST 今日の0時をUTCに変換
+      const jstMidnight = new Date(Date.UTC(
+        nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate(), 0, 0, 0, 0
+      ) - jstOffset);
+      const jstMidnightNext = new Date(jstMidnight.getTime() + 24 * 60 * 60 * 1000);
 
       // =====================================
       // 2. 今日の運行データを取得
@@ -81,10 +85,10 @@ export class SummaryService {
       const operations = await this.prisma.operation.findMany({
         where: {
           driverId: userId,
-          createdAt: {
-            gte: today,
-            lt: tomorrow
-          }
+          OR: [
+            { actualStartTime: { gte: jstMidnight, lt: jstMidnightNext } },
+            { createdAt: { gte: jstMidnight, lt: jstMidnightNext } },
+          ],
         },
         select: {
           id: true,
