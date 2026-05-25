@@ -304,14 +304,41 @@ const LoadingInput: React.FC = () => {
   // 「運行開始」ボタンハンドラー
   // ※ 旧D5の「進む」+ 旧D5aの「運行開始」を統合
   // ============================================================
-  // REQ-020: カメラ/ファイル選択ハンドラー
+  // REQ-020: カメラ/ファイル選択ハンドラー（Canvas圧縮付き）
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setCargoPhotoBlob(file);
-    const url = URL.createObjectURL(file);
-    setCargoPhotoUrl(url);
-    toast.success('写真を選択しました');
+
+    // ✅ Canvas APIで送信前にリサイズ・圧縮（iPhoneの2〜3MB → 300KB以下）
+    const MAX_WIDTH = 1280;
+    const JPEG_QUALITY = 0.7;
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      // リサイズ比率計算（MAX_WIDTH以下ならそのまま）
+      const ratio = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+      const width  = Math.round(img.width  * ratio);
+      const height = Math.round(img.height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return;
+          console.log(`📷 写真圧縮: ${(file.size / 1024).toFixed(0)}KB → ${(blob.size / 1024).toFixed(0)}KB`);
+          setCargoPhotoBlob(blob);
+          setCargoPhotoUrl(URL.createObjectURL(blob));
+          toast.success('写真を選択しました');
+        },
+        'image/jpeg',
+        JPEG_QUALITY
+      );
+    };
+    img.src = objectUrl;
   };
 
   const handleStartOperation = async () => {
