@@ -195,7 +195,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     const script = document.createElement('script');
     script.id = 'google-maps-script';
     // BUG-012: loading=async で廃止APIの初期化警告を抑制
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&v=weekly&loading=async&libraries=marker`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&libraries=marker`;
     script.async = true;
     script.defer = true;
     

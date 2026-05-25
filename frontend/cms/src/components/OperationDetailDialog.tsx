@@ -254,7 +254,8 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
     const map = new g.Map(container, {
       center: { lat: centerLat, lng: centerLng },
       zoom: 17, disableDefaultUI: true, zoomControl: true,
-      mapId: 'DEMO_MAP_ID',
+      // ✅ Fix③-B: DEMO_MAP_IDはAdvancedMarkerElementでエラーになるため実Map IDを使用
+      ...((import.meta as any).env?.VITE_GOOGLE_MAP_ID ? { mapId: (import.meta as any).env.VITE_GOOGLE_MAP_ID } : {}),
     });
     const pos = existingMarker ? existingMarker.getPosition() : { lat: centerLat, lng: centerLng };
     // BUG-011: AdvancedMarkerElement 移行
@@ -289,11 +290,12 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
         }
         return;
       }
-      if (!document.getElementById(CMS_MAPS_SCRIPT_ID)) {
+      // ✅ Fix③: google-maps-scriptが既にある場合は再利用、なければ新規作成
+      if (!document.getElementById('google-maps-script') && !document.getElementById(CMS_MAPS_SCRIPT_ID)) {
         const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
         const s = document.createElement('script');
-        s.id = CMS_MAPS_SCRIPT_ID;
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=__cmsMapsReady`;
+        s.id = 'google-maps-script';
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&callback=__cmsMapsReady`;
         s.async = true;
         (window as any).__cmsMapsReady = () => {
           if (mapRef.current && !mapInst.current) {
