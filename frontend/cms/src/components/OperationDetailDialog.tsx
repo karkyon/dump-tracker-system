@@ -1175,6 +1175,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         center: { lat: centerLat, lng: centerLng },
         zoom: 14,
         mapTypeId: google.maps.MapTypeId.ROADMAP,
+        mapId: 'DEMO_MAP_ID',
       });
 
       mapInstanceRef.current = map;
@@ -2460,6 +2461,40 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   備考: {subEvent.notes}
                                 </div>
                               )}
+                              {/* REQ-020: 積載物写真サムネ（完了イベントのみ） */}
+                              {!isArrived && (subEvent as any).imageUrl && (() => {
+                                const imgUrl = (subEvent as any).imageUrl as string;
+                                const apiBase = (window as any).__API_BASE_URL__
+                                  || import.meta.env.VITE_API_BASE_URL
+                                  || '';
+                                const baseOrigin = apiBase
+                                  ? apiBase.replace(/\/api\/v1.*$/, '')
+                                  : window.location.origin;
+                                const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${baseOrigin}${imgUrl}`;
+                                return (
+                                  <div className="mt-2">
+                                    <p className="text-xs text-gray-500 mb-1">📷 積載物写真</p>
+                                    <img
+                                      src={fullUrl}
+                                      alt="積載物写真"
+                                      className="rounded-lg border border-gray-200 cursor-zoom-in hover:opacity-90 transition-opacity shadow-sm"
+                                      style={{ maxWidth: '180px', maxHeight: '130px', objectFit: 'cover', display: 'block' }}
+                                      onClick={() => {
+                                        const modal = document.createElement('div');
+                                        modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+                                        const img = document.createElement('img');
+                                        img.src = fullUrl;
+                                        img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;box-shadow:0 4px 32px rgba(0,0,0,0.5)';
+                                        img.alt = '積載物写真（拡大）';
+                                        modal.appendChild(img);
+                                        modal.onclick = () => document.body.removeChild(modal);
+                                        document.body.appendChild(modal);
+                                      }}
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">クリックで拡大</p>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
