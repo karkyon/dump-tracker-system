@@ -1,4 +1,27 @@
-#!/usr/bin/env python3
+import subprocess, sys
+from pathlib import Path
+
+APP_ROOT = Path.home() / 'projects' / 'dump-tracker'
+FIX_NGINX = APP_ROOT / 'scripts' / 'fix-nginx-cms.py'
+
+print('='*60)
+print('fix-nginx-cms.py に /uploads/ location を追加')
+print('='*60)
+
+# 現在の内容を確認
+original = FIX_NGINX.read_text(encoding='utf-8') if FIX_NGINX.exists() else ''
+print(f'現在のファイル内容 ({len(original)} 文字):')
+print(original[:500] if original else '(空またはファイルなし)')
+print('...')
+
+# uploads location 追加済みかチェック
+if 'uploads' in original.lower():
+    print('✅ 既に /uploads/ の設定が含まれています')
+else:
+    print('⚠️ /uploads/ の設定なし → 追加します')
+
+# fix-nginx-cms.py を完全上書き（/uploads/ location を確実に含む版）
+NEW_CONTENT = '''#!/usr/bin/env python3
 """
 staging nginx 設定修正スクリプト
 CMSデプロイ時に sudo python3 /tmp/fix-nginx-cms.py として実行される
@@ -33,7 +56,7 @@ changed = False
 if 'client_max_body_size' not in content:
     content = content.replace(
         'server_name dumptracker-s.ddns.net;',
-        'server_name dumptracker-s.ddns.net;\n    client_max_body_size 20m;'
+        'server_name dumptracker-s.ddns.net;\\n    client_max_body_size 20m;'
     )
     changed = True
     print('✅ client_max_body_size 20m 追加')
@@ -61,20 +84,20 @@ if 'location /uploads/' not in content:
     if 'location /api/' in content:
         content = content.replace(
             'location /api/',
-            UPLOADS_LOCATION + '\n\n    location /api/',
+            UPLOADS_LOCATION + '\\n\\n    location /api/',
             1
         )
     elif 'location /' in content:
         # / location の前に挿入
         content = content.replace(
             'location /',
-            UPLOADS_LOCATION + '\n\n    location /',
+            UPLOADS_LOCATION + '\\n\\n    location /',
             1
         )
     else:
         # 最初の } の前に追加
         last_brace = content.rfind('}')
-        content = content[:last_brace] + UPLOADS_LOCATION + '\n}\n'
+        content = content[:last_brace] + UPLOADS_LOCATION + '\\n}\\n'
     changed = True
     print('✅ location /uploads/ 追加')
 else:
@@ -95,3 +118,26 @@ if changed:
         print('🔄 ロールバック完了')
 else:
     print('ℹ️  変更なし')
+'''
+
+FIX_NGINX.write_text(NEW_CONTENT, encoding='utf-8')
+print(f'\n✅ {FIX_NGINX} 更新完了')
+
+# Git commit & push
+print('\n[Git commit & push...]')
+subprocess.run(['git', 'add', '-A'], cwd=str(APP_ROOT))
+subprocess.run(['git', 'commit', '-m', 'fix(nginx): /uploads/ location追加 + client_max_body_size(fix-nginx-cms.py更新)'], cwd=str(APP_ROOT))
+result = subprocess.run(['git', 'push'], cwd=str(APP_ROOT), capture_output=True, text=True)
+print(result.stdout)
+print(result.stderr)
+
+print('='*60)
+print('✅ push完了！次回CMS deployで自動適用されます')
+print()
+print('★ staging に今すぐ適用するには:')
+print('  stagingサーバー(karkyon_dump)で以下を実行:')
+print()
+print('  sudo python3 - << \'EOF\'')
+print(NEW_CONTENT.replace("'", "'\\''"))
+print('EOF')
+print('='*60)
