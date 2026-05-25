@@ -2674,8 +2674,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   {(event as any).imageUrl && (() => {
                                     const imgUrl = (event as any).imageUrl as string;
                                     // stagingのバックエンドURLを考慮（/uploads/ は nginx経由でバックエンドから配信）
-                                    const apiBase = (window as any).__API_BASE_URL__ || '';
-                                    const baseOrigin = apiBase ? apiBase.replace('/api/v1', '') : window.location.origin;
+                                    // ✅ REQ-020修正: VITE_API_BASE_URL からバックエンドオリジンを正確に取得
+                                    const apiBase = (window as any).__API_BASE_URL__
+                                      || import.meta.env.VITE_API_BASE_URL
+                                      || '';
+                                    const baseOrigin = apiBase
+                                      ? apiBase.replace('/api/v1', '').replace(/\/api\/v1.*$/, '')
+                                      : window.location.origin;
                                     const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${baseOrigin}${imgUrl}`;
                                     return (
                                       <div className="mt-2">
