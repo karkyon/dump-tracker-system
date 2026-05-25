@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
         const [usersRes, vehiclesRes, operationsRes] = await Promise.allSettled([
           apiClient.get<any>('/users', { params: { limit: 200 } }),
           apiClient.get<any>('/vehicles', { params: { limit: 200 } }),
-          apiClient.get<any>('/operations', { params: { limit: 200, sortOrder: 'desc' } }),
+          apiClient.get<any>('/operations', { params: { limit: 500, sortOrder: 'desc' } }),
         ]);
 
         // ユーザー（稼働運転手数）
@@ -108,13 +108,16 @@ const Dashboard: React.FC = () => {
         const recentOps: RecentOperation[] = [];
         if (operationsRes.status === 'fulfilled') {
           const opsData = (operationsRes.value as any)?.data;
-          const opList: any[] = Array.isArray(opsData)
-            ? opsData
-            : Array.isArray(opsData?.data)
-              ? opsData.data
-              : Array.isArray(opsData?.operations)
-                ? opsData.operations
-                : [];
+          // ✅ 修正: /operations APIレスポンス構造に完全対応
+          // axios経由: res.data = { success, data: { operations:[...], pagination:{...} } }
+          // opsData = res.data (axios wrapper)
+          const opList: any[] =
+            Array.isArray(opsData?.data?.operations)  ? opsData.data.operations  :  // パターン1: data.data.operations
+            Array.isArray(opsData?.data?.data?.operations) ? opsData.data.data.operations :  // パターン2: 3重ネスト
+            Array.isArray(opsData?.operations)         ? opsData.operations        :  // パターン3: data.operations
+            Array.isArray(opsData?.data)               ? opsData.data              :  // パターン4: data配列
+            Array.isArray(opsData)                     ? opsData                   :  // パターン5: 直接配列
+            [];
 
           // ✅ Fix②: JST(UTC+9)基準で今日の日付を計算して比較
           const nowJST = new Date(Date.now() + 9 * 60 * 60 * 1000);
