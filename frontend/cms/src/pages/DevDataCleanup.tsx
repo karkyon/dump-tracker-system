@@ -71,6 +71,7 @@ export const DevDataCleanup: React.FC = () => {
 
   // ---- マスタ一覧取得 ----
   const fetchMasterRows = useCallback(async (table: string) => {
+    console.log(`🔥 [DevCleanup] fetchMasterRows 呼び出し開始 table=${table}`);
     setMasterLoading(true);
     setSelectedIds(new Set());
     try {
@@ -132,11 +133,13 @@ export const DevDataCleanup: React.FC = () => {
             : Array.isArray(d) ? d : [];
       }
 
+      console.log(`✅ [DevCleanup] arr確定 table=${table} 件数=${arr.length}`, arr.slice(0,2));
       const rows: MasterRow[] = arr.map((r: any) => ({
         id: r.id,
         label: r.plateNumber || r.name || r.username || '(不明)',
         sub: r.model || r.role || r.address || r.unit || r.inspectionType || '',
       }));
+      console.log(`✅ [DevCleanup] setMasterRows 件数=${rows.length}`, rows);
       setMasterRows(rows);
     } catch (e: any) {
       toast.error('マスタ取得エラー: ' + e.message);
@@ -146,7 +149,11 @@ export const DevDataCleanup: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (phase === 'master') fetchMasterRows(activeTable);
+    console.log(`⚡ [DevCleanup] useEffect発火 phase=${phase} activeTable=${activeTable}`);
+    if (phase === 'master') {
+      console.log(`⚡ [DevCleanup] useEffect → fetchMasterRows(${activeTable}) 呼び出し`);
+      fetchMasterRows(activeTable);
+    }
   }, [phase, activeTable, fetchMasterRows]);
 
   // ---- トランザクション削除実行 ----
@@ -456,7 +463,11 @@ export const DevDataCleanup: React.FC = () => {
             {MASTER_TABS.map(t => (
               <button
                 key={t.key}
-                onClick={() => setActiveTable(t.key)}
+                onClick={() => {
+                console.log(`🖱️ [DevCleanup] タブクリック key=${t.key} phase=${phase}`);
+                setActiveTable(t.key);
+                fetchMasterRows(t.key);
+              }}
                 className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTable === t.key
                     ? 'border-blue-600 text-blue-700 bg-blue-50'
