@@ -403,15 +403,6 @@ export class ExpressApp {
       logger.error('❌ feedbackRoutes 読み込み失敗', error);
     }
 
-    // 🛠️ UAT準備 データクリーンアップAPI（ADMIN専用）
-    try {
-      const devCleanupRoutes = require('./routes/devCleanupRoutes').default || require('./routes/devCleanupRoutes');
-      this.app.use('/api/v1/dev/cleanup', devCleanupRoutes);
-      logger.info('✅ DevCleanup APIルート登録完了: /api/v1/dev/cleanup');
-    } catch (error) {
-      logger.error('❌ devCleanupRoutes 読み込み失敗', error);
-    }
-
     // ログビューアAPI（管理者専用）
     try {
       const logRoutes = require('./routes/logRoutes').default || require('./routes/logRoutes');

@@ -855,6 +855,15 @@ if (registrationSummary.successRate < 70) {
 }
 
 // =====================================
+// 🛠️ UAT準備 データクリーンアップAPI（ADMIN専用）
+// =====================================
+safeImportAndRegisterRoute('devCleanupRoutes', '/dev/cleanup', router, {
+  priority: 'normal',
+  requireAuth: false,  // ルート内でauthenticateToken()+requireAdmin適用
+  description: 'UAT準備データクリーンアップ（ADMIN専用）'
+});
+
+// =====================================
 // 最終的な404・エラーハンドリング（統合版）
 // =====================================
 
