@@ -296,7 +296,7 @@ const OperationRecords: React.FC = () => {
         </div>
         {loading ? <div className="p-8 text-center">読み込み中...</div> : error ? <div className="p-8 text-center text-red-600">{error}</div> : filteredRecords.length === 0 ? <div className="p-8 text-center text-gray-500">運行記録が見つかりません</div> : (
           <>
-            <Table columns={columns} data={filteredRecords} />
+            <Table columns={columns} data={filteredRecords} scrollClassName="max-h-[calc(100vh-340px)]" />
             <div className="p-4 border-t border-gray-200 flex justify-between items-center">
               <div className="text-sm text-gray-600">{pagination.total}件中 {(pagination.page - 1) * pagination.pageSize + 1} - {Math.min(pagination.page * pagination.pageSize, pagination.total)}件を表示</div>
               <div className="flex gap-2">

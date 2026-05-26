@@ -18,6 +18,7 @@ interface TableProps<T> {
   sortDirection?: 'asc' | 'desc';
   onSort?: (key: string) => void;
   className?: string;
+  scrollClassName?: string;
 }
 
 function Table<T extends Record<string, any>>({
@@ -29,6 +30,7 @@ function Table<T extends Record<string, any>>({
   sortDirection,
   onSort,
   className = '',
+  scrollClassName = '',
 }: TableProps<T>) {
   const handleSort = (key: string, sortable?: boolean) => {
     if (sortable && onSort) {
@@ -80,7 +82,7 @@ function Table<T extends Record<string, any>>({
 
   return (
     <div className={`bg-white shadow sm:rounded-md overflow-hidden ${className}`}>
-      <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+      <div className={`overflow-x-auto overflow-y-auto ${scrollClassName}`} style={{ maxHeight: scrollClassName ? undefined : 'calc(100vh - 280px)' }}>
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
           <tr>
