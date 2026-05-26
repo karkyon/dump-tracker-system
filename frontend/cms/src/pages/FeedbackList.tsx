@@ -4,6 +4,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Pagination from '../components/common/Pagination';
 import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import {
@@ -83,6 +84,8 @@ function authHeaders(): Record<string, string> {
 // =============================================
 
 const FeedbackList: React.FC = () => {
+  const [_fbPage, _setFbPage] = React.useState(1);
+  const [_fbPageSize, _setFbPageSize] = React.useState(50);
   useTLog('FEEDBACK_LIST', 'フィードバック管理一覧');
   const navigate = useNavigate();
 
@@ -426,6 +429,16 @@ const FeedbackList: React.FC = () => {
                 })}
               </tbody>
             </table>
+      <Pagination
+        currentPage={_fbPage}
+        totalPages={Math.max(1, Math.ceil(total / _fbPageSize))}
+        totalItems={total}
+        pageSize={_fbPageSize}
+        onPageChange={(p) => { _setFbPage(p); setPage(p); }}
+        showPageSizeSelector={true}
+        onPageSizeChange={(size) => { _setFbPageSize(size); setLimit(size); _setFbPage(1); setPage(1); }}
+        pageSizeOptions={[10, 25, 50, 100]}
+      />
           </div>
         )}
 

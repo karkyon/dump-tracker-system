@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useTLog } from '../hooks/useTLog';
 import { Plus, ChevronUp, ChevronDown, Save, GripVertical } from 'lucide-react';
 import Button from '../components/common/Button';
+import Pagination from '../components/common/Pagination';
 import Table, { ActionButtons } from '../components/common/Table';
 import Input from '../components/common/Input';
 import Modal from '../components/common/Modal';
@@ -94,6 +95,8 @@ const getItemTypeLabel = (itemType: Item['itemType']): string => {
 // =====================================
 
 const ItemManagement: React.FC = () => {
+  const [_itemPage, _setItemPage] = React.useState(1);
+  const [_itemPageSize, _setItemPageSize] = React.useState(50);
   useTLog('ITEM_MANAGEMENT', '品目管理');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -452,9 +455,19 @@ const ItemManagement: React.FC = () => {
 
           <Table
             columns={columns}
-            data={tableData}
+            data={tableData.slice((_itemPage-1)*_itemPageSize, _itemPage*_itemPageSize)}
             loading={itemLoading}
             emptyMessage="品目が見つかりません"
+          />
+          <Pagination
+            currentPage={_itemPage}
+            totalPages={Math.max(1, Math.ceil(tableData.length / _itemPageSize))}
+            totalItems={tableData.length}
+            pageSize={_itemPageSize}
+            onPageChange={_setItemPage}
+            showPageSizeSelector={true}
+            onPageSizeChange={(size) => { _setItemPageSize(size); _setItemPage(1); }}
+            pageSizeOptions={[10, 25, 50, 100]}
           />
         </div>
       </div>

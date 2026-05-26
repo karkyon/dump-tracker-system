@@ -1,6 +1,7 @@
 // frontend/cms/src/pages/CustomerManagement.tsx
 // 客先マスタ管理ページ
 import React, { useEffect, useState } from 'react';
+import Pagination from '../components/common/Pagination';
 import { useTLog } from '../hooks/useTLog';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -26,6 +27,8 @@ const emptyForm = (): CustomerFormData => ({
 });
 
 const CustomerManagement: React.FC = () => {
+  const [_custPage, _setCustPage] = React.useState(1);
+  const [_custPageSize, _setCustPageSize] = React.useState(50);
   useTLog('CUSTOMER_MANAGEMENT', '客先管理');
 
   const {

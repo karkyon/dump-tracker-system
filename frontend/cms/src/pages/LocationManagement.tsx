@@ -7,12 +7,15 @@ import { Location } from '../types';
 import Button from '../components/common/Button';
 // Input/Select は不使用のため削除
 import Table, { ActionButtons } from '../components/common/Table';
+import Pagination from '../components/common/Pagination';
 import { ConfirmDialog } from '../components/common/Modal';
 import LocationFormModal from '../components/location/LocationFormModal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate } from '../utils/helpers';
 
 const LocationManagement: React.FC = () => {
+  const [_locPage, _setLocPage] = React.useState(1);
+  const [_locPageSize, _setLocPageSize] = React.useState(50);
   useTLog('LOCATION_MANAGEMENT', '場所管理');
 
   const {
@@ -364,13 +367,23 @@ const LocationManagement: React.FC = () => {
 
       {/* 場所一覧テーブル */}
       <Table
-        data={filteredLocations}
+        data={filteredLocations.slice((_locPage-1)*_locPageSize, _locPage*_locPageSize)}
         columns={columns}
         loading={locationLoading}
         emptyMessage="場所が見つかりません"
         sortBy={sortBy}
         sortDirection={sortDirection}
         onSort={handleSort}
+      />
+      <Pagination
+        currentPage={_locPage}
+        totalPages={Math.max(1, Math.ceil(filteredLocations.length / _locPageSize))}
+        totalItems={filteredLocations.length}
+        pageSize={_locPageSize}
+        onPageChange={_setLocPage}
+        showPageSizeSelector={true}
+        onPageSizeChange={(size) => { _setLocPageSize(size); _setLocPage(1); }}
+        pageSizeOptions={[10, 25, 50, 100]}
       />
 
       {/* 新規作成モーダル（新しいLocationFormModal） */}

@@ -3,6 +3,7 @@
 // ADMIN / MANAGER 専用
 
 import React, { useCallback, useEffect, useState } from 'react';
+import Pagination from '../components/common/Pagination';
 import { useTLog } from '../hooks/useTLog';
 import { AlertTriangle, Plus, Pencil, Trash2, X, Save } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -82,6 +83,8 @@ const EMPTY_FORM: Partial<AccidentRecord> = {
 // =====================================
 
 const AccidentRecordManagement: React.FC = () => {
+  const [_accPage, _setAccPage] = React.useState(1);
+  const [_accPageSize, _setAccPageSize] = React.useState(50);
   useTLog('ACCIDENT_RECORD_MGMT', '事故記録管理');
 
   const { user } = useAuthStore();
@@ -355,6 +358,21 @@ const AccidentRecordManagement: React.FC = () => {
           </tbody>
         </table>
       </div>
+      {(() => {
+        const _accList = records ?? [];
+        return (
+          <Pagination
+            currentPage={_accPage}
+            totalPages={Math.max(1, Math.ceil(_accList.length / _accPageSize))}
+            totalItems={_accList.length}
+            pageSize={_accPageSize}
+            onPageChange={_setAccPage}
+            showPageSizeSelector={true}
+            onPageSizeChange={(size) => { _setAccPageSize(size); _setAccPage(1); }}
+            pageSizeOptions={[10, 25, 50, 100]}
+          />
+        );
+      })()}
 
       {/* =====================================
           登録・編集モーダル

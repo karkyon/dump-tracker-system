@@ -21,9 +21,12 @@ import Input, { Select } from '../components/common/Input';
 import Table, { ActionButtons } from '../components/common/Table';
 import { FormModal, ConfirmDialog } from '../components/common/Modal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 
 const InspectionItemManagement: React.FC = () => {
   useTLog('INSPECTION_ITEM_MGMT', '点検項目管理');
+  const [_page, _setPage] = React.useState(1);
+  const [_pageSize, _setPageSize] = React.useState(50);
 
   // ==========================================
   // Store接続（統一パターン）
