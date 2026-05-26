@@ -11,7 +11,7 @@ const API = (window as any).__API_BASE_URL__
 
 const headers = () => ({
   'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+  Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
 });
 
 interface TableInfo {
