@@ -343,9 +343,9 @@ const FeedbackList: React.FC = () => {
             <p>フィードバックが見つかりません</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 360px)' }}>
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide sticky top-0 z-10">
                 <tr>
                   <th className="w-9 px-3 py-2.5 text-left">
                     <input

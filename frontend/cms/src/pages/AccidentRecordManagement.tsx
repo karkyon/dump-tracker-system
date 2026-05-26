@@ -291,8 +291,9 @@ const AccidentRecordManagement: React.FC = () => {
 
       {/* テーブル */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>
         <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               {['発生日', '種別', '車両番号', '運転者', '死者', '負傷者', '管轄区域', '操作'].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -357,6 +358,7 @@ const AccidentRecordManagement: React.FC = () => {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       {(() => {
         const _accList = records ?? [];

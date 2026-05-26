@@ -79,7 +79,8 @@ function Table<T extends Record<string, any>>({
   }
 
   return (
-    <div className={`bg-white shadow overflow-x-auto sm:rounded-md ${className}`}>
+    <div className={`bg-white shadow sm:rounded-md overflow-hidden ${className}`}>
+      <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
           <tr>
@@ -134,6 +135,7 @@ function Table<T extends Record<string, any>>({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
