@@ -107,32 +107,27 @@ export const DevDataCleanup: React.FC = () => {
       console.groupEnd();
       // ===== デバッグログここまで =====
 
-      // テーブルごとに明示的なキーでレスポンスを解析
-      // fetch直呼び: json = バックエンドのレスポンスそのまま
-      // バックエンド: sendSuccess(res, payload) → { success, data: payload }
+      // ===== ログで確定した実際のAPIレスポンス構造に基づく解析 =====
+      // vehicles:  { success, data:[{...}], meta }          → data が配列直接
+      // customers: { success, data:{ customers:[...] } }    → data.customers
+      // locations: { success, data:[{...}], meta }          → data が配列直接
+      // items:     { success, data:[{...}], meta }          → data が配列直接
+      // users:     未確認 → data.users or 配列直接 両方フォールバック
+      // inspection_items: 未確認 → data.data or 配列直接 両方フォールバック
       let arr: any[] = [];
-      const d = json?.data; // payload
-      if (table === 'vehicles') {
-        // sendSuccess({ vehicles:[...], pagination }) → d.vehicles
-        arr = Array.isArray(d?.vehicles) ? d.vehicles : [];
-      } else if (table === 'users') {
-        // sendSuccess({ users:[...], pagination }) → d.users
-        arr = Array.isArray(d?.users) ? d.users : [];
+      const d = json?.data;
+      if (table === 'vehicles' || table === 'locations' || table === 'items') {
+        // これらは json.data が配列直接
+        arr = Array.isArray(d) ? d : [];
       } else if (table === 'customers') {
-        // sendSuccess({ customers:[...], total }) → d.customers
+        // json.data = { customers:[...], total }
         arr = Array.isArray(d?.customers) ? d.customers : [];
-      } else if (table === 'locations') {
-        // sendSuccess({ locations:[...] }) → d.locations or d.data
-        arr = Array.isArray(d?.locations) ? d.locations
-            : Array.isArray(d?.data) ? d.data
+      } else if (table === 'users') {
+        // json.data.users or json.data が配列
+        arr = Array.isArray(d?.users) ? d.users
             : Array.isArray(d) ? d : [];
-      } else if (table === 'items') {
-        // res.json({success, data:[...], meta}) → jsonのdataが配列
-        arr = Array.isArray(d) ? d
-            : Array.isArray(d?.data) ? d.data : [];
       } else if (table === 'inspection_items') {
-        // sendSuccess(result) where result={success,data:[...],meta}
-        // → json.data = {success,data:[...],meta} → json.data.data
+        // json.data.data or json.data が配列
         arr = Array.isArray(d?.data) ? d.data
             : Array.isArray(d) ? d : [];
       }
