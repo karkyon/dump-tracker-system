@@ -89,17 +89,30 @@ export const DevDataCleanup: React.FC = () => {
       const res = await fetch(`${API}${url}`, { headers: headers() });
       const json = await res.json();
 
-      // レスポンス構造の多段階解析
+      // レスポンス構造の多段階解析（各APIの実際の構造に対応）
       let arr: any[] = [];
       const d = json?.data;
-      if (Array.isArray(d?.data?.vehicles))        arr = d.data.vehicles;
-      else if (Array.isArray(d?.data?.users))       arr = d.data.users;
-      else if (Array.isArray(d?.data?.customers))   arr = d.data.customers;
-      else if (Array.isArray(d?.data?.locations))   arr = d.data.locations;
-      else if (Array.isArray(d?.data?.items))       arr = d.data.items;
-      else if (Array.isArray(d?.data?.data))        arr = d.data.data;
-      else if (Array.isArray(d?.data))              arr = d.data;
-      else if (Array.isArray(d))                    arr = d;
+      // 二重ネスト解消: APIクライアントが { success, data: <バックエンドレスポンス> } を返す
+      // バックエンドは sendSuccess(res, payload) で { success, data: payload } を返す
+      // vehicles:   payload = { vehicles: [...] }
+      // users:      payload = { users: [...] }
+      // customers:  payload = { customers: [...], total }
+      // locations:  payload = { locations: [...] } or { data: [...] }
+      // items:      res.json直接 → data が配列
+      // inspection_items: payload = { data: [...], meta } (inspectionService結果そのまま)
+      if (Array.isArray(d?.vehicles))              arr = d.vehicles;
+      else if (Array.isArray(d?.users))            arr = d.users;
+      else if (Array.isArray(d?.customers))        arr = d.customers;
+      else if (Array.isArray(d?.locations))        arr = d.locations;
+      else if (Array.isArray(d?.data))             arr = d.data;   // items直接配列 or inspection_items
+      else if (Array.isArray(d))                   arr = d;
+      // 二重ネスト (APIクライアントが d={success,data:{...}} で返す場合)
+      else if (Array.isArray(d?.data?.vehicles))   arr = d.data.vehicles;
+      else if (Array.isArray(d?.data?.users))      arr = d.data.users;
+      else if (Array.isArray(d?.data?.customers))  arr = d.data.customers;
+      else if (Array.isArray(d?.data?.locations))  arr = d.data.locations;
+      else if (Array.isArray(d?.data?.data))       arr = d.data.data;
+      else if (Array.isArray(d?.data))             arr = d.data;
 
       const rows: MasterRow[] = arr.map((r: any) => ({
         id: r.id,
