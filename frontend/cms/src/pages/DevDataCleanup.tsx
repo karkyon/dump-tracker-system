@@ -76,12 +76,12 @@ export const DevDataCleanup: React.FC = () => {
     try {
       // 各テーブルの一覧APIを叩く
       const endpointMap: Record<string, string> = {
-        vehicles:         '/vehicles?limit=200',
-        users:            '/users?limit=200&role=DRIVER',
-        customers:        '/customers?limit=200',
-        locations:        '/locations?limit=200',
-        items:            '/items?limit=200',
-        inspection_items: '/inspection-items?limit=200',
+        vehicles:         '/vehicles?limit=100',
+        users:            '/users?limit=100&role=DRIVER',
+        customers:        '/customers?limit=100',
+        locations:        '/locations?limit=100',
+        items:            '/items?limit=100',
+        inspection_items: '/inspection-items?limit=100',
       };
       const url = endpointMap[table];
       if (!url) { setMasterRows([]); return; }
@@ -120,7 +120,7 @@ export const DevDataCleanup: React.FC = () => {
 
   // ---- トランザクション削除実行 ----
   const handleTxDelete = async () => {
-    if (txConfirmInput !== 'DELETE_ALL_TRANSACTIONS') {
+    if (txConfirmInput !== 'DUMPTRACKER2026') {
       toast.error('確認コードが一致しません');
       return;
     }
@@ -129,7 +129,7 @@ export const DevDataCleanup: React.FC = () => {
       const res = await fetch(`${API}/dev/cleanup/transactions`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ confirm: 'DELETE_ALL_TRANSACTIONS' }),
+        body: JSON.stringify({ confirm: 'DUMPTRACKER2026' }),
       });
       const json = await res.json();
       if (json.success) {
@@ -328,13 +328,13 @@ export const DevDataCleanup: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 実行するには以下を入力してください：
-                <code className="ml-2 bg-gray-100 px-2 py-0.5 rounded text-red-700">DELETE_ALL_TRANSACTIONS</code>
+                <code className="ml-2 bg-gray-100 px-2 py-0.5 rounded text-red-700">DUMPTRACKER2026</code>
               </label>
               <input
                 type="text"
                 value={txConfirmInput}
                 onChange={e => setTxConfirmInput(e.target.value)}
-                placeholder="DELETE_ALL_TRANSACTIONS"
+                placeholder="DUMPTRACKER2026"
                 className="w-full border border-gray-300 rounded px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
@@ -342,7 +342,7 @@ export const DevDataCleanup: React.FC = () => {
             <div className="flex gap-3">
               <button
                 onClick={handleTxDelete}
-                disabled={loading || txConfirmInput !== 'DELETE_ALL_TRANSACTIONS'}
+                disabled={loading || txConfirmInput !== 'DUMPTRACKER2026'}
                 className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-40 font-medium"
               >
                 <Trash2 className="w-4 h-4" />

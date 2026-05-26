@@ -106,7 +106,7 @@ router.get('/counts', asyncHandler(async (req: AuthenticatedRequest, res: Respon
  */
 router.post('/transactions', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { confirm } = req.body;
-  if (confirm !== 'DELETE_ALL_TRANSACTIONS') {
+  if (confirm !== 'DUMPTRACKER2026') {
     res.status(400).json({ success: false, message: '確認コードが正しくありません' });
     return;
   }
