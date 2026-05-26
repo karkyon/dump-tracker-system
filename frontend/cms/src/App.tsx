@@ -24,6 +24,7 @@ import OperationDebug from './pages/OperationDebug';
 import AccidentRecordManagement from './pages/AccidentRecordManagement';
 import CustomerManagement from './pages/CustomerManagement';
 import GpsInspector from './pages/GpsInspector';
+import DevDataCleanup from './pages/DevDataCleanup';
 import FeedbackList from './pages/FeedbackList';
 import FeedbackDetail from './pages/FeedbackDetail';
 
@@ -275,6 +276,9 @@ const App: React.FC = () => {
 
               {/* GPS Inspector（管理者専用） */}
               <Route path="gps-inspector" element={<GpsInspector />} />
+
+              {/* 🛠️ UAT準備 データクリーンアップ（ADMIN専用） */}
+              <Route path="dev/data-cleanup" element={<DevDataCleanup />} />
               
               {/* システム設定 */}
               <Route path="settings" element={<SystemSettings />} />
