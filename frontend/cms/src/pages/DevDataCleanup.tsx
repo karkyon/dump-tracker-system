@@ -56,7 +56,8 @@ export const DevDataCleanup: React.FC = () => {
       const json = await res.json();
       if (json.success) {
         setCounts(json.data);
-        setPhase('count');
+        // phaseはリセットしない（マスタ削除後もmaster phaseを維持するため）
+        // setPhase('count'); ← 削除
       } else {
         toast.error('件数取得失敗: ' + json.message);
       }
@@ -189,15 +190,17 @@ export const DevDataCleanup: React.FC = () => {
   // ---- マスタ複数削除 ----
   const handleMasterBulkDelete = async () => {
     if (selectedIds.size === 0) { toast.error('削除対象を選択してください'); return; }
+    // フロントのキー(MASTER_TABLES.key) → DBの物理テーブル名 に変換
     const tableMap: Record<string, string> = {
-      vehicles: 'vehicles',
-      users: 'users',
-      customers: 'customers',
-      locations: 'locations',
-      items: 'items',
-      inspection_items: 'inspection_items',
+      vehicles:       'vehicles',
+      users_driver:   'users',        // users_driver → users (role=DRIVERフィルタはバックエンド側)
+      customers:      'customers',
+      locations:      'locations',
+      items:          'items',
+      inspectionItems: 'inspection_items', // inspectionItems → inspection_items
     };
     const table = tableMap[activeTable];
+    if (!table) { toast.error('対象外のテーブルです'); return; }
     setMasterLoading(true);
     try {
       const res = await fetch(`${API}/dev/cleanup/master/bulk-delete`, {
@@ -208,6 +211,7 @@ export const DevDataCleanup: React.FC = () => {
       const json = await res.json();
       if (json.success) {
         toast.success(`${json.deleted}件削除しました`);
+        // phaseはmasterのまま維持 → 一覧を再取得するだけ
         fetchMasterRows(activeTable);
         fetchCounts();
       } else {
