@@ -539,4 +539,9 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     console.log('[VehicleStore] clearSelectedVehicle');
     set({ selectedVehicle: null });
   },
+
+  setPageSize: (pageSize: number) => {
+    console.log('[VehicleStore] setPageSize:', pageSize);
+    set({ pagination: { ...get().pagination, pageSize, page: 1 } });
+  },
 }));
