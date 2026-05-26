@@ -65,10 +65,17 @@ const setupErrorHandling = () => {
 // API接続テスト
 const testApiConnection = async () => {
   try {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://dumptracker-s.ddns.net';
-    console.log(`🔗 API接続テスト: ${apiBaseUrl}/health`);
+    // ✅ 修正: VITE_API_BASE_URL が相対パス(/api/v1)の場合はそのまま使用
+    // 絶対URLの場合のみそのまま使用、相対パスの場合は /api/v1/health に
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    // /api/v1 のような相対パスの場合は /health を付けて /api/v1/health にする
+    // https://... のような絶対URLの場合は /api/v1/health を付ける
+    const healthUrl = apiBaseUrl.startsWith('http')
+      ? `${apiBaseUrl}/health`
+      : `${apiBaseUrl}/health`;
+    console.log(`🔗 API接続テスト: ${healthUrl}`);
     
-    const response = await fetch(`${apiBaseUrl}/health`, {
+    const response = await fetch(healthUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -82,13 +89,10 @@ const testApiConnection = async () => {
       console.warn(`⚠️ API接続警告: ${response.status} ${response.statusText}`);
     }
   } catch (error) {
-    console.error('❌ API接続エラー:', error);
-    if (error instanceof Error) {
-      if (error.message.includes('certificate')) {
-        handleCertificateError();
-      } else if (error.message.includes('Failed to fetch')) {
-        console.log('🔍 ネットワーク接続を確認してください');
-      }
+    // 開発環境では接続テスト失敗はログのみ（アプリ起動は継続）
+    console.warn('⚠️ API接続テスト失敗（アプリは継続起動）:', error instanceof Error ? error.message : error);
+    if (error instanceof Error && error.message.includes('certificate')) {
+      handleCertificateError();
     }
   }
 };
