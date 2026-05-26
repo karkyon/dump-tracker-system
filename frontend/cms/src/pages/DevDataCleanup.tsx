@@ -76,13 +76,14 @@ export const DevDataCleanup: React.FC = () => {
     setSelectedIds(new Set());
     try {
       // 各テーブルの一覧APIを叩く
+      // キーは devCleanupRoutes.ts の MASTER_TABLES.key と完全一致させること
       const endpointMap: Record<string, string> = {
-        vehicles:         '/vehicles?limit=100',
-        users:            '/users?limit=100&role=DRIVER',
-        customers:        '/customers?limit=100',
-        locations:        '/locations?limit=100',
-        items:            '/items?limit=100',
-        inspection_items: '/inspection-items?limit=100',
+        vehicles:       '/vehicles?limit=100',
+        users_driver:   '/users?limit=100&role=DRIVER',
+        customers:      '/customers?limit=100',
+        locations:      '/locations?limit=100',
+        items:          '/items?limit=100',
+        inspectionItems: '/inspection-items?limit=100',
       };
       const url = endpointMap[table];
       if (!url) { setMasterRows([]); return; }
@@ -123,11 +124,11 @@ export const DevDataCleanup: React.FC = () => {
       } else if (table === 'customers') {
         // json.data = { customers:[...], total }
         arr = Array.isArray(d?.customers) ? d.customers : [];
-      } else if (table === 'users') {
-        // json.data.users or json.data が配列
+      } else if (table === 'users_driver') {
+        // json.data = { users:[...], pagination } → d.users
         arr = Array.isArray(d?.users) ? d.users
             : Array.isArray(d) ? d : [];
-      } else if (table === 'inspection_items') {
+      } else if (table === 'inspectionItems') {
         // json.data.data or json.data が配列
         arr = Array.isArray(d?.data) ? d.data
             : Array.isArray(d) ? d : [];
