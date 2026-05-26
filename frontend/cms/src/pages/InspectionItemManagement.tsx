@@ -542,10 +542,19 @@ const InspectionItemManagement: React.FC = () => {
         <div className="bg-white rounded-lg shadow">
           <Table
             columns={columns}
-            data={filteredAndSortedItems}
+            data={filteredAndSortedItems.slice((_page - 1) * _pageSize, _page * _pageSize)}
             loading={isLoading}
             emptyMessage="点検項目が見つかりません"
-            // 🐛 修正6: pagination プロパティを削除（Tableコンポーネントに存在しないため）
+          />
+          <Pagination
+            currentPage={_page}
+            totalPages={Math.max(1, Math.ceil(filteredAndSortedItems.length / _pageSize))}
+            totalItems={filteredAndSortedItems.length}
+            pageSize={_pageSize}
+            onPageChange={_setPage}
+            showPageSizeSelector={true}
+            onPageSizeChange={(size) => { _setPageSize(size); _setPage(1); }}
+            pageSizeOptions={[10, 25, 50, 100]}
           />
         </div>
       )}

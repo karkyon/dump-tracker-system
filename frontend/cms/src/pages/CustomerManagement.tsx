@@ -150,7 +150,24 @@ const CustomerManagement: React.FC = () => {
         </div>
       </div>
 
-      <Table data={filteredCustomers} columns={columns} loading={customerLoading} emptyMessage="客先が見つかりません" />
+      <div className="bg-white rounded-lg shadow">
+        <Table
+          data={filteredCustomers.slice((_custPage - 1) * _custPageSize, _custPage * _custPageSize)}
+          columns={columns}
+          loading={customerLoading}
+          emptyMessage="客先が見つかりません"
+        />
+        <Pagination
+          currentPage={_custPage}
+          totalPages={Math.max(1, Math.ceil(filteredCustomers.length / _custPageSize))}
+          totalItems={filteredCustomers.length}
+          pageSize={_custPageSize}
+          onPageChange={_setCustPage}
+          showPageSizeSelector={true}
+          onPageSizeChange={(size) => { _setCustPageSize(size); _setCustPage(1); }}
+          pageSizeOptions={[10, 25, 50, 100]}
+        />
+      </div>
 
       {/* 新規作成モーダル */}
       {showCreateModal && (

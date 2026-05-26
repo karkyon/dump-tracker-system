@@ -436,7 +436,7 @@ const FeedbackList: React.FC = () => {
         pageSize={_fbPageSize}
         onPageChange={(p) => { _setFbPage(p); setPage(p); }}
         showPageSizeSelector={true}
-        onPageSizeChange={(size) => { _setFbPageSize(size); setLimit(size); _setFbPage(1); setPage(1); }}
+        onPageSizeChange={(size) => { _setFbPageSize(size); _setFbPage(1); setPage(1); fetchData(1); }}
         pageSizeOptions={[10, 25, 50, 100]}
       />
           </div>
