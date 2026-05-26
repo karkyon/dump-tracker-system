@@ -89,30 +89,35 @@ export const DevDataCleanup: React.FC = () => {
       const res = await fetch(`${API}${url}`, { headers: headers() });
       const json = await res.json();
 
-      // レスポンス構造の多段階解析（各APIの実際の構造に対応）
+      // テーブルごとに明示的なキーでレスポンスを解析
+      // fetch直呼び: json = バックエンドのレスポンスそのまま
+      // バックエンド: sendSuccess(res, payload) → { success, data: payload }
       let arr: any[] = [];
-      const d = json?.data;
-      // 二重ネスト解消: APIクライアントが { success, data: <バックエンドレスポンス> } を返す
-      // バックエンドは sendSuccess(res, payload) で { success, data: payload } を返す
-      // vehicles:   payload = { vehicles: [...] }
-      // users:      payload = { users: [...] }
-      // customers:  payload = { customers: [...], total }
-      // locations:  payload = { locations: [...] } or { data: [...] }
-      // items:      res.json直接 → data が配列
-      // inspection_items: payload = { data: [...], meta } (inspectionService結果そのまま)
-      if (Array.isArray(d?.vehicles))              arr = d.vehicles;
-      else if (Array.isArray(d?.users))            arr = d.users;
-      else if (Array.isArray(d?.customers))        arr = d.customers;
-      else if (Array.isArray(d?.locations))        arr = d.locations;
-      else if (Array.isArray(d?.data))             arr = d.data;   // items直接配列 or inspection_items
-      else if (Array.isArray(d))                   arr = d;
-      // 二重ネスト (APIクライアントが d={success,data:{...}} で返す場合)
-      else if (Array.isArray(d?.data?.vehicles))   arr = d.data.vehicles;
-      else if (Array.isArray(d?.data?.users))      arr = d.data.users;
-      else if (Array.isArray(d?.data?.customers))  arr = d.data.customers;
-      else if (Array.isArray(d?.data?.locations))  arr = d.data.locations;
-      else if (Array.isArray(d?.data?.data))       arr = d.data.data;
-      else if (Array.isArray(d?.data))             arr = d.data;
+      const d = json?.data; // payload
+      if (table === 'vehicles') {
+        // sendSuccess({ vehicles:[...], pagination }) → d.vehicles
+        arr = Array.isArray(d?.vehicles) ? d.vehicles : [];
+      } else if (table === 'users') {
+        // sendSuccess({ users:[...], pagination }) → d.users
+        arr = Array.isArray(d?.users) ? d.users : [];
+      } else if (table === 'customers') {
+        // sendSuccess({ customers:[...], total }) → d.customers
+        arr = Array.isArray(d?.customers) ? d.customers : [];
+      } else if (table === 'locations') {
+        // sendSuccess({ locations:[...] }) → d.locations or d.data
+        arr = Array.isArray(d?.locations) ? d.locations
+            : Array.isArray(d?.data) ? d.data
+            : Array.isArray(d) ? d : [];
+      } else if (table === 'items') {
+        // res.json({success, data:[...], meta}) → jsonのdataが配列
+        arr = Array.isArray(d) ? d
+            : Array.isArray(d?.data) ? d.data : [];
+      } else if (table === 'inspection_items') {
+        // sendSuccess(result) where result={success,data:[...],meta}
+        // → json.data = {success,data:[...],meta} → json.data.data
+        arr = Array.isArray(d?.data) ? d.data
+            : Array.isArray(d) ? d : [];
+      }
 
       const rows: MasterRow[] = arr.map((r: any) => ({
         id: r.id,
