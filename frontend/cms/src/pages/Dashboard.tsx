@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
         const [usersRes, vehiclesRes, operationsRes] = await Promise.allSettled([
           apiClient.get<any>('/users', { params: { limit: 200 } }),
           apiClient.get<any>('/vehicles', { params: { limit: 200 } }),
-          apiClient.get<any>('/operations', { params: { limit: 500, sortOrder: 'desc' } }),
+          apiClient.get<any>('/operations', { params: { limit: 100, sortOrder: 'desc' } }),
         ]);
 
         // ユーザー（稼働運転手数）
