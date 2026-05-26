@@ -89,6 +89,24 @@ export const DevDataCleanup: React.FC = () => {
       const res = await fetch(`${API}${url}`, { headers: headers() });
       const json = await res.json();
 
+      // ===== デバッグログ =====
+      console.group(`[DevCleanup] fetchMasterRows table=${table}`);
+      console.log('URL:', `${API}${url}`);
+      console.log('HTTP status:', res.status);
+      console.log('json (全体):', JSON.stringify(json, null, 2));
+      console.log('json.success:', json?.success);
+      console.log('json.data:', json?.data);
+      console.log('json.data type:', typeof json?.data);
+      console.log('Array.isArray(json.data):', Array.isArray(json?.data));
+      if (json?.data && typeof json.data === 'object' && !Array.isArray(json.data)) {
+        console.log('json.data keys:', Object.keys(json.data));
+        Object.keys(json.data).forEach(k => {
+          console.log(`  json.data.${k}:`, json.data[k], '| isArray:', Array.isArray(json.data[k]));
+        });
+      }
+      console.groupEnd();
+      // ===== デバッグログここまで =====
+
       // テーブルごとに明示的なキーでレスポンスを解析
       // fetch直呼び: json = バックエンドのレスポンスそのまま
       // バックエンド: sendSuccess(res, payload) → { success, data: payload }
