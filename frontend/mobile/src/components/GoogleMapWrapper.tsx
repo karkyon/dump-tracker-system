@@ -119,16 +119,33 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         console.log('✅ Map作成成功');
 
         const markerSVG = createCustomMarkerSVG(0, 0, 0);
-        // BUG-011: AdvancedMarkerElement に移行済み。markerIcon は不要なので削除(TS6133解消)
         const markerDiv = document.createElement('div');
         markerDiv.innerHTML = markerSVG;
         markerDiv.style.cssText = 'width:60px;height:80px;cursor:pointer;';
-        const marker = new window.google.maps.marker.AdvancedMarkerElement({
-          map: map,
-          position: centerPosition,
-          title: '現在位置',
-          content: markerDiv,
-        });
+
+        // mapId未設定時は AdvancedMarkerElement が使えないため旧Markerにフォールバック
+        let marker: any;
+        const hasMapId = !!import.meta.env.VITE_GOOGLE_MAP_ID;
+        if (hasMapId && window.google.maps.marker?.AdvancedMarkerElement) {
+          marker = new window.google.maps.marker.AdvancedMarkerElement({
+            map: map,
+            position: centerPosition,
+            title: '現在位置',
+            content: markerDiv,
+          });
+        } else {
+          // フォールバック: 旧 Marker（mapId不要、エラーポップアップなし）
+          marker = new window.google.maps.Marker({
+            map: map,
+            position: centerPosition,
+            title: '現在位置',
+            icon: {
+              url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(markerSVG)}`,
+              scaledSize: new window.google.maps.Size(60, 80),
+              anchor: new window.google.maps.Point(30, 28),
+            },
+          });
+        }
 
         console.log('✅ 三角マーカー作成成功');
 
@@ -259,10 +276,18 @@ export const updateMarkerIcon = (distance: number, speed: number, heading: numbe
     return;
   }
 
-  // BUG-011: AdvancedMarkerElement は content プロパティで SVG を更新
   const markerSVG = createCustomMarkerSVG(distance, speed, heading);
+  // AdvancedMarkerElement(mapId有り) と 旧Marker(mapId無し) の両対応
   if (globalMarkerInstance.content instanceof HTMLElement) {
+    // AdvancedMarkerElement
     globalMarkerInstance.content.innerHTML = markerSVG;
+  } else if (typeof globalMarkerInstance.setIcon === 'function') {
+    // 旧 Marker フォールバック
+    globalMarkerInstance.setIcon({
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(markerSVG)}`,
+      scaledSize: new window.google.maps.Size(60, 80),
+      anchor: new window.google.maps.Point(30, 28),
+    });
   } else {
     const markerDiv = document.createElement('div');
     markerDiv.innerHTML = markerSVG;
@@ -277,8 +302,12 @@ export const updateMarkerPosition = (lat: number, lng: number) => {
     return;
   }
 
-  // BUG-011: AdvancedMarkerElement は position プロパティで更新
-  globalMarkerInstance.position = { lat, lng };
+  // AdvancedMarkerElement と旧Marker の両対応
+  if (typeof globalMarkerInstance.setPosition === 'function') {
+    globalMarkerInstance.setPosition({ lat, lng });
+  } else {
+    globalMarkerInstance.position = { lat, lng };
+  }
 };
 
 export const panMapToPosition = (lat: number, lng: number) => {
