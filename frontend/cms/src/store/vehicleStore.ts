@@ -133,7 +133,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   error: null,
   pagination: {
     page: 1,
-    pageSize: 50,
+    pageSize: 10,
     total: 0,
     totalPages: 0,
   },
