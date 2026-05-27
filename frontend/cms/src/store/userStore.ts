@@ -221,8 +221,14 @@ export const useUserStore = create<UserState>((set, get) => ({
         // APIレスポンス → リクエストパラメータ → デフォルト値 の順でフォールバック
         const page = paginationInfo.page || params.page || 1;
         const limit = paginationInfo.limit || paginationInfo.pageSize || params.pageSize || 10;
-        const total = paginationInfo.total || normalizedUsers.length;
-        const totalPages = paginationInfo.totalPages || Math.ceil(total / limit);
+        // ✅ Fix: total が明示的に数値で返ってきた場合のみ使用（0やundefinedは除外）
+        const total = (typeof paginationInfo.total === 'number' && paginationInfo.total > 0)
+          ? paginationInfo.total
+          : normalizedUsers.length;
+        // ✅ Fix: totalPages も明示的に計算（paginationInfo.totalPages が 0 の場合は再計算）
+        const totalPages = (typeof paginationInfo.totalPages === 'number' && paginationInfo.totalPages > 0)
+          ? paginationInfo.totalPages
+          : Math.ceil(total / limit);
 
         console.log('[UserStore] Final pagination values:', {
           page,

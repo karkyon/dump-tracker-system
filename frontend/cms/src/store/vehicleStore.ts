@@ -170,6 +170,8 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         // ✅ 改善1: 二重ネスト構造を解決（UserStoreから採用）
         // バックエンドが successResponse() を使っているため、
         // response.data が { success: true, data: {...} } 構造になっている場合がある
+        // ※ metaはunwrap前の外側に残るため別途保持する
+        const outerMeta = (apiData as any).meta || null;
         if (apiData.success && apiData.data) {
           console.log('[VehicleStore] 二重ネスト構造を検出、内側のdataを取得');
           apiData = apiData.data;
@@ -186,8 +188,10 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         if (Array.isArray(apiData)) {
           console.log('[VehicleStore] パターン1: 直接配列を検出');
           rawVehicles = apiData;
-          // paginationは response の外側にある可能性
-          paginationInfo = (response as any).pagination || {};
+          // metaまたはpaginationからページネーション情報を取得
+          // バックエンドは { success, data:[...], meta:{total,totalPages,...} } を返す
+          const outerData = (response as any).data as any;
+          paginationInfo = outerMeta || outerData?.meta || outerData?.pagination || (response as any).meta || (response as any).pagination || {};
         }
         // パターン2: { vehicles: [...], pagination: {...} }
         else if (Array.isArray(apiData.vehicles)) {
