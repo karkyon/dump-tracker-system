@@ -266,6 +266,8 @@ const VehicleManagement: React.FC = () => {
       inspectionExpiry: '',  // REQ-007
       region: '',  // 🆕 P4-03
     });
+    setCapacityInput('');
+    setMileageInput('');
     setFormErrors({});
   };
 
@@ -517,6 +519,7 @@ const VehicleManagement: React.FC = () => {
             max={new Date().getFullYear() + 1}
             value={formData.year}
             onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) })}
+            onFocus={(e) => e.target.select()}
             error={formErrors.year}
             required
           />
@@ -527,6 +530,7 @@ const VehicleManagement: React.FC = () => {
             inputMode="decimal"
             value={capacityInput}
             onChange={(e) => setCapacityInput(e.target.value)}
+            onFocus={(e) => e.target.select()}
             onBlur={() => { if (capacityInput === '') setCapacityInput('0'); }}
             error={formErrors.capacity}
             required
@@ -551,6 +555,7 @@ const VehicleManagement: React.FC = () => {
             inputMode="numeric"
             value={mileageInput}
             onChange={(e) => setMileageInput(e.target.value)}
+            onFocus={(e) => e.target.select()}
             onBlur={() => { if (mileageInput === '') setMileageInput('0'); }}
             error={formErrors.currentMileage}
             required
@@ -656,17 +661,19 @@ const VehicleManagement: React.FC = () => {
             max={new Date().getFullYear() + 1}
             value={formData.year}
             onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) })}
+            onFocus={(e) => e.target.select()}
             error={formErrors.year}
             required
           />
 
           <Input
             label="積載量 (t)"
-            type="number"
-            min="0"
-            step="0.1"
-            value={formData.capacity}
-            onChange={(e) => setFormData({ ...formData, capacity: Number(e.target.value) })}
+            type="text"
+            inputMode="decimal"
+            value={capacityInput}
+            onChange={(e) => setCapacityInput(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            onBlur={() => { if (capacityInput === '') setCapacityInput('0'); }}
             error={formErrors.capacity}
             required
           />
@@ -686,10 +693,12 @@ const VehicleManagement: React.FC = () => {
           
           <Input
             label="現在走行距離 (km)"
-            type="number"
-            min="0"
-            value={formData.currentMileage}
-            onChange={(e) => setFormData({ ...formData, currentMileage: Number(e.target.value) })}
+            type="text"
+            inputMode="numeric"
+            value={mileageInput}
+            onChange={(e) => setMileageInput(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            onBlur={() => { if (mileageInput === '') setMileageInput('0'); }}
             error={formErrors.currentMileage}
             required
           />
