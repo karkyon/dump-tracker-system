@@ -1,4 +1,12 @@
-# 🚛 Dump Tracker — Mobile App
+#!/usr/bin/env python3
+"""
+frontend/mobile/README.md を最新の開発状況に合わせて全面更新
+"""
+import os, subprocess
+
+ROOT = os.path.expanduser('~/projects/dump-tracker')
+
+NEW_README = '''# 🚛 Dump Tracker — Mobile App
 
 ダンプトラック運行記録モバイルアプリ
 
@@ -246,4 +254,32 @@ git push origin main
 - Prisma スキーマ: `backend/prisma/schema.camel.prisma`
 - ハンドオフ資料: `docs/HANDOFF_dump-tracker_20260424.md`
 - Staging VM: `dump-tracker-vm-staging-v2`（IP: `8.228.253.81`）
-- SSL 証明書期限: 2026-08-22（Let's Encrypt、自動更新設定要確認）
+- SSL 証明書期限: 2026-08-22（Let\'s Encrypt、自動更新設定要確認）
+'''
+
+filepath = os.path.join(ROOT, 'frontend/mobile/README.md')
+with open(filepath, 'w', encoding='utf-8') as f:
+    f.write(NEW_README)
+print('✅ README.md 更新完了')
+
+print('\n[TypeScript コンパイルチェック - Mobile]')
+r = subprocess.run(
+    'cd ~/projects/dump-tracker/frontend/mobile && npx tsc --noEmit 2>&1',
+    shell=True, capture_output=True, text=True
+)
+errors = [l for l in (r.stdout+r.stderr).splitlines() if 'error TS' in l]
+if errors:
+    print('❌ TSエラー:')
+    for e in errors: print(' ', e)
+    exit(1)
+print('✅ TypeScript: エラー 0件')
+
+print('\n[Git commit & push...]')
+subprocess.run(
+    'cd ~/projects/dump-tracker && git add -A && '
+    'git commit -m "docs: README.md 全面更新 (CSP/クリーンアップ機能/技術ルール/環境情報)" && '
+    'git push origin main',
+    shell=True
+)
+
+print('\n✅ README.md 更新・push完了！')
