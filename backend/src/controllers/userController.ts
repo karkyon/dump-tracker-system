@@ -113,7 +113,9 @@ class UserController {
       const filterOptions = {
         role: role as UserRole | undefined,
         isActive: status === 'active' ? true : status === 'inactive' ? false : undefined,
-        search: search as string | undefined
+        search: search as string | undefined,
+        page: paginationOptions.page,
+        limit: paginationOptions.limit
       };
 
       // 🔧🔧🔧 デバッグ出力3: フィルタオプション構築完了
