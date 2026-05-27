@@ -24,6 +24,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/uploads': {
+        target: 'https://10.1.119.244:8443',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   build: {

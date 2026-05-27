@@ -2472,13 +2472,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               {/* REQ-020: 積載物写真サムネ（完了イベントのみ） */}
                               {!isArrived && (subEvent as any).imageUrl && (() => {
                                 const imgUrl = (subEvent as any).imageUrl as string;
-                                const apiBase = (window as any).__API_BASE_URL__
-                                  || import.meta.env.VITE_API_BASE_URL
-                                  || '';
-                                const baseOrigin = (apiBase && apiBase.startsWith('http'))
-                                  ? apiBase.replace(/\/api\/v1.*$/, '')
-                                  : window.location.origin;
-                                const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${baseOrigin}${imgUrl}`;
+                                // Viteプロキシ(/uploads → backend:8443)経由で配信
+                                // 自己署名証明書問題を回避するため相対パスをそのまま使用
+                                const fullUrl = imgUrl.startsWith('http') ? imgUrl : imgUrl;
                                 return (
                                   <div className="mt-2">
                                     <p className="text-xs text-gray-500 mb-1">📷 積載物写真</p>
@@ -2718,14 +2714,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     const imgUrl = (event as any).imageUrl as string;
                                     // stagingのバックエンドURLを考慮（/uploads/ は nginx経由でバックエンドから配信）
                                     // ✅ REQ-020修正: VITE_API_BASE_URL からバックエンドオリジンを正確に取得
-                                    const apiBase = (window as any).__API_BASE_URL__
-                                      || import.meta.env.VITE_API_BASE_URL
-                                      || '';
-                                    // ✅ Fix④: /api/v1は相対パスのためwindow.location.originを使用
-                                    const baseOrigin = (apiBase && apiBase.startsWith('http'))
-                                      ? apiBase.replace(/\/api\/v1.*$/, '')
-                                      : window.location.origin;
-                                    const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${baseOrigin}${imgUrl}`;
+                                    // Viteプロキシ(/uploads → backend:8443)経由で配信
+                                    // 自己署名証明書問題を回避するため相対パスをそのまま使用
+                                    const fullUrl = imgUrl.startsWith('http') ? imgUrl : imgUrl;
                                     return (
                                       <div className="mt-2">
                                         <p className="text-xs text-gray-500 mb-1">📷 積載物写真</p>
