@@ -1,9 +1,8 @@
 name: 🧪 Deploy to Staging
 
 on:
-  # ⏸️ CI/CD 一時停止中 (push トリガー無効)
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
