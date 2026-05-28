@@ -1,60 +1,24 @@
-name: 🚀 Deploy to Production
+name: 🏭 Deploy to Production
 
 on:
   workflow_dispatch:
-    inputs:
-      confirmation:
-        description: 'Type "DEPLOY" to confirm production deployment'
-        required: true
+  push:
+    branches:
+      - 'release/**'
 
 jobs:
   deploy-production:
-    name: 🏭 Deploy to Production Environment
+    name: 🚀 Deploy to Production Environment
     runs-on: ubuntu-latest
     
     steps:
-      - name: ⚠️ Verify deployment confirmation
-        run: |
-          if [ "${{ github.event.inputs.confirmation }}" != "DEPLOY" ]; then
-            echo "❌ Deployment cancelled: confirmation word not matched"
-            exit 1
-          fi
-          echo "✅ Deployment confirmed"
-      
-      # ===========================
-      # 📸 GCP認証とスナップショット作成
-      # ===========================
-      - name: 🔐 Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      
-      - name: 🔧 Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-      
-      - name: 📸 Create Pre-Deployment Snapshot
-        run: |
-          DATE=$(date +%Y%m%d-%H%M%S)
-          SNAPSHOT_NAME="prod-pre-deploy-${DATE}"
-          
-          echo "📸 Creating pre-deployment snapshot: $SNAPSHOT_NAME"
-          
-          gcloud compute disks snapshot dump-tracker-vm-prod-v2 \
-            --snapshot-names=$SNAPSHOT_NAME \
-            --zone=us-west1-b \
-            --description="Pre-deployment snapshot - $(date '+%Y-%m-%d %H:%M:%S')" \
-            --project=${{ secrets.GCP_PROJECT_ID }}
-          
-          echo "✅ Snapshot created successfully: $SNAPSHOT_NAME"
-          echo "🔗 Snapshot can be used for rollback if needed"
-      
       - name: 📥 Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # ===========================
       # Backend デプロイ
@@ -67,31 +31,70 @@ jobs:
         working-directory: ./backend
         run: npm run build
       
-      - name: 🚀 Deploy backend to Production
+      - name: 🚀 Deploy backend to Staging
         uses: appleboy/scp-action@master
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          source: "backend/dist/*,backend/package*.json"
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          source: "backend/dist/*,backend/package*.json,backend/prisma/schema.camel.prisma,deploy/dump-tracker-backend.service"
           target: "/tmp/backend-deploy/"
           strip_components: 1
       
-      - name: 📂 Update backend on Production
+      - name: 📂 Update backend on Staging
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
           script: |
             cd ~/projects/dump-tracker/backend
             rm -rf dist
             cp -r /tmp/backend-deploy/dist .
             cp /tmp/backend-deploy/package*.json .
+            mkdir -p prisma
+            cp /tmp/backend-deploy/schema.camel.prisma prisma/ 2>/dev/null || true
+            export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
             npm ci
+            npx prisma generate --schema=./prisma/schema.camel.prisma 2>/dev/null || true
+            npx prisma db push --schema=./prisma/schema.camel.prisma 2>/dev/null || true
+            # ✅ テーブル権限付与（db push後はownerがpostgresになる場合があるため）
+            sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
+            sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
+            # systemdサービスとして起動（自動再起動・VM再起動対応）
+            # CORS_ORIGIN設定
+            BACKEND_ENV=~/projects/dump-tracker/backend/.env
+            # ✅ Fix②: JWT有効期限を24hに設定（デフォルト15mがログアウト根本原因）
+            if grep -q "JWT_EXPIRES_IN" "$BACKEND_ENV" 2>/dev/null; then
+              sed -i 's|JWT_EXPIRES_IN=.*|JWT_EXPIRES_IN=24h|' "$BACKEND_ENV"
+            else
+              echo "JWT_EXPIRES_IN=24h" >> "$BACKEND_ENV"
+            fi
+            if grep -q "JWT_REFRESH_EXPIRES_IN" "$BACKEND_ENV" 2>/dev/null; then
+              sed -i 's|JWT_REFRESH_EXPIRES_IN=.*|JWT_REFRESH_EXPIRES_IN=30d|' "$BACKEND_ENV"
+            else
+              echo "JWT_REFRESH_EXPIRES_IN=30d" >> "$BACKEND_ENV"
+            fi
+            if grep -q "CORS_ORIGIN" "$BACKEND_ENV" 2>/dev/null; then
+              sed -i 's|CORS_ORIGIN=.*|CORS_ORIGIN=https://dump-tracker.ddns.net,https://dump-tracker.ddns.net:3003,https://dump-tracker.ddns.net:3001|' "$BACKEND_ENV"
+            else
+              echo "CORS_ORIGIN=https://dump-tracker.ddns.net,https://dump-tracker.ddns.net:3003,https://dump-tracker.ddns.net:3001" >> "$BACKEND_ENV"
+            fi
+            echo "CORS_ORIGIN 設定完了"
+            NGINX_CONF="/etc/nginx/sites-enabled/dump-tracker-prod"
+            if [ -f "$NGINX_CONF" ]; then
+              if grep -q "proxy_read_timeout" "$NGINX_CONF"; then
+                sudo sed -i 's/proxy_read_timeout [0-9]*/proxy_read_timeout 120/' "$NGINX_CONF" 2>/dev/null || true
+                sudo sed -i 's/proxy_connect_timeout [0-9]*/proxy_connect_timeout 120/' "$NGINX_CONF" 2>/dev/null || true
+              else
+                sudo sed -i '/proxy_pass http.*8443/a\            proxy_read_timeout 120;\n            proxy_connect_timeout 120;' "$NGINX_CONF" 2>/dev/null || true
+              fi
+              sudo nginx -t && sudo nginx -s reload 2>/dev/null || echo "nginx reload skip"
+            fi
+            sudo systemctl restart dump-tracker-backend
+            sleep 3
+            sudo systemctl is-active dump-tracker-backend && echo "OK"
             rm -rf /tmp/backend-deploy
-            sudo systemctl restart dump-tracker-backend.service
-            echo "✅ Backend deployed to Production"
 
       # ===========================
       # Mobile Frontend デプロイ
@@ -100,13 +103,14 @@ jobs:
         working-directory: ./frontend/mobile
         run: npm ci
       
-      - name: 🔧 Create Production .env.production for Mobile
+      - name: 🔧 Create Staging .env.production for Mobile
         working-directory: ./frontend/mobile
         run: |
           cat > .env.production << EOF
-          VITE_API_BASE_URL=${{ secrets.PRODUCTION_API_URL }}
-          VITE_GOOGLE_MAPS_API_KEY=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY
+          VITE_API_BASE_URL=/api/v1
+          VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
           VITE_APP_ENV=production
+          VITE_GOOGLE_MAP_ID=793b2cb3013694b0700a2152 
           EOF
       
       - name: 🏗️ Build mobile app
@@ -118,22 +122,22 @@ jobs:
           sed -i 's/useRef<number | null>/useRef<any>/g' src/pages/OperationMain.tsx || true
           npm run build
       
-      - name: 🚀 Deploy mobile to Production
+      - name: 🚀 Deploy mobile to Staging
         uses: appleboy/scp-action@master
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
           source: "frontend/mobile/dist/*"
           target: "/tmp/mobile-deploy/"
           strip_components: 3
       
-      - name: 📂 Update mobile on Production
+      - name: 📂 Update mobile on Staging
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
           script: |
             rm -rf ~/projects/dump-tracker/frontend/mobile/dist/*
             cp -r /tmp/mobile-deploy/* ~/projects/dump-tracker/frontend/mobile/dist/
@@ -148,12 +152,12 @@ jobs:
         working-directory: ./frontend/cms
         run: npm ci
       
-      - name: 🔧 Create Production .env.production for CMS
+      - name: 🔧 Create Staging .env.production for CMS
         working-directory: ./frontend/cms
         run: |
           cat > .env.production << EOF
-          VITE_API_BASE_URL=${{ secrets.PRODUCTION_API_URL }}
-          VITE_GOOGLE_MAPS_API_KEY=AIzaSyC1LrD7xMN_sLZ5iELaLpPzXPeQeEoH6pY
+          VITE_API_BASE_URL=/api/v1
+          VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
           VITE_APP_ENV=production
           VITE_GPS_UPDATE_INTERVAL=5000
           VITE_DEBUG=false
@@ -164,35 +168,34 @@ jobs:
         working-directory: ./frontend/cms
         run: npm run build
       
-      - name: 🚀 Deploy CMS to Production
+      - name: 🚀 Deploy CMS to Staging
         uses: appleboy/scp-action@master
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          source: "frontend/cms/dist/*"
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          source: "frontend/cms/dist/*,scripts/fix-nginx-cms.py"
           target: "/tmp/cms-deploy/"
           strip_components: 3
       
-      - name: 📂 Update CMS on Production
+      - name: 📂 Update CMS on Staging
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
           script: |
             rm -rf ~/projects/dump-tracker/frontend/cms/dist/*
             cp -r /tmp/cms-deploy/* ~/projects/dump-tracker/frontend/cms/dist/
             chmod -R 755 ~/projects/dump-tracker/frontend/cms/dist
+            cp /tmp/cms-deploy/fix-nginx-cms.py /tmp/fix-nginx-cms.py 2>/dev/null || true
             rm -rf /tmp/cms-deploy
-            sudo systemctl reload nginx
+            sudo python3 /tmp/fix-nginx-cms.py 2>/dev/null || true
+            sudo nginx -t && sudo systemctl reload nginx
             echo "✅ CMS deployed to Production"
       
       - name: ✅ Deployment Complete
         run: |
-          echo "🎉 Production deployment completed successfully!"
+          echo "🎉 Production deployment completed!"
           echo "📱 Mobile: https://dump-tracker.ddns.net/"
-          echo "💼 CMS: https://dump-tracker.ddns.net:3003/"
-          echo "📚 API Docs: https://dump-tracker.ddns.net/docs/"
-          echo ""
-          echo "📸 Pre-deployment snapshot was created for rollback"
+          echo "💼 CMS:    https://dump-tracker.ddns.net:3003/"
