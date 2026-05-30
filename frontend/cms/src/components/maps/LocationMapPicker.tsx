@@ -77,6 +77,56 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
       }
     });
 
+    // ✅ Fix: ダブルクリックした地点にマーカーを移動（ズームは変更しない）
+    map.addListener('dblclick', async (e: google.maps.MapMouseEvent) => {
+      if (!e.latLng) return;
+      // dblclickはデフォルトでズームするので preventDefault
+      e.stop?.();
+
+      const coordinates: Coordinates = {
+        lat: e.latLng.lat(),
+        lng: e.latLng.lng(),
+      };
+
+      // マーカーを移動
+      marker.position = coordinates;
+
+      setIsLoadingAddress(true);
+      try {
+        const address = await reverseGeocode(coordinates);
+        setCurrentAddress(address);
+        onPositionChange(coordinates, address);
+      } catch (error) {
+        console.error('住所取得エラー（dblclick）:', error);
+      } finally {
+        setIsLoadingAddress(false);
+      }
+    });
+
+    // ✅ Fix: シングルクリックでもマーカー移動（ドラッグ難しい場合の補完）
+    map.addListener('click', async (e: google.maps.MapMouseEvent) => {
+      if (!e.latLng) return;
+
+      const coordinates: Coordinates = {
+        lat: e.latLng.lat(),
+        lng: e.latLng.lng(),
+      };
+
+      // マーカーを移動
+      marker.position = coordinates;
+
+      setIsLoadingAddress(true);
+      try {
+        const address = await reverseGeocode(coordinates);
+        setCurrentAddress(address);
+        onPositionChange(coordinates, address);
+      } catch (error) {
+        console.error('住所取得エラー（click）:', error);
+      } finally {
+        setIsLoadingAddress(false);
+      }
+    });
+
     // 初期位置の住所を取得
     reverseGeocode(initialPosition)
       .then(address => setCurrentAddress(address))
@@ -198,7 +248,7 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
           </div>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          💡 マーカーをドラッグして位置を微調整できます
+          💡 地図をクリックまたはダブルクリックした地点にマーカーが移動します。ドラッグでも調整できます
         </p>
       </div>
     </div>

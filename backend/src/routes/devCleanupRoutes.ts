@@ -178,7 +178,39 @@ router.delete('/master/:table/:id', asyncHandler(async (req: AuthenticatedReques
 
   const prisma = DatabaseService.getInstance();
 
-  await prisma.$executeRawUnsafe(`DELETE FROM ${table} WHERE id = $1::uuid`, id);
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // 外部キー制約のある子テーブルを先に削除
+    if (table === 'locations') {
+      // operation_details.location_id → locations を参照しているため先に削除
+      await tx.$executeRawUnsafe(`DELETE FROM operation_details WHERE location_id = $1::uuid`, id);
+    } else if (table === 'items') {
+      // operation_detail_items.item_id → items を参照しているため先に削除
+      await tx.$executeRawUnsafe(`DELETE FROM operation_detail_items WHERE item_id = $1::uuid`, id);
+    } else if (table === 'vehicles') {
+      // 車両に紐づくトランザクションを削除順序通りに削除
+      const vOps = await (tx.$queryRawUnsafe as any)(`SELECT id FROM operations WHERE vehicle_id = $1::uuid`, id);
+      for (const op of vOps) {
+        await tx.$executeRawUnsafe(`DELETE FROM inspection_item_results WHERE inspection_record_id IN (SELECT id FROM inspection_records WHERE operation_id = $1::uuid)`, op.id);
+        await tx.$executeRawUnsafe(`DELETE FROM operation_detail_items WHERE operation_detail_id IN (SELECT id FROM operation_details WHERE operation_id = $1::uuid)`, op.id);
+        await tx.$executeRawUnsafe(`DELETE FROM operation_details WHERE operation_id = $1::uuid`, op.id);
+        await tx.$executeRawUnsafe(`DELETE FROM inspection_records WHERE operation_id = $1::uuid`, op.id);
+        await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE operation_id = $1::uuid`, op.id);
+        await tx.$executeRawUnsafe(`DELETE FROM accident_records WHERE operation_id = $1::uuid`, op.id);
+      }
+      await tx.$executeRawUnsafe(`DELETE FROM operations WHERE vehicle_id = $1::uuid`, id);
+      await tx.$executeRawUnsafe(`DELETE FROM maintenance_records WHERE vehicle_id = $1::uuid`, id);
+    } else if (table === 'customers') {
+      // operation.customer_id → customers 参照
+      const cOps = await (tx.$queryRawUnsafe as any)(`SELECT id FROM operations WHERE customer_id = $1::uuid`, id);
+      for (const op of cOps) {
+        await tx.$executeRawUnsafe(`DELETE FROM operation_detail_items WHERE operation_detail_id IN (SELECT id FROM operation_details WHERE operation_id = $1::uuid)`, op.id);
+        await tx.$executeRawUnsafe(`DELETE FROM operation_details WHERE operation_id = $1::uuid`, op.id);
+        await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE operation_id = $1::uuid`, op.id);
+      }
+      await tx.$executeRawUnsafe(`DELETE FROM operations WHERE customer_id = $1::uuid`, id);
+    }
+    await tx.$executeRawUnsafe(`DELETE FROM ${table} WHERE id = $1::uuid`, id);
+  }, { timeout: 30000 });
 
   logger.info('マスタデータ1件削除', { table, id, userId: req.user?.userId });
 
@@ -203,18 +235,51 @@ router.post('/master/bulk-delete', asyncHandler(async (req: AuthenticatedRequest
   }
 
   const prisma = DatabaseService.getInstance();
-  // DRIVER限定（usersテーブルは役割チェック）
-  let where = `id = ANY($1::uuid[])`;
-  if (table === 'users') where += ` AND role = 'DRIVER'`;
 
-  const result = await prisma.$executeRawUnsafe(
-    `DELETE FROM ${table} WHERE ${where}`,
-    ids
-  );
+  let deleted = 0;
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // 外部キー制約のある子テーブルを先に一括削除
+    if (table === 'locations') {
+      await tx.$executeRawUnsafe(`DELETE FROM operation_details WHERE location_id = ANY($1::uuid[])`, ids);
+    } else if (table === 'items') {
+      await tx.$executeRawUnsafe(`DELETE FROM operation_detail_items WHERE item_id = ANY($1::uuid[])`, ids);
+    } else if (table === 'vehicles') {
+      const opIds = await (tx.$queryRawUnsafe as any)(`SELECT id FROM operations WHERE vehicle_id = ANY($1::uuid[])`, ids);
+      if (opIds.length > 0) {
+        const opIdList = opIds.map((o: {id: string}) => o.id);
+        await tx.$executeRawUnsafe(`DELETE FROM inspection_item_results WHERE inspection_record_id IN (SELECT id FROM inspection_records WHERE operation_id = ANY($1::uuid[]))`, opIdList);
+        await tx.$executeRawUnsafe(`DELETE FROM operation_detail_items WHERE operation_detail_id IN (SELECT id FROM operation_details WHERE operation_id = ANY($1::uuid[]))`, opIdList);
+        await tx.$executeRawUnsafe(`DELETE FROM operation_details WHERE operation_id = ANY($1::uuid[])`, opIdList);
+        await tx.$executeRawUnsafe(`DELETE FROM inspection_records WHERE operation_id = ANY($1::uuid[])`, opIdList);
+        await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE operation_id = ANY($1::uuid[])`, opIdList);
+        await tx.$executeRawUnsafe(`DELETE FROM accident_records WHERE operation_id = ANY($1::uuid[])`, opIdList);
+      }
+      await tx.$executeRawUnsafe(`DELETE FROM operations WHERE vehicle_id = ANY($1::uuid[])`, ids);
+      await tx.$executeRawUnsafe(`DELETE FROM maintenance_records WHERE vehicle_id = ANY($1::uuid[])`, ids);
+    } else if (table === 'customers') {
+      const opIds = await (tx.$queryRawUnsafe as any)(`SELECT id FROM operations WHERE customer_id = ANY($1::uuid[])`, ids);
+      if (opIds.length > 0) {
+        const opIdList = opIds.map((o: {id: string}) => o.id);
+        await tx.$executeRawUnsafe(`DELETE FROM operation_detail_items WHERE operation_detail_id IN (SELECT id FROM operation_details WHERE operation_id = ANY($1::uuid[]))`, opIdList);
+        await tx.$executeRawUnsafe(`DELETE FROM operation_details WHERE operation_id = ANY($1::uuid[])`, opIdList);
+        await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE operation_id = ANY($1::uuid[])`, opIdList);
+      }
+      await tx.$executeRawUnsafe(`DELETE FROM operations WHERE customer_id = ANY($1::uuid[])`, ids);
+    }
 
-  logger.info('マスタデータ複数削除', { table, count: result, ids, userId: req.user?.userId });
+    // DRIVER限定（usersテーブルは役割チェック）
+    let where = `id = ANY($1::uuid[])`;
+    if (table === 'users') where += ` AND role = 'DRIVER'`;
 
-  res.json({ success: true, message: `${result}件削除しました`, deleted: result });
+    deleted = await tx.$executeRawUnsafe(
+      `DELETE FROM ${table} WHERE ${where}`,
+      ids
+    );
+  }, { timeout: 30000 });
+
+  logger.info('マスタデータ複数削除', { table, count: deleted, ids, userId: req.user?.userId });
+
+  res.json({ success: true, message: `${deleted}件削除しました`, deleted });
 }));
 
 export default router;
