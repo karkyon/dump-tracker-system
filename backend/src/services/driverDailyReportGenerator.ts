@@ -10,17 +10,36 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
 
-const FONT_PATHS = [
-  '/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf',
-  '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf',
-  '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf',
-];
+interface FontResult {
+  path: string;
+  isTtc: boolean;
+}
 
-function findJapaneseFont(): string {
-  for (const fp of FONT_PATHS) {
-    if (fs.existsSync(fp)) return fp;
+function findJapaneseFont(): FontResult {
+  // TTF/OTF優先（pdfkitが直接読める）
+  const ttfCandidates = [
+    '/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf',
+    '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSansCJKjp-Regular.otf',
+    '/usr/share/fonts/truetype/takao-gothic/TakaoGothic.ttf',
+    '/usr/share/fonts/truetype/ipafont-gothic/ipag.ttf',
+    '/usr/share/fonts/truetype/ipafont/ipag.ttf',
+    '/usr/share/fonts/opentype/ipafont-gothic/ipag.otf',
+    '/usr/share/fonts/truetype/vlgothic/VL-Gothic-Regular.ttf',
+    '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf',
+  ];
+  for (const fp of ttfCandidates) {
+    if (fs.existsSync(fp)) return { path: fp, isTtc: false };
   }
-  throw new Error('日本語フォントが見つかりません');
+  // TTCフォールバック（fontIndexを指定して登録）
+  const ttcCandidates = [
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+  ];
+  for (const fp of ttcCandidates) {
+    if (fs.existsSync(fp)) return { path: fp, isTtc: true };
+  }
+  throw new Error('日本語フォントが見つかりません（TTF/OTF/TTC全て不在）');
 }
 
 export interface OperationRowData {
@@ -133,8 +152,8 @@ export async function generateDriverDailyReport(
   data: DriverDailyReportData,
   outputPath: string
 ): Promise<void> {
-  const fontPath = findJapaneseFont();
-  logger.info('[DriverDailyReport] PDF生成開始', { outputPath, fontPath });
+  const fontResult = findJapaneseFont();
+  logger.info('[DriverDailyReport] PDF生成開始', { outputPath, fontPath: fontResult.path, isTtc: fontResult.isTtc });
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -149,7 +168,11 @@ export async function generateDriverDailyReport(
     }
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
-    doc.registerFont('JP', fontPath);
+    if (fontResult.isTtc) {
+      doc.registerFont('JP', fontResult.path, 'Noto Sans CJK JP');
+    } else {
+      doc.registerFont('JP', fontResult.path);
+    }
 
     const ML = 18;
     const MT = 15;

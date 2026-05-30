@@ -149,13 +149,18 @@ export function ensureReportDirectory(): void {
   }
 }
 
-function findJapaneseFont(): string | null {
-  const candidates = [
-    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+/** フォント検索結果 */
+interface FontResult {
+  path: string;
+  isTtc: boolean;
+}
+
+function findJapaneseFont(): FontResult | null {
+  // TTF/OTF優先（pdfkitが直接読める）
+  const ttfCandidates = [
+    '/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf',
+    '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf',
     '/usr/share/fonts/truetype/noto/NotoSansCJKjp-Regular.otf',
-    '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
-    '/System/Library/Fonts/Hiragino Sans GB.ttc',
     '/usr/share/fonts/truetype/takao-gothic/TakaoGothic.ttf',
     '/usr/share/fonts/truetype/ipafont-gothic/ipag.ttf',
     '/usr/share/fonts/truetype/ipafont/ipag.ttf',
@@ -163,10 +168,23 @@ function findJapaneseFont(): string | null {
     '/usr/share/fonts/truetype/vlgothic/VL-Gothic-Regular.ttf',
     '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf',
   ];
-  for (const f of candidates) {
-    if (fs.existsSync(f) && !f.endsWith('.ttc')) {
-      logger.info(`[PDF] 日本語フォント: ${f}`);
-      return f;
+  for (const f of ttfCandidates) {
+    if (fs.existsSync(f)) {
+      logger.info(`[PDF] 日本語フォント(TTF/OTF): ${f}`);
+      return { path: f, isTtc: false };
+    }
+  }
+  // TTCフォールバック（fontIndexを指定して登録）
+  const ttcCandidates = [
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+    '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
+    '/System/Library/Fonts/Hiragino Sans GB.ttc',
+  ];
+  for (const f of ttcCandidates) {
+    if (fs.existsSync(f)) {
+      logger.info(`[PDF] 日本語フォント(TTC): ${f}`);
+      return { path: f, isTtc: true };
     }
   }
   logger.warn('[PDF] 日本語フォントが見つかりません。ASCII文字のみ表示されます。');
@@ -782,7 +800,7 @@ export async function generateDailyDriverReportPDF(
   return new Promise((resolve, reject) => {
     try {
       ensureReportDirectory();
-      const japaneseFont = findJapaneseFont();
+      const fontResult = findJapaneseFont();
 
       const doc = new PDFDocument({
         size: 'A4',
@@ -794,12 +812,16 @@ export async function generateDailyDriverReportPDF(
       const stream = fs.createWriteStream(outputPath);
       doc.pipe(stream);
 
-      if (japaneseFont) {
-        doc.registerFont('JpFont', japaneseFont);
+      if (fontResult) {
+        if (fontResult.isTtc) {
+          doc.registerFont('JpFont', fontResult.path, 'Noto Sans CJK JP');
+        } else {
+          doc.registerFont('JpFont', fontResult.path);
+        }
       }
 
       doc.addPage();
-      drawDailyDriverReport(doc, data, japaneseFont ? 'JpFont' : null);
+      drawDailyDriverReport(doc, data, fontResult ? 'JpFont' : null);
 
       doc.end();
 

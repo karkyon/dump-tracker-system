@@ -42,12 +42,18 @@ const COL_LAST   = CONTENT_W - COL_REGION - COL_NUM * 6;      // 残り（≈69p
 // フォント検索（pdfReportGenerator.ts と同じロジック）
 // =====================================
 
-function findJapaneseFont(): string | null {
-  const candidates = [
-    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+/** フォント検索結果 */
+interface FontResult {
+  path: string;
+  isTtc: boolean;
+}
+
+function findJapaneseFont(): FontResult | null {
+  // TTF/OTF優先（pdfkitが直接読める）
+  const ttfCandidates = [
+    '/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf',
+    '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf',
     '/usr/share/fonts/truetype/noto/NotoSansCJKjp-Regular.otf',
-    '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
     '/usr/share/fonts/truetype/takao-gothic/TakaoGothic.ttf',
     '/usr/share/fonts/truetype/ipafont-gothic/ipag.ttf',
     '/usr/share/fonts/truetype/ipafont/ipag.ttf',
@@ -55,10 +61,22 @@ function findJapaneseFont(): string | null {
     '/usr/share/fonts/truetype/vlgothic/VL-Gothic-Regular.ttf',
     '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf',
   ];
-  for (const f of candidates) {
-    if (fs.existsSync(f) && !f.endsWith('.ttc')) {
-      logger.info(`[AnnualPDF] フォント: ${f}`);
-      return f;
+  for (const f of ttfCandidates) {
+    if (fs.existsSync(f)) {
+      logger.info(`[AnnualPDF] フォント(TTF/OTF): ${f}`);
+      return { path: f, isTtc: false };
+    }
+  }
+  // TTCフォールバック（fontIndexを指定して登録）
+  const ttcCandidates = [
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+    '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
+  ];
+  for (const f of ttcCandidates) {
+    if (fs.existsSync(f)) {
+      logger.info(`[AnnualPDF] フォント(TTC): ${f}`);
+      return { path: f, isTtc: true };
     }
   }
   logger.warn('[AnnualPDF] 日本語フォントなし。英字フォールバック。');
@@ -347,7 +365,9 @@ export async function generateAnnualTransportReportPDF(
   return new Promise((resolve, reject) => {
     try {
       ensureReportDirectory();
-      const jpFont = findJapaneseFont();
+      const jpFontResult = findJapaneseFont();
+      const jpFont = jpFontResult ? jpFontResult.path : null;
+      const jpFontIsTtc = jpFontResult ? jpFontResult.isTtc : false;
 
       const doc = new PDFDocument({
         size: 'A4',
@@ -360,7 +380,11 @@ export async function generateAnnualTransportReportPDF(
       doc.pipe(stream);
 
       if (jpFont) {
-        doc.registerFont('JpFont', jpFont);
+        if (jpFontIsTtc) {
+          doc.registerFont('JpFont', jpFont, 'Noto Sans CJK JP');
+        } else {
+          doc.registerFont('JpFont', jpFont);
+        }
       }
 
       doc.addPage();
