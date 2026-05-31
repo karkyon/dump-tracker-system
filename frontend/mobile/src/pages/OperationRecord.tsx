@@ -237,7 +237,7 @@ const OperationRecord: React.FC = () => {
     const alertDistanceKm = 0.2; // デフォルト200m = 0.2km（将来: system_settingsから取得）
 
     // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
-    // 積込場所到着中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
+    // 積込場所到着 v2.1中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
     if (phase === 'AT_LOADING' || phase === 'LOADING_IN_PROGRESS') {
       const loadingLat = operationStore.loadingLocationLat;
       const loadingLng = operationStore.loadingLocationLng;

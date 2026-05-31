@@ -946,8 +946,7 @@ export class MobileController {
         longitude: parseFloat(longitude),
         radiusKm: parseFloat(radiusMeters) / 1000, // メートルからキロメートルに変換
         locationType: locationTypeFilter,
-        limit: 5,
-        isActiveOnly: true
+        limit: 5
       };
 
       logger.info('LocationService呼び出し', {
