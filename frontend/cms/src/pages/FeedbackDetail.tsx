@@ -8,6 +8,7 @@ import { useTLog } from '../hooks/useTLog';
 import { toast } from 'react-hot-toast';
 import {
   ArrowLeft, MessageSquare, ExternalLink, Save, Link, Link2Off, AlertCircle,
+  Eye, Edit2, Columns, Bold, Italic, List, Code, Heading1, Heading2, ChevronDown,
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/constants';
 
@@ -99,6 +100,96 @@ function formatDate(iso?: string) {
 // コンポーネント
 // =============================================
 
+// =============================================
+// Markdown → HTML 変換
+// =============================================
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function inlineMd(s: string): string {
+  let t = escapeHtml(s);
+  t = t.replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:0.85em">$1</code>');
+  t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:#2563eb;text-decoration:underline">$1</a>');
+  return t;
+}
+function mdToHtml(md: string): string {
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let inCode = false; let inUl = false; let inOl = false;
+  const closeList = () => { if (inUl) { out.push('</ul>'); inUl = false; } if (inOl) { out.push('</ol>'); inOl = false; } };
+  for (const line of lines) {
+    if (line.startsWith('```')) { if (inCode) { out.push('</code></pre>'); inCode = false; } else { closeList(); out.push('<pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;overflow-x:auto;font-size:0.85em"><code>'); inCode = true; } continue; }
+    if (inCode) { out.push(escapeHtml(line)); continue; }
+    if (line.startsWith('### ')) { closeList(); out.push(`<h3 style="font-size:1em;font-weight:600;margin:12px 0 4px;color:#374151">${inlineMd(line.slice(4))}</h3>`); continue; }
+    if (line.startsWith('## ')) { closeList(); out.push(`<h2 style="font-size:1.1em;font-weight:700;margin:16px 0 6px;color:#1f2937;border-bottom:1px solid #e5e7eb;padding-bottom:4px">${inlineMd(line.slice(3))}</h2>`); continue; }
+    if (line.startsWith('# ')) { closeList(); out.push(`<h1 style="font-size:1.25em;font-weight:700;margin:16px 0 8px;color:#111827">${inlineMd(line.slice(2))}</h1>`); continue; }
+    if (line.startsWith('> ')) { closeList(); out.push(`<blockquote style="border-left:3px solid #6366f1;background:#f5f3ff;padding:6px 12px;margin:8px 0;border-radius:0 4px 4px 0;color:#4b5563">${inlineMd(line.slice(2))}</blockquote>`); continue; }
+    if (line.match(/^[-*] /)) { if (!inUl) { if (inOl) { out.push('</ol>'); inOl = false; } out.push('<ul style="list-style:disc;padding-left:20px;margin:6px 0">'); inUl = true; } out.push(`<li style="margin:2px 0">${inlineMd(line.slice(2))}</li>`); continue; }
+    if (line.match(/^\d+\. /)) { if (!inOl) { if (inUl) { out.push('</ul>'); inUl = false; } out.push('<ol style="list-style:decimal;padding-left:20px;margin:6px 0">'); inOl = true; } out.push(`<li style="margin:2px 0">${inlineMd(line.replace(/^\d+\. /, ''))}</li>`); continue; }
+    closeList();
+    if (line.trim() === '' || line.trim() === '---') { out.push(line.trim() === '---' ? '<hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0">' : '<br>'); continue; }
+    out.push(`<p style="margin:4px 0;line-height:1.6">${inlineMd(line)}</p>`);
+  }
+  closeList();
+  return out.join('\n');
+}
+
+// =============================================
+// テンプレート定義
+// =============================================
+const NOTES_TEMPLATES = [
+  {
+    label: '🐛 不具合対応',
+    value: `## 原因
+<!-- 何が根本原因だったか -->
+
+## 影響範囲
+<!-- どの機能・ユーザーに影響があるか -->
+
+## 対策内容
+\`\`\`
+// 修正箇所・変更内容
+\`\`\`
+
+## 確認方法
+- [ ] 再現手順で不具合が解消されていることを確認
+- [ ] 既存機能への影響がないことを確認
+
+## 関連コミット / PR
+<!-- commit hash または PR URL -->
+`,
+  },
+  {
+    label: '💡 改善実装',
+    value: `## 実装内容
+<!-- 何を変更・追加したか -->
+
+## 変更ファイル
+\`\`\`
+- path/to/file.ts
+\`\`\`
+
+## 動作確認
+- [ ] 要望通りに動作することを確認
+- [ ] 既存機能への影響がないことを確認
+`,
+  },
+  {
+    label: '⏭️ 先送り・却下理由',
+    value: `## 判断理由
+<!-- なぜ対応しない or 先送りにするか -->
+
+## 代替案
+<!-- 代わりにユーザーができること -->
+
+## 再検討条件
+<!-- どうなったら対応を検討するか -->
+`,
+  },
+];
+
 const FeedbackDetail: React.FC = () => {
   useTLog('FEEDBACK_DETAIL', 'フィードバック管理詳細');
   const { id } = useParams<{ id: string }>();
@@ -109,6 +200,8 @@ const FeedbackDetail: React.FC = () => {
   const [savingNotes, setSavingNotes] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [notes, setNotes] = useState('');
+  const [notesViewMode, setNotesViewMode] = useState<'edit' | 'split' | 'preview'>('edit');
+  const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
 
   const [showBacklogPanel, setShowBacklogPanel] = useState(false);
@@ -118,6 +211,8 @@ const FeedbackDetail: React.FC = () => {
   const [linkMode, setLinkMode] = useState<'new' | 'existing'>('new');
   const [manualKey, setManualKey] = useState('');
   const [linkingManual, setLinkingManual] = useState(false);
+
+  const notesTextareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
@@ -466,29 +561,116 @@ const FeedbackDetail: React.FC = () => {
         {/* サイドカラム */}
         <div className="space-y-4">
 
-          {/* 管理者メモ */}
+          {/* 管理者メモ（Markdownエディタ） */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 text-sm font-semibold text-gray-700">🗒️ 管理者メモ</div>
-            <div className="p-3">
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                rows={5}
-                placeholder="対応内容・調査メモを入力..."
-                className="w-full border border-gray-300 rounded p-2 text-sm resize-y focus:outline-none focus:border-primary-500"
-              />
-              <div className="flex items-center justify-between mt-2">
-                {fb.adminNotesUpdatedBy && (
-                  <span className="text-xs text-gray-400">最終更新: {fb.adminNotesUpdatedBy} / {formatDate(fb.adminNotesUpdatedAt)}</span>
-                )}
+            {/* ヘッダー */}
+            <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-700">🗒️ 対応メモ</span>
+              <span className="text-xs text-gray-400 flex-1">Markdown形式で記述できます</span>
+              {/* テンプレート */}
+              <div className="relative">
                 <button
-                  onClick={saveNotes}
-                  disabled={savingNotes}
-                  className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-primary-600 text-white rounded text-xs font-medium hover:bg-primary-700 disabled:opacity-50"
+                  onClick={() => setShowTemplateMenu(v => !v)}
+                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white"
                 >
-                  <Save className="h-3.5 w-3.5" /> {savingNotes ? '保存中...' : '保存'}
+                  テンプレート <ChevronDown className="h-3 w-3" />
                 </button>
+                {showTemplateMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded shadow-lg min-w-[180px]">
+                    {NOTES_TEMPLATES.map(t => (
+                      <button
+                        key={t.label}
+                        onClick={() => { setNotes(t.value); setShowTemplateMenu(false); setNotesViewMode('edit'); }}
+                        className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50"
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+              {/* ビューモード切替 */}
+              <div className="flex items-center border border-gray-200 rounded overflow-hidden">
+                {([['edit', <Edit2 className="h-3 w-3" />, '編集'], ['split', <Columns className="h-3 w-3" />, '分割'], ['preview', <Eye className="h-3 w-3" />, 'プレビュー']] as const).map(([mode, icon, label]) => (
+                  <button
+                    key={mode}
+                    title={label}
+                    onClick={() => setNotesViewMode(mode)}
+                    className={`px-2 py-1 text-xs flex items-center gap-1 ${notesViewMode === mode ? 'bg-primary-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* ツールバー */}
+            {notesViewMode !== 'preview' && (
+              <div className="flex items-center gap-0.5 px-2 py-1 border-b border-gray-100 bg-gray-50 flex-wrap">
+                {[
+                  { icon: <Bold className="h-3.5 w-3.5" />, title: '太字', wrap: ['**', '**'] },
+                  { icon: <Italic className="h-3.5 w-3.5" />, title: '斜体', wrap: ['*', '*'] },
+                  { icon: <Heading1 className="h-3.5 w-3.5" />, title: '見出し1', line: '# ' },
+                  { icon: <Heading2 className="h-3.5 w-3.5" />, title: '見出し2', line: '## ' },
+                  { icon: <List className="h-3.5 w-3.5" />, title: 'リスト', line: '- ' },
+                  { icon: <Code className="h-3.5 w-3.5" />, title: 'コード', wrap: ['`', '`'] },
+                ].map((btn, i) => (
+                  <button
+                    key={i}
+                    title={btn.title}
+                    onClick={() => {
+                      const ta = notesTextareaRef.current;
+                      if (!ta) return;
+                      const { selectionStart: s, selectionEnd: e, value: v } = ta;
+                      if (btn.wrap) {
+                        const sel = v.slice(s, e) || 'テキスト';
+                        const nv = v.slice(0, s) + btn.wrap[0] + sel + btn.wrap[1] + v.slice(e);
+                        setNotes(nv);
+                        setTimeout(() => { ta.focus(); ta.setSelectionRange(s + btn.wrap![0].length, s + btn.wrap![0].length + sel.length); }, 0);
+                      } else if (btn.line) {
+                        const ls = v.lastIndexOf('\n', s - 1) + 1;
+                        setNotes(v.slice(0, ls) + btn.line + v.slice(ls));
+                        setTimeout(() => ta.focus(), 0);
+                      }
+                    }}
+                    className="p-1.5 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    {btn.icon}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* エディタ / プレビュー本体 */}
+            <div className={`flex ${notesViewMode === 'split' ? 'divide-x divide-gray-200' : ''}`} style={{ minHeight: '200px' }}>
+              {(notesViewMode === 'edit' || notesViewMode === 'split') && (
+                <textarea
+                  ref={notesTextareaRef}
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder={'## 原因\n\n## 対策内容\n\n## 確認方法\n'}
+                  className="flex-1 border-none outline-none p-3 text-sm font-mono resize-none bg-white"
+                  style={{ minHeight: '200px' }}
+                />
+              )}
+              {(notesViewMode === 'preview' || notesViewMode === 'split') && (
+                <div
+                  className="flex-1 p-3 overflow-y-auto text-sm"
+                  style={{ minHeight: '200px' }}
+                  dangerouslySetInnerHTML={{ __html: notes.trim() ? mdToHtml(notes) : '<p style="color:#9ca3af">プレビューがここに表示されます</p>' }}
+                />
+              )}
+            </div>
+            {/* フッター: 最終更新 + 保存ボタン */}
+            <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 bg-gray-50">
+              {fb.adminNotesUpdatedBy ? (
+                <span className="text-xs text-gray-400">最終更新: {fb.adminNotesUpdatedBy} / {formatDate(fb.adminNotesUpdatedAt)}</span>
+              ) : <span />}
+              <button
+                onClick={saveNotes}
+                disabled={savingNotes}
+                className="flex items-center gap-1 px-3 py-1.5 bg-primary-600 text-white rounded text-xs font-medium hover:bg-primary-700 disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" /> {savingNotes ? '保存中...' : '保存'}
+              </button>
             </div>
           </div>
 
