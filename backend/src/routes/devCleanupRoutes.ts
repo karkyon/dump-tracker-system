@@ -197,6 +197,8 @@ router.delete('/master/:table/:id', asyncHandler(async (req: AuthenticatedReques
         await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE operation_id = $1::uuid`, op.id);
         await tx.$executeRawUnsafe(`DELETE FROM accident_records WHERE operation_id = $1::uuid`, op.id);
       }
+      // gps_logs は operation_id 経由で削除済みだが、vehicle_id 直接FK分も削除（gps_logs_vehicle_id_fkey 対策）
+      await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE vehicle_id = $1::uuid`, id);
       await tx.$executeRawUnsafe(`DELETE FROM operations WHERE vehicle_id = $1::uuid`, id);
       await tx.$executeRawUnsafe(`DELETE FROM maintenance_records WHERE vehicle_id = $1::uuid`, id);
     } else if (table === 'customers') {
@@ -254,6 +256,8 @@ router.post('/master/bulk-delete', asyncHandler(async (req: AuthenticatedRequest
         await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE operation_id = ANY($1::uuid[])`, opIdList);
         await tx.$executeRawUnsafe(`DELETE FROM accident_records WHERE operation_id = ANY($1::uuid[])`, opIdList);
       }
+      // gps_logs は operation_id 経由で削除済みだが、vehicle_id 直接FK分も削除（gps_logs_vehicle_id_fkey 対策）
+      await tx.$executeRawUnsafe(`DELETE FROM gps_logs WHERE vehicle_id = ANY($1::uuid[])`, ids);
       await tx.$executeRawUnsafe(`DELETE FROM operations WHERE vehicle_id = ANY($1::uuid[])`, ids);
       await tx.$executeRawUnsafe(`DELETE FROM maintenance_records WHERE vehicle_id = ANY($1::uuid[])`, ids);
     } else if (table === 'customers') {
