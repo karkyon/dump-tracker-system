@@ -1127,7 +1127,7 @@ export class MobileController {
 
       const paginationQuery: PaginationQuery = {
         page: Number(req.query.page) || 1,
-        limit: Number(req.query.limit) || 10
+        limit: Number(req.query.limit) || 100  // ✅ 修正: デフォルト100件（モバイル車両選択用）
       };
 
       const filter: VehicleFilter = {

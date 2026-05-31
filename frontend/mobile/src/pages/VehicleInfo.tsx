@@ -131,7 +131,9 @@ const VehicleInfo: React.FC = () => {
       
       if (response.data.success && response.data.data) {
         // ✅ バックエンドからのデータを変換
-        const apiVehicles = response.data.data.vehicles || response.data.data;
+        // mobileController: sendSuccess → { success, data: { vehicles:[...], pagination:{} } }
+        const apiVehicles = response.data.data.vehicles
+          || (Array.isArray(response.data.data) ? response.data.data : null);
         
         if (!Array.isArray(apiVehicles)) {
           console.error('❌ 車両データが配列ではありません:', apiVehicles);
