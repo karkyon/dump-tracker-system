@@ -454,9 +454,10 @@ const OperationRecord: React.FC = () => {
 
       // 🆕 近隣地点を手動検索
       const nearbyResult = await apiService.getNearbyLocations({
+        operationId: operationStore.operationId || '',
         latitude: currentPosition.coords.latitude,
         longitude: currentPosition.coords.longitude,
-        radiusMeters: 200,
+        radiusMeters: 500,  // 🔧 修正: 200→500m（GPS誤差・登録座標ずれを考慮）
         phase: 'TO_LOADING'
       });
 
@@ -515,9 +516,10 @@ const OperationRecord: React.FC = () => {
 
       // 🆕 近隣地点を手動検索
       const nearbyResult = await apiService.getNearbyLocations({
+        operationId: operationStore.operationId || '',
         latitude: currentPosition.coords.latitude,
         longitude: currentPosition.coords.longitude,
-        radiusMeters: 200,
+        radiusMeters: 500,  // 🔧 修正: 200→500m（GPS誤差・登録座標ずれを考慮）
         phase: 'TO_UNLOADING'
       });
 
