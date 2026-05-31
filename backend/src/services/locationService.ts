@@ -509,7 +509,7 @@ class LocationServiceWrapper {
       // 全位置取得（座標を持つもののみ）
       const allLocations = await this.locationService.findMany({
         where: {
-          isActive: true,
+          isActive: { not: false },  // null（モバイル登録地点）も含める
           latitude: { not: null },
           longitude: { not: null },
           // ✅ locationTypeフィルタ追加

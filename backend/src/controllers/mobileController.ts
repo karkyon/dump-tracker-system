@@ -676,7 +676,8 @@ export class MobileController {
           latitude: new Decimal(req.body.latitude),
           longitude: new Decimal(req.body.longitude),
           address: req.body.address || '',
-          specialInstructions: 'モバイルからクイック登録'
+          specialInstructions: 'モバイルからクイック登録',
+          isActive: true
         });
       };
 
