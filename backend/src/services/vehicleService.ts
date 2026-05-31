@@ -148,7 +148,7 @@ class VehicleService {
 
       const whereClause = await this.buildVehicleWhereClause(filter, context);
       const page = filter.page || 1;
-      const limit = filter.limit || 10;
+      const limit = filter.limit || 100; // ✅ 修正: モバイル車両選択のため全件取得
       const skip = (page - 1) * limit;
       const orderBy = this.buildOrderBy(filter.sortBy, filter.sortOrder);
 
