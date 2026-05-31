@@ -674,6 +674,34 @@ const FeedbackDetail: React.FC = () => {
             </div>
           </div>
 
+        </div>
+
+        {/* 右カラム: 対応履歴 → Backlog連携 → 一覧に戻る */}
+        <div className="space-y-4">
+
+          {/* 対応履歴 */}
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 text-sm font-semibold text-gray-700">📅 対応履歴</div>
+            <div className="p-3 space-y-3">
+              <div className="flex gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+                <div>
+                  <div className="text-xs text-gray-700">フィードバック受信（新規）</div>
+                  <div className="text-xs text-gray-400">{formatDate(fb.createdAt)} / システム自動</div>
+                </div>
+              </div>
+              {fb.statusHistory && fb.statusHistory.map((h, i) => (
+                <div key={i} className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary-400 mt-1.5 flex-shrink-0" />
+                  <div>
+                    <div className="text-xs text-gray-700">ステータスを「{h.to}」に変更</div>
+                    <div className="text-xs text-gray-400">{formatDate(h.changedAt)} / {h.changedBy}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Backlog連携 */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 text-sm font-semibold text-gray-700">🎫 Backlog連携</div>
@@ -699,7 +727,6 @@ const FeedbackDetail: React.FC = () => {
                 </div>
               ) : showBacklogPanel ? (
                 <div className="space-y-3">
-                  {/* タブ: 新規起票 / 既存連携 */}
                   <div className="flex border border-gray-200 rounded overflow-hidden text-xs">
                     <button
                       onClick={() => setLinkMode('new')}
@@ -708,9 +735,8 @@ const FeedbackDetail: React.FC = () => {
                     <button
                       onClick={() => setLinkMode('existing')}
                       className={`flex-1 py-1.5 font-semibold ${linkMode === 'existing' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                    >🔗 既存チケット連携</button>
+                    >🔗 既存連携</button>
                   </div>
-
                   {linkMode === 'new' ? (
                     <div className="space-y-2">
                       <div>
@@ -723,36 +749,32 @@ const FeedbackDetail: React.FC = () => {
                         <div className="text-sm font-semibold">{PRIORITY_MAP[fb.severity]}</div>
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">詳細本文（編集可）</label>
-                        <textarea value={backlogBody} onChange={e => setBacklogBody(e.target.value)} rows={6}
+                        <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">詳細本文</label>
+                        <textarea value={backlogBody} onChange={e => setBacklogBody(e.target.value)} rows={5}
                           className="w-full border border-gray-300 rounded p-1.5 text-xs font-mono resize-y focus:outline-none focus:border-primary-500" />
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => setShowBacklogPanel(false)} className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
                         <button onClick={submitBacklog} disabled={linkingBacklog}
                           className="flex-1 px-2 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-semibold">
-                          {linkingBacklog ? '起票中...' : '🎫 起票する'}
+                          {linkingBacklog ? '起票中...' : '起票する'}
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-500">既にBacklogにチケットがある場合、キーを入力して連携します。連携後はWebhookでステータスが自動同期されます。</p>
-                      <div>
-                        <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">Backlogチケットキー</label>
-                        <input
-                          value={manualKey}
-                          onChange={e => setManualKey(e.target.value)}
-                          placeholder="例: DUMPTRACKER2026-52"
-                          className="w-full border border-gray-300 rounded p-1.5 text-xs font-mono focus:outline-none focus:border-primary-500"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">プロジェクトキー-番号 の形式で入力してください</p>
-                      </div>
+                      <p className="text-xs text-gray-500">既存チケットのキーを入力して連携します。</p>
+                      <input
+                        value={manualKey}
+                        onChange={e => setManualKey(e.target.value)}
+                        placeholder="例: DUMPTRACKER2026-52"
+                        className="w-full border border-gray-300 rounded p-1.5 text-xs font-mono focus:outline-none focus:border-primary-500"
+                      />
                       <div className="flex gap-2">
                         <button onClick={() => setShowBacklogPanel(false)} className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
                         <button onClick={linkManualKey} disabled={linkingManual || !manualKey.trim()}
                           className="flex-1 px-2 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-semibold">
-                          {linkingManual ? '連携中...' : '🔗 連携する'}
+                          {linkingManual ? '連携中...' : '連携する'}
                         </button>
                       </div>
                     </div>
@@ -773,34 +795,11 @@ const FeedbackDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* 対応履歴 */}
-          {fb.statusHistory && fb.statusHistory.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 text-sm font-semibold text-gray-700">📅 対応履歴</div>
-              <div className="p-3 space-y-3">
-                <div className="flex gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
-                  <div>
-                    <div className="text-xs text-gray-700">フィードバック受信（新規）</div>
-                    <div className="text-xs text-gray-400">{formatDate(fb.createdAt)} / システム自動</div>
-                  </div>
-                </div>
-                {fb.statusHistory.map((h, i) => (
-                  <div key={i} className="flex gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary-400 mt-1.5 flex-shrink-0" />
-                    <div>
-                      <div className="text-xs text-gray-700">ステータスを「{h.to}」に変更</div>
-                      <div className="text-xs text-gray-400">{formatDate(h.changedAt)} / {h.changedBy}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
+          {/* 一覧に戻る */}
           <button onClick={() => navigate('/feedback')} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50">
             <ArrowLeft className="h-4 w-4" /> 一覧に戻る
           </button>
+
         </div>
       </div>
 
