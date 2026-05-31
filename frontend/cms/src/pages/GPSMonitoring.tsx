@@ -62,7 +62,7 @@ interface VehicleLocation {
   //   - in_op_offline : 運行中だがオフライン
   // 「運行外」:
   //   - offline       : 運行していない
-  status: 'loading' | 'unloading' | 'break' | 'refueling' | 'in_op_offline' | 'offline';
+  status: 'in_operation' | 'in_op_offline' | 'offline';
   lastUpdate: string | null;
   speed: number;
   currentAddress: string;
@@ -108,7 +108,8 @@ const mapVehicleStatus = (
 ): VehicleLocation['status'] => {
   if (apiStatus === 'MAINTENANCE' || apiStatus === 'OUT_OF_SERVICE') return 'offline';
   if (apiStatus === 'IN_USE' || hasActiveOperation) {
-    return hasPosition ? 'loading' : 'in_op_offline';
+    // 運行中（activeOperation.status=IN_PROGRESS が存在する = その日の運行開始済み・未終了）
+    return hasPosition ? 'in_operation' : 'in_op_offline';
   }
   return 'offline';
 };
@@ -147,32 +148,11 @@ const mapApiToVehicleLocation = (api: ApiVehiclePosition): VehicleLocation => {
  */
 const getStatusConfig = (status: string): StatusConfig => {
   const configs: Record<string, StatusConfig> = {
-    loading: {
-      label: '積込中',
-      className: 'bg-orange-100 text-orange-800',
-      icon: '📦',
-      color: '#c2410c',
-      isInOperation: true,
-    },
-    unloading: {
-      label: '荷降中',
-      className: 'bg-purple-100 text-purple-800',
-      icon: '📤',
-      color: '#7e22ce',
-      isInOperation: true,
-    },
-    break: {
-      label: '休憩中',
-      className: 'bg-yellow-100 text-yellow-800',
-      icon: '☕',
-      color: '#a16207',
-      isInOperation: true,
-    },
-    refueling: {
-      label: '給油中',
-      className: 'bg-green-100 text-green-800',
-      icon: '⛽',
-      color: '#15803d',
+    in_operation: {
+      label: '運行中',
+      className: 'bg-blue-100 text-blue-800',
+      icon: '🚛',
+      color: '#1d4ed8',
       isInOperation: true,
     },
     in_op_offline: {
@@ -325,7 +305,7 @@ const POLL_INTERVAL_MS = 30_000;
 const DEFAULT_CENTER = { lat: 34.6617, lng: 133.9349 };
 
 const ALL_STATUS_KEYS: VehicleLocation['status'][] = [
-  'loading', 'unloading', 'break', 'refueling', 'in_op_offline', 'offline'
+  'in_operation', 'in_op_offline', 'offline'
 ];
 
 // =====================================
