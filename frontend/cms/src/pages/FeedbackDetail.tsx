@@ -556,11 +556,6 @@ const FeedbackDetail: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-
-        {/* サイドカラム */}
-        <div className="space-y-4">
-
           {/* 管理者メモ（Markdownエディタ） */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             {/* ヘッダー */}
@@ -676,7 +671,7 @@ const FeedbackDetail: React.FC = () => {
 
         </div>
 
-        {/* 右カラム: 対応履歴 → Backlog連携 → 一覧に戻る */}
+        {/* 右カラム */}
         <div className="space-y-4">
 
           {/* 対応履歴 */}
