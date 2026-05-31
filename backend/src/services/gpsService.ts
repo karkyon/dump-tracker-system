@@ -59,6 +59,12 @@ export class GpsService {
                   id: true,
                   name: true
                 }
+              },
+              // 🆕 最新のOperationDetailを取得してactivityTypeをGPSモニタリングに返す
+              operationDetails: {
+                orderBy: { actualStartTime: 'desc' },
+                take: 1,
+                select: { activityType: true }
               }
             }
           }
@@ -89,7 +95,9 @@ export class GpsService {
             driver: activeOperation.usersOperationsDriverIdTousers ? {
               id: activeOperation.usersOperationsDriverIdTousers.id,
               name: activeOperation.usersOperationsDriverIdTousers.name
-            } : null
+            } : null,
+            // 🆕 最新のactivityType（積込中/荷降中/休憩中/給油中の判別用）
+            lastActivityType: activeOperation.operationDetails?.[0]?.activityType ?? null
           } : null
         };
       });
@@ -129,6 +137,12 @@ export class GpsService {
                   id: true,
                   name: true
                 }
+              },
+              // 🆕 最新のOperationDetailを取得してactivityTypeをGPSモニタリングに返す
+              operationDetails: {
+                orderBy: { actualStartTime: 'desc' },
+                take: 1,
+                select: { activityType: true }
               }
             }
           }

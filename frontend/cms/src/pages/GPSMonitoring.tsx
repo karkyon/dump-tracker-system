@@ -43,6 +43,8 @@ interface ApiVehiclePosition {
       id: string;
       name: string;
     } | null;
+    // 🆕 最新のOperationDetailのactivityType
+    lastActivityType: string | null;
   } | null;
 }
 
@@ -62,7 +64,7 @@ interface VehicleLocation {
   //   - in_op_offline : 運行中だがオフライン
   // 「運行外」:
   //   - offline       : 運行していない
-  status: 'in_operation' | 'in_op_offline' | 'offline';
+  status: 'loading' | 'unloading' | 'break' | 'refueling' | 'in_operation' | 'in_op_offline' | 'offline';
   lastUpdate: string | null;
   speed: number;
   currentAddress: string;
@@ -104,13 +106,26 @@ interface RoutePoint {
 const mapVehicleStatus = (
   apiStatus: ApiVehiclePosition['status'],
   hasActiveOperation: boolean,
-  hasPosition: boolean
+  hasPosition: boolean,
+  lastActivityType: string | null
 ): VehicleLocation['status'] => {
   if (apiStatus === 'MAINTENANCE' || apiStatus === 'OUT_OF_SERVICE') return 'offline';
+
   if (apiStatus === 'IN_USE' || hasActiveOperation) {
-    // 運行中（activeOperation.status=IN_PROGRESS が存在する = その日の運行開始済み・未終了）
-    return hasPosition ? 'in_operation' : 'in_op_offline';
+    if (!hasPosition) return 'in_op_offline';
+
+    // 最新のOperationDetailのactivityTypeでサブステータスを判別
+    if (lastActivityType) {
+      const t = lastActivityType.toUpperCase();
+      if (t.includes('LOADING'))   return 'loading';
+      if (t.includes('UNLOADING')) return 'unloading';
+      if (t.includes('BREAK'))     return 'break';
+      if (t.includes('REFUEL') || t === 'REFUELING') return 'refueling';
+    }
+    // activityTypeが取れない場合は運行中（汎用）
+    return 'in_operation';
   }
+
   return 'offline';
 };
 
@@ -123,7 +138,8 @@ const mapApiToVehicleLocation = (api: ApiVehiclePosition): VehicleLocation => {
     api.activeOperation !== null &&
     api.activeOperation?.status === 'IN_PROGRESS';
   const hasPosition = api.position !== null;
-  const status = mapVehicleStatus(api.status, hasActiveOperation, hasPosition);
+  const lastActivityType = api.activeOperation?.lastActivityType ?? null;
+  const status = mapVehicleStatus(api.status, hasActiveOperation, hasPosition, lastActivityType);
   const driverName = api.activeOperation?.driver?.name ?? '未割当';
   const currentAddress = api.position
     ? `${api.position.latitude.toFixed(5)}, ${api.position.longitude.toFixed(5)}`
@@ -148,6 +164,34 @@ const mapApiToVehicleLocation = (api: ApiVehiclePosition): VehicleLocation => {
  */
 const getStatusConfig = (status: string): StatusConfig => {
   const configs: Record<string, StatusConfig> = {
+    loading: {
+      label: '積込中',
+      className: 'bg-orange-100 text-orange-800',
+      icon: '📦',
+      color: '#c2410c',
+      isInOperation: true,
+    },
+    unloading: {
+      label: '荷降中',
+      className: 'bg-purple-100 text-purple-800',
+      icon: '📤',
+      color: '#7e22ce',
+      isInOperation: true,
+    },
+    break: {
+      label: '休憩中',
+      className: 'bg-yellow-100 text-yellow-800',
+      icon: '☕',
+      color: '#a16207',
+      isInOperation: true,
+    },
+    refueling: {
+      label: '給油中',
+      className: 'bg-green-100 text-green-800',
+      icon: '⛽',
+      color: '#15803d',
+      isInOperation: true,
+    },
     in_operation: {
       label: '運行中',
       className: 'bg-blue-100 text-blue-800',
@@ -305,7 +349,7 @@ const POLL_INTERVAL_MS = 30_000;
 const DEFAULT_CENTER = { lat: 34.6617, lng: 133.9349 };
 
 const ALL_STATUS_KEYS: VehicleLocation['status'][] = [
-  'in_operation', 'in_op_offline', 'offline'
+  'loading', 'unloading', 'break', 'refueling', 'in_operation', 'in_op_offline', 'offline'
 ];
 
 // =====================================
