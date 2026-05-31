@@ -8,6 +8,7 @@ import {
   updateFeedbackNotes,
   linkBacklog,
   unlinkBacklog,
+  linkExistingBacklog,
   handleBacklogWebhook,
 } from '../controllers/feedbackController';
 
@@ -25,6 +26,7 @@ router.get('/:id', getFeedback);
 router.patch('/:id/status', updateFeedbackStatus);
 router.patch('/:id/notes', updateFeedbackNotes);
 router.post('/:id/backlog', linkBacklog);
+router.post('/:id/backlog/link-existing', linkExistingBacklog);
 router.delete('/:id/backlog', unlinkBacklog);
 
 export default router;

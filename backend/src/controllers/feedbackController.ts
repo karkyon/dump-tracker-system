@@ -101,6 +101,19 @@ export const unlinkBacklog = asyncHandler(async (req: AuthenticatedRequest, res:
   res.json({ success: true, message: 'Backlog連携を解除しました' });
 });
 
+export const linkExistingBacklog = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const id = str(req.params['id']);
+  const { issueKey } = req.body as { issueKey: string };
+  if (!issueKey || typeof issueKey !== 'string') {
+    sendError(res, 'issueKey は必須です', 400, 'INVALID_PARAMS');
+    return;
+  }
+  const linkedBy = actor(req);
+  logger.info('既存Backlogチケット連携', { id, issueKey, linkedBy });
+  await feedbackService.linkExistingKey(id, issueKey.trim().toUpperCase(), linkedBy);
+  res.json({ success: true, data: { issueKey: issueKey.trim().toUpperCase() }, message: `Backlog ${issueKey} と連携しました` });
+});
+
 
 export const handleBacklogWebhook = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   logger.info('🔔 [feedbackController] handleBacklogWebhook 受信', {

@@ -9,9 +9,9 @@ import {
   TrendingUp,
   Clock,
   MapPin,
+  MessageSquare,
   // Fuel
 } from 'lucide-react';
-import { formatDate } from '../utils/helpers';
 import { apiClient } from '../utils/api';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { StatusBadge } from '../components/common/Table';
@@ -43,6 +43,11 @@ const Dashboard: React.FC = () => {
   });
   const [recentOperations, setRecentOperations] = useState<RecentOperation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recentFeedbacks, setRecentFeedbacks] = useState<Array<{
+    id: string; reportType: string; screen: string; what: string;
+    severity: number; status: string; createdAt: string;
+    backlogIssueKey?: string;
+  }>>([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -190,6 +195,19 @@ const Dashboard: React.FC = () => {
 
         setStats({ totalDrivers, activeVehicles, todayOperations, onlineVehicles });
         setRecentOperations(recentOps);
+
+        // 直近フィードバック取得
+        try {
+          const fbToken = localStorage.getItem('auth_token');
+          const fbRes = await fetch('/api/v1/feedback?limit=5&sortBy=createdAt&sortOrder=desc', {
+            headers: { 'Content-Type': 'application/json', ...(fbToken ? { Authorization: 'Bearer ' + fbToken } : {}) },
+          });
+          if (fbRes.ok) {
+            const fbJson = await fbRes.json();
+            setRecentFeedbacks(fbJson.data || []);
+          }
+        } catch (_) { /* FB取得失敗は無視 */ }
+
         setLoading(false);
       } catch (error: any) {
         // BUG-009修正: error が {} になる問題を修正（各フィールドを明示展開）
@@ -424,30 +442,51 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* システム情報 */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">システム情報</h3>
+      {/* フィードバック直近対応状況 */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary-600" />
+            <h3 className="text-base font-semibold text-gray-900">直近のフィードバック</h3>
+          </div>
+          <Link to="/feedback" className="text-xs text-primary-600 hover:underline">
+            すべて表示 →
+          </Link>
         </div>
-        <div className="px-6 py-4">
-          <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-            <div>
-              <dt className="text-sm font-medium text-gray-500">システムバージョン</dt>
-              <dd className="mt-1 text-sm text-gray-900">v1.0.0</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">最終更新</dt>
-              <dd className="mt-1 text-sm text-gray-900">{formatDate(new Date())}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">稼働状況</dt>
-              <dd className="mt-1 text-sm text-green-600">正常</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">データベース</dt>
-              <dd className="mt-1 text-sm text-green-600">接続中</dd>
-            </div>
-          </dl>
+        <div className="divide-y divide-gray-100">
+          {recentFeedbacks.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-400">フィードバックはありません</div>
+          ) : recentFeedbacks.map((fb) => {
+            const typeLabels: Record<string, string> = {
+              bug: '🐛 バグ', odd: '⚠️ おかしい', improve: '💡 改善',
+              feature: '✨ 新機能', data: '📊 データ', good: '👍 良い',
+            };
+            const statusConfig: Record<string, { color: string; label: string }> = {
+              new:         { color: 'text-red-500',    label: '新規' },
+              in_progress: { color: 'text-yellow-600', label: '対応中' },
+              resolved:    { color: 'text-green-600',  label: '完了' },
+              wontfix:     { color: 'text-gray-400',   label: '却下' },
+            };
+            const sevDots = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400'];
+            const sevDot = sevDots[fb.severity] ?? 'bg-gray-300';
+            const st = statusConfig[fb.status] ?? statusConfig['new']!;
+            return (
+              <Link key={fb.id} to={`/feedback/${fb.id}`} className="flex items-start gap-3 px-6 py-3 hover:bg-gray-50 transition-colors">
+                <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${sevDot}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs text-gray-500">{typeLabels[fb.reportType] ?? fb.reportType}</span>
+                    <span className="text-xs text-gray-400">{fb.screen}</span>
+                    {fb.backlogIssueKey && (
+                      <span className="text-xs font-mono bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{fb.backlogIssueKey}</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-800 truncate">{fb.what}</p>
+                </div>
+                <span className={`text-xs flex-shrink-0 ${st.color}`}>{st.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>

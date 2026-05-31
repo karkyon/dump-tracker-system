@@ -115,6 +115,9 @@ const FeedbackDetail: React.FC = () => {
   const [backlogTitle, setBacklogTitle] = useState('');
   const [backlogBody, setBacklogBody] = useState('');
   const [linkingBacklog, setLinkingBacklog] = useState(false);
+  const [linkMode, setLinkMode] = useState<'new' | 'existing'>('new');
+  const [manualKey, setManualKey] = useState('');
+  const [linkingManual, setLinkingManual] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
@@ -280,6 +283,37 @@ const FeedbackDetail: React.FC = () => {
       fetchDetail();
     } catch (e: any) {
       toast.error(`解除エラー: ${e.message}`);
+    }
+  };
+
+  // 既存Backlogチケットキーを手入力で連携
+  const linkManualKey = async () => {
+    const key = manualKey.trim().toUpperCase();
+    if (!key || !id) return;
+    // 簡易バリデーション: 英数字-数字 形式
+    if (!/^[A-Z0-9]+-\d+$/.test(key)) {
+      toast.error('キー形式が正しくありません（例: DUMPTRACKER2026-52）');
+      return;
+    }
+    setLinkingManual(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/feedback/${id}/backlog/link-existing`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ issueKey: key }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      toast.success(`Backlog ${key} と連携しました`);
+      setManualKey('');
+      setShowBacklogPanel(false);
+      fetchDetail();
+    } catch (e: any) {
+      toast.error(`連携エラー: ${e.message}`);
+    } finally {
+      setLinkingManual(false);
     }
   };
 
@@ -482,38 +516,75 @@ const FeedbackDetail: React.FC = () => {
                   </button>
                 </div>
               ) : showBacklogPanel ? (
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">件名</label>
-                    <input value={backlogTitle} onChange={e => setBacklogTitle(e.target.value)}
-                      className="w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:border-primary-500" />
+                <div className="space-y-3">
+                  {/* タブ: 新規起票 / 既存連携 */}
+                  <div className="flex border border-gray-200 rounded overflow-hidden text-xs">
+                    <button
+                      onClick={() => setLinkMode('new')}
+                      className={`flex-1 py-1.5 font-semibold ${linkMode === 'new' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >🎫 新規起票</button>
+                    <button
+                      onClick={() => setLinkMode('existing')}
+                      className={`flex-1 py-1.5 font-semibold ${linkMode === 'existing' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >🔗 既存チケット連携</button>
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">優先度</label>
-                    <div className="text-sm font-semibold">{PRIORITY_MAP[fb.severity]}</div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">詳細本文（編集可）</label>
-                    <textarea value={backlogBody} onChange={e => setBacklogBody(e.target.value)} rows={8}
-                      className="w-full border border-gray-300 rounded p-1.5 text-xs font-mono resize-y focus:outline-none focus:border-primary-500" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setShowBacklogPanel(false)} className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
-                    <button onClick={submitBacklog} disabled={linkingBacklog}
-                      className="flex-1 px-2 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-semibold">
-                      {linkingBacklog ? '起票中...' : '🎫 起票する'}
-                    </button>
-                  </div>
+
+                  {linkMode === 'new' ? (
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">件名</label>
+                        <input value={backlogTitle} onChange={e => setBacklogTitle(e.target.value)}
+                          className="w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:border-primary-500" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">優先度</label>
+                        <div className="text-sm font-semibold">{PRIORITY_MAP[fb.severity]}</div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">詳細本文（編集可）</label>
+                        <textarea value={backlogBody} onChange={e => setBacklogBody(e.target.value)} rows={6}
+                          className="w-full border border-gray-300 rounded p-1.5 text-xs font-mono resize-y focus:outline-none focus:border-primary-500" />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowBacklogPanel(false)} className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
+                        <button onClick={submitBacklog} disabled={linkingBacklog}
+                          className="flex-1 px-2 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-semibold">
+                          {linkingBacklog ? '起票中...' : '🎫 起票する'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500">既にBacklogにチケットがある場合、キーを入力して連携します。連携後はWebhookでステータスが自動同期されます。</p>
+                      <div>
+                        <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">Backlogチケットキー</label>
+                        <input
+                          value={manualKey}
+                          onChange={e => setManualKey(e.target.value)}
+                          placeholder="例: DUMPTRACKER2026-52"
+                          className="w-full border border-gray-300 rounded p-1.5 text-xs font-mono focus:outline-none focus:border-primary-500"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">プロジェクトキー-番号 の形式で入力してください</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowBacklogPanel(false)} className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
+                        <button onClick={linkManualKey} disabled={linkingManual || !manualKey.trim()}
+                          className="flex-1 px-2 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-semibold">
+                          {linkingManual ? '連携中...' : '🔗 連携する'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-4">
                   <div className="text-3xl mb-2">🎫</div>
                   <p className="text-xs text-gray-500 mb-3">Backlogチケットに<br />まだ起票されていません</p>
                   <button
-                    onClick={() => setShowBacklogPanel(true)}
+                    onClick={() => { setShowBacklogPanel(true); setLinkMode('new'); }}
                     className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600 text-white rounded text-sm font-semibold hover:bg-blue-700"
                   >
-                    <Link className="h-4 w-4" /> Backlogに起票する
+                    <Link className="h-4 w-4" /> Backlogに起票 / 連携する
                   </button>
                 </div>
               )}

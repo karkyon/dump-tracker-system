@@ -420,6 +420,28 @@ export class FeedbackService {
     return { issueId: String(data.id), issueKey: data.issueKey };
   }
 
+  // =============================================
+  // 既存Backlogチケットキーを手入力で連携（新規起票なし）
+  // =============================================
+  async linkExistingKey(id: string, issueKey: string, linkedBy: string): Promise<void> {
+    const db = await getFirestoreAsync();
+    for (const col of this.COLLECTIONS) {
+      const docRef = db.collection(col).doc(id);
+      const snap = await docRef.get();
+      if (snap.exists) {
+        await docRef.update({
+          backlogIssueKey: issueKey,
+          backlogIssueId: null,   // 手動連携の場合IDは不明のためnull
+          backlogLinkedAt: admin.firestore.Timestamp.now(),
+          backlogLinkedBy: linkedBy,
+        });
+        logger.info('既存Backlogチケット連携完了', { id, issueKey, linkedBy });
+        return;
+      }
+    }
+    throw new Error(`フィードバック ID=${id} が見つかりません`);
+  }
+
   // Backlog連携解除
   async unlinkBacklog(id: string): Promise<void> {
     const db = await getFirestoreAsync();
