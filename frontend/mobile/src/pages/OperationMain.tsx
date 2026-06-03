@@ -86,7 +86,7 @@ const OperationMain: React.FC = () => {
       return;
     }
     
-    const inspectionCompleted = sessionStorage.getItem('inspection_completed');
+    const inspectionCompleted = operationStore.inspectionCompleted || sessionStorage.getItem('inspection_completed');
     if (!inspectionCompleted) {
       toast.error('乗車前点検を完了してください');
       navigate('/pre-departure-inspection', { replace: true });
@@ -118,7 +118,7 @@ const OperationMain: React.FC = () => {
         });
         // sessionStorage の inspection_completed を復元
         if (!sessionStorage.getItem('inspection_completed')) {
-          sessionStorage.setItem('inspection_completed', 'true');
+          // inspection_completed はoperationStore.inspectionCompletedで管理（sessionStorage廃止）
         }
         setOperation(prev => ({
           ...prev,

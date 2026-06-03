@@ -136,7 +136,7 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
       // ✅ Fix②-C: ブラウザクローズ/スクリーンブランク後の再ログイン時に
       // sessionStorageのinspection_completedが消えてOperationMainに弾かれる問題修正
       if (!sessionStorage.getItem('inspection_completed')) {
-        sessionStorage.setItem('inspection_completed', 'true');
+        // inspection_completed はoperationStore.inspectionCompletedで管理（sessionStorage廃止）
         console.log('[StateRestorer] ✅ inspection_completed フラグ復元');
       }
       console.log('[StateRestorer] 📍 復元データ:', {

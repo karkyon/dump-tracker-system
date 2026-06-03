@@ -65,9 +65,9 @@ jobs:
             BACKEND_ENV=~/projects/dump-tracker/backend/.env
             # ✅ Fix②: JWT有効期限を24hに設定（デフォルト15mがログアウト根本原因）
             if grep -q "JWT_EXPIRES_IN" "$BACKEND_ENV" 2>/dev/null; then
-              sed -i 's|JWT_EXPIRES_IN=.*|JWT_EXPIRES_IN=24h|' "$BACKEND_ENV"
+              sed -i 's|JWT_EXPIRES_IN=.*|JWT_EXPIRES_IN=6h|' "$BACKEND_ENV"
             else
-              echo "JWT_EXPIRES_IN=24h" >> "$BACKEND_ENV"
+              echo "JWT_EXPIRES_IN=6h" >> "$BACKEND_ENV"
             fi
             if grep -q "JWT_REFRESH_EXPIRES_IN" "$BACKEND_ENV" 2>/dev/null; then
               sed -i 's|JWT_REFRESH_EXPIRES_IN=.*|JWT_REFRESH_EXPIRES_IN=30d|' "$BACKEND_ENV"
