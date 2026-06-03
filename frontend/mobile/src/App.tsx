@@ -77,16 +77,16 @@ const OperationStateRestorer: React.FC<{ children: React.ReactNode }> = ({ child
   const operationStore = useOperationStore();
   
   useEffect(() => {
-    // 認証されていない場合: 運行中データが残っていればリセット
+    // ✅ 修正: 認証されていない場合でも IN_PROGRESS データは絶対に消さない
+    // 理由: ネット一時断(Fortigate等) → checkServerConnection失敗 → isAuthenticated=false の間に
+    //       resetOperation() が走ると運行中データが全消去される重大バグを修正
     if (!isAuthenticated) {
-      console.log('[StateRestorer] 🔒 未認証のため状態復元をスキップ');
-      // BUG-018: 未認証なのに IN_PROGRESS データが残っている場合は強制リセット
-      if (operationStore.status === 'IN_PROGRESS' && operationStore.operationId) {
-        console.warn('[StateRestorer] ⚠️ BUG-018: 未認証だが運行中データが残存 → リセット実行', {
-          operationId: operationStore.operationId,
-          status: operationStore.status
-        });
-        operationStore.resetOperation();
+      console.log('[StateRestorer] 🔒 未認証のため状態復元をスキップ (運行データは保護)');
+      // ⚠️ IN_PROGRESS データは削除しない（ネット断の可能性があるため）
+      // トークンが localStorage に残っている場合は認証復帰待ち
+      const hasToken = !!localStorage.getItem('auth_token');
+      if (hasToken) {
+        console.log('[StateRestorer] 🔑 トークン残存 → 認証復帰待ち (operationStore保護)');
       }
       return;
     }

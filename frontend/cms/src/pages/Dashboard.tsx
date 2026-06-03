@@ -175,13 +175,11 @@ const Dashboard: React.FC = () => {
             recentOps.push({
               id: op.id,
               date: startTime
-                ? new Date(startTime).toLocaleString('ja-JP', {
-                    year: 'numeric',
+                ? new Date(startTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric',
                     month: '2-digit',
                     day: '2-digit',
                     hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                    minute: '2-digit', })
                 : '-',
               driverName,
               vehicleNumber,

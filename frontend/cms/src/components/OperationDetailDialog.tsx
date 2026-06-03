@@ -1217,7 +1217,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           new google.maps.Marker({
             position: { lat: log.latitude, lng: log.longitude },
             map: map,
-            title: `GPS記録: ${new Date(log.recordedAt).toLocaleString('ja-JP')}${log.speedKmh != null ? ` (${log.speedKmh.toFixed(1)} km/h)` : ''}`,
+            title: `GPS記録: ${new Date(log.recordedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}${log.speedKmh != null ? ` (${log.speedKmh.toFixed(1)} km/h)` : ''}`,
             icon: {
               path: google.maps.SymbolPath.CIRCLE,
               scale: 4,
@@ -1287,7 +1287,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                   📍 ${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}
                 </div>
                 <div style="color:#6b7280;margin-bottom:2px;">
-                  🕐 ${new Date(point.recordedAt).toLocaleString('ja-JP')}
+                  🕐 ${new Date(point.recordedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
                 </div>
                 ${point.notes ? `<div style="color:#374151;margin-top:4px;border-top:1px solid #e5e7eb;padding-top:4px;">${point.notes}</div>` : ''}
               </div>
@@ -2884,7 +2884,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
                               <div>
                                 <p className="text-sm font-medium">
-                                  {new Date(record.recordedAt).toLocaleString('ja-JP')}
+                                  {new Date(record.recordedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {formatGps(record.latitude, record.longitude)}

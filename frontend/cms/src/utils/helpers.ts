@@ -1,27 +1,40 @@
 import { DATE_FORMATS } from './constants';
 
-// 日付関連のヘルパー関数
+// 日付関連のヘルパー関数 - JST(Asia/Tokyo)固定
+const JST = 'Asia/Tokyo';
+
+// JST での各部を取得するユーティリティ
+const getJSTParts = (d: Date): { year: number; month: number; day: number; hours: number; minutes: number } => {
+  const fmt = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: JST, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value ?? '0', 10);
+  return { year: get('year'), month: get('month'), day: get('day'), hours: get('hour'), minutes: get('minute') };
+};
+
 export const formatDate = (date: string | Date, format: string = DATE_FORMATS.DISPLAY): string => {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
 
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const { year, month, day, hours, minutes } = getJSTParts(d);
+  const mm = String(month).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
+  const hh = String(hours).padStart(2, '0');
+  const mi = String(minutes).padStart(2, '0');
 
   switch (format) {
     case DATE_FORMATS.DISPLAY:
-      return `${year}/${month}/${day}`;
+      return `${year}/${mm}/${dd}`;
     case DATE_FORMATS.INPUT:
-      return `${year}-${month}-${day}`;
+      return `${year}-${mm}-${dd}`;
     case DATE_FORMATS.DATETIME:
-      return `${year}/${month}/${day} ${hours}:${minutes}`;
+      return `${year}/${mm}/${dd} ${hh}:${mi}`;
     case DATE_FORMATS.TIME:
-      return `${hours}:${minutes}`;
+      return `${hh}:${mi}`;
     default:
-      return `${year}/${month}/${day}`;
+      return `${year}/${mm}/${dd}`;
   }
 };
 

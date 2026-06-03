@@ -131,67 +131,63 @@ export const useAuthStore = create<AuthState>()(
       checkServerConnection: async () => {
         set({ loading: true, error: null });
         
+        const token = localStorage.getItem('auth_token');
+        const userData = localStorage.getItem('user_data');
+
+        // ✅ 修正: トークンがない場合のみ未認証にする
+        if (!token) {
+          set({ isAuthenticated: false, user: null, token: null, loading: false, error: null });
+          console.log('[Auth Store] No token found, user not authenticated');
+          return;
+        }
+
+        // ✅ 修正: トークンがある場合はまず認証状態を維持（ネット一時断でリセットしない）
+        // localStorage に user_data があれば即時復元する
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            set({ isAuthenticated: true, user, token, loading: false, error: null });
+          } catch (_) {}
+        }
+
+        // バックグラウンドでサーバー検証（失敗してもトークンがある限り認証状態を維持）
         try {
-          // Check if we have a stored token
-          const token = localStorage.getItem('auth_token');
-          const userData = localStorage.getItem('user_data');
+          const response = await apiService.getMe();
           
-          if (token && userData) {
-            // Verify the token with the server
-            const response = await apiService.getMe();
-            
-            if (response.success && response.data) {
-              const user = JSON.parse(userData);
-              
-              set({
-                isAuthenticated: true,
-                user,
-                token,  // ✅ 追加
-                loading: false,
-                error: null
-              });
-              console.log('[Auth Store] Server connection verified, user authenticated');
-            } else {
-              // Token is invalid, clear it
-              localStorage.removeItem('auth_token');
-              localStorage.removeItem('user_data');
-              set({
-                isAuthenticated: false,
-                user: null,
-                token: null,  // ✅ 追加
-                loading: false,
-                error: null
-              });
-              console.log('[Auth Store] Token invalid, user logged out');
-            }
+          if (response.success && response.data) {
+            const user = userData ? JSON.parse(userData) : response.data;
+            set({ isAuthenticated: true, user, token, loading: false, error: null });
+            console.log('[Auth Store] ✅ Server connection verified, user authenticated');
           } else {
-            set({
-              isAuthenticated: false,
-              user: null,
-              token: null,  // ✅ 追加
-              loading: false,
-              error: null
-            });
-            console.log('[Auth Store] No token found, user not authenticated');
+            // サーバーが明示的に401/失敗を返した場合のみトークン破棄
+            // ※ネットワークエラーはここに来ない（catchで処理）
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            set({ isAuthenticated: false, user: null, token: null, loading: false, error: null });
+            console.log('[Auth Store] Token explicitly rejected by server → logout');
           }
         } catch (error: any) {
-          console.error('[Auth Store] Server connection check failed:', error);
+          // ✅ 修正: ネットワークエラー（一時断、Fortigate遮断等）では認証状態を維持
+          // トークンは削除しない。ユーザーは運行継続可能。
+          const isNetworkError = error.message?.includes('Network Error')
+            || error.message?.includes('ERR_NETWORK')
+            || error.message?.includes('timeout')
+            || error.code === 'ERR_NETWORK'
+            || error.code === 'ECONNABORTED'
+            || !error.response; // レスポンスなし = ネットワーク到達不可
           
-          let errorMessage = '';
-          
-          if (error.message && (error.message.includes('certificate') || error.message.includes('ERR_CERT'))) {
-            errorMessage = 'HTTPS証明書エラー: https://10.1.119.244:8443 に直接アクセスして証明書を信頼してください';
-          } else if (error.message && error.message.includes('Network Error')) {
-            errorMessage = 'ネットワークエラー: サーバーに接続できません';
+          if (isNetworkError) {
+            console.warn('[Auth Store] ⚠️ Network error during server check → keeping auth state (token preserved)');
+            set({ loading: false, error: null }); // 認証状態は変更しない
+          } else {
+            // 証明書エラー等: 状態はそのまま、エラーメッセージのみ表示
+            let errorMessage = '';
+            if (error.message?.includes('certificate') || error.message?.includes('ERR_CERT')) {
+              errorMessage = 'HTTPS証明書エラー: サーバー証明書を確認してください';
+            }
+            console.error('[Auth Store] Server connection check failed (non-network):', error);
+            set({ loading: false, error: errorMessage }); // isAuthenticated は変更しない
           }
-          
-          set({
-            isAuthenticated: false,
-            user: null,
-            token: null,  // ✅ 追加
-            loading: false,
-            error: errorMessage
-          });
         }
       },
 

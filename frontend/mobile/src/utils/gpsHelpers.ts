@@ -392,7 +392,7 @@ export function logGPSPosition(position: GeolocationPosition, label: string = 'G
   console.log('高度:', position.coords.altitude, 'm');
   console.log('速度:', position.coords.speed, 'm/s');
   console.log('方位:', position.coords.heading, '度');
-  console.log('タイムスタンプ:', new Date(position.timestamp).toLocaleString('ja-JP'));
+  console.log('タイムスタンプ:', new Date(position.timestamp).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
   console.groupEnd();
 }
 

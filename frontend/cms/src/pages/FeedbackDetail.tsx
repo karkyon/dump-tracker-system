@@ -93,7 +93,7 @@ function authHeaders(): Record<string, string> {
 
 function formatDate(iso?: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('ja-JP');
+  return new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 }
 
 // =============================================

@@ -328,7 +328,7 @@ const ItemManagement: React.FC = () => {
     itemType: getItemTypeLabel(item.itemType),
     description: item.description ?? '-',
     createdAt: item.createdAt
-      ? new Date(item.createdAt).toLocaleDateString('ja-JP')
+      ? new Date(item.createdAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
       : '-',
     actions: (
       <ActionButtons

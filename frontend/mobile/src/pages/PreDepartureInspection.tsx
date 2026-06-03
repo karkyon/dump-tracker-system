@@ -379,7 +379,7 @@ const PreDepartureInspection: React.FC = () => {
                 <li>• エラー: 点検項目取得失敗</li>
                 <li>• 画面: D3 乗車前点検</li>
                 <li>• 車両ID: {vehicleId}</li>
-                <li>• 時刻: {new Date().toLocaleString('ja-JP')}</li>
+                <li>• 時刻: {new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</li>
               </ul>
             </div>
           </div>

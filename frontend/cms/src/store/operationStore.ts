@@ -279,7 +279,7 @@ export const useOperationStore = create<OperationState>((set, get) => ({
         const csvContent = [
           headers.join(','),
           ...operations.map(op => [
-            op.date || new Date(op.startTime).toLocaleDateString('ja-JP'),
+            op.date || new Date(op.startTime).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }),
             op.driverId,
             op.vehicleId,
             op.startTime,

@@ -57,7 +57,7 @@ const levelColor: Record<string, string> = {
   info: 'bg-blue-50 text-blue-700', debug: 'bg-gray-50 text-gray-600',
 };
 function fmtDt(s: string | null) {
-  return s ? new Date(s).toLocaleString('ja-JP') : '—';
+  return s ? new Date(s).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '—';
 }
 function fmtKm(v: number | null) {
   return v !== null ? `${v.toFixed(3)} km` : '—';

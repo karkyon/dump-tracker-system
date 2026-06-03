@@ -606,7 +606,7 @@ const GPSMonitoring: React.FC = () => {
         <div>
           リアルタイム位置追跡・位置情報管理
           <br />
-          最終更新: {lastRefresh.toLocaleString('ja-JP')}
+          最終更新: {lastRefresh.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
           <span className="ml-2 text-xs text-gray-400">（30秒ごと自動更新）</span>
         </div>
         <div className="flex items-center gap-2">

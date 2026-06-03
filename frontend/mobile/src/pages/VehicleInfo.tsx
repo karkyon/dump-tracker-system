@@ -234,7 +234,7 @@ const VehicleInfo: React.FC = () => {
         const diffDays = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
           toast.error(
-            `🚨 車検切れ！\nこの車両は車検が切れています\n期限: ${expiry.toLocaleDateString('ja-JP')}\n\n⚠️ 直ちに運行を中止してください`,
+            `🚨 車検切れ！\nこの車両は車検が切れています\n期限: ${expiry.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}\n\n⚠️ 直ちに運行を中止してください`,
             {
               duration: 15000,
               style: {
@@ -253,7 +253,7 @@ const VehicleInfo: React.FC = () => {
         } else if (diffDays <= 60) {
           const isUrgent = diffDays <= 14;
           toast(
-            `${isUrgent ? '🔴' : '🟡'} 車検期限まで残り ${diffDays} 日\n期限: ${expiry.toLocaleDateString('ja-JP')}\n${isUrgent ? '\n⚠️ 至急、車検の手続きをしてください！' : '\n早めに車検の手続きをしてください。'}`,
+            `${isUrgent ? '🔴' : '🟡'} 車検期限まで残り ${diffDays} 日\n期限: ${expiry.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}\n${isUrgent ? '\n⚠️ 至急、車検の手続きをしてください！' : '\n早めに車検の手続きをしてください。'}`,
             {
               duration: isUrgent ? 15000 : 10000,
               icon: isUrgent ? '🚗' : '📋',
