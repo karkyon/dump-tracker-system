@@ -18,6 +18,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useOperationStore } from '../stores/operationStore';
 import apiService from '../services/api';
 
 // 運行状態
@@ -45,6 +46,7 @@ const OperationMain: React.FC = () => {
 
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
+  const operationStore = useOperationStore();
   
   // 運行状態
   const [operation, setOperation] = useState<OperationState>({
@@ -106,6 +108,28 @@ const OperationMain: React.FC = () => {
     
     try {
       console.log('🔄 運行状態を確認中...');
+
+      // ✅ BUG-NEW: operationStore に既存operationId(IN_PROGRESS)がある場合はAPIスキップして復元
+      const storedOperationId = operationStore.operationId;
+      const storedStatus = operationStore.status;
+      if (storedOperationId && storedStatus === 'IN_PROGRESS') {
+        console.log('✅ [OperationMain] operationStore に既存IN_PROGRESS運行あり → 復元のみ実行', {
+          operationId: storedOperationId
+        });
+        // sessionStorage の inspection_completed を復元
+        if (!sessionStorage.getItem('inspection_completed')) {
+          sessionStorage.setItem('inspection_completed', 'true');
+        }
+        setOperation(prev => ({
+          ...prev,
+          id: storedOperationId,
+          status: 'running'
+        }));
+        setIsInitializing(false);
+        // 運行記録画面へ遷移
+        navigate('/operation-record', { replace: true });
+        return;
+      }
       
       // ✅ 現在の運行中データを取得
       const response = await apiService.getCurrentOperation();

@@ -158,6 +158,50 @@ class TripService {
       }
       logger.info('✅ [LINE 6] driverId 確認完了', { driverId: request.driverId });
 
+      // ✅ BUG-NEW: 同一ドライバーの既存IN_PROGRESS運行チェック（二重防御）
+      logger.info('🚀 [LINE 6-1] 既存IN_PROGRESS運行チェック開始');
+      const existingInProgressOp = await DatabaseService.getInstance().operation.findFirst({
+        where: {
+          driverId: request.driverId,
+          status: 'IN_PROGRESS'
+        },
+        select: { id: true, operationNumber: true, actualStartTime: true }
+      });
+      if (existingInProgressOp) {
+        logger.warn('⚠️ [LINE 6-2] 既存IN_PROGRESS運行あり - 新規開始をブロック', {
+          driverId: request.driverId,
+          existingOperationId: existingInProgressOp.id,
+          existingOperationNumber: existingInProgressOp.operationNumber
+        });
+        // 既存運行をそのまま返す（エラーではなく継続扱い）
+        const existingFullOp = await DatabaseService.getInstance().operation.findUnique({
+          where: { id: existingInProgressOp.id },
+          include: {
+            vehicles: true,
+            usersOperationsDriverIdTousers: true,
+            operationDetails: { orderBy: { sequenceNumber: 'asc' } },
+            gpsLogs: { orderBy: { recordedAt: 'asc' } },
+            inspectionRecords: true
+          }
+        });
+        const existingTripOp: TripOperationModel = {
+          ...existingFullOp!,
+          tripStatus: 'IN_PROGRESS',
+          vehicleOperationStatus: 'IN_USE' as VehicleOperationStatus,
+          vehicle: (existingFullOp as any)?.vehicles,
+          driver: (existingFullOp as any)?.usersOperationsDriverIdTousers,
+          activities: (existingFullOp as any)?.operationDetails || [],
+          gpsLogs: (existingFullOp as any)?.gpsLogs || [],
+          inspectionRecords: (existingFullOp as any)?.inspectionRecords || []
+        };
+        return {
+          success: true,
+          data: existingTripOp,
+          message: '既存の進行中運行を返します'
+        };
+      }
+      logger.info('✅ [LINE 6-3] 既存IN_PROGRESS運行なし - 新規開始可能');
+
       // 車両状態確認・更新
       logger.info('🚀 [LINE 7] 車両状態確認開始');
       const statusResult = await this.checkAndUpdateVehicleStatus(

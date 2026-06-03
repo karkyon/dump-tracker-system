@@ -266,6 +266,43 @@ export class MobileController {
 
       this.collectStats('operation', req.user.userId);
 
+      // ✅ BUG-NEW: 同一ドライバーの既存IN_PROGRESS運行チェック（重複開始防止）
+      const db = DatabaseService.getInstance();
+      const existingOperation = await db.operation.findFirst({
+        where: {
+          driverId: req.user.userId,
+          status: 'IN_PROGRESS'
+        },
+        select: { id: true, operationNumber: true, actualStartTime: true }
+      });
+
+      if (existingOperation) {
+        logger.warn('モバイル運行開始拒否: 既存IN_PROGRESS運行あり', {
+          driverId: req.user.userId,
+          existingOperationId: existingOperation.id,
+          existingOperationNumber: existingOperation.operationNumber
+        });
+        // 既存運行の情報を返す（エラーではなく継続用レスポンス）
+        const mobileExistingResponse = {
+          tripId: existingOperation.id,
+          operationId: existingOperation.id,
+          status: 'in_progress',
+          startTime: existingOperation.actualStartTime || new Date(),
+          alreadyInProgress: true,
+          instructions: [
+            '既存の運行が進行中です',
+            '運行を継続してください'
+          ],
+          offlineSync: {
+            enabled: true,
+            lastSync: new Date(),
+            pendingUploads: 0
+          }
+        };
+        sendSuccess(res, mobileExistingResponse, '既存の運行が進行中です', 200);
+        return;
+      }
+
       // ✅ GPS開始位置情報を含むリクエスト
       const tripData: CreateTripRequest = {
         vehicleId: req.body.vehicleId,
