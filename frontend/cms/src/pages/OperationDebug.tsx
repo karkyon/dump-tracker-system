@@ -383,6 +383,7 @@ const OperationDebug: React.FC = () => {
   const formatTime = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',

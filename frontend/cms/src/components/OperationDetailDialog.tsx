@@ -2034,6 +2034,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const formatTime = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -2204,7 +2205,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         <p className="text-sm text-gray-500 mb-1">出発時刻</p>
                         <p className="font-medium">
                           {operation.actualStartTime
-                            ? new Date(operation.actualStartTime).toLocaleString('ja-JP')
+                            ? new Date(operation.actualStartTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
                             : '-'}
                         </p>
                       </div>
@@ -2212,7 +2213,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         <p className="text-sm text-gray-500 mb-1">到着時刻</p>
                         <p className="font-medium">
                           {operation.actualEndTime
-                            ? new Date(operation.actualEndTime).toLocaleString('ja-JP')
+                            ? new Date(operation.actualEndTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
                             : '-'}
                         </p>
                       </div>
@@ -2399,6 +2400,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         // ─────────────────────────────────────────────
                         const fmtTs = (ts: string | null) =>
                           ts ? new Date(ts).toLocaleString('ja-JP', {
+                            timeZone: 'Asia/Tokyo',
                             month: '2-digit', day: '2-digit',
                             hour: '2-digit', minute: '2-digit', second: '2-digit'
                           }) : '-';
