@@ -14,23 +14,40 @@ const router = Router();
  *   lines: 取得行数 (デフォルト500)
  *   level: フィルターレベル (error/warn/info/debug/all)
  *   keyword: キーワードフィルター
+ *   startDate: 日付フィルター開始 (YYYY-MM-DD, JST)
+ *   endDate: 日付フィルター終了 (YYYY-MM-DD, JST)
  */
 router.get('/recent', authenticateToken(), requireAdmin, asyncHandler(async (req: Request, res: Response) => {
-  const lines = Math.min(parseInt(req.query.lines as string) || 500, 2000);
+  const lines = Math.min(parseInt(req.query.lines as string) || 500, 5000);
   const level = (req.query.level as string) || 'all';
   const keyword = (req.query.keyword as string) || '';
+  const startDate = (req.query.startDate as string) || '';
+  const endDate   = (req.query.endDate   as string) || '';
+
+  // 日付フィルター用タイムスタンプ範囲（JST指定→UTC変換）
+  let startTs: number | null = null;
+  let endTs:   number | null = null;
+  if (startDate) startTs = new Date(startDate + 'T00:00:00+09:00').getTime();
+  if (endDate)   endTs   = new Date(endDate   + 'T23:59:59+09:00').getTime();
 
   const logPath = path.join(process.cwd(), 'logs', 'combined.log');
   try {
-    // ファイル末尾からN行だけ読む（大容量ログ対応）
     const stat = fs.statSync(logPath);
     const fileSizeMB = (stat.size / 1024 / 1024).toFixed(2);
-    const CHUNK_SIZE = Math.min(stat.size, 512 * 1024); // 末尾512KBだけ読む
-    const buf = Buffer.alloc(CHUNK_SIZE);
-    const fd = fs.openSync(logPath, 'r');
-    fs.readSync(fd, buf, 0, CHUNK_SIZE, stat.size - CHUNK_SIZE);
-    fs.closeSync(fd);
-    const rawContent = buf.toString('utf-8');
+
+    let rawContent: string;
+    if (startTs !== null || endTs !== null) {
+      // 日付指定ありの場合はファイル全体を読む（過去ログ検索のため）
+      rawContent = fs.readFileSync(logPath, 'utf-8');
+    } else {
+      // 日付指定なし：末尾512KBのみ（高速）
+      const CHUNK_SIZE = Math.min(stat.size, 512 * 1024);
+      const buf = Buffer.alloc(CHUNK_SIZE);
+      const fd = fs.openSync(logPath, 'r');
+      fs.readSync(fd, buf, 0, CHUNK_SIZE, stat.size - CHUNK_SIZE);
+      fs.closeSync(fd);
+      rawContent = buf.toString('utf-8');
+    }
     // 最初の行は途中から始まる可能性があるので除去
     const firstNewline = rawContent.indexOf('\n');
     const content = firstNewline >= 0 ? rawContent.slice(firstNewline + 1) : rawContent;
@@ -53,8 +70,26 @@ router.get('/recent', authenticateToken(), requireAdmin, asyncHandler(async (req
       allLines = allLines.filter(l => l.includes(keyword));
     }
 
-    // 最新N行
-    const recent = allLines.slice(-lines);
+    // 日付フィルター（startDate / endDate, JST基準）
+    if (startTs !== null || endTs !== null) {
+      allLines = allLines.filter(l => {
+        try {
+          const d = JSON.parse(l);
+          if (!d.timestamp) return false;
+          const ts = new Date(d.timestamp).getTime();
+          if (startTs !== null && ts < startTs) return false;
+          if (endTs   !== null && ts > endTs)   return false;
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    // 最新N行（日付フィルターあり時は全件、なしは末尾N行）
+    const recent = (startTs !== null || endTs !== null)
+      ? allLines.slice(-Math.min(allLines.length, lines))
+      : allLines.slice(-lines);
 
     // ログサイズ
     const sizeMB = fileSizeMB;
@@ -64,7 +99,7 @@ router.get('/recent', authenticateToken(), requireAdmin, asyncHandler(async (req
       total: recent.length,
       logFileSizeMB: sizeMB,
       logFilePath: logPath,
-      filters: { lines, level, keyword }
+      filters: { lines, level, keyword, startDate, endDate }
     });
   } catch (e: any) {
     return sendSuccess(res, { logs: [`ログファイルエラー: ${e.message}`], total: 0 });

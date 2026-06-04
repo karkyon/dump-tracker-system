@@ -62,6 +62,11 @@ export default function LogViewer() {
   const [currentLogLevel, setCurrentLogLevel] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  // 日付フィルター（デフォルト: 今日のJST日付）
+  const todayJST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(todayJST);
+  const [endDate,   setEndDate]   = useState(todayJST);
+  const [useDateFilter, setUseDateFilter] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -70,6 +75,8 @@ export default function LogViewer() {
     try {
       const params = new URLSearchParams({ lines: String(lines), level });
       if (keyword) params.set('keyword', keyword);
+      if (useDateFilter && startDate) params.set('startDate', startDate);
+      if (useDateFilter && endDate)   params.set('endDate',   endDate);
       const res = await apiClient.get(`/logs/recent?${params}`) as any;
       const data = res.data?.data || res.data;
       const rawLogs: string[] = data?.logs || [];
@@ -81,7 +88,7 @@ export default function LogViewer() {
     } finally {
       setLoading(false);
     }
-  }, [lines, level, keyword, autoScroll]);
+  }, [lines, level, keyword, autoScroll, startDate, endDate, useDateFilter]);
 
   useEffect(() => {
     fetchLogs();
@@ -193,6 +200,19 @@ export default function LogViewer() {
         {keyword && <button onClick={() => setKeyword('')} style={{ padding: '4px 8px', background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, cursor: 'pointer' }}>
           クリア
         </button>}
+
+        {/* 日付フィルター */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#8b949e', fontSize: 11, marginLeft: 8 }}>
+          <input type="checkbox" checked={useDateFilter} onChange={e => setUseDateFilter(e.target.checked)} />
+          日付指定
+        </label>
+        {useDateFilter && (<>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+            style={{ padding: '3px 6px', background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, fontSize: 11 }} />
+          <span style={{ color: '#8b949e', fontSize: 11 }}>〜</span>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+            style={{ padding: '3px 6px', background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, fontSize: 11 }} />
+        </>)}
 
         {/* サーバーログレベル切り替え */}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
