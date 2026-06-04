@@ -71,17 +71,21 @@ router.get('/recent', authenticateToken(), requireAdmin, asyncHandler(async (req
     }
 
     // 日付フィルター（startDate / endDate, JST基準）
+    // JSONパース成功行 → timestampで範囲チェック
+    // JSONパース失敗行（プレーンテキスト）→ 除外しない（タイムスタンプ判定不能のため通す）
     if (startTs !== null || endTs !== null) {
       allLines = allLines.filter(l => {
         try {
           const d = JSON.parse(l);
-          if (!d.timestamp) return false;
+          // JSONだがtimestampなし → 通す
+          if (!d.timestamp) return true;
           const ts = new Date(d.timestamp).getTime();
           if (startTs !== null && ts < startTs) return false;
           if (endTs   !== null && ts > endTs)   return false;
           return true;
         } catch {
-          return false;
+          // プレーンテキスト行 → 通す
+          return true;
         }
       });
     }
