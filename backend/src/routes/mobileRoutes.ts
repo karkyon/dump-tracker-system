@@ -236,6 +236,48 @@ router.post('/auth/login',
 );
 
 /**
+ * POST /mobile/auth/refresh
+ * モバイル用トークンリフレッシュ
+ */
+router.post('/auth/refresh',
+  logRequest('POST /mobile/auth/refresh'),
+  asyncHandler(async (req, res) => {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      res.status(400).json({ success: false, message: 'refreshTokenが必要です', error: 'MISSING_REFRESH_TOKEN' });
+      return;
+    }
+    // authService経由でrefresh
+    const { getJWTConfig } = await import('../utils/crypto');
+    const jwt = await import('jsonwebtoken');
+    try {
+      const jwtConfig = getJWTConfig();
+      const decoded = jwt.verify(refreshToken, jwtConfig.refreshToken.secret) as any;
+      const { DatabaseService } = await import('../utils/database');
+      const user = await DatabaseService.getInstance().user.findUnique({ where: { id: decoded.userId } });
+      if (!user || !user.isActive) {
+        res.status(401).json({ success: false, message: '無効なリフレッシュトークンです', error: 'INVALID_REFRESH_TOKEN' });
+        return;
+      }
+      const { generateTokenPair } = await import('../utils/crypto');
+      const tokenPair = generateTokenPair({ id: user.id, username: user.username, email: user.email, role: user.role as string });
+      localStorage_dummy: true; // eslint-disable-line
+      res.status(200).json({
+        success: true,
+        data: {
+          accessToken: tokenPair.accessToken,
+          refreshToken: tokenPair.refreshToken,
+          expiresIn: jwtConfig.accessToken.expiresIn
+        },
+        message: 'トークンをリフレッシュしました'
+      });
+    } catch {
+      res.status(401).json({ success: false, message: 'リフレッシュトークンが無効または期限切れです', error: 'TOKEN_EXPIRED' });
+    }
+  })
+);
+
+/**
  * @swagger
  * /mobile/auth/me:
  *   get:
