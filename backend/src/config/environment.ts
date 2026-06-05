@@ -202,12 +202,12 @@ const ENV_DEFINITIONS: EnvVarDefinition[] = [
     defaultValue: '15m',
     section: 'authentication',
     description: 'JWTアクセストークン有効期限',
-    allowedValues: ['5m', '15m', '30m', '1h', '2h', '24h']
+    allowedValues: ['5m', '15m', '30m', '1h', '2h', '6h', '8h', '12h', '24h']
   },
   {
     key: 'JWT_REFRESH_EXPIRES_IN',
     required: false,
-    defaultValue: '7d',
+    defaultValue: '30d',
     section: 'authentication',
     description: 'JWTリフレッシュトークン有効期限',
     allowedValues: ['1d', '7d', '30d', '90d']
