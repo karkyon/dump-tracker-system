@@ -13,6 +13,7 @@ declare global {
 interface GoogleMapWrapperProps {
   onMapReady?: (map: any, marker: any, polyline: any) => void;
   initialPosition?: { lat: number; lng: number };
+  currentHeading?: number; // 🧭 追加: 初期heading（マーカーSVG向き）
 }
 
 let globalMapInstance: any = null;
@@ -47,11 +48,19 @@ const createCustomMarkerSVG = (distance: number, speed: number, heading: number 
 
 const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({ 
   onMapReady, 
-  initialPosition 
+  initialPosition,
+  currentHeading = 0
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const mountedRef = useRef(true);
+
+  // currentHeading変化時にマーカー矢印を更新
+  useEffect(() => {
+    if (currentHeading !== 0) {
+      updateMarkerHeading(currentHeading);
+    }
+  }, [currentHeading]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -310,6 +319,39 @@ export const updateMarkerPosition = (lat: number, lng: number) => {
   }
 };
 
+// 現在のマーカー表示用heading（グローバル管理）
+let _currentMarkerHeading = 0;
+let _currentMarkerSpeed = 0;
+let _currentMarkerDistance = 0;
+
+/**
+ * 🧭 マーカーのheadingを更新（SVG再描画）
+ * Rasterマップでも矢印が進行方向を向く
+ */
+export const updateMarkerHeading = (heading: number, speed?: number, distance?: number) => {
+  _currentMarkerHeading = heading;
+  if (speed !== undefined) _currentMarkerSpeed = speed;
+  if (distance !== undefined) _currentMarkerDistance = distance;
+
+  console.log(`🧭 マーカーheading更新: ${_currentMarkerHeading.toFixed(1)}°`);
+
+  if (!globalMarkerInstance) return;
+
+  try {
+    const svgStr = createCustomMarkerSVG(_currentMarkerDistance, _currentMarkerSpeed, heading);
+    const markerDiv = document.createElement('div');
+    markerDiv.innerHTML = svgStr;
+    markerDiv.style.cssText = 'width:60px;height:80px;cursor:pointer;';
+
+    // AdvancedMarkerElement の場合 content を更新
+    if (globalMarkerInstance.content !== undefined) {
+      globalMarkerInstance.content = markerDiv;
+    }
+  } catch (e) {
+    // 旧Markerの場合はアイコン更新
+  }
+};
+
 export const panMapToPosition = (lat: number, lng: number) => {
   if (!globalMapInstance) {
     console.warn('⚠️ マップ未初期化');
@@ -320,22 +362,32 @@ export const panMapToPosition = (lat: number, lng: number) => {
 };
 
 export const setMapHeading = (heading: number) => {
+  if (heading === null || isNaN(heading)) return;
+
+  // マーカーのSVG矢印を常に更新（Raster/Vector共通）
+  updateMarkerHeading(heading);
+
   if (!globalMapInstance) {
     console.warn('⚠️ マップ未初期化');
     return;
   }
 
-  const renderingType = globalMapInstance.getRenderingType();
-  const isVector = (renderingType === window.google.maps.RenderingType.VECTOR);
+  try {
+    const renderingType = globalMapInstance.getRenderingType?.();
+    const isVector = renderingType &&
+      window.google?.maps?.RenderingType?.VECTOR &&
+      (renderingType === window.google.maps.RenderingType.VECTOR);
 
-  if (!isVector) {
-    console.warn('⚠️ ベクターマップではないため、ヘッドアップ無効');
-    return;
-  }
-
-  if (heading !== null && !isNaN(heading)) {
-    console.log(`🧭 ヘッドアップ回転: ${heading.toFixed(1)}°`);
-    globalMapInstance.setHeading(heading);
+    if (isVector) {
+      // VectorマップはmapオブジェクトごとheadingUp回転
+      console.log(`🧭 ヘッドアップ回転(Vector): ${heading.toFixed(1)}°`);
+      globalMapInstance.setHeading(heading);
+    } else {
+      // Rasterマップはマーカーのみ回転（マップ本体は North-up のまま）
+      console.log(`🧭 マーカー矢印回転(Raster): ${heading.toFixed(1)}°`);
+    }
+  } catch (e) {
+    console.warn('⚠️ setMapHeading エラー:', e);
   }
 };
 
