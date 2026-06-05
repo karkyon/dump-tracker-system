@@ -129,16 +129,35 @@ class LocationServiceWrapper {
         }
       }
 
-      // 重複チェック
-      const existingLocation = await this.locationService.findFirst({
-        where: {
-          name: request.name.trim(),
-          address: request.address.trim()
-        }
+      // 重複チェック: 同名でもGPS座標が50m以上離れていれば別の場所として登録許可
+      const existingLocationsWithName = await this.locationService.findMany({
+        where: { name: request.name.trim() }
       });
 
-      if (existingLocation) {
-        throw new ConflictError('同名・同住所の位置が既に存在します');
+      if (existingLocationsWithName.length > 0) {
+        if (request.latitude !== undefined && request.longitude !== undefined) {
+          for (const existing of existingLocationsWithName) {
+            if (existing.latitude !== null && existing.longitude !== null) {
+              const existLat = typeof existing.latitude === 'object' ? Number(existing.latitude) : existing.latitude as number;
+              const existLng = typeof existing.longitude === 'object' ? Number(existing.longitude) : existing.longitude as number;
+              const dist = calculateDistance(
+                request.latitude, request.longitude,
+                existLat, existLng
+              );
+              if (dist < 0.05) {
+                throw new ConflictError(
+                  `場所名「${request.name.trim()}」は既に登録されています（登録済み「${existing.name}」と同一場所、距離${Math.round(dist * 1000)}m）。別の名称を使用してください。`
+                );
+              }
+            }
+          }
+          // 全既存レコードと50m以上離れている → 別の場所として登録許可
+        } else {
+          // GPS座標なしで同名 → 登録不可
+          throw new ConflictError(
+            `場所名「${request.name.trim()}」は既に登録されています。GPS座標を指定するか、別の名称を使用してください。`
+          );
+        }
       }
 
       // 位置作成
@@ -156,7 +175,18 @@ class LocationServiceWrapper {
         isActive: request.isActive !== false
       };
 
-      const result = await this.locationService.create(locationData);
+      let result;
+      try {
+        result = await this.locationService.create(locationData);
+      } catch (createErr: any) {
+        const errMsg = createErr?.message || String(createErr);
+        if (errMsg.includes('P2002') || errMsg.includes('Unique constraint') || errMsg.includes('unique')) {
+          throw new ConflictError(
+            `場所名「${locationData.name}」は既に登録されています（DBユニーク制約違反）。別の名称を使用してください。`
+          );
+        }
+        throw createErr;
+      }
       if (!result.success || !result.data) {
         throw new AppError(result.message || '位置作成に失敗しました', 500);
       }
