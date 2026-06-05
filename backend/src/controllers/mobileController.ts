@@ -720,21 +720,41 @@ export class MobileController {
 
       logger.info('クイック位置登録開始', { baseName, body: req.body });
 
-      let result = await tryCreate(baseName);
-
-      // 失敗時: P2002(unique constraint)ならタイムスタンプ付きでリトライ
-      if (!result.success) {
-        const errMsg = result.message || '';
-        if (errMsg.includes('P2002') || errMsg.includes('unique') || errMsg.includes('Unique') || errMsg.includes('失敗')) {
+      let result;
+      try {
+        result = await tryCreate(baseName);
+      } catch (createErr: any) {
+        const ceMsg = createErr?.message || String(createErr);
+        const ceCode = createErr?.code || '';
+        // P2002(ユニーク制約違反) または ConflictError → タイムスタンプ付きでリトライ
+        if (
+          ceCode === 'P2002' ||
+          ceMsg.includes('P2002') ||
+          ceMsg.includes('Unique constraint') ||
+          ceMsg.includes('unique constraint') ||
+          ceMsg.includes('既に登録されています') ||
+          createErr?.statusCode === 409
+        ) {
           const altName = `${baseName}-${Date.now()}`;
-          logger.info('名前重複のためリトライ', { baseName, altName });
-          result = await tryCreate(altName);
+          logger.info('名前重複のためリトライ（例外キャッチ）', { baseName, altName, ceMsg });
+          try {
+            result = await tryCreate(altName);
+          } catch (retryErr: any) {
+            const retryMsg = retryErr?.message || String(retryErr);
+            logger.error('クイック位置登録リトライも失敗', { retryErr });
+            sendError(res, `位置の登録に失敗しました: ${retryMsg.substring(0, 100)}`, 500, 'LOCATION_CREATE_ERROR');
+            return;
+          }
+        } else {
+          logger.error('クイック位置登録例外（非重複）', { createErr, body: req.body });
+          sendError(res, `位置の登録に失敗しました: ${ceMsg.substring(0, 100)}`, 500, 'LOCATION_CREATE_ERROR');
+          return;
         }
       }
 
-      if (!result.success || !result.data) {
+      if (!result || !result.success || !result.data) {
         logger.error('クイック位置登録失敗', { result, body: req.body });
-        sendError(res, result.message || '位置情報の作成に失敗しました', 500, 'LOCATION_CREATE_ERROR');
+        sendError(res, result?.message || '位置情報の作成に失敗しました', 500, 'LOCATION_CREATE_ERROR');
         return;
       }
 

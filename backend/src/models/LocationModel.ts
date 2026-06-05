@@ -185,11 +185,33 @@ export class LocationService {
     } catch (error) {
       logger.error('Failed to create location', { error: error as any, data });
 
-      if (error instanceof ValidationError) {
+      // すでにアプリエラーとして処理済みの場合はそのままスロー
+      if (error instanceof ValidationError || error instanceof ConflictError || error instanceof AppError) {
         throw error;
       }
 
-      throw new AppError('位置情報の作成に失敗しました', 500);
+      // Prismaエラーの詳細を解析して適切なエラーに変換
+      const errMsg = (error as any)?.message || String(error);
+      const errCode = (error as any)?.code || '';
+
+      if (errCode === 'P2002' || errMsg.includes('P2002') || errMsg.includes('Unique constraint') || errMsg.includes('unique constraint')) {
+        // P2002: ユニーク制約違反 (name カラム)
+        const targetFields = (error as any)?.meta?.target;
+        const fieldInfo = Array.isArray(targetFields) ? targetFields.join(', ') : 'name';
+        throw new ConflictError(
+          `場所名「${data.name}」は既に登録されています（${fieldInfo}の重複）。別の名称を使用してください。`
+        );
+      }
+
+      if (errCode === 'P2003' || errMsg.includes('P2003') || errMsg.includes('Foreign key constraint')) {
+        throw new AppError(`位置情報の作成に失敗しました（関連データエラー）: ${errMsg.substring(0, 150)}`, 400);
+      }
+
+      if (errCode?.startsWith('P') || errMsg.toLowerCase().includes('prisma')) {
+        throw new AppError(`位置情報の作成に失敗しました（DBエラー: ${errCode || 'unknown'}）: ${errMsg.substring(0, 150)}`, 500);
+      }
+
+      throw new AppError(`位置情報の作成に失敗しました: ${errMsg.substring(0, 150)}`, 500);
     }
   }
 
