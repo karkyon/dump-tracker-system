@@ -1216,9 +1216,7 @@ const OperationRecord: React.FC = () => {
             >
               📍 積込場所到着
             </button>
-            <div style={{ textAlign: 'center', fontSize: '10px', color: '#999', marginTop: '4px' }}>
-              v2.1 (isActive fix)
-            </div>
+
           </div>
         );
 
