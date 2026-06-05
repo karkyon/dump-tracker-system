@@ -264,14 +264,16 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         return true;
       } else {
         set({
-          locationError: response.error || '場所の作成に失敗しました',
+          locationError: response.message || response.error || '場所の作成に失敗しました',
           locationLoading: false,
         });
         return false;
       }
     } catch (error) {
+      console.error('[masterStore] createLocation エラー:', error);
+      const networkErrMsg = (error as any)?.response?.data?.message || (error as any)?.message || 'ネットワークエラーが発生しました';
       set({
-        locationError: 'ネットワークエラーが発生しました',
+        locationError: networkErrMsg,
         locationLoading: false,
       });
       return false;
