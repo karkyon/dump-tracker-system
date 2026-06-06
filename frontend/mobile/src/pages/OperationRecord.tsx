@@ -1066,12 +1066,15 @@ const OperationRecord: React.FC = () => {
       
       console.log('✅ 休憩開始API成功:', response);
       
+      // operationStoreに現在phaseを保存してからBREAKに切り替え（永続化）
+      operationStore.savePreviousPhase(operation.phase);
+      operationStore.setPhase('BREAK');
+      operationStore.incrementBreakCount();  // 🔧 永続化に反映 (2026-02-01)
       setOperation(prev => ({ 
         ...prev, 
         phase: 'BREAK',
         breakCount: prev.breakCount + 1
       }));
-      operationStore.incrementBreakCount();  // 🔧 永続化に反映 (2026-02-01)
       toast.success('休憩を開始しました');
       
       setIsSubmitting(false);
