@@ -199,7 +199,34 @@ const App: React.FC = () => {
     console.log('📋 環境変数:');
     console.log(`  - API_BASE_URL: ${import.meta.env.VITE_API_BASE_URL || '未設定'}`);
     console.log(`  - NODE_ENV: ${import.meta.env.MODE}`);
-    
+
+    // 🐛 フロントエンドconsoleをバックエンドに転送
+    const _apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    const _logUrl = `${_apiBase}/mobile/debug/log`;
+    let _logBuf: any[] = [];
+    let _logTimer: any = null;
+    const _flush = () => {
+      if (_logBuf.length === 0) return;
+      const batch = _logBuf.splice(0);
+      fetch(_logUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'info', message: '[CONSOLE_BATCH]', data: batch }),
+        keepalive: true
+      }).catch(() => {});
+    };
+    const _intercept = (level: string, orig: (...a: any[]) => void) =>
+      (...args: any[]) => {
+        orig.apply(console, args);
+        const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+        _logBuf.push({ level, msg, t: new Date().toISOString() });
+        if (_logBuf.length >= 10) { clearTimeout(_logTimer); _flush(); }
+        else { clearTimeout(_logTimer); _logTimer = setTimeout(_flush, 2000); }
+      };
+    console.log = _intercept('log', console.log);
+    console.warn = _intercept('warn', console.warn);
+    console.error = _intercept('error', console.error);
+
     checkServerConnection();
     
     console.log('✅ アプリケーション起動完了');

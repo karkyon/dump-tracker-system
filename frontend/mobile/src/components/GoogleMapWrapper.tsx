@@ -375,8 +375,9 @@ export const panMapToPosition = (lat: number, lng: number) => {
 // 🐛 フロントエンドデバッグログ送信
 const sendDebugLog = (message: string, data?: any) => {
   try {
-    const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || '';
-    fetch(`${apiBase}/api/v1/mobile/debug/log`, {
+    // VITE_API_BASE_URL=/api/v1 なので mobile/debug/log だけ追加
+    const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1';
+    fetch(`${apiBase}/mobile/debug/log`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ level: 'info', message, data }),
