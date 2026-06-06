@@ -119,7 +119,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           center: centerPosition,
           zoom: 18,
           // 🔧 常にVectorレンダリングを強制指定
-          ...(renderingTypeValue ? { renderingType: renderingTypeValue } : {}),
+          // iOS SafariではRenderingType enumがundefinedになるため文字列'VECTOR'でフォールバック
+          renderingType: renderingTypeValue ?? 'VECTOR',
           // mapIdがあれば追加（Cloud Stylingを使う場合）
           ...(import.meta.env.VITE_GOOGLE_MAP_ID
             ? { mapId: import.meta.env.VITE_GOOGLE_MAP_ID }
