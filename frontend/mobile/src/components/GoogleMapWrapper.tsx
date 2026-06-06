@@ -107,21 +107,30 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
       try {
         const centerPosition = initialPosition || { lat: 34.6937, lng: 135.5023 };
 
+        // 🧭 Vector Mapを強制有効化（mapId有無に関係なく）
+        // setHeading()はVectorマップのみ動作。RasterではAPIエラーも出ないが無効。
+        // RenderingType.VECTORを直接指定すればmapIdなしでもVector動作する
+        let renderingTypeValue: any = undefined;
+        try {
+          renderingTypeValue = window.google.maps.RenderingType?.VECTOR;
+        } catch (_e) { /* RenderingType未対応ブラウザ */ }
+
         const mapOptions: any = {
           center: centerPosition,
           zoom: 18,
-          // ✅ Fix①: VITE_GOOGLE_MAP_IDが設定済みの場合のみVECTOR+mapId
-          // 未設定時はmapIdなしで初期化（RenderingType指定もしない）
+          // 🔧 常にVectorレンダリングを強制指定
+          ...(renderingTypeValue ? { renderingType: renderingTypeValue } : {}),
+          // mapIdがあれば追加（Cloud Stylingを使う場合）
           ...(import.meta.env.VITE_GOOGLE_MAP_ID
-            ? { renderingType: window.google.maps.RenderingType.VECTOR, mapId: import.meta.env.VITE_GOOGLE_MAP_ID }
+            ? { mapId: import.meta.env.VITE_GOOGLE_MAP_ID }
             : {}),
           heading: 0,
           tilt: 0,
           disableDefaultUI: true,
           zoomControl: true,
           gestureHandling: 'greedy',
-          tiltInteractionEnabled: true,
-          headingInteractionEnabled: true,
+          tiltInteractionEnabled: false,   // ユーザー操作によるtiltは無効（ナビ用途）
+          headingInteractionEnabled: false, // ユーザー操作によるheadingは無効（GPS自動）
         };
 
         const map = new window.google.maps.Map(mapContainerRef.current, mapOptions);
@@ -362,32 +371,30 @@ export const panMapToPosition = (lat: number, lng: number) => {
 };
 
 export const setMapHeading = (heading: number) => {
-  if (heading === null || isNaN(heading)) return;
+  if (heading === null || heading === undefined || isNaN(heading)) return;
 
   // マーカーのSVG矢印を常に更新（Raster/Vector共通）
   updateMarkerHeading(heading);
 
-  if (!globalMapInstance) {
-    console.warn('⚠️ マップ未初期化');
-    return;
-  }
+  if (!globalMapInstance) return;
 
   try {
+    // VectorマップかどうかはrenderingTypeで判定
+    // ただしRenderingType APIが利用不可の場合もsetHeadingを試みる
     const renderingType = globalMapInstance.getRenderingType?.();
-    const isVector = renderingType &&
-      window.google?.maps?.RenderingType?.VECTOR &&
-      (renderingType === window.google.maps.RenderingType.VECTOR);
+    const VECTOR = window.google?.maps?.RenderingType?.VECTOR;
+    const isVector = !VECTOR || !renderingType || (renderingType === VECTOR);
+    // ↑ RenderingType APIが使えない場合(= 古いSDK)はとりあえずsetHeadingを呼ぶ
 
-    if (isVector) {
-      // VectorマップはmapオブジェクトごとheadingUp回転
-      console.log(`🧭 ヘッドアップ回転(Vector): ${heading.toFixed(1)}°`);
+    if (isVector && typeof globalMapInstance.setHeading === 'function') {
       globalMapInstance.setHeading(heading);
+      console.log(`🧭 Map.setHeading(${heading.toFixed(1)}°) 実行`);
     } else {
-      // Rasterマップはマーカーのみ回転（マップ本体は North-up のまま）
-      console.log(`🧭 マーカー矢印回転(Raster): ${heading.toFixed(1)}°`);
+      console.log(`🧭 Rasterマップ: マーカーのみ回転 ${heading.toFixed(1)}°`);
     }
   } catch (e) {
-    console.warn('⚠️ setMapHeading エラー:', e);
+    // setHeadingが失敗しても続行
+    console.warn('⚠️ setMapHeading エラー:', String(e).substring(0, 100));
   }
 };
 

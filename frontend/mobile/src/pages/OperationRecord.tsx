@@ -422,8 +422,12 @@ const OperationRecord: React.FC = () => {
     // マップ移動（低頻度）
     if (now - lastMapUpdateRef.current >= MAP_UPDATE_INTERVAL) {
       panMapToPosition(currentPosition.coords.latitude, currentPosition.coords.longitude);
-      if (heading !== null) {
-        setMapHeading(heading);
+      // 🧭 headingUp: GPS heading優先、低速時はコンパスheadingを使用
+      const effectiveHeading = (heading !== null && speed !== null && speed > 3)
+        ? heading  // GPS heading（移動中3km/h以上）
+        : (compassHeading?.current !== null ? compassHeading?.current ?? heading ?? 0 : heading ?? 0);
+      if (effectiveHeading !== null && effectiveHeading !== undefined) {
+        setMapHeading(effectiveHeading);
       }
       addPathPoint(currentPosition.coords.latitude, currentPosition.coords.longitude);
       lastMapUpdateRef.current = now;
