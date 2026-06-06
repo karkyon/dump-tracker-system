@@ -194,10 +194,30 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         
         console.log('🎉 マップ初期化完了!');
 
+        // マップ初期化直後にrenderingTypeを確認してログ送信
+        setTimeout(() => {
+          try {
+            const rt = map.getRenderingType?.();
+            const VKEY = window.google?.maps?.RenderingType?.VECTOR;
+            const isVec = rt === VKEY || String(rt) === 'VECTOR';
+            const initMsg = `[MAP_INIT] renderingType=${String(rt)} isVector=${isVec} mapId=${import.meta.env.VITE_GOOGLE_MAP_ID || 'none'}`;
+            console.log(initMsg);
+            sendDebugLog('[MAP_INIT] renderingType確認', {
+              renderingType: String(rt),
+              isVector: isVec,
+              mapId: import.meta.env.VITE_GOOGLE_MAP_ID || 'none',
+              renderingTypeValueUsed: String(renderingTypeValue),
+              VECTOR_enum: String(VKEY),
+              url: window.location.href,
+            });
+          } catch(e) { console.warn('renderingType取得エラー:', e); }
+        }, 2000);
+
         map.addListener('renderingtype_changed', () => {
           const renderingType = map.getRenderingType();
-          const isVector = (renderingType === window.google.maps.RenderingType.VECTOR);
-          console.log(`マップレンダリング: ${isVector ? 'VECTOR' : 'RASTER'}`);
+          const isVector = (renderingType === window.google.maps.RenderingType?.VECTOR || String(renderingType) === 'VECTOR');
+          console.log(`マップレンダリング変更: ${isVector ? 'VECTOR✅' : 'RASTER❌'}`);
+          sendDebugLog('[MAP_RENDERING_CHANGED]', { renderingType: String(renderingType), isVector });
         });
 
       } catch (error) {

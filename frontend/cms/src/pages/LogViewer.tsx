@@ -1,9 +1,11 @@
 // frontend/cms/src/pages/LogViewer.tsx
-// バックエンドログビューア（本格版）
-// 機能: リアルタイム監視・レベルフィルター・キーワード検索・ログクリア・ダウンロード
+// バックエンドログビューア（改善版）
+// - 新しいログを上部表示
+// - 画面高さ固定（スクロール不要）
+// - Light/Dark切り替え
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { RefreshCw, Play, Square, Trash2, Download, Filter, Terminal, AlertCircle, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Play, Square, Trash2, Download, Terminal, AlertCircle, AlertTriangle, Sun, Moon } from 'lucide-react';
 import { apiClient } from '../utils/api';
 
 type LogLevel = 'all' | 'error' | 'warn' | 'info' | 'http' | 'debug';
@@ -19,56 +21,44 @@ interface LogEntry {
 function parseLine(line: string): LogEntry {
   try {
     const d = JSON.parse(line);
-    return {
-      raw: line,
-      level: d.level || 'info',
-      message: d.message || line,
-      timestamp: d.timestamp || '',
-      data: d.data
-    };
+    return { raw: line, level: d.level || 'info', message: d.message || line, timestamp: d.timestamp || '', data: d.data };
   } catch {
-    const level = line.includes('error') ? 'error'
-      : line.includes('warn') ? 'warn'
-      : line.includes('debug') ? 'debug'
-      : 'info';
+    const level = line.includes('error') ? 'error' : line.includes('warn') ? 'warn' : line.includes('debug') ? 'debug' : 'info';
     return { raw: line, level, message: line, timestamp: '' };
   }
 }
 
-const LEVEL_COLORS: Record<string, string> = {
-  error: '#ff7b72',
-  warn:  '#e3b341',
-  info:  '#79c0ff',
-  http:  '#56d364',
-  debug: '#8b949e',
+const LEVEL_COLORS_DARK: Record<string, string> = {
+  error: '#ff7b72', warn: '#e3b341', info: '#79c0ff', http: '#56d364', debug: '#8b949e',
 };
-
-const LEVEL_BG: Record<string, string> = {
-  error: 'rgba(255,123,114,0.1)',
-  warn:  'rgba(227,179,65,0.1)',
-  info:  '',
-  http:  '',
-  debug: '',
+const LEVEL_COLORS_LIGHT: Record<string, string> = {
+  error: '#cf222e', warn: '#9a6700', info: '#0969da', http: '#1a7f37', debug: '#57606a',
 };
 
 export default function LogViewer() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(true);
   const [level, setLevel] = useState<LogLevel>('all');
-  const [keyword, setKeyword] = useState('');
-  const [lines, setLines] = useState(500);
+  const [keyword, setKeyword] = useState('FRONTEND');
+  const [lines, setLines] = useState(2000);
   const [loading, setLoading] = useState(false);
   const [logFileSize, setLogFileSize] = useState('');
   const [currentLogLevel, setCurrentLogLevel] = useState('');
-  const [autoScroll, setAutoScroll] = useState(true);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  // 日付フィルター（デフォルト: 今日のJST日付）
+  const [dark, setDark] = useState(true);
   const todayJST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(todayJST);
-  const [endDate,   setEndDate]   = useState(todayJST);
+  const [endDate, setEndDate] = useState(todayJST);
   const [useDateFilter, setUseDateFilter] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // テーマ
+  const bg = dark ? '#0d1117' : '#ffffff';
+  const bg2 = dark ? '#161b22' : '#f6f8fa';
+  const border = dark ? '#30363d' : '#d0d7de';
+  const text = dark ? '#c9d1d9' : '#1f2328';
+  const textMuted = dark ? '#8b949e' : '#57606a';
+  const LEVEL_COLORS = dark ? LEVEL_COLORS_DARK : LEVEL_COLORS_LIGHT;
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -76,29 +66,25 @@ export default function LogViewer() {
       const params = new URLSearchParams({ lines: String(lines), level });
       if (keyword) params.set('keyword', keyword);
       if (useDateFilter && startDate) params.set('startDate', startDate);
-      if (useDateFilter && endDate)   params.set('endDate',   endDate);
+      if (useDateFilter && endDate) params.set('endDate', endDate);
       const res = await apiClient.get(`/logs/recent?${params}`) as any;
       const data = res.data?.data || res.data;
       const rawLogs: string[] = data?.logs || [];
-      setLogs(rawLogs.map(parseLine));
+      // 新しいログを上部に表示（reverse）
+      setLogs(rawLogs.map(parseLine).reverse());
       setLogFileSize(data?.logFileSizeMB || '');
-      if (autoScroll) setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (e: any) {
       setLogs([{ raw: '', level: 'error', message: `API エラー: ${e.message}`, timestamp: '' }]);
     } finally {
       setLoading(false);
     }
-  }, [lines, level, keyword, autoScroll, startDate, endDate, useDateFilter]);
+  }, [lines, level, keyword, startDate, endDate, useDateFilter]);
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
+  useEffect(() => { fetchLogs(); }, []);
 
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    if (running) {
-      intervalRef.current = setInterval(fetchLogs, 3000);
-    }
+    if (running) intervalRef.current = setInterval(fetchLogs, 3000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running, fetchLogs]);
 
@@ -106,21 +92,16 @@ export default function LogViewer() {
     try {
       await (apiClient.post('/logs/level', { level: lv }) as any);
       setCurrentLogLevel(lv);
-      alert(`サーバーのログレベルを "${lv}" に変更しました`);
     } catch (e: any) { alert(`失敗: ${e.message}`); }
   };
 
   const clearLogs = async () => {
     if (!confirm('ログファイルをクリアしますか？')) return;
-    try {
-      await (apiClient.delete('/logs/clear') as any);
-      setLogs([]);
-      alert('クリアしました');
-    } catch (e: any) { alert(`失敗: ${e.message}`); }
+    try { await (apiClient.delete('/logs/clear') as any); setLogs([]); } catch (e: any) { alert(`失敗: ${e.message}`); }
   };
 
   const downloadLogs = () => {
-    const content = logs.map(l => l.raw).join('\n');
+    const content = [...logs].reverse().map(l => l.raw).join('\n');
     const blob = new Blob([content], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -132,147 +113,100 @@ export default function LogViewer() {
   const warnCount = logs.filter(l => l.level === 'warn').length;
 
   return (
-    <div style={{ background: '#0d1117', minHeight: '100vh', color: '#c9d1d9', fontFamily: 'monospace', fontSize: 12, padding: 0 }}>
-      {/* ヘッダー */}
-      <div style={{ background: '#161b22', borderBottom: '1px solid #30363d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#58a6ff', fontSize: 16, fontWeight: 'bold' }}>
-          <Terminal size={20} />
-          バックエンドログビューア
+    <div style={{ background: bg, height: '100vh', display: 'flex', flexDirection: 'column', color: text, fontFamily: 'monospace', fontSize: 12, overflow: 'hidden' }}>
+      {/* ヘッダー固定 */}
+      <div style={{ background: bg2, borderBottom: `1px solid ${border}`, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#58a6ff', fontSize: 14, fontWeight: 'bold' }}>
+          <Terminal size={16} /> ログビューア
         </div>
-        {/* 統計 */}
-        <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
-          <span style={{ background: 'rgba(255,123,114,0.2)', color: '#ff7b72', padding: '2px 8px', borderRadius: 4 }}>
-            <AlertCircle size={12} style={{ display: 'inline', marginRight: 4 }} />エラー {errorCount}
-          </span>
-          <span style={{ background: 'rgba(227,179,65,0.2)', color: '#e3b341', padding: '2px 8px', borderRadius: 4 }}>
-            <AlertTriangle size={12} style={{ display: 'inline', marginRight: 4 }} />警告 {warnCount}
-          </span>
-          <span style={{ color: '#8b949e', padding: '2px 8px' }}>
-            計 {logs.length}件 {logFileSize && `| ファイル ${logFileSize}MB`}
-          </span>
-        </div>
-        {loading && <span style={{ color: '#58a6ff', fontSize: 11 }}>⟳ 読み込み中...</span>}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button onClick={() => { setRunning(r => !r); }}
-            style={{ padding: '4px 12px', background: running ? '#da3633' : '#238636', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {running ? <><Square size={12} /> 停止</> : <><Play size={12} /> リアルタイム</>}
-          </button>
-          <button onClick={fetchLogs} style={{ padding: '4px 10px', background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, cursor: 'pointer' }}>
-            <RefreshCw size={12} />
-          </button>
-          <button onClick={downloadLogs} style={{ padding: '4px 10px', background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, cursor: 'pointer' }}>
-            <Download size={12} />
-          </button>
-          <button onClick={clearLogs} style={{ padding: '4px 10px', background: '#21262d', color: '#ff7b72', border: '1px solid #30363d', borderRadius: 6, cursor: 'pointer' }}>
-            <Trash2 size={12} />
-          </button>
-        </div>
+        <span style={{ background: 'rgba(255,123,114,0.2)', color: '#ff7b72', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>
+          <AlertCircle size={10} style={{ display: 'inline', marginRight: 2 }} />ERR {errorCount}
+        </span>
+        <span style={{ background: 'rgba(227,179,65,0.2)', color: '#e3b341', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>
+          <AlertTriangle size={10} style={{ display: 'inline', marginRight: 2 }} />WARN {warnCount}
+        </span>
+        <span style={{ color: textMuted, fontSize: 11 }}>計 {logs.length}件{logFileSize && ` | ${logFileSize}MB`}</span>
+        {loading && <span style={{ color: '#58a6ff', fontSize: 11 }}>⟳</span>}
+
+        {/* 操作ボタン */}
+        <button onClick={() => setRunning(r => !r)} style={{ padding: '2px 8px', background: running ? '#da3633' : '#238636', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 3 }}>
+          {running ? <><Square size={10} />停止</> : <><Play size={10} />開始</>}
+        </button>
+        <button onClick={fetchLogs} style={{ padding: '2px 6px', background: '#21262d', color: text, border: `1px solid ${border}`, borderRadius: 4, cursor: 'pointer' }}>
+          <RefreshCw size={12} />
+        </button>
+        <button onClick={clearLogs} style={{ padding: '2px 6px', background: '#21262d', color: '#ff7b72', border: `1px solid ${border}`, borderRadius: 4, cursor: 'pointer' }}>
+          <Trash2 size={12} />
+        </button>
+        <button onClick={downloadLogs} style={{ padding: '2px 6px', background: '#21262d', color: text, border: `1px solid ${border}`, borderRadius: 4, cursor: 'pointer' }}>
+          <Download size={12} />
+        </button>
+        <button onClick={() => setDark(d => !d)} style={{ padding: '2px 6px', background: '#21262d', color: text, border: `1px solid ${border}`, borderRadius: 4, cursor: 'pointer' }}>
+          {dark ? <Sun size={12} /> : <Moon size={12} />}
+        </button>
       </div>
 
-      {/* フィルターバー */}
-      <div style={{ background: '#161b22', borderBottom: '1px solid #30363d', padding: '8px 16px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Filter size={14} style={{ color: '#8b949e' }} />
-        {/* 表示レベルフィルター */}
-        <select value={level} onChange={e => setLevel(e.target.value as LogLevel)}
-          style={{ padding: '4px 8px', background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4 }}>
-          <option value="all">全レベル</option>
-          <option value="error">ERROR のみ</option>
-          <option value="warn">WARN のみ</option>
-          <option value="info">INFO のみ</option>
-          <option value="http">HTTP のみ</option>
-          <option value="debug">DEBUG のみ</option>
-        </select>
+      {/* フィルターバー固定 */}
+      <div style={{ background: bg2, borderBottom: `1px solid ${border}`, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
         {/* キーワード */}
-        <input value={keyword} onChange={e => setKeyword(e.target.value)}
-          placeholder="キーワード検索 (例: operationId, 400, prisma)"
-          style={{ padding: '4px 10px', background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, width: 280 }} />
-        {/* 行数 */}
-        <select value={lines} onChange={e => setLines(Number(e.target.value))}
-          style={{ padding: '4px 8px', background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4 }}>
-          <option value={100}>最新100行</option>
-          <option value={500}>最新500行</option>
-          <option value={1000}>最新1000行</option>
-          <option value={2000}>最新2000行</option>
+        <input value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchLogs()} placeholder="キーワード" style={{ padding: '2px 8px', background: dark ? '#0d1117' : '#f6f8fa', color: text, border: `1px solid ${border}`, borderRadius: 4, fontSize: 11, width: 130 }} />
+        {/* 表示件数 */}
+        <select value={lines} onChange={e => setLines(Number(e.target.value))} style={{ padding: '2px 4px', background: dark ? '#0d1117' : '#f6f8fa', color: text, border: `1px solid ${border}`, borderRadius: 4, fontSize: 11 }}>
+          {[200, 500, 1000, 2000, 5000].map(n => <option key={n} value={n}>{n}件</option>)}
         </select>
-        <button onClick={fetchLogs} style={{ padding: '4px 12px', background: '#1f6feb', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-          検索
-        </button>
-        {keyword && <button onClick={() => setKeyword('')} style={{ padding: '4px 8px', background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, cursor: 'pointer' }}>
-          クリア
-        </button>}
-
-        {/* 日付フィルター */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#8b949e', fontSize: 11, marginLeft: 8 }}>
-          <input type="checkbox" checked={useDateFilter} onChange={e => setUseDateFilter(e.target.checked)} />
-          日付指定
+        {/* レベルフィルター */}
+        {(['all','error','warn','info','http','debug'] as LogLevel[]).map(lv => (
+          <button key={lv} onClick={() => setLevel(lv)} style={{ padding: '1px 6px', background: level === lv ? '#1f6feb' : (dark ? '#21262d' : '#f6f8fa'), color: LEVEL_COLORS[lv] || text, border: `1px solid ${level === lv ? '#1f6feb' : border}`, borderRadius: 4, cursor: 'pointer', fontSize: 11, textTransform: 'uppercase' }}>
+            {lv}
+          </button>
+        ))}
+        {/* 日付 */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 3, color: textMuted, fontSize: 11 }}>
+          <input type="checkbox" checked={useDateFilter} onChange={e => setUseDateFilter(e.target.checked)} />日付
         </label>
         {useDateFilter && (<>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-            style={{ padding: '3px 6px', background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, fontSize: 11 }} />
-          <span style={{ color: '#8b949e', fontSize: 11 }}>〜</span>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-            style={{ padding: '3px 6px', background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, fontSize: 11 }} />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ padding: '2px 4px', background: dark ? '#0d1117' : '#f6f8fa', color: text, border: `1px solid ${border}`, borderRadius: 4, fontSize: 11 }} />
+          <span style={{ color: textMuted, fontSize: 11 }}>〜</span>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ padding: '2px 4px', background: dark ? '#0d1117' : '#f6f8fa', color: text, border: `1px solid ${border}`, borderRadius: 4, fontSize: 11 }} />
         </>)}
-
-        {/* サーバーログレベル切り替え */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
-          <span style={{ color: '#8b949e', fontSize: 11 }}>サーバーログレベル:</span>
+        {/* サーバーログレベル */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 3, alignItems: 'center' }}>
+          <span style={{ color: textMuted, fontSize: 10 }}>サーバーログレベル:</span>
           {['error','warn','info','http','debug'].map(lv => (
-            <button key={lv} onClick={() => changeServerLogLevel(lv)}
-              style={{ padding: '2px 8px', background: currentLogLevel === lv ? '#1f6feb' : '#21262d', color: LEVEL_COLORS[lv] || '#c9d1d9', border: `1px solid ${currentLogLevel === lv ? '#1f6feb' : '#30363d'}`, borderRadius: 4, cursor: 'pointer', fontSize: 11, textTransform: 'uppercase' }}>
+            <button key={lv} onClick={() => changeServerLogLevel(lv)} style={{ padding: '1px 5px', background: currentLogLevel === lv ? '#1f6feb' : (dark ? '#21262d' : '#f6f8fa'), color: LEVEL_COLORS[lv] || text, border: `1px solid ${currentLogLevel === lv ? '#1f6feb' : border}`, borderRadius: 4, cursor: 'pointer', fontSize: 10, textTransform: 'uppercase' }}>
               {lv}
             </button>
           ))}
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#8b949e', fontSize: 11 }}>
-          <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
-          自動スクロール
+        <label style={{ display: 'flex', alignItems: 'center', gap: 3, color: textMuted, fontSize: 11 }}>
+          {running && <span style={{ color: '#56d364' }}>● リアルタイム(3秒)</span>}
         </label>
       </div>
 
-      {/* ログ表示エリア */}
-      <div style={{ height: 'calc(100vh - 130px)', overflowY: 'auto', padding: '4px 0' }}>
+      {/* ログエリア - 残り高さ全部使う */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '2px 0' }}>
         {logs.map((entry, i) => (
-          <div key={i}
-            onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
-            style={{
-              padding: '2px 16px',
-              background: expandedIdx === i ? '#161b22' : (LEVEL_BG[entry.level] || 'transparent'),
-              borderLeft: `3px solid ${LEVEL_COLORS[entry.level] || '#30363d'}`,
-              borderBottom: '1px solid #21262d',
-              cursor: 'pointer',
-              color: LEVEL_COLORS[entry.level] || '#c9d1d9',
-            }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ color: '#8b949e', minWidth: 80, fontSize: 11 }}>
+          <div key={i} onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
+            style={{ padding: '1px 12px', background: expandedIdx === i ? (dark ? '#161b22' : '#f6f8fa') : 'transparent', borderLeft: `3px solid ${LEVEL_COLORS[entry.level] || border}`, borderBottom: `1px solid ${dark ? '#21262d' : '#eaeef2'}`, cursor: 'pointer', color: LEVEL_COLORS[entry.level] || text }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <span style={{ color: textMuted, minWidth: 72, fontSize: 11, flexShrink: 0 }}>
                 {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false }) : ''}
               </span>
-              <span style={{ minWidth: 50, fontWeight: 'bold', textTransform: 'uppercase', fontSize: 11 }}>
+              <span style={{ minWidth: 42, fontWeight: 'bold', textTransform: 'uppercase', fontSize: 11, flexShrink: 0 }}>
                 {entry.level}
               </span>
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: expandedIdx === i ? 'pre-wrap' : 'nowrap' }}>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: expandedIdx === i ? 'pre-wrap' : 'nowrap', fontSize: 11 }}>
                 {entry.message}
               </span>
             </div>
-            {expandedIdx === i && entry.data && (
-              <pre style={{ marginTop: 4, padding: 8, background: '#0d1117', borderRadius: 4, overflow: 'auto', fontSize: 11, color: '#c9d1d9', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                {JSON.stringify(entry.data, null, 2)}
-              </pre>
-            )}
-            {expandedIdx === i && !entry.data && (
-              <pre style={{ marginTop: 4, padding: 8, background: '#0d1117', borderRadius: 4, overflow: 'auto', fontSize: 11, color: '#c9d1d9', whiteSpace: 'pre-wrap' }}>
-                {entry.raw}
+            {expandedIdx === i && (
+              <pre style={{ marginTop: 2, padding: 6, background: dark ? '#0d1117' : '#f6f8fa', borderRadius: 4, overflow: 'auto', fontSize: 11, color: text, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {entry.data ? JSON.stringify(entry.data, null, 2) : entry.raw}
               </pre>
             )}
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
-      {running && (
-        <div style={{ position: 'fixed', bottom: 16, right: 16, background: '#238636', color: '#fff', padding: '6px 14px', borderRadius: 20, fontSize: 12 }}>
-          🟢 リアルタイム監視中 (3秒更新)
-        </div>
-      )}
     </div>
   );
 }
