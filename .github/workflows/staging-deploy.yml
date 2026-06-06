@@ -190,6 +190,13 @@ jobs:
             cp /tmp/cms-deploy/fix-nginx-cms.py /tmp/fix-nginx-cms.py 2>/dev/null || true
             rm -rf /tmp/cms-deploy
             sudo python3 /tmp/fix-nginx-cms.py 2>/dev/null || true
+            # sw.js を no-cache に設定（PWAキャッシュ強制更新）
+            NGINX_CONF="/etc/nginx/sites-enabled/dump-tracker-staging"
+            if [ -f "$NGINX_CONF" ]; then
+              if ! grep -q 'sw.js' "$NGINX_CONF"; then
+                sudo sed -i '/server_name/a\\n    location ~* sw\.js$ { add_header Cache-Control "no-cache, no-store, must-revalidate"; }' "$NGINX_CONF" 2>/dev/null || true
+              fi
+            fi
             sudo nginx -t && sudo systemctl reload nginx
             echo "✅ CMS deployed to Staging"
       
