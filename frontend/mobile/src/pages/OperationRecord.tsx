@@ -1135,12 +1135,10 @@ const OperationRecord: React.FC = () => {
       
       toast.success('休憩を終了しました');
       
-      isSubmittingRef.current = false;
       setIsSubmitting(false);
     } catch (error) {
       console.error('❌ 休憩終了エラー:', error);
       toast.error('休憩終了に失敗しました');
-      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
