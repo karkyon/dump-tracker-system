@@ -1520,8 +1520,22 @@ router.post(
   '/debug/log',
   asyncHandler(async (req: Request, res: Response) => {
     const { level = 'info', message, data } = req.body;
+    // winstonLogger に直接書き込み（Loggerクラス経由のバグ回避）
     const safeLevel = ['error','warn','info','debug'].includes(level) ? level : 'info';
-    (logger as any)[safeLevel](`[FRONTEND] ${message}`, data || {});
+    const logMsg = `[FRONTEND] ${message}`;
+    // winston経由でファイルに確実に書く
+    logger.info(logMsg, { frontendData: data || {}, level: safeLevel });
+    // fs直接書き込みでも保険をかける
+    const fs = require('fs');
+    const path = require('path');
+    const logLine = JSON.stringify({
+      timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false }),
+      level: safeLevel,
+      message: logMsg,
+      data: data || {}
+    }) + '\n';
+    const logPath = path.join(process.cwd(), 'logs', 'combined.log');
+    fs.appendFileSync(logPath, logLine);
     res.json({ success: true });
   })
 );
