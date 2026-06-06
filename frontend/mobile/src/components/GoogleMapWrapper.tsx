@@ -121,10 +121,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
           // 🔧 常にVectorレンダリングを強制指定
           // iOS SafariではRenderingType enumがundefinedになるため文字列'VECTOR'でフォールバック
           renderingType: renderingTypeValue ?? 'VECTOR',
-          // mapIdがあれば追加（Cloud Stylingを使う場合）
-          ...(import.meta.env.VITE_GOOGLE_MAP_ID
-            ? { mapId: import.meta.env.VITE_GOOGLE_MAP_ID }
-            : {}),
+          // ⚠️ mapIdを使わない: mapIdがCloud Console側でRaster設定だとVECTOR指定が無効になる
+          // mapIdなしでRenderingType:'VECTOR'を指定するとVectorマップが有効になりsetHeading()が動作する
           heading: 0,
           tilt: 0,
           disableDefaultUI: true,
