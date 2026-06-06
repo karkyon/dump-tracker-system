@@ -238,11 +238,14 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         console.log('✅ Google Maps APIロード済み');
         setTimeout(initializeMap, 100);
       } else {
+        // 既存scriptのコールバックを今回の initializeMap に差し替え
+        // （古いmapIdのscriptが再実行されないよう上書き）
         window.initGoogleMap = initializeMap;
       }
       return;
     }
 
+    // 初回: callbackを設定してからscriptを追加
     window.initGoogleMap = initializeMap;
     
     const script = document.createElement('script');
@@ -250,7 +253,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     // BUG-012: loading=async で廃止APIの初期化警告を抑制
     // &v=weekly: VectorマップとRenderingTypeを使うために必要
     // stable版ではRenderingType.VECTORが存在せずheadingUp無効になる
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&libraries=marker&v=weekly`;
+    // DEMO_MAP_ID をprecacheして確実にVector Mapを有効化
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&libraries=marker&v=weekly&map_ids=DEMO_MAP_ID`;
     script.async = true;
     script.defer = true;
     
