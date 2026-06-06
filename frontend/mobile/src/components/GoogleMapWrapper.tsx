@@ -372,12 +372,19 @@ export const updateMarkerHeading = (heading: number, speed?: number, distance?: 
     markerDiv.innerHTML = svgStr;
     markerDiv.style.cssText = 'width:60px;height:80px;cursor:pointer;';
 
-    // AdvancedMarkerElement の場合 content を更新
     if (globalMarkerInstance.content !== undefined) {
+      // AdvancedMarkerElement: content を更新
       globalMarkerInstance.content = markerDiv;
+    } else if (typeof globalMarkerInstance.setIcon === 'function') {
+      // 旧Marker: setIcon でSVGアイコンを更新（回転を反映）
+      globalMarkerInstance.setIcon({
+        url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgStr)}`,
+        scaledSize: new window.google.maps.Size(60, 80),
+        anchor: new window.google.maps.Point(30, 28),
+      });
     }
   } catch (e) {
-    // 旧Markerの場合はアイコン更新
+    console.warn('⚠️ マーカー回転更新エラー:', e);
   }
 };
 
