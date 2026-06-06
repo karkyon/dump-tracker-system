@@ -93,6 +93,8 @@ jobs:
             sudo systemctl restart dump-tracker-backend
             sleep 3
             sudo systemctl is-active dump-tracker-backend && echo "OK"
+            # ログファイルのオーナーを修正（rootになる場合がある）
+            sudo chown -R karkyon_dump:karkyon_dump ~/projects/dump-tracker/backend/logs/ 2>/dev/null || true
             rm -rf /tmp/backend-deploy
 
       # ===========================
