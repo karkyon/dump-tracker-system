@@ -372,27 +372,60 @@ export const panMapToPosition = (lat: number, lng: number) => {
   globalMapInstance.panTo({ lat, lng });
 };
 
+// 🐛 フロントエンドデバッグログ送信
+const sendDebugLog = (message: string, data?: any) => {
+  try {
+    const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || '';
+    fetch(`${apiBase}/api/v1/mobile/debug/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: 'info', message, data }),
+      keepalive: true
+    }).catch(() => {});
+  } catch (_) {}
+};
+let _lastDebugSentAt = 0;
+
 export const setMapHeading = (heading: number) => {
   if (heading === null || heading === undefined || isNaN(heading)) return;
-
-  // マーカーのSVG矢印を常に更新
   updateMarkerHeading(heading);
-
-  if (!globalMapInstance) return;
-
-  // isVector判定廃止 - MapID+Vector設定済みのため直接setHeading呼び出し
-  if (typeof globalMapInstance.setHeading === 'function') {
+  if (!globalMapInstance) {
+    const now = Date.now();
+    if (now - _lastDebugSentAt > 5000) {
+      _lastDebugSentAt = now;
+      sendDebugLog('setMapHeading: globalMapInstance=null', { heading });
+    }
+    return;
+  }
+  const renderingType = globalMapInstance.getRenderingType?.();
+  const VECTOR = (window as any).google?.maps?.RenderingType?.VECTOR;
+  const hasSetHeading = typeof globalMapInstance.setHeading === 'function';
+  if (hasSetHeading) {
     try {
       globalMapInstance.setHeading(heading);
+      const now = Date.now();
+      if (now - _lastDebugSentAt > 5000) {
+        _lastDebugSentAt = now;
+        sendDebugLog('setMapHeading: OK', {
+          heading: Math.round(heading),
+          renderingType: String(renderingType),
+          isVector: VECTOR ? renderingType === VECTOR : 'NO_VECTOR_API',
+        });
+      }
     } catch (e) {
+      sendDebugLog('setMapHeading: ERROR', { heading, error: String(e).substring(0, 100) });
       console.warn('⚠️ setHeading:', String(e).substring(0, 80));
     }
+  } else {
+    const now = Date.now();
+    if (now - _lastDebugSentAt > 5000) {
+      _lastDebugSentAt = now;
+      sendDebugLog('setMapHeading: NO_FUNCTION', {
+        heading, renderingType: String(renderingType)
+      });
+    }
   }
-};
-
-/**
- * 🛤️ 走行軌跡に座標を追加 - 修正版（初期化チェック追加）
- */
+}
 export const addPathPoint = (lat: number, lng: number) => {
   if (!globalPolylineInstance) {
     console.warn('⚠️ Polyline未初期化 - 座標追加スキップ');

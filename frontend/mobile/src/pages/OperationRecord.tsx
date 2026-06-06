@@ -1119,21 +1119,28 @@ const OperationRecord: React.FC = () => {
       
       console.log('✅ 休憩終了API成功:', response);
       
-      // 🔧 修正: operationStoreから休憩前のフェーズを復元
-      const previousPhase = operationStore.phase || 'TO_UNLOADING';
+      // 🔧 修正: operationStore.previousPhase から休憩前のフェーズを復元
+      // (operationStore.phaseはBREAKのため使用不可)
+      const restoredPhase = operationStore.previousPhase || 'TO_UNLOADING';
+      console.log('⏱️ 休憩終了: フェーズ復元', restoredPhase);
+      
+      // operationStoreのphaseも更新（永続化）
+      operationStore.setPhase(restoredPhase);
       
       // 休憩前のフェーズに戻る
       setOperation(prev => ({ 
         ...prev, 
-        phase: previousPhase
+        phase: restoredPhase
       }));
       
       toast.success('休憩を終了しました');
       
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     } catch (error) {
       console.error('❌ 休憩終了エラー:', error);
       toast.error('休憩終了に失敗しました');
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

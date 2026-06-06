@@ -245,7 +245,7 @@ export default function LogViewer() {
             }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <span style={{ color: '#8b949e', minWidth: 80, fontSize: 11 }}>
-                {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString('ja-JP') : ''}
+                {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false }) : ''}
               </span>
               <span style={{ minWidth: 50, fontWeight: 'bold', textTransform: 'uppercase', fontSize: 11 }}>
                 {entry.level}
