@@ -375,28 +375,18 @@ export const panMapToPosition = (lat: number, lng: number) => {
 export const setMapHeading = (heading: number) => {
   if (heading === null || heading === undefined || isNaN(heading)) return;
 
-  // マーカーのSVG矢印を常に更新（Raster/Vector共通）
+  // マーカーのSVG矢印を常に更新
   updateMarkerHeading(heading);
 
   if (!globalMapInstance) return;
 
-  try {
-    // VectorマップかどうかはrenderingTypeで判定
-    // ただしRenderingType APIが利用不可の場合もsetHeadingを試みる
-    const renderingType = globalMapInstance.getRenderingType?.();
-    const VECTOR = window.google?.maps?.RenderingType?.VECTOR;
-    const isVector = !VECTOR || !renderingType || (renderingType === VECTOR);
-    // ↑ RenderingType APIが使えない場合(= 古いSDK)はとりあえずsetHeadingを呼ぶ
-
-    if (isVector && typeof globalMapInstance.setHeading === 'function') {
+  // isVector判定廃止 - MapID+Vector設定済みのため直接setHeading呼び出し
+  if (typeof globalMapInstance.setHeading === 'function') {
+    try {
       globalMapInstance.setHeading(heading);
-      console.log(`🧭 Map.setHeading(${heading.toFixed(1)}°) 実行`);
-    } else {
-      console.log(`🧭 Rasterマップ: マーカーのみ回転 ${heading.toFixed(1)}°`);
+    } catch (e) {
+      console.warn('⚠️ setHeading:', String(e).substring(0, 80));
     }
-  } catch (e) {
-    // setHeadingが失敗しても続行
-    console.warn('⚠️ setMapHeading エラー:', String(e).substring(0, 100));
   }
 };
 
