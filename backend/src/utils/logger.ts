@@ -252,7 +252,12 @@ const level = (): string => {
  * カスタムログフォーマット定義
  */
 const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.timestamp({ format: () => {
+    return new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).replace(/\//g, '-');
+  } }),
   winston.format.errors({ stack: true }),
   winston.format.splat(),
   winston.format.json()

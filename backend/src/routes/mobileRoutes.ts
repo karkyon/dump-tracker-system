@@ -1514,6 +1514,18 @@ router.get('/summary/today',
   mobileController.getTodaysSummary
 );
 
+// 🐛 フロントエンドデバッグログAPI（認証不要・404ハンドラーより前に配置）
+// POST /api/v1/mobile/debug/log
+router.post(
+  '/debug/log',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { level = 'info', message, data } = req.body;
+    const safeLevel = ['error','warn','info','debug'].includes(level) ? level : 'info';
+    (logger as any)[safeLevel](`[FRONTEND] ${message}`, data || {});
+    res.json({ success: true });
+  })
+);
+
 // =====================================
 // 🚫 404ハンドラー
 // =====================================
@@ -1576,18 +1588,6 @@ logger.info('✅ routes/mobileRoutes.ts Swagger UI完全対応版 + 近隣地点
   middleware: 'auth + validation + Swagger integrated',
   timestamp: new Date().toISOString()
 });
-
-// 🐛 フロントエンドデバッグログAPI（認証不要）
-// POST /api/v1/mobile/debug/log
-router.post(
-  '/debug/log',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { level = 'info', message, data } = req.body;
-    const safeLevel = ['error','warn','info','debug'].includes(level) ? level : 'info';
-    (logger as any)[safeLevel](`[FRONTEND] ${message}`, data || {});
-    res.json({ success: true });
-  })
-);
 
 export default router;
 
