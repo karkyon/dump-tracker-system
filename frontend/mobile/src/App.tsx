@@ -26,6 +26,7 @@ import LoadingInput from './pages/LoadingInput';
 import OperationHistory from './pages/OperationHistory';  // 🆕 運行履歴画面
 import OperationHistoryDetail from './pages/OperationHistoryDetail';  // 🆕 D9a: 運行記録詳細画面
 import Settings from './pages/Settings';                  // 🆕 設定画面
+import MapTest from './pages/MapTest';                      // 🧪 マップテスト（認証不要）
 
 // =========================================================
 // BUG-042/TASK-003: 起動時にバックエンドAPIからGPS設定を同期
@@ -268,6 +269,9 @@ const App: React.FC = () => {
 
         {/* ルーティング設定 */}
         <Routes>
+          {/* 🧪 マップテスト（認証不要） */}
+          <Route path="/map-test" element={<MapTest />} />
+
           {/* パブリックルート */}
           <Route 
             path="/login" 
