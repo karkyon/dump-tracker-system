@@ -118,10 +118,10 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         const mapOptions: any = {
           center: centerPosition,
           zoom: 18,
-          // 🔧 DEMO_MAP_ID: GoogleのVector Map対応デモMapID（iOS Safariでも確実にVectorで動作）
-          // 旧バージョン(8bb68d4)で正常動作していた設定に戻す
+          // 🔧 VITE_GOOGLE_MAP_ID: Cloud ConsoleでVector有効済みのMapID（793b2cb3013694b0700a2152）
+          // hasMapId判定と一致させるため環境変数から取得。未設定時はDEMO_MAP_IDをフォールバック
           renderingType: renderingTypeValue ?? 'VECTOR',
-          mapId: 'DEMO_MAP_ID',
+          mapId: import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID',
           heading: 0,
           tilt: 0,
           disableDefaultUI: true,
@@ -254,7 +254,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     // &v=weekly: VectorマップとRenderingTypeを使うために必要
     // stable版ではRenderingType.VECTORが存在せずheadingUp無効になる
     // DEMO_MAP_ID をprecacheして確実にVector Mapを有効化
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&libraries=marker&v=weekly&map_ids=DEMO_MAP_ID`;
+    const mapIdParam = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&libraries=marker&v=weekly&map_ids=${mapIdParam}`;
     script.async = true;
     script.defer = true;
     
