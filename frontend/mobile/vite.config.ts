@@ -11,6 +11,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // 🔧 selfDestroying: スマホの古いSWキャッシュを完全削除させる
+      // これにより毎回サーバーから最新JSを取得するようになる
+      selfDestroying: true,
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'favicon.ico'],
       manifest: {
