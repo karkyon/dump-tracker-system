@@ -1304,12 +1304,15 @@ class TripService {
         ? `[手入力品目: ${completeCustomItemName}]${completeBaseNotes ? ' ' + completeBaseNotes : ''}`
         : completeBaseNotes || undefined;
 
+      // ✅ 修正: itemId が送られた場合のみ更新（未送信の場合は既存の itemId を維持）
+      const resolvedItemId = data.itemId ? data.itemId : (loadingDetail.itemId ?? undefined);
+
       // operation_detail更新（actualEndTime, itemId, quantityTons を設定）
       const updatedDetail = await this.operationDetailService.update(
         loadingDetail.id,
         {
           actualEndTime: data.endTime || new Date(),
-          itemId: data.itemId || undefined,
+          itemId: resolvedItemId,  // ✅ 修正: 既存 itemId を維持
           quantityTons: data.quantity !== undefined
             ? data.quantity
             : Number(loadingDetail.quantityTons),

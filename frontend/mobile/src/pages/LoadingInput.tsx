@@ -446,6 +446,12 @@ const LoadingInput: React.FC = () => {
 
       console.log('✅ 積込場所到着記録完了');
       console.log('📦 API応答:', response);
+      // ✅ 修正: 品目情報を operationStore に保存（積込完了ボタン押下時に使用）
+      if (formData.itemId || formData.customItemName) {
+        (operationStore as any).loadingItemId = formData.itemId || undefined;
+        (operationStore as any).loadingCustomItemName = formData.customItemName || undefined;
+        console.log('[D5] 品目情報をoperationStoreに保存:', { itemId: formData.itemId, customItemName: formData.customItemName });
+      }
 
       // REQ-020: 写真が選択されていればアップロード
       // recordLoadingArrival戻り値: APIResponse<ActivityRecordResponse> = { success, data: { id, ... }, message }

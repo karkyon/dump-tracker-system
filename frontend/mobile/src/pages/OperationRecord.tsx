@@ -953,10 +953,16 @@ const OperationRecord: React.FC = () => {
     }
     try {
       setIsSubmitting(true);
+      // ✅ 修正: operationStore に保存された品目情報を completeLoading に渡す
+      const loadingItemId = (operationStore as any).loadingItemId as string | undefined;
+      const loadingCustomItemName = (operationStore as any).loadingCustomItemName as string | undefined;
+      console.log('[D4-積込完了] 品目情報:', { loadingItemId, loadingCustomItemName });
       await retryWithBackoff(
         () => apiService.completeLoadingAtLocation(currentOperationId, {
           endTime: new Date(),
           notes: '積込完了',
+          ...(loadingItemId ? { itemId: loadingItemId } : {}),
+          ...(loadingCustomItemName ? { customItemName: loadingCustomItemName } : {}),
         }),
         3, 1000, '積込完了'
       );
