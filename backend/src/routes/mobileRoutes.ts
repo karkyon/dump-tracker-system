@@ -1514,6 +1514,69 @@ router.get('/summary/today',
   mobileController.getTodaysSummary
 );
 
+
+// ================================
+// 🚛 運行イベントログAPI（構造化）
+// POST /api/v1/mobile/events/log
+// 積込/荷降/給油/休憩の各イベントを構造化してバックエンドに記録
+// ================================
+router.post(
+  '/events/log',
+  authenticateToken(),
+  asyncHandler(async (req: Request, res: Response) => {
+    const {
+      eventType,    // LOADING_ARRIVED | LOADING_COMPLETED | UNLOADING_ARRIVED | UNLOADING_COMPLETED | BREAK_START | BREAK_END | FUELING | OPERATION_START | OPERATION_END
+      operationId,
+      operationNumber,
+      driverId,
+      driverName,
+      vehicleId,
+      vehiclePlateNumber,
+      locationId,
+      locationName,
+      locationAddress,
+      itemId,
+      itemName,
+      customItemName,
+      quantity,
+      unit,
+      fuelAmount,
+      fuelCostYen,
+      gps,          // { lat, lng, accuracy }
+      timestamp,
+      phase,
+      notes,
+      result,       // success | error
+      errorMessage,
+    } = req.body as Record<string, any>;
+
+    const user = (req as any).user;
+    const logMsg = `[OPERATION_EVENT] ${eventType || 'UNKNOWN'}`;
+
+    logger.info(logMsg, {
+      eventType,
+      operationId,
+      operationNumber,
+      driverId: driverId || user?.userId,
+      driverName: driverName || user?.name,
+      vehicleId,
+      vehiclePlateNumber,
+      location: locationName ? { id: locationId, name: locationName, address: locationAddress } : null,
+      item: (itemId || itemName || customItemName) ? { id: itemId, name: itemName, customName: customItemName } : null,
+      quantity: quantity !== undefined ? Number(quantity) : null,
+      unit: unit || null,
+      fuel: (fuelAmount !== undefined) ? { amount: Number(fuelAmount), costYen: fuelCostYen ? Number(fuelCostYen) : null } : null,
+      gps: gps ? { lat: Number(gps.lat), lng: Number(gps.lng), accuracy: gps.accuracy ? Number(gps.accuracy) : null } : null,
+      timestamp: timestamp || new Date().toISOString(),
+      phase: phase || null,
+      notes: notes || null,
+      result: result || 'success',
+      errorMessage: errorMessage || null,
+    });
+
+    res.json({ success: true, message: 'イベントログを記録しました' });
+  })
+);
 // 🐛 フロントエンドデバッグログAPI（認証不要・404ハンドラーより前に配置）
 // POST /api/v1/mobile/debug/log
 router.post(

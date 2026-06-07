@@ -474,6 +474,20 @@ const LoadingInput: React.FC = () => {
       console.log('🔄 フェーズ維持: AT_LOADING（積込確認完了・自動移動検知待ち）');
       operationStore.setPhase('AT_LOADING');
       operationStore.setLoadingLocation(formData.locationName, formData.locationId);
+      // 🚛 運行イベントログ（積込到着）
+      apiService.logOperationEvent({
+        eventType: 'LOADING_ARRIVED',
+        operationId: currentOperationId,
+        locationId: formData.locationId,
+        locationName: formData.locationName,
+        itemId: formData.itemId || undefined,
+        itemName: formData.itemName || undefined,
+        customItemName: formData.customItemName || undefined,
+        quantity: formData.quantity,
+        gps: position ? { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy } : undefined,
+        phase: 'AT_LOADING',
+        result: 'success',
+      }).catch(() => {});
 
       // 少し待機して状態更新を確実にする
       await new Promise(resolve => setTimeout(resolve, 500));

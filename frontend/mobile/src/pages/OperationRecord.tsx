@@ -962,6 +962,15 @@ const OperationRecord: React.FC = () => {
       setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
       operationStore.setPhase('TO_UNLOADING');
       toast.success('積込が完了しました。荷降場所へ移動してください。');
+      // 🚛 運行イベントログ
+      apiService.logOperationEvent({
+        eventType: 'LOADING_COMPLETED',
+        operationId: currentOperationId,
+        locationId: operationStore.loadingLocationId || undefined,
+        locationName: operationStore.loadingLocation || undefined,
+        phase: operationStore.phase,
+        result: 'success',
+      }).catch(() => {});
       setIsSubmitting(false);
     } catch (error) {
       console.error('積込完了エラー:', error);

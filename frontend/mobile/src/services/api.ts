@@ -973,6 +973,52 @@ class APIServiceClass {
     }
   }
 
+
+  // =============================================================================
+  // 運行イベントログAPI（構造化）
+  // =============================================================================
+
+  /**
+   * 運行イベントをバックエンドに構造化ログとして送信
+   * POST /api/v1/mobile/events/log
+   * 積込/荷降/給油/休憩 の各イベント発生時に呼び出す
+   */
+  async logOperationEvent(data: {
+    eventType: 'LOADING_ARRIVED' | 'LOADING_COMPLETED' | 'UNLOADING_ARRIVED' | 'UNLOADING_COMPLETED' |
+               'BREAK_START' | 'BREAK_END' | 'FUELING' | 'OPERATION_START' | 'OPERATION_END';
+    operationId?: string;
+    operationNumber?: string;
+    driverId?: string;
+    driverName?: string;
+    vehicleId?: string;
+    vehiclePlateNumber?: string;
+    locationId?: string;
+    locationName?: string;
+    locationAddress?: string;
+    itemId?: string;
+    itemName?: string;
+    customItemName?: string;
+    quantity?: number;
+    unit?: string;
+    fuelAmount?: number;
+    fuelCostYen?: number;
+    gps?: { lat: number; lng: number; accuracy?: number };
+    timestamp?: string;
+    phase?: string;
+    notes?: string;
+    result?: 'success' | 'error';
+    errorMessage?: string;
+  }): Promise<void> {
+    try {
+      await this.axiosInstance.post('/mobile/events/log', {
+        ...data,
+        timestamp: data.timestamp || new Date().toISOString(),
+      });
+    } catch {
+      // ログ送信失敗は無視（運行操作を妨げない）
+    }
+  }
+
   // =============================================================================
   // GPS位置情報API
   // =============================================================================
