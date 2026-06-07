@@ -1035,6 +1035,15 @@ const OperationRecord: React.FC = () => {
       departureAlertFiredRef.current = false;
 
       toast.success('荷降が完了しました。次の積込場所へ移動してください。');
+      // 🚛 運行イベントログ
+      apiService.logOperationEvent({
+        eventType: 'UNLOADING_COMPLETED',
+        operationId: currentOperationId,
+        locationId: unloadingLocationId || undefined,
+        locationName: operationStore.unloadingLocation || undefined,
+        phase: 'TO_LOADING',
+        result: 'success',
+      }).catch(() => {});
       setIsSubmitting(false);
 
     } catch (error) {
@@ -1087,6 +1096,14 @@ const OperationRecord: React.FC = () => {
         breakCount: prev.breakCount + 1
       }));
       toast.success('休憩を開始しました');
+      // 🚛 運行イベントログ
+      apiService.logOperationEvent({
+        eventType: 'BREAK_START',
+        operationId: currentOperationId,
+        gps: currentPosition ? { lat: currentPosition.coords.latitude, lng: currentPosition.coords.longitude, accuracy: currentPosition.coords.accuracy } : undefined,
+        phase: 'BREAK',
+        result: 'success',
+      }).catch(() => {});
       
       setIsSubmitting(false);
     } catch (error) {
@@ -1143,6 +1160,13 @@ const OperationRecord: React.FC = () => {
       }));
       
       toast.success('休憩を終了しました');
+      // 🚛 運行イベントログ
+      apiService.logOperationEvent({
+        eventType: 'BREAK_END',
+        operationId: currentOperationId,
+        phase: restoredPhase,
+        result: 'success',
+      }).catch(() => {});
       
       setIsSubmitting(false);
     } catch (error) {

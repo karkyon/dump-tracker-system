@@ -172,7 +172,21 @@ const LoadingConfirmation: React.FC = () => {
       operationStore.setPhase('AT_LOADING');
       
       // 🔧 修正: 積込場所情報も更新
-      operationStore.setLoadingLocation(loadingData.locationName, loadingData.locationId);  // REQ-019: locationId も保存
+      operationStore.setLoadingLocation(loadingData.locationName, loadingData.locationId);
+      // 🚛 運行イベントログ（積込到着 D5a経由）
+      apiService.logOperationEvent({
+        eventType: 'LOADING_ARRIVED',
+        operationId: currentOperationId,
+        locationId: loadingData.locationId,
+        locationName: loadingData.locationName,
+        itemId: loadingData.itemId || undefined,
+        itemName: loadingData.itemName || undefined,
+        customItemName: loadingData.customItemName || undefined,
+        quantity: loadingData.quantity,
+        gps: position ? { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy } : undefined,
+        phase: 'AT_LOADING',
+        result: 'success',
+      }).catch(() => {});  // REQ-019: locationId も保存
 
       // 運行ステータス更新を待つ(少し待機)
       await new Promise(resolve => setTimeout(resolve, 500));

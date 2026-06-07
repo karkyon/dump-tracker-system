@@ -149,6 +149,15 @@ const RefuelRecord: React.FC = () => {
 
       console.log('✅ 給油記録保存完了');
       toast.success('給油記録を保存しました');
+      // 🚛 運行イベントログ
+      apiService.logOperationEvent({
+        eventType: 'FUELING',
+        operationId: currentOperationId,
+        fuelAmount: fuelAmountNum,
+        fuelCostYen: fuelCostNum,
+        gps: gpsCoords.latitude ? { lat: gpsCoords.latitude, lng: gpsCoords.longitude!, accuracy: gpsCoords.accuracy } : undefined,
+        result: 'success',
+      }).catch(() => {});
       navigate('/operation-record');
       
       setIsSubmitting(false);
