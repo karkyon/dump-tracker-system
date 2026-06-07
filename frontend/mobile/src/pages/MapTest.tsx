@@ -51,6 +51,13 @@ const MapTest: React.FC = () => {
   };
 
   useEffect(() => {
+    // WebGL確認
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      addLog(`WebGL: ${gl ? '✅ 利用可能' : '❌ 利用不可'}`);
+    } catch(e) { addLog('WebGL: ❌ エラー'); }
+
     const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
     if (!apiKey) { setStatus('❌ APIキー未設定'); return; }
 
@@ -204,6 +211,24 @@ const MapTest: React.FC = () => {
             <div key={i} style={{ fontSize: '10px', color: i === 0 ? '#e5e7eb' : '#6b7280' }}>{l}</div>
           ))}
         </div>
+      </div>
+      {/* リンク */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.80)', padding: '8px 14px',
+        display: 'flex', gap: '8px', flexWrap: 'wrap',
+      }}>
+        <a href="https://developers.google.com/maps/documentation/javascript/examples/webgl/webgl-tilt-rotation"
+           target="_blank" rel="noreferrer"
+           style={{ color: '#60a5fa', fontSize: '11px', textDecoration: 'underline' }}>
+          📖 Google公式 Vector/Tilt/Rotation サンプル
+        </a>
+        <span style={{ color: '#6b7280', fontSize: '11px' }}>|</span>
+        <a href="https://maps.googleapis.com/maps/api/js?key=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk&callback=Function.prototype&v=weekly"
+           target="_blank" rel="noreferrer"
+           style={{ color: '#34d399', fontSize: '11px', textDecoration: 'underline' }}>
+          🔗 Maps API直接ロード確認
+        </a>
       </div>
       {/* マップ */}
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
