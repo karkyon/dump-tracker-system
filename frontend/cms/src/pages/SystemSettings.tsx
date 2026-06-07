@@ -441,8 +441,19 @@ const SystemSettings: React.FC = () => {
   };
 
   // =====================================
-  // ⑤ システムログ モックデータ・もっと見るロジック
+  // ⑤ システムログ: 実API（combined.log のユーザー操作ログ抽出）
   // =====================================
+  const [activityLogs, setActivityLogs] = React.useState<{timestamp:string;level:string;message:string}[]>([]);
+  const [activityLoading, setActivityLoading] = React.useState(false);
+  React.useEffect(() => {
+    if (activeTab !== 'logs') return;
+    setActivityLoading(true);
+    fetch(`${API_BASE_URL}/logs/activity?lines=100`, { headers: getAuthHeaders() })
+      .then(r => r.json()).then(j => { setActivityLogs(j.data?.logs || []); })
+      .catch(() => {})
+      .finally(() => setActivityLoading(false));
+  }, [activeTab]);
+  // (旧 mockLogs 削除済み)
   const mockLogs = [
     {
       id: '1',
@@ -510,9 +521,9 @@ const SystemSettings: React.FC = () => {
     },
   ];
 
-  /** ⑤ 現在表示するログ（displayedLogsCount 件） */
-  const displayedLogs = mockLogs.slice(0, displayedLogsCount);
-  const hasMoreLogs   = displayedLogsCount < mockLogs.length;
+  /** ⑤ 現在表示するログ（実API取得データ使用） */
+  const displayedLogs = activityLogs.slice(0, displayedLogsCount);
+  const hasMoreLogs   = displayedLogsCount < activityLogs.length;
 
   /** ⑤ もっと見るボタンクリック: LOG_PAGE_SIZE 件追加表示 */
   const handleLoadMoreLogs = () => {

@@ -276,6 +276,12 @@ const ServerLogLevelTab: React.FC = () => {
   };
 
   useEffect(() => {
+    // 現在のサーバーLogLvを取得
+    (apiClient.get('/logs/current-level') as any).then((res: any) => {
+      const lv = res.data?.data?.level || res.data?.level;
+      if (lv) setCurrentLevel(lv);
+    }).catch(()=>{});
+    // ログ設定を取得
     (apiClient.get('/logs/config') as any).then((res: any) => {
       const d = res.data?.data || res.data;
       if (d && d.maxArchives) setLogConfig(d);
@@ -392,6 +398,122 @@ const ServerLogLevelTab: React.FC = () => {
 };
 
 // ════════════════════════════════════════════════════════════
+// サーバー状態タブ
+// ════════════════════════════════════════════════════════════
+interface ServerStatus {
+  timestamp: string;
+  cpu: { cores: number; model: string; loadAvg1m: string; loadAvg5m: string; loadAvg15m: string };
+  memory: { totalMB: string; usedMB: string; freeMB: string; usedPercent: string; nodeHeapUsedMB: string; nodeHeapTotalMB: string; nodeRssMB: string };
+  disk: { total: string; used: string; free: string; usedPercent: string };
+  logFile: { sizeMB: string; path: string };
+  ports: Record<number, boolean>;
+  services: { backendSystemd: string; nodeUptime: string; pid: number; nodeVersion: string; platform: string };
+  logLevel: string;
+}
+
+const ServerStatusTab: React.FC = () => {
+  const [status, setStatus] = React.useState<ServerStatus | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [lastUpdated, setLastUpdated] = React.useState('');
+
+  const fetchStatus = async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/logs/server-status') as any;
+      const d = res.data?.data || res.data;
+      setStatus(d);
+      setLastUpdated(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' }));
+    } catch (e: any) {
+      alert(`取得失敗: ${e.message}`);
+    } finally { setLoading(false); }
+  };
+
+  React.useEffect(() => { fetchStatus(); }, []);
+
+  const badge = (ok: boolean, t: string, f: string) => (
+    <span className={`px-2 py-0.5 rounded text-xs font-bold ${ok ? 'bg-green-900/50 text-green-400 border border-green-700' : 'bg-red-900/50 text-red-400 border border-red-700'}`}>
+      {ok ? `✅ ${t}` : `❌ ${f}`}
+    </span>
+  );
+
+  const PORT_LABELS: Record<number, string> = { 3000: 'Backend API', 3001: 'CMS dev', 3002: 'Mobile dev', 3003: 'CMS prod', 5432: 'PostgreSQL' };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={fetchStatus} disabled={loading}
+          className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded disabled:opacity-50">
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''}/>更新
+        </button>
+        {lastUpdated && <span className="text-xs text-gray-500">最終更新: {lastUpdated}</span>}
+      </div>
+
+      {!status ? (
+        <div className="text-gray-400 text-sm py-8 text-center">{loading ? '取得中...' : 'データなし'}</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* CPU */}
+          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">CPU</h4>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-gray-400">コア数</span><span className="text-white">{status.cpu.cores}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Load (1m)</span><span className={parseFloat(status.cpu.loadAvg1m) > status.cpu.cores * 0.8 ? 'text-red-400' : 'text-green-400'}>{status.cpu.loadAvg1m}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Load (5m)</span><span className="text-gray-200">{status.cpu.loadAvg5m}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Load (15m)</span><span className="text-gray-200">{status.cpu.loadAvg15m}</span></div>
+            </div>
+          </div>
+
+          {/* Memory */}
+          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">メモリ</h4>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-gray-400">使用率</span><span className={parseFloat(status.memory.usedPercent) > 80 ? 'text-red-400' : 'text-green-400'}>{status.memory.usedPercent}%</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">使用/総計</span><span className="text-gray-200">{status.memory.usedMB} / {status.memory.totalMB} MB</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Node Heap</span><span className="text-gray-200">{status.memory.nodeHeapUsedMB}/{status.memory.nodeHeapTotalMB} MB</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Node RSS</span><span className="text-gray-200">{status.memory.nodeRssMB} MB</span></div>
+            </div>
+          </div>
+
+          {/* Disk */}
+          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">ディスク (/)</h4>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-gray-400">使用率</span><span className={parseInt(status.disk.usedPercent) > 80 ? 'text-red-400' : 'text-green-400'}>{status.disk.usedPercent}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">使用/総計</span><span className="text-gray-200">{status.disk.used} / {status.disk.total}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">空き</span><span className="text-gray-200">{status.disk.free}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">ログファイル</span><span className="text-yellow-400">{status.logFile.sizeMB} MB</span></div>
+            </div>
+          </div>
+
+          {/* Services & Ports */}
+          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">サービス・ポート</h4>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Backend systemd</span>
+                {badge(status.services.backendSystemd === 'active', 'active', status.services.backendSystemd)}
+              </div>
+              <div className="flex justify-between"><span className="text-gray-400">稼働時間</span><span className="text-gray-200">{status.services.nodeUptime}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">PID</span><span className="text-gray-200">{status.services.pid}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Node.js</span><span className="text-gray-200">{status.services.nodeVersion}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">ログLv</span><span className="text-blue-300 font-mono">{status.logLevel}</span></div>
+              <div className="mt-2 pt-2 border-t border-gray-700 space-y-1">
+                {Object.entries(status.ports).map(([port, open]) => (
+                  <div key={port} className="flex justify-between items-center">
+                    <span className="text-gray-400 font-mono">:{port} <span className="text-gray-500 text-xs">{PORT_LABELS[Number(port)] || ''}</span></span>
+                    {badge(open, 'OPEN', 'CLOSED')}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════
 // メインページ
 // ════════════════════════════════════════════════════════════
 const DEVELOPER_TABS = [
@@ -400,6 +522,7 @@ const DEVELOPER_TABS = [
   { id: 'gps-inspector', label: 'GPS Inspector',         icon: Satellite },
   { id: 'op-debug',      label: '運行・点検デバッグ',    icon: FileText  },
   { id: 'data-cleanup',  label: 'データクリーンアップ',  icon: Database  },
+  { id: 'server-status', label: 'サーバー状態',          icon: Settings  },
 ] as const;
 type DevTabId = typeof DEVELOPER_TABS[number]['id'];
 
@@ -462,6 +585,7 @@ const DeveloperTools: React.FC = () => {
         {activeTab === 'gps-inspector' && <GpsInspector/>}
         {activeTab === 'op-debug'      && <OperationDebug/>}
         {activeTab === 'data-cleanup'  && <DevDataCleanup/>}
+        {activeTab === 'server-status' && <ServerStatusTab/>}
       </div>
     </div>
   );
