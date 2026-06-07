@@ -269,8 +269,7 @@ const App: React.FC = () => {
 
         {/* ルーティング設定 */}
         <Routes>
-          {/* MapTest / MapLibreTest は削除済み (Vector Map調査完了) */
-
+          {/* MapTest / MapLibreTest は削除済み (Vector Map調査完了) */}
           {/* パブリックルート */}
           <Route 
             path="/login" 
