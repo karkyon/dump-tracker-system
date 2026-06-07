@@ -108,27 +108,13 @@ export const NAVIGATION_ITEMS = [
     icon: 'MessageSquare',
     adminOnly: true,  // ADMIN / MANAGER のみ
   },
-    {
-    id: 'gps-inspector',
-    name: 'GPS Inspector',
-    path: '/gps-inspector',
-    icon: 'Satellite',
-    adminOnly: true
-  },
+    // 開発者ツール統合ページ（ADMIN専用）
   {
-    id: 'log-viewer',
-    name: 'ログビューア',
-    path: '/log-viewer',
+    id: 'developer',
+    name: '開発者ツール',
+    path: '/developer',
     icon: 'Bug',
-    adminOnly: true
-  },
-  // デバッグメニュー（管理者専用）
-  {
-    id: 'debug',
-    name: '運行・点検デバッグ',
-    path: '/debug/operations',
-    icon: 'Bug',
-    adminOnly: true  // 管理者のみ表示
+    adminOnly: true,
   },
 ] as const;
 

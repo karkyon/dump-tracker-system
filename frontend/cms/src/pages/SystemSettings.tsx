@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { AlertTriangle, Building2, Link2, Save, Settings, Trash2, Upload, Download } from 'lucide-react';
+import { AlertTriangle, Building2, Save, Settings, Trash2, Upload, Download } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { API_BASE_URL } from '../utils/constants';
@@ -260,10 +260,10 @@ const SystemSettings: React.FC = () => {
   // =====================================
   const tabs = [
     { id: 'general',   label: '一般設定',   icon: Settings      },
-    { id: 'operation', label: '運行設定',   icon: Settings      },  // 🆕 離脱検知距離等
+    { id: 'operation', label: '運行設定',   icon: Settings      },
     { id: 'business',  label: '事業者情報', icon: Building2     },
     { id: 'logs',      label: 'ログ管理',   icon: AlertTriangle },
-    { id: 'integration', label: '連携設定',   icon: Link2 },
+    // 連携設定（APIキー等）は開発者ツール (/developer) へ移動
   ];
 
   // =====================================

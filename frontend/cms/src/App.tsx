@@ -1,6 +1,7 @@
 // frontend/cms/src/App.tsx - 完全修正版: 既存機能保持 + Layout統合 + OperationDebugルート追加
 import React, { useEffect } from 'react';
 import LogViewer from './pages/LogViewer';
+import DeveloperTools from './pages/DeveloperTools';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
@@ -271,14 +272,14 @@ const App: React.FC = () => {
               <Route path="feedback" element={<FeedbackList />} />
               <Route path="feedback/:id" element={<FeedbackDetail />} />
 
-              {/* ログビューア（管理者専用） */}
+              {/* ログビューア（後方互換 URL） */}
               <Route path="log-viewer" element={<LogViewer />} />
-
-              {/* GPS Inspector（管理者専用） */}
+              {/* GPS Inspector（後方互換 URL） */}
               <Route path="gps-inspector" element={<GpsInspector />} />
-
-              {/* 🛠️ UAT準備 データクリーンアップ（ADMIN専用） */}
+              {/* データクリーンアップ（後方互換 URL） */}
               <Route path="dev/data-cleanup" element={<DevDataCleanup />} />
+              {/* 🛠️ 開発者ツール統合ページ（ADMIN専用） */}
+              <Route path="developer" element={<DeveloperTools />} />
               
               {/* システム設定 */}
               <Route path="settings" element={<SystemSettings />} />
