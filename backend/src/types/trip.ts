@@ -283,6 +283,7 @@ export interface AddActivityRequest extends OperationDetailCreateDTO {
   startTime?: Date;  // 🆕 オプションに変更（自動設定可能）
   endTime?: Date;
   notes?: string;
+  customItemName?: string;  // ✅ 手入力品目名（tripService.addActivityでnotesに変換）
   // 既存のgpsLocationオブジェクト（下位互換性維持）
   gpsLocation?: {
     latitude: number;
