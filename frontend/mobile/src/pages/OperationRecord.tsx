@@ -931,6 +931,7 @@ const OperationRecord: React.FC = () => {
    * POST /trips/:id/loading/start で actualStartTime を記録
    */
   const handleLoadingStart = () => {
+    console.log('[D4-ボタン] 積込開始ボタン押下:', { operationId: operationStore.operationId, phase: operation.phase, loadingLocation: operationStore.loadingLocation });
     // ④修正: API呼び出しなし（LoadingInputで既にLOADINGレコード作成済み）
     // フェーズをLOADING_IN_PROGRESSに変更するのみ
     setOperation(prev => ({ ...prev, phase: 'LOADING_IN_PROGRESS' }));
@@ -945,6 +946,7 @@ const OperationRecord: React.FC = () => {
    */
   const handleLoadingComplete = async () => {
     const currentOperationId = operationStore.operationId;
+    console.log('[D4-ボタン] 積込完了ボタン押下:', { operationId: currentOperationId, phase: operation.phase, loadingLocation: operationStore.loadingLocation, loadingLocationId: operationStore.loadingLocationId });
     if (!currentOperationId) {
       toast.error('運行IDが見つかりません');
       return;
@@ -1002,6 +1004,7 @@ const OperationRecord: React.FC = () => {
         return;
       }
 
+      console.log('[D4-ボタン] 荷降完了ボタン押下:', JSON.stringify({ operationId: currentOperationId, phase: operation.phase, unloadingLocation: operationStore.unloadingLocation, unloadingLocationId: operationStore.unloadingLocationId }));
       console.log('📦 荷降完了API呼び出し:', {
         tripId: currentOperationId
       });
@@ -1070,6 +1073,7 @@ const OperationRecord: React.FC = () => {
         return;
       }
       
+      console.log('[D4-ボタン] 休憩開始ボタン押下:', { operationId: currentOperationId, phase: operation.phase, gps: currentPosition ? { lat: currentPosition.coords.latitude, lng: currentPosition.coords.longitude } : null });
       console.log('☕ 休憩開始処理開始:', currentOperationId);
       
       // BUG-019: リトライ付き
@@ -1130,6 +1134,7 @@ const OperationRecord: React.FC = () => {
         return;
       }
       
+      console.log('[D4-ボタン] 休憩終了ボタン押下:', { operationId: currentOperationId, phase: operation.phase, previousPhase: operationStore.previousPhase });
       console.log('⏱️ 休憩終了処理開始:', currentOperationId);
       
       // BUG-019: リトライ付き

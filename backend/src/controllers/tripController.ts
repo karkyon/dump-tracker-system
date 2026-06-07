@@ -704,6 +704,8 @@ export class TripController {
         startTime: activityData.startTime || new Date(),
         endTime: activityData.endTime,
         notes: activityData.notes || '',
+        // ✅ 手入力品目名（tripService.addActivity で notes に変換）
+        ...(activityData.customItemName ? { customItemName: activityData.customItemName } : {}),
         // 🆕 GPS データを operation_details に保存
         latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude ? Number(activityData.longitude) : undefined,

@@ -1553,6 +1553,34 @@ router.post(
     const user = (req as any).user;
     const logMsg = `[OPERATION_EVENT] ${eventType || 'UNKNOWN'}`;
 
+    // ✅ fs 直接書き込み（/debug/log と同じ方式で combined.log に確実に保存）
+    const _fs = require('fs');
+    const _path = require('path');
+    const _eventLogData = {
+      eventType, operationId, operationNumber,
+      driverId: driverId || user?.userId,
+      driverName: driverName || user?.name,
+      vehicleId, vehiclePlateNumber,
+      location: locationName ? { id: locationId, name: locationName, address: locationAddress } : null,
+      item: (itemId || itemName || customItemName) ? { id: itemId, name: itemName, customName: customItemName } : null,
+      quantity: quantity !== undefined ? Number(quantity) : null,
+      unit: unit || null,
+      fuel: (fuelAmount !== undefined) ? { amount: Number(fuelAmount), costYen: fuelCostYen ? Number(fuelCostYen) : null } : null,
+      gps: gps ? { lat: Number(gps.lat), lng: Number(gps.lng), accuracy: gps.accuracy ? Number(gps.accuracy) : null } : null,
+      timestamp: timestamp || new Date().toISOString(),
+      phase: phase || null,
+      notes: notes || null,
+      result: result || 'success',
+      errorMessage: errorMessage || null,
+    };
+    const _eventLine = JSON.stringify({
+      timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false }),
+      level: 'info',
+      message: logMsg,
+      data: _eventLogData,
+    }) + '\n';
+    _fs.appendFileSync(_path.join(process.cwd(), 'logs', 'combined.log'), _eventLine);
+
     logger.info(logMsg, {
       eventType,
       operationId,

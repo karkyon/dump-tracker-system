@@ -129,6 +129,15 @@ const RefuelRecord: React.FC = () => {
         console.warn('⚠️ GPS座標取得失敗（記録は続行）:', gpsError);
       }
 
+      console.log('[D7-ボタン] 給油保存ボタン押下:', JSON.stringify({
+        operationId: currentOperationId,
+        fuelAmount: fuelAmountNum,
+        fuelCost: fuelCostNum,
+        fuelStation: fuelStation || null,
+        mileageAtRefuel: mileageAtRefuelNum || null,
+        notes: notes || null,
+        gps: gpsCoords,
+      }));
       console.log('⛽ 給油記録保存開始:', {
         tripId: currentOperationId,
         fuelAmount: fuelAmountNum,

@@ -266,6 +266,9 @@ const LoadingInput: React.FC = () => {
       const firstItemId = newSelection.length > 0 && newSelection[0] ? newSelection[0] : '';
       const firstItemName = selectedItems.length > 0 && selectedItems[0] ? selectedItems[0].name : '';
 
+      const itemName = items.find(i => i.id === itemId)?.name || itemId;
+      console.log(`[D5-品目] ${isSelected ? '解除' : '選択'}: itemId=${itemId} name=${itemName} 選択後一覧=[${newSelection.map(id => items.find(i=>i.id===id)?.name||id).join(',')}]`);
+
       return {
         ...prev,
         selectedItemIds: newSelection,
@@ -278,12 +281,15 @@ const LoadingInput: React.FC = () => {
 
   /** 「その他」手入力ハンドラー */
   const handleCustomItemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, customItemName: e.target.value }));
+    const val = e.target.value;
+    console.log(`[D5-手入力品目] 入力変更: "${val}"`);
+    setFormData(prev => ({ ...prev, customItemName: val }));
   };
 
   /** 数量入力ハンドラー */
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    console.log(`[D5-数量] 入力変更: "${value}"`);
     setFormData(prev => ({
       ...prev,
       quantity: value ? parseFloat(value) : undefined,
@@ -405,10 +411,21 @@ const LoadingInput: React.FC = () => {
       }
 
       console.log('🚛 積込場所到着記録API呼び出し開始');
-      console.log('📍 運行ID:', currentOperationId);
-      console.log('📍 地点ID:', formData.locationId);
-      console.log('📍 品目:', formData.itemName || formData.customItemName);
-      console.log('📍 複数品目:', formData.selectedItemNames);
+      console.log('[D5-送信] 積込確認ボタン押下:', JSON.stringify({
+        operationId: currentOperationId,
+        locationId: formData.locationId,
+        locationName: formData.locationName,
+        clientName: formData.clientName,
+        selectedItemIds: formData.selectedItemIds,
+        selectedItemNames: formData.selectedItemNames,
+        itemId: formData.itemId,
+        itemName: formData.itemName,
+        customItemName: formData.customItemName,
+        quantity: formData.quantity,
+        notes: formData.notes,
+        cargoConfirmed: formData.cargoConfirmed,
+        gps: { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy },
+      }));
 
       // 品目IDの決定
       const itemId = formData.itemId || undefined;
