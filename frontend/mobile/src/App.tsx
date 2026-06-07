@@ -26,7 +26,7 @@ import LoadingInput from './pages/LoadingInput';
 import OperationHistory from './pages/OperationHistory';  // 🆕 運行履歴画面
 import OperationHistoryDetail from './pages/OperationHistoryDetail';  // 🆕 D9a: 運行記録詳細画面
 import Settings from './pages/Settings';                  // 🆕 設定画面
-// MapTest / MapLibreTest は Vector Map調査完了により削除
+{/* MapTest / MapLibreTest は Vector Map調査完了により削除 */}
 
 // =========================================================
 // BUG-042/TASK-003: 起動時にバックエンドAPIからGPS設定を同期

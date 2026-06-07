@@ -444,14 +444,12 @@ const SystemSettings: React.FC = () => {
   // ⑤ システムログ: 実API（combined.log のユーザー操作ログ抽出）
   // =====================================
   const [activityLogs, setActivityLogs] = React.useState<{timestamp:string;level:string;message:string}[]>([]);
-  const [activityLoading, setActivityLoading] = React.useState(false);
   React.useEffect(() => {
     if (activeTab !== 'logs') return;
-    setActivityLoading(true);
     fetch(`${API_BASE_URL}/logs/activity?lines=100`, { headers: getAuthHeaders() })
       .then(r => r.json()).then(j => { setActivityLogs(j.data?.logs || []); })
       .catch(() => {})
-      .finally(() => setActivityLoading(false));
+      .finally(() => {});
   }, [activeTab]);
   // (旧 mockLogs 削除済み)
   const mockLogs = [
@@ -1156,8 +1154,8 @@ const SystemSettings: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {displayedLogs.map(log => (
-                    <tr key={log.id} className="hover:bg-gray-50">
+                  {displayedLogs.map((log, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {log.timestamp}
                       </td>
@@ -1165,13 +1163,13 @@ const SystemSettings: React.FC = () => {
                         {getLogLevelBadge(log.level)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {log.category}
+                        —
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
                         {log.message}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {log.ip}
+                        —
                       </td>
                     </tr>
                   ))}

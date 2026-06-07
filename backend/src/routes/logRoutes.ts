@@ -278,7 +278,12 @@ router.get('/server-status', authenticateToken(), requireAdmin, asyncHandler(asy
   };
   try {
     const dfOut = execSync("df -h / | tail -1").toString().trim().split(/\s+/);
-    diskInfo = { total: dfOut[1] || '?', used: dfOut[2] || '?', free: dfOut[3] || '?', usedPercent: dfOut[4] || '?' };
+    diskInfo = {
+      total:       (dfOut[1] as string) || '?',
+      used:        (dfOut[2] as string) || '?',
+      free:        (dfOut[3] as string) || '?',
+      usedPercent: (dfOut[4] as string) || '?',
+    };
   } catch {}
 
   // ログファイルサイズ
