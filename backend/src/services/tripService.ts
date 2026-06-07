@@ -1123,7 +1123,7 @@ class TripService {
         actualStartTime: activityData.startTime,
         actualEndTime: activityData.endTime,
         quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
-        notes: activityData.notes || '',
+        notes: resolvedNotes,  // ✅ 修正: activityData.notes || '' → resolvedNotes（手入力品目名を含む）
         // 🆕 GPS位置情報マッピング
         latitude: activityData.latitude,
         longitude: activityData.longitude,
@@ -1297,6 +1297,13 @@ class TripService {
         sequenceNumber: loadingDetail.sequenceNumber
       });
 
+      // ✅ 手入力品目名が含まれる場合は notes に反映（addActivityと同様のロジック）
+      const completeCustomItemName = (data as any).customItemName as string | undefined;
+      const completeBaseNotes = data.notes || (loadingDetail.notes as string | null | undefined) || '';
+      const completeResolvedNotes = completeCustomItemName && !completeBaseNotes.includes('[手入力品目:')
+        ? `[手入力品目: ${completeCustomItemName}]${completeBaseNotes ? ' ' + completeBaseNotes : ''}`
+        : completeBaseNotes || undefined;
+
       // operation_detail更新（actualEndTime, itemId, quantityTons を設定）
       const updatedDetail = await this.operationDetailService.update(
         loadingDetail.id,
@@ -1306,7 +1313,7 @@ class TripService {
           quantityTons: data.quantity !== undefined
             ? data.quantity
             : Number(loadingDetail.quantityTons),
-          notes: data.notes || loadingDetail.notes || undefined,
+          notes: completeResolvedNotes,  // ✅ 修正: 手入力品目名を含む
           // 🆕 GPS座標を operation_details に保存
           latitude: data.latitude ? Number(data.latitude) : undefined,
           longitude: data.longitude ? Number(data.longitude) : undefined,

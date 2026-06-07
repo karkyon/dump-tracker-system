@@ -176,6 +176,8 @@ export interface CompleteLoadingRequest {
   longitude?: number;        // GPS経度（オプション）
   accuracy?: number;         // GPS測位精度（メートル）
   notes?: string;            // メモ（オプション）
+  customItemName?: string;   // ✅ 手入力品目名（notesに変換してDB保存）
+  selectedItemIds?: string[]; // ✅ 複数品目ID
 }
 
 // 🆕 D5/D6機能: 積込・積降記録レスポンス
