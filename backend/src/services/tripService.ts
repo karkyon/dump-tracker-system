@@ -1107,6 +1107,13 @@ class TripService {
       });
 
       // ✅ 修正: OperationDetailCreateDTO型に完全対応 + locationId空文字列対応
+      // ✅ 手入力品目名が含まれる場合は notes に反映
+      const customItemName = (activityData as any).customItemName as string | undefined;
+      const baseNotes = activityData.notes || '';
+      const resolvedNotes = customItemName && !baseNotes.includes('[手入力品目:')
+        ? `[手入力品目: ${customItemName}]${baseNotes ? ' ' + baseNotes : ''}`
+        : baseNotes;
+
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
         locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,

@@ -110,6 +110,7 @@ export interface RecordLoadingArrivalRequest {
   arrivalTime?: Date | string; // 到着時刻（省略時は現在時刻）
   itemId?: string;           // 品目ID（オプション）
   selectedItemIds?: string[];  // ✅ 複数品目ID
+  customItemName?: string;   // ✅ 手入力品目名（マスタにない場合）
   quantity?: number;         // 積載量（オプション）
   notes?: string;            // メモ（オプション）
 }

@@ -422,8 +422,9 @@ const LoadingInput: React.FC = () => {
         arrivalTime: new Date(),
         itemId: itemId,
         selectedItemIds: formData.selectedItemIds.length > 0 ? formData.selectedItemIds : undefined,
+        customItemName: formData.customItemName || undefined,  // ✅ 手入力品目名
         quantity: formData.quantity,
-        notes: formData.notes || undefined,  // ✅ 自由記述のみ
+        notes: formData.notes || undefined,
       });
 
       console.log('✅ 積込場所到着記録完了');
