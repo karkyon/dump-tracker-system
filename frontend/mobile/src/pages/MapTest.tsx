@@ -138,11 +138,12 @@ const MapTest: React.FC = () => {
     window.initMapTest = init;
     const s = document.createElement('script');
     s.id = 'google-maps-script-test';
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMapTest&v=weekly`;
+    // &loading=async は Google公式でVector Mode必須パラメータ（URLパラメータ。script.async属性とは別物）
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initMapTest&v=weekly`;
     s.async=true; s.defer=true;
     s.onerror = () => { setStatus('❌ scriptロードエラー'); addLog('ERROR: script失敗'); };
     document.head.appendChild(s);
-    addLog(`script: &v=weekly (libraries=markerなし) key=${isOff2?'公式':'自前'}`);
+    addLog(`script: &loading=async&v=weekly (libraries=markerなし) key=${isOff2?'公式':'自前'}`);
 
     return () => { if (itvRef.current) clearInterval(itvRef.current); };
   }, []);
