@@ -308,15 +308,15 @@ const ServerLogLevelTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* サーバーLogLv */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-yellow-800/60">
+      <div className="bg-amber-50 rounded-xl p-5 border border-yellow-300">
         <div className="flex items-center gap-2 mb-2">
-          <span className="px-2 py-0.5 bg-yellow-900/60 text-yellow-400 text-xs font-bold rounded border border-yellow-700">
+          <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded border border-yellow-300">
             ⚠️ 開発者専用
           </span>
           <h3 className="text-sm font-bold text-yellow-700">サーバーログレベル動的変更</h3>
         </div>
         <div className="text-xs text-gray-600 mb-2 space-y-1">
-          <p>バックエンドサーバーがファイルに<strong className="text-yellow-300">書き込むログの種類</strong>をリアルタイムで制御します。</p>
+          <p>バックエンドサーバーがファイルに<strong className="text-yellow-700">書き込むログの種類</strong>をリアルタイムで制御します。</p>
           <p className="text-red-600">⚠️ 再起動するとリセット。永続化は <code className="bg-gray-100 px-1 rounded text-gray-700">backend/.env</code> の <code className="bg-gray-100 px-1 rounded text-gray-700">LOG_LEVEL</code> を変更してください。</p>
           <p className="text-gray-500">※ ログビューアの「表示フィルター」とは別物です。表示フィルターは取得データの絞り込みで、書き込みには影響しません。</p>
         </div>
@@ -431,20 +431,20 @@ const ServerStatusTab: React.FC = () => {
   React.useEffect(() => { fetchStatus(); }, []);
 
   const badge = (ok: boolean, t: string, f: string) => (
-    <span className={`px-2 py-0.5 rounded text-xs font-bold ${ok ? 'bg-green-900/50 text-green-400 border border-green-700' : 'bg-red-900/50 text-red-400 border border-red-700'}`}>
+    <span className={`px-2 py-0.5 rounded text-xs font-bold ${ok ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>
       {ok ? `✅ ${t}` : `❌ ${f}`}
     </span>
   );
 
-  const PORT_LABELS: Record<number, string> = { 3000: 'Backend内部(nginx経由)', 3001: 'CMS dev(開発専用)', 3002: 'Mobile dev(開発専用)', 3003: 'CMS prod(nginx)', 5432: 'PostgreSQL' };
+  const PORT_LABELS: Record<number, string> = { 80: 'HTTP (nginx→HTTPS redirect)', 443: 'HTTPS (Mobile/CMS nginx)', 3000: 'Backend内部 (nginxがproxy)', 3003: 'CMS prod (nginx)', 5432: 'PostgreSQL' };
   // staging での期待状態: 3003/5432=OPEN, 3000/3001/3002=CLOSED(正常)
-  const PORT_EXPECTED_OPEN: Record<number, boolean> = { 3000: false, 3001: false, 3002: false, 3003: true, 5432: true };
+  const PORT_EXPECTED_OPEN: Record<number, boolean> = { 80: true, 443: true, 3000: false, 3003: true, 5432: true };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <button onClick={fetchStatus} disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded disabled:opacity-50">
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded disabled:opacity-50">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''}/>更新
         </button>
         {lastUpdated && <span className="text-xs text-gray-500">最終更新: {lastUpdated}</span>}
@@ -458,7 +458,7 @@ const ServerStatusTab: React.FC = () => {
           <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
             <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">CPU</h4>
             <div className="space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-gray-600">コア数</span><span className="text-white">{status.cpu.cores}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">コア数</span><span className="text-gray-900 font-medium">{status.cpu.cores}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Load (1m)</span><span className={parseFloat(status.cpu.loadAvg1m) > status.cpu.cores * 0.8 ? 'text-red-400' : 'text-green-400'}>{status.cpu.loadAvg1m}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Load (5m)</span><span className="text-gray-700">{status.cpu.loadAvg5m}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Load (15m)</span><span className="text-gray-700">{status.cpu.loadAvg15m}</span></div>

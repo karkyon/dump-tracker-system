@@ -278,7 +278,7 @@ router.get('/server-status', authenticateToken(), requireAdmin, asyncHandler(asy
   let logFileSizeMB = '0.00';
   try { logFileSizeMB = (fs.statSync(logPath).size / 1024 / 1024).toFixed(2); } catch {}
 
-  const checkPorts = [3000, 3001, 3002, 3003, 5432];
+  const checkPorts = [80, 443, 3000, 3003, 5432];
   const portStatus: Record<number, boolean> = {};
   for (const port of checkPorts) {
     try {
