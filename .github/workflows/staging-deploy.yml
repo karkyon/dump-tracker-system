@@ -64,6 +64,12 @@ jobs:
             # CORS_ORIGIN設定
             BACKEND_ENV=~/projects/dump-tracker/backend/.env
             # ✅ Fix②: JWT有効期限を24hに設定（デフォルト15mがログアウト根本原因）
+            # ✅ PORT=3000を確実に設定（3001になるとnginxプロキシが失敗する）
+            if grep -q "^PORT=" "$BACKEND_ENV" 2>/dev/null; then
+              sed -i 's|^PORT=.*|PORT=3000|' "$BACKEND_ENV"
+            else
+              echo "PORT=3000" >> "$BACKEND_ENV"
+            fi
             if grep -q "JWT_EXPIRES_IN" "$BACKEND_ENV" 2>/dev/null; then
               sed -i 's|JWT_EXPIRES_IN=.*|JWT_EXPIRES_IN=24h|' "$BACKEND_ENV"
             else
