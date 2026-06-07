@@ -44,7 +44,7 @@ export default function LogViewer() {
   const [logFileSize, setLogFileSize] = useState('');
   const [currentLogLevel, setCurrentLogLevel] = useState('');
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(false);
   const todayJST = new Date(Date.now() + 9*60*60*1000).toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(todayJST);
   const [endDate, setEndDate] = useState(todayJST);

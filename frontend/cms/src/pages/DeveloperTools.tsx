@@ -56,7 +56,7 @@ const LogViewerTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [logFileSize, setLogFileSize] = useState('');
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(false);
   const todayJST = new Date(Date.now() + 9*60*60*1000).toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(todayJST);
   const [endDate, setEndDate] = useState(todayJST);
@@ -313,11 +313,11 @@ const ServerLogLevelTab: React.FC = () => {
           <span className="px-2 py-0.5 bg-yellow-900/60 text-yellow-400 text-xs font-bold rounded border border-yellow-700">
             ⚠️ 開発者専用
           </span>
-          <h3 className="text-sm font-bold text-yellow-400">サーバーログレベル動的変更</h3>
+          <h3 className="text-sm font-bold text-yellow-700">サーバーログレベル動的変更</h3>
         </div>
         <div className="text-xs text-gray-400 mb-2 space-y-1">
           <p>バックエンドサーバーがファイルに<strong className="text-yellow-300">書き込むログの種類</strong>をリアルタイムで制御します。</p>
-          <p className="text-red-400">⚠️ 再起動するとリセット。永続化は <code className="bg-gray-700 px-1 rounded text-gray-200">backend/.env</code> の <code className="bg-gray-700 px-1 rounded text-gray-200">LOG_LEVEL</code> を変更してください。</p>
+          <p className="text-red-600">⚠️ 再起動するとリセット。永続化は <code className="bg-gray-100 px-1 rounded text-gray-700">backend/.env</code> の <code className="bg-gray-100 px-1 rounded text-gray-700">LOG_LEVEL</code> を変更してください。</p>
           <p className="text-gray-500">※ ログビューアの「表示フィルター」とは別物です。表示フィルターは取得データの絞り込みで、書き込みには影響しません。</p>
         </div>
         <div className="flex flex-wrap gap-3 mt-4">
@@ -327,22 +327,22 @@ const ServerLogLevelTab: React.FC = () => {
                 currentLevel===lv ? 'border-blue-500 bg-blue-900/40' : 'border-gray-600 bg-gray-800 hover:bg-gray-700'
               }`}>
               <span className="text-xs font-bold uppercase" style={{color:LEVEL_COLORS[lv]}}>{lv}</span>
-              <span className="text-xs text-gray-400 mt-1">{LEVEL_DESC[lv]}</span>
+              <span className="text-xs text-gray-600 mt-1">{LEVEL_DESC[lv]}</span>
             </button>
           ))}
         </div>
-        <p className="text-xs text-gray-500 mt-3">
+        <p className="text-xs text-gray-500 mt-3" id="svrloglv-current">
           現在のセッション設定: <span className="text-blue-300 font-mono">{currentLevel || '（変更なし）'}</span>
         </p>
       </div>
 
       {/* ログファイル管理設定 */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-gray-700">
+      <div className="bg-blue-50 rounded-xl p-5 border border-blue-200">
         <div className="flex items-center gap-2 mb-2">
-          <span className="px-2 py-0.5 bg-yellow-900/60 text-yellow-400 text-xs font-bold rounded border border-yellow-700">
+          <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded border border-yellow-300">
             ⚠️ 開発者専用
           </span>
-          <h3 className="text-sm font-bold text-blue-400">ログファイル管理設定</h3>
+          <h3 className="text-sm font-bold text-blue-700">ログファイル管理設定</h3>
         </div>
         <div className="text-xs text-gray-400 mb-4 space-y-1">
           <p>アーカイブ世代数・自動退避閾値を設定します。</p>
@@ -357,30 +357,30 @@ const ServerLogLevelTab: React.FC = () => {
             <label className="text-xs text-gray-300 block mb-1">最大アーカイブ世代数</label>
             <input type="number" value={logConfig.maxArchives} min={1} max={100}
               onChange={e=>setLogConfig({...logConfig,maxArchives:Number(e.target.value)})}
-              className="w-full px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-sm"/>
+              className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded text-gray-900 text-sm"/>
             <p className="text-xs text-gray-500 mt-0.5">超えた古いアーカイブは自動削除</p>
           </div>
           <div>
             <label className="text-xs text-gray-300 block mb-1">ログ保持期間（日）</label>
             <input type="number" value={logConfig.retentionDays} min={1} max={3650}
               onChange={e=>setLogConfig({...logConfig,retentionDays:Number(e.target.value)})}
-              className="w-full px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-sm"/>
+              className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded text-gray-900 text-sm"/>
           </div>
           <div>
             <label className="text-xs text-gray-300 block mb-1">最大ファイルサイズ (MB)</label>
             <input type="number" value={logConfig.maxFileSizeMB} min={10} max={500}
               onChange={e=>setLogConfig({...logConfig,maxFileSizeMB:Number(e.target.value)})}
-              className="w-full px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-sm"/>
+              className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded text-gray-900 text-sm"/>
             <p className="text-xs text-gray-500 mt-0.5">自動退避有効時に参照</p>
           </div>
           <div>
             <label className="text-xs text-gray-300 block mb-1">自動退避閾値 (MB)</label>
             <input type="number" value={logConfig.autoArchiveThresholdMB} min={10} max={1000}
               onChange={e=>setLogConfig({...logConfig,autoArchiveThresholdMB:Number(e.target.value)})}
-              className="w-full px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-sm"/>
+              className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded text-gray-900 text-sm"/>
           </div>
           <div className="col-span-2">
-            <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
               <input type="checkbox" checked={logConfig.autoArchiveEnabled}
                 onChange={e=>setLogConfig({...logConfig,autoArchiveEnabled:e.target.checked})}
                 className="rounded"/>
@@ -453,54 +453,54 @@ const ServerStatusTab: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* CPU */}
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">CPU</h4>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">CPU</h4>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between"><span className="text-gray-400">コア数</span><span className="text-white">{status.cpu.cores}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Load (1m)</span><span className={parseFloat(status.cpu.loadAvg1m) > status.cpu.cores * 0.8 ? 'text-red-400' : 'text-green-400'}>{status.cpu.loadAvg1m}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Load (5m)</span><span className="text-gray-200">{status.cpu.loadAvg5m}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Load (15m)</span><span className="text-gray-200">{status.cpu.loadAvg15m}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Load (5m)</span><span className="text-gray-700">{status.cpu.loadAvg5m}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Load (15m)</span><span className="text-gray-700">{status.cpu.loadAvg15m}</span></div>
             </div>
           </div>
 
           {/* Memory */}
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">メモリ</h4>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">メモリ</h4>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between"><span className="text-gray-400">使用率</span><span className={parseFloat(status.memory.usedPercent) > 80 ? 'text-red-400' : 'text-green-400'}>{status.memory.usedPercent}%</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">使用/総計</span><span className="text-gray-200">{status.memory.usedMB} / {status.memory.totalMB} MB</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Node Heap</span><span className="text-gray-200">{status.memory.nodeHeapUsedMB}/{status.memory.nodeHeapTotalMB} MB</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Node RSS</span><span className="text-gray-200">{status.memory.nodeRssMB} MB</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">使用/総計</span><span className="text-gray-700">{status.memory.usedMB} / {status.memory.totalMB} MB</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Node Heap</span><span className="text-gray-700">{status.memory.nodeHeapUsedMB}/{status.memory.nodeHeapTotalMB} MB</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Node RSS</span><span className="text-gray-700">{status.memory.nodeRssMB} MB</span></div>
             </div>
           </div>
 
           {/* Disk */}
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">ディスク (/)</h4>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">ディスク (/)</h4>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between"><span className="text-gray-400">使用率</span><span className={parseInt(status.disk.usedPercent) > 80 ? 'text-red-400' : 'text-green-400'}>{status.disk.usedPercent}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">使用/総計</span><span className="text-gray-200">{status.disk.used} / {status.disk.total}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">空き</span><span className="text-gray-200">{status.disk.free}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">ログファイル</span><span className="text-yellow-400">{status.logFile.sizeMB} MB</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">使用/総計</span><span className="text-gray-700">{status.disk.used} / {status.disk.total}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">空き</span><span className="text-gray-700">{status.disk.free}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">ログファイル</span><span className="text-yellow-400">{status.logFile.sizeMB} MB</span></div>
             </div>
           </div>
 
           {/* Services & Ports */}
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">サービス・ポート</h4>
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">サービス・ポート</h4>
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Backend systemd</span>
                 {badge(status.services.backendSystemd === 'active', 'active', status.services.backendSystemd)}
               </div>
-              <div className="flex justify-between"><span className="text-gray-400">稼働時間</span><span className="text-gray-200">{status.services.nodeUptime}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">PID</span><span className="text-gray-200">{status.services.pid}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Node.js</span><span className="text-gray-200">{status.services.nodeVersion}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">稼働時間</span><span className="text-gray-700">{status.services.nodeUptime}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">PID</span><span className="text-gray-700">{status.services.pid}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Node.js</span><span className="text-gray-700">{status.services.nodeVersion}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">ログLv</span><span className="text-blue-300 font-mono">{status.logLevel}</span></div>
-              <div className="mt-2 pt-2 border-t border-gray-700 space-y-1">
+              <div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
                 {Object.entries(status.ports).map(([port, open]) => (
                   <div key={port} className="flex justify-between items-center">
-                    <span className="text-gray-400 font-mono">:{port} <span className="text-gray-500 text-xs">{PORT_LABELS[Number(port)] || ''}</span></span>
+                    <span className="text-gray-600 font-mono">:{port} <span className="text-gray-400 text-xs">{PORT_LABELS[Number(port)] || ''}</span></span>
                     {badge(open, 'OPEN', 'CLOSED')}
                   </div>
                 ))}
