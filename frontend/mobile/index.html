@@ -32,7 +32,13 @@
         }
       });
     </script>
-  </head>
+    <!-- 🧪 Google Maps API静的ロードテスト用（/map-test?mode=static でのみ使用） -->
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=%VITE_GOOGLE_MAPS_API_KEY%&callback=Function.prototype&v=weekly"
+    defer
+    id="google-maps-script-static"
+  ></script>
+</head>
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>

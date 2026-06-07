@@ -34,6 +34,7 @@ const MapTest: React.FC = () => {
   const mode     = params.get('mode') || 'official';
   const isLegacy = mode === 'legacy';
   const isOff2   = mode === 'official2';
+  const isStatic = mode === 'static'; // index.htmlの静的scriptタグ使用
 
   const addLog = (m: string) => {
     const t = new Date().toLocaleTimeString('ja-JP');
@@ -64,6 +65,7 @@ const MapTest: React.FC = () => {
         setStatus('❌ API未ロード'); return;
       }
       try {
+        // staticモード: index.htmlで静的ロード済みのAPIを使用（公式サンプルと同じ方式）
         const mapOptions: any = isLegacy
           ? { center:{lat:34.6937,lng:135.5023}, zoom:18,
               renderingType: window.google.maps.RenderingType.VECTOR,
@@ -110,6 +112,24 @@ const MapTest: React.FC = () => {
       } catch(e:any) { setStatus(`❌ ${e?.message}`); addLog(`ERROR: ${e?.message}`); }
     };
 
+    if (isStatic) {
+      addLog('静的scriptタグ方式（index.html）でロード済み確認中...');
+      // index.htmlのscriptタグは defer なので DOMContentLoaded後に利用可能
+      if (window.google?.maps?.Map) {
+        addLog('✅ 静的ロード済み API使用');
+        init(); return;
+      }
+      // まだロード中の場合はgoogle-maps-script-staticのloadイベント待機
+      const staticScript = document.getElementById('google-maps-script-static');
+      if (staticScript) {
+        staticScript.addEventListener('load', init);
+        addLog('静的script loadイベント待機中...');
+      } else {
+        addLog('⚠️ google-maps-script-static が見つからない');
+        init();
+      }
+      return;
+    }
     if (window.google?.maps?.Map) { addLog('⚠️ 既存API使用'); init(); return; }
     const existing = document.getElementById('google-maps-script') ||
                      document.getElementById('google-maps-script-test');
@@ -127,7 +147,7 @@ const MapTest: React.FC = () => {
     return () => { if (itvRef.current) clearInterval(itvRef.current); };
   }, []);
 
-  const modeTitle = isLegacy ? '旧版(8bb68d4)再現' : isOff2 ? '公式Key+公式mapId（完全同条件）' : '自前Key+公式mapId';
+  const modeTitle = isLegacy ? '旧版(8bb68d4)再現' : isOff2 ? '公式Key+公式mapId（完全同条件）' : isStatic ? '静的scriptタグ方式(index.html)' : '自前Key+公式mapId';
 
   return (
     <div style={{width:'100vw',height:'100vh',position:'relative',background:'#111'}}>
@@ -153,6 +173,8 @@ const MapTest: React.FC = () => {
         {isLegacy  && <a href="/map-test?mode=official" style={{color:'#fbbf24',fontSize:'11px',textDecoration:'underline'}}>🔄 自前Key+公式mapId</a>}
         <span style={{color:'#6b7280',fontSize:'11px'}}>|</span>
         <a href="/map-test?mode=official2" style={{color:'#a78bfa',fontSize:'11px',textDecoration:'underline'}}>🔑 公式Key+公式mapId</a>
+        <span style={{color:'#6b7280',fontSize:'11px'}}>|</span>
+        <a href="/map-test?mode=static" style={{color:'#34d399',fontSize:'11px',textDecoration:'underline'}}>📌 静的script方式</a>
         <span style={{color:'#6b7280',fontSize:'11px'}}>|</span>
         <a href="https://developers.google.com/maps/documentation/javascript/examples/webgl/webgl-tilt-rotation"
            target="_blank" rel="noreferrer" style={{color:'#60a5fa',fontSize:'11px',textDecoration:'underline'}}>
