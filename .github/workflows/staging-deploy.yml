@@ -113,11 +113,13 @@ jobs:
       - name: 🔧 Create Staging .env.production for Mobile
         working-directory: ./frontend/mobile
         run: |
+          BUILD_TS=$(date +%Y%m%d%H%M%S)
           cat > .env.production << EOF
           VITE_API_BASE_URL=/api/v1
           VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
           VITE_APP_ENV=staging
-          VITE_GOOGLE_MAP_ID=793b2cb3013694b0700a2152 
+          VITE_GOOGLE_MAP_ID=793b2cb3013694b0700a2152
+          VITE_BUILD_TIMESTAMP=${BUILD_TS}
           EOF
       
       - name: 🏗️ Build mobile app
@@ -150,6 +152,11 @@ jobs:
             cp -r /tmp/mobile-deploy/* ~/projects/dump-tracker/frontend/mobile/dist/
             chmod -R 755 ~/projects/dump-tracker/frontend/mobile/dist
             rm -rf /tmp/mobile-deploy
+            # ✅ sw.js のタイムスタンプを更新してPWAキャッシュを強制無効化
+            SW_FILE=~/projects/dump-tracker/frontend/mobile/dist/sw.js
+            if [ -f "$SW_FILE" ]; then
+              echo "/* cache-bust: $(date +%Y%m%d%H%M%S) */" >> "$SW_FILE"
+            fi
             echo "✅ Mobile deployed to Staging"
 
       # ===========================
