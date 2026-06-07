@@ -197,7 +197,7 @@ const GpsPinMap: React.FC<GpsPinMapProps> = ({ accentColor, initialLat, initialL
       if (!existing) {
         const s = document.createElement('script');
         s.id = 'google-maps-script';
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=marker&callback=__gmapEditReady`;
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&loading=async&callback=__gmapEditReady`;
         s.async = true;
         (window as any).__gmapEditReady = () => initMap();
         document.head.appendChild(s);

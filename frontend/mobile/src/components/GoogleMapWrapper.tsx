@@ -118,10 +118,10 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
         const mapOptions: any = {
           center: centerPosition,
           zoom: 18,
-          // 🔧 VITE_GOOGLE_MAP_ID: Cloud ConsoleでVector有効済みのMapID（793b2cb3013694b0700a2152）
-          // hasMapId判定と一致させるため環境変数から取得。未設定時はDEMO_MAP_IDをフォールバック
+          // mapId=90f87356969d889c: iOS Safari VECTOR動作確認済み（2026-06-07テスト）
+          // libraries=markerなし + loading=async + このmapIdの組み合わせが必須
           renderingType: renderingTypeValue ?? 'VECTOR',
-          mapId: import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID',
+          mapId: '90f87356969d889c',
           heading: 0,
           tilt: 0,
           disableDefaultUI: true,
@@ -141,7 +141,7 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
 
         // mapId未設定時は AdvancedMarkerElement が使えないため旧Markerにフォールバック
         let marker: any;
-        const hasMapId = !!import.meta.env.VITE_GOOGLE_MAP_ID;
+        const hasMapId = true; // mapId='90f87356969d889c' 固定
         if (hasMapId && window.google.maps.marker?.AdvancedMarkerElement) {
           marker = new window.google.maps.marker.AdvancedMarkerElement({
             map: map,
@@ -254,9 +254,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     // &v=weekly: VectorマップとRenderingTypeを使うために必要
     // stable版ではRenderingType.VECTORが存在せずheadingUp無効になる
     // DEMO_MAP_ID をprecacheして確実にVector Mapを有効化
-    const mapIdParam = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
-    // &loading=async: Google公式でVector Mode必須パラメータ（script.async属性とは別物）
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initGoogleMap&libraries=marker&v=weekly&map_ids=${mapIdParam}`;
+    // &loading=async: Vector Mode必須。libraries=marker削除でiOS SafariのVECTOR動作確認済み
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initGoogleMap&v=weekly`;
     script.async = true;
     script.defer = true;
     
