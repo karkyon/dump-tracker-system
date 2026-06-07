@@ -1,237 +1,179 @@
 // frontend/mobile/src/pages/MapTest.tsx
-// 🧪 8bb68d4 完全再現テスト（認証不要）
+// 🧪 マップVectorテスト（認証不要）
 // URL: https://dumptracker-s.ddns.net/map-test
-// 必ず直接URLでアクセス（他ページ経由不可）
-// script.src = &callback=initMapLegacy&v=weekly のみ（libraries=marker なし）
+// ?mode=legacy  : 8bb68d4再現（DEMO_MAP_ID）
+// ?mode=official: 公式サンプル完全再現（mapId=90f87356969d889c）※デフォルト
 
 import React, { useEffect, useRef, useState } from 'react';
 
 declare global {
-  interface Window {
-    google: any;
-    initMapLegacy?: () => void;
-  }
+  interface Window { google: any; initMapTest?: () => void; }
 }
 
-// ===== 8bb68d4 の createCustomMarkerSVG をそのまま移植 =====
-const createCustomMarkerSVG = (distance: number, speed: number, heading: number = 0): string => {
-  return `
-    <svg width="60" height="80" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <g id="arrow-marker">
-          <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)" />
-          <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-          <path d="M 30 13 L 38 25 L 22 25 Z" fill="#ffffff" stroke="#1a73e8" stroke-width="1.5"/>
-          <circle cx="30" cy="28" r="4" fill="#ffffff"/>
-        </g>
-      </defs>
-      <use href="#arrow-marker" transform="rotate(${heading} 30 28)"/>
-      <rect x="8" y="52" width="44" height="24" rx="4" fill="#ffffff" stroke="#4285F4" stroke-width="2"/>
-      <text x="30" y="62" text-anchor="middle" font-family="Arial" font-size="9" font-weight="bold" fill="#1a73e8">
-        ${speed.toFixed(0)} km/h
-      </text>
-      <text x="30" y="71" text-anchor="middle" font-family="Arial" font-size="8" fill="#666">
-        ${distance.toFixed(1)} km
-      </text>
-    </svg>
-  `;
+const createSVG = (h: number) => {
+  const s = `<svg width="60" height="80" xmlns="http://www.w3.org/2000/svg">
+    <defs><g id="am">
+      <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)"/>
+      <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#fff" stroke-width="3"/>
+      <path d="M 30 13 L 38 25 L 22 25 Z" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+      <circle cx="30" cy="28" r="4" fill="#fff"/>
+    </g></defs>
+    <use href="#am" transform="rotate(${h} 30 28)"/>
+    <rect x="8" y="52" width="44" height="18" rx="3" fill="#fff" stroke="#4285F4" stroke-width="1.5"/>
+    <text x="30" y="64" text-anchor="middle" font-family="Arial" font-size="8" fill="#1a73e8">${h}°</text>
+  </svg>`;
+  return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(s),
+           scaledSize: (window as any).google?.maps ? new (window as any).google.maps.Size(60,80) : null,
+           anchor: (window as any).google?.maps ? new (window as any).google.maps.Point(30,40) : null };
 };
 
 const MapTest: React.FC = () => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const [status, setStatus]     = useState('読み込み中...');
-  const [rtDisplay, setRtDisplay] = useState('不明');
-  const [headingVal, setHeadingVal] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
-  const intervalRef = useRef<any>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus]   = useState('読み込み中...');
+  const [rt, setRt]           = useState('不明');
+  const [hval, setHval]       = useState(0);
+  const [logs, setLogs]       = useState<string[]>([]);
+  const itvRef = useRef<any>(null);
 
-  const addLog = (msg: string) => {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get('mode') || 'official';
+  const isLegacy = mode === 'legacy';
+
+  const addLog = (m: string) => {
     const t = new Date().toLocaleTimeString('ja-JP');
-    setLogs(prev => [`[${t}] ${msg}`, ...prev].slice(0, 8));
+    setLogs(p => [`[${t}] ${m}`, ...p].slice(0, 10));
   };
 
   useEffect(() => {
     // WebGL確認
     try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      const cv = document.createElement('canvas');
+      const gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
       addLog(`WebGL: ${gl ? '✅ 利用可能' : '❌ 利用不可'}`);
-    } catch(e) { addLog('WebGL: ❌ エラー'); }
+    } catch { addLog('WebGL: ❌ エラー'); }
 
     const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
     if (!apiKey) { setStatus('❌ APIキー未設定'); return; }
 
-    // ===== 8bb68d4 の initializeMap をそのまま移植 =====
-
-    const initializeMap = () => {
-      if (!mapContainerRef.current) return;
-      if (!window.google?.maps?.Map) {
-        setStatus('❌ Google Maps API未ロード');
-        return;
+    const init = () => {
+      if (!mapRef.current || !window.google?.maps?.Map) {
+        setStatus('❌ API未ロード'); return;
       }
-
+      addLog(`モード: ${isLegacy ? 'legacy(DEMO_MAP_ID)' : 'official(90f87356969d889c)'}`);
       try {
-        addLog('マップ初期化開始');
+        // ===== モードで切り替え =====
+        const mapOptions: any = isLegacy
+          ? {
+              // 8bb68d4 完全再現
+              center: { lat: 34.6937, lng: 135.5023 }, zoom: 18,
+              renderingType: window.google.maps.RenderingType.VECTOR,
+              mapId: 'DEMO_MAP_ID', heading: 0, tilt: 0,
+              disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy',
+              tiltInteractionEnabled: true, headingInteractionEnabled: true,
+            }
+          : {
+              // 公式サンプル完全再現（renderingType指定なし）
+              center: { lat: 37.7893719, lng: -122.3942 }, zoom: 16,
+              heading: 320, tilt: 47.5,
+              mapId: '90f87356969d889c',
+            };
 
-        // 8bb68d4 mapOptions そのまま
-        const mapOptions: any = {
-          center: { lat: 34.6937, lng: 135.5023 },
-          zoom: 18,
-          renderingType: window.google.maps.RenderingType.VECTOR,
-          mapId: 'DEMO_MAP_ID',
-          heading: 0,
-          tilt: 0,
-          disableDefaultUI: true,
-          zoomControl: true,
-          gestureHandling: 'greedy',
-          tiltInteractionEnabled: true,
-          headingInteractionEnabled: true,
-        };
-
-        const map = new window.google.maps.Map(mapContainerRef.current, mapOptions);
+        const map = new window.google.maps.Map(mapRef.current, mapOptions);
         addLog('Map作成成功');
 
-        // 8bb68d4 マーカー: 旧Marker固定
-        const markerSVG = createCustomMarkerSVG(0, 0, 0);
-        const markerIcon = {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markerSVG),
-          scaledSize: new window.google.maps.Size(60, 80),
-          anchor: new window.google.maps.Point(30, 40),
-        };
-        const marker = new window.google.maps.Marker({
-          map,
-          position: { lat: 34.6937, lng: 135.5023 },
-          title: '現在位置',
-          icon: markerIcon,
-          zIndex: 1000,
-        });
-        addLog('マーカー作成成功（旧Marker）');
-
-        // 8bb68d4 renderingtype_changed
         map.addListener('renderingtype_changed', () => {
-          const rt = map.getRenderingType();
-          const isVec = (rt === window.google.maps.RenderingType.VECTOR);
-          const rtStr = String(rt);
-          setRtDisplay(`${rtStr} ${isVec ? '✅' : '❌'}`);
-          setStatus(isVec ? '✅ VECTOR → 地図が回転するはず' : '❌ RASTER → 地図回転不可');
-          addLog(`renderingtype_changed: ${rtStr}`);
+          const r = map.getRenderingType();
+          const v = String(r) === 'VECTOR';
+          setRt(`${String(r)} ${v ? '✅' : '❌'}`);
+          setStatus(v ? '✅ VECTOR → 地図回転有効' : '❌ RASTER → 地図回転不可');
+          addLog(`renderingtype_changed: ${String(r)}`);
         });
 
-        // 初期renderingType確認（1秒後）
         setTimeout(() => {
-          const rt = map.getRenderingType?.();
-          const isVec = (rt === window.google.maps.RenderingType?.VECTOR);
-          const rtStr = String(rt);
-          setRtDisplay(`${rtStr} ${isVec ? '✅' : '❌'}`);
-          setStatus(isVec ? '✅ VECTOR → 地図が回転するはず' : '❌ RASTER → 地図回転不可');
-          addLog(`[MAP_INIT] renderingType=${rtStr} mapId=DEMO_MAP_ID`);
+          const r = map.getRenderingType?.();
+          const v = String(r) === 'VECTOR';
+          setRt(`${String(r)} ${v ? '✅' : '❌'}`);
+          setStatus(v ? '✅ VECTOR → 地図回転有効' : '❌ RASTER → 地図回転不可');
+          addLog(`[MAP_INIT] renderingType=${String(r)}`);
         }, 1000);
 
-        // heading自動回転テスト
-        let h = 0;
-        intervalRef.current = setInterval(() => {
-          h = (h + 3) % 360;
-          setHeadingVal(h);
-
-          // 8bb68d4 の setMapHeading ロジックそのまま
-          const rt = map.getRenderingType?.();
-          const isVec = (rt === window.google.maps.RenderingType?.VECTOR);
-          if (isVec && !isNaN(h)) {
-            map.setHeading(h);
-          }
-          // マーカー矢印更新
-          const svg = createCustomMarkerSVG(0, 0, h);
-          marker.setIcon({
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-            scaledSize: new window.google.maps.Size(60, 80),
-            anchor: new window.google.maps.Point(30, 40),
-          });
+        // heading自動回転
+        const marker = new window.google.maps.Marker({
+          map, position: mapOptions.center, title: 'TEST',
+          icon: createSVG(0), zIndex: 1000,
+        });
+        let h = isLegacy ? 0 : 320;
+        itvRef.current = setInterval(() => {
+          h = (h + 3) % 360; setHval(h);
+          if (String(map.getRenderingType?.()) === 'VECTOR') map.setHeading(h);
+          marker.setIcon(createSVG(h));
         }, 100);
-
-        addLog('heading自動回転テスト開始');
-
-      } catch (e: any) {
-        setStatus(`❌ 初期化エラー: ${e?.message}`);
-        addLog(`ERROR: ${e?.message}`);
-      }
+        addLog('heading自動回転開始');
+      } catch(e: any) { setStatus(`❌ ${e?.message}`); addLog(`ERROR: ${e?.message}`); }
     };
 
-    // 既存スクリプトチェック
-    if (window.google?.maps?.Map) {
-      addLog('⚠️ 既存API使用中（他ページ経由の可能性）');
-      initializeMap();
-      return;
-    }
-    if (document.getElementById('google-maps-script') ||
-        document.getElementById('google-maps-script-legacy')) {
-      addLog('⚠️ 既存scriptタグあり');
-      const existing = document.getElementById('google-maps-script') ||
-                       document.getElementById('google-maps-script-legacy');
-      existing?.addEventListener('load', initializeMap);
-      return;
-    }
+    if (window.google?.maps?.Map) { addLog('⚠️ 既存API使用'); init(); return; }
+    const existing = document.getElementById('google-maps-script') ||
+                     document.getElementById('google-maps-script-legacy');
+    if (existing) { existing.addEventListener('load', init); return; }
 
-    // ===== 8bb68d4 の script.src そのまま: &callback=xxx&v=weekly のみ =====
-    window.initMapLegacy = initializeMap;
-    const script = document.createElement('script');
-    script.id = 'google-maps-script-legacy';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMapLegacy&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => {
-      setStatus('❌ スクリプトロードエラー');
-      addLog('ERROR: script load failed');
-    };
-    document.head.appendChild(script);
-    addLog(`script.src: ...&callback=initMapLegacy&v=weekly`);
+    window.initMapTest = init;
+    const s = document.createElement('script');
+    s.id = 'google-maps-script-legacy';
+    // 8bb68d4と同じ: &v=weekly のみ（libraries=marker なし）
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMapTest&v=weekly`;
+    s.async = true; s.defer = true;
+    s.onerror = () => { setStatus('❌ scriptロードエラー'); };
+    document.head.appendChild(s);
+    addLog('script.src: &v=weekly (libraries=markerなし)');
 
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    return () => { if (itvRef.current) clearInterval(itvRef.current); };
   }, []);
 
+  const otherMode = isLegacy ? 'official' : 'legacy';
+  const otherLabel = isLegacy ? '公式サンプル版(90f87...）' : '旧版(DEMO_MAP_ID)';
+
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#111' }}>
+    <div style={{ width:'100vw', height:'100vh', position:'relative', background:'#111' }}>
       {/* ステータスパネル */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.88)', color: '#fff',
-        padding: '10px 14px', fontFamily: 'monospace', fontSize: '12px',
+        position:'absolute', top:0, left:0, right:0, zIndex:1000,
+        background:'rgba(0,0,0,0.88)', color:'#fff', padding:'8px 12px', fontFamily:'monospace', fontSize:'12px',
       }}>
-        <div style={{ fontWeight: 'bold', marginBottom: 2 }}>
-          🔬 8bb68d4 完全再現テスト（libraries=markerなし / &v=weekly のみ）
+        <div style={{ fontWeight:'bold', marginBottom:2 }}>
+          🔬 {isLegacy ? '旧版(8bb68d4)再現' : '公式サンプル完全再現(mapId=90f87356969d889c)'}
         </div>
-        <div>状態: <span style={{ color: status.includes('✅') ? '#4ade80' : '#f87171' }}>{status}</span></div>
-        <div>renderingType: <span style={{ color: rtDisplay.includes('✅') ? '#4ade80' : '#fbbf24' }}>{rtDisplay}</span></div>
-        <div>heading: <span style={{ color: '#60a5fa' }}>{headingVal}°</span>
-          <span style={{ marginLeft: 8, fontSize: '10px', color: '#9ca3af' }}>
-            {rtDisplay.includes('✅') ? '↑地図も回転中' : '↑マーカーのみ回転'}
+        <div>状態: <span style={{ color: status.includes('✅') ? '#4ade80':'#f87171' }}>{status}</span></div>
+        <div>renderingType: <span style={{ color: rt.includes('✅') ? '#4ade80':'#fbbf24' }}>{rt}</span></div>
+        <div>heading: <span style={{ color:'#60a5fa' }}>{hval}°</span>
+          <span style={{ marginLeft:6, fontSize:'10px', color:'#9ca3af' }}>
+            {rt.includes('✅') ? '↑地図も回転中' : '↑マーカーのみ回転'}
           </span>
         </div>
-        <div style={{ marginTop: 3, borderTop: '1px solid #333', paddingTop: 3 }}>
-          {logs.map((l, i) => (
-            <div key={i} style={{ fontSize: '10px', color: i === 0 ? '#e5e7eb' : '#6b7280' }}>{l}</div>
+        <div style={{ marginTop:3, borderTop:'1px solid #333', paddingTop:3 }}>
+          {logs.map((l,i) => (
+            <div key={i} style={{ fontSize:'10px', color: i===0 ? '#e5e7eb':'#6b7280' }}>{l}</div>
           ))}
         </div>
       </div>
-      {/* リンク */}
+      {/* 切り替え＆リンクパネル */}
       <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.80)', padding: '8px 14px',
-        display: 'flex', gap: '8px', flexWrap: 'wrap',
+        position:'absolute', bottom:0, left:0, right:0, zIndex:1000,
+        background:'rgba(0,0,0,0.80)', padding:'8px 12px', display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center',
       }}>
+        <a href={`/map-test?mode=${otherMode}`}
+           style={{ color:'#fbbf24', fontSize:'11px', textDecoration:'underline' }}>
+          🔄 {otherLabel}に切替
+        </a>
+        <span style={{ color:'#6b7280', fontSize:'11px' }}>|</span>
         <a href="https://developers.google.com/maps/documentation/javascript/examples/webgl/webgl-tilt-rotation"
            target="_blank" rel="noreferrer"
-           style={{ color: '#60a5fa', fontSize: '11px', textDecoration: 'underline' }}>
-          📖 Google公式 Vector/Tilt/Rotation サンプル
-        </a>
-        <span style={{ color: '#6b7280', fontSize: '11px' }}>|</span>
-        <a href="https://maps.googleapis.com/maps/api/js?key=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk&callback=Function.prototype&v=weekly"
-           target="_blank" rel="noreferrer"
-           style={{ color: '#34d399', fontSize: '11px', textDecoration: 'underline' }}>
-          🔗 Maps API直接ロード確認
+           style={{ color:'#60a5fa', fontSize:'11px', textDecoration:'underline' }}>
+          📖 Google公式サンプル
         </a>
       </div>
       {/* マップ */}
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={mapRef} style={{ width:'100%', height:'100%' }} />
     </div>
   );
 };
