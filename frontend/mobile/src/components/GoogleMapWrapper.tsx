@@ -255,7 +255,8 @@ const GoogleMapWrapper: React.FC<GoogleMapWrapperProps> = ({
     // stable版ではRenderingType.VECTORが存在せずheadingUp無効になる
     // DEMO_MAP_ID をprecacheして確実にVector Mapを有効化
     const mapIdParam = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&libraries=marker&v=weekly&map_ids=${mapIdParam}`;
+    // &loading=async: Google公式でVector Mode必須パラメータ（script.async属性とは別物）
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initGoogleMap&libraries=marker&v=weekly&map_ids=${mapIdParam}`;
     script.async = true;
     script.defer = true;
     

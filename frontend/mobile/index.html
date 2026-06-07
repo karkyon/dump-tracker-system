@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
     <!-- BUG-016: CSP - XSS対策。Google Maps/API/Firebase のオリジンを許可 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://tlog-apex.ddns.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://*.google.com; connect-src 'self' https://10.1.119.244:8443 https://10.1.119.244:8000 https://localhost:3001 https://localhost:3002 https://localhost:8443 https://dumptracker-s.ddns.net https://dumptracker.ddns.net https://tlog-apex.ddns.net https://maps.googleapis.com https://firebaseapp.com wss:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://tlog-apex.ddns.net https://cdnjs.cloudflare.com blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://*.google.com; worker-src 'self' blob:; connect-src 'self' https://10.1.119.244:8443 https://10.1.119.244:8000 https://localhost:3001 https://localhost:3002 https://localhost:8443 https://dumptracker-s.ddns.net https://dumptracker.ddns.net https://tlog-apex.ddns.net https://maps.googleapis.com https://firebaseapp.com wss:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none';" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="X-Frame-Options" content="DENY" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
@@ -32,12 +32,7 @@
         }
       });
     </script>
-    <!-- 🧪 Google Maps API静的ロードテスト用（/map-test?mode=static でのみ使用） -->
-  <script
-    src="https://maps.googleapis.com/maps/api/js?key=%VITE_GOOGLE_MAPS_API_KEY%&loading=async&callback=Function.prototype&v=weekly"
-    defer
-    id="google-maps-script-static"
-  ></script>
+  
 </head>
 <body>
   <div id="root"></div>
