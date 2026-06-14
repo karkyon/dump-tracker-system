@@ -349,8 +349,8 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
   allDetails.length = 0;
   allDetails.push(...deduped);
 
-  const LOADING_TYPES = ['LOADING', 'LOADING_START', 'LOADING_COMPLETE'];
-  const UNLOADING_TYPES = ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE'];
+  const LOADING_TYPES = ['LOADING', 'LOADING_START', 'LOADING_COMPLETE', 'LOADING_ARRIVED', 'LOADING_COMPLETED'];
+  const UNLOADING_TYPES = ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE', 'UNLOADING_ARRIVED', 'UNLOADING_COMPLETED'];
 
   interface CycleAccumulator {
     contractorName: string;
@@ -374,7 +374,12 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
   for (const d of allDetails) {
     const actType: string = d.activity_type ?? d.activityType ?? '';
     const locationName: string = d.locations?.name ?? d.location?.name ?? '';
-    const itemName: string = d.items?.name ?? d.item?.name ?? '';
+    // ★ customItemName: notes の [手入力品目: XXX] を抽出し、DB品目名より優先
+    const dbItemName: string = d.items?.name ?? d.item?.name ?? '';
+    const notesStr: string = d.notes ?? '';
+    const customItemMatch = notesStr.match(/\[手入力品目:\s*(.+?)\]/);
+    const customItemName: string = customItemMatch?.[1]?.trim() ?? '';
+    const itemName: string = customItemName || dbItemName;
     const qty: number = d.quantity_tons != null ? Number(d.quantity_tons) : (d.quantityTons != null ? Number(d.quantityTons) : 0);
     const startT: string = formatTime(d.actual_start_time ?? d.actualStartTime);
     const endT: string = formatTime(d.actual_end_time ?? d.actualEndTime);
@@ -1685,7 +1690,7 @@ class ReportService {
     const dbInspItems = await (this.db as any).inspectionItem.findMany({
       where: { isActive: true, inspectionType: 'PRE_TRIP' },
       orderBy: { displayOrder: 'asc' },
-      take: 16,
+      take: 26, // ★ 26件対応
     });
 
     // DB項目ごとに inspResults から結果を検索してマッピング
@@ -1699,9 +1704,9 @@ class ReportService {
       };
     });
 
-    // 前半8件 → 左列、後半8件 → 右列（最大16項目）
-    const leftItems   = allMappedItems.slice(0, 8);
-    const middleItems = allMappedItems.slice(8, 16);
+    // ★ 全26件対応: 前半13件→左列、後半13件→右列
+    const leftItems   = allMappedItems.slice(0, 13);
+    const middleItems = allMappedItems.slice(13, 26);
     const rightItems: any[] = [];  // 旧3列目は廃止
 
     // 帳票データ組み立て

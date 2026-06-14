@@ -447,6 +447,28 @@ function drawOperationColHeaders(
   cell(doc, cx + halfTimeW + sub4W + sub5W, y + subH, sub6W, subH, '時間', f6);
 }
 
+
+/**
+ * 改ページ後の継続ページ用コンパクトヘッダー
+ * タイトル行(TITLE_H) + ヘッダー行(HEADER_H) の2行を描画
+ * @returns 描画後のY座標
+ */
+function drawPageHeader(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  w: number,
+  data: DailyDriverReportData,
+  fontN: string,
+  fontB: string
+): number {
+  drawTitle(doc, x, y, w, TITLE_H, fontB);
+  y += TITLE_H;
+  drawHeaderRow(doc, x, y, w, HEADER_H, data, fontN, fontB);
+  y += HEADER_H;
+  return y;
+}
+
 /**
  * 運行記録全件表示（改ページ対応）
  * ★ BUG修正: OP_ROWS固定→全件ループ、1ページ溢れ時は改ページしてカラムヘッダー再描画
@@ -461,9 +483,9 @@ function drawOperationRowsAll(
   fontB: string,
   pageH: number,
   marginT: number,
-  marginB: number
+  marginB: number,
+  data: DailyDriverReportData  // ★ 改ページヘッダー再描画用
 ): number {
-  const availableH = pageH - marginT - marginB;
   let y = yStart;
 
   const drawSubCols = (trip: TripCycleRow | undefined, ry: number) => {
@@ -529,6 +551,8 @@ function drawOperationRowsAll(
     if (y + OP_ROW_H > pageH - marginB) {
       doc.addPage();
       y = marginT;
+      // ★ 改ページ後: タイトル行 + 年月日・氏名・車番行 を再描画
+      y = drawPageHeader(doc, x, y, CONTENT_W, data, fontN, fontB);
       // カラムヘッダーを再描画
       drawOperationColHeaders(doc, x, y, COL_HEADER_H, fontB);
       y += COL_HEADER_H;
@@ -840,7 +864,7 @@ function drawDailyDriverReport(
   y += COL_HEADER_H;
 
   // ④ 運行記録 全件表示（★改ページ対応）
-  y = drawOperationRowsAll(doc, x0, y, data.trips, fontN, fontB, PAGE_H, MARGIN_T, 12);
+  y = drawOperationRowsAll(doc, x0, y, data.trips, fontN, fontB, PAGE_H, MARGIN_T, 12, data);
 
   // ⑤ 給油・署名セクション＋点検チェックリストを一体で改ページ判定
   // 必要高さ = FUEL_H + INSP_HEADER_H + INSP_ROW_H * inspRows + LEGEND_H
@@ -854,6 +878,8 @@ function drawDailyDriverReport(
     // 給油+点検ブロックが入らないので改ページ（★指示: 絶対に分断禁止）
     doc.addPage();
     y = MARGIN_T;
+    // ★ 改ページ後: タイトル行 + 年月日・氏名・車番行 を再描画
+    y = drawPageHeader(doc, x0, y, CONTENT_W, data, fontN, fontB);
   }
 
   // ⑤ 給油・署名セクション [E/F修正: 1行 + 正方形署名欄]
@@ -911,6 +937,7 @@ export async function generateDailyDriverReportPDF(
         layout: 'landscape',
         margins: { top: MARGIN_T, bottom: 12, left: MARGIN_L, right: MARGIN_L },
         autoFirstPage: false,
+        bufferPages: true,  // ★ ページ番号後付けのため全ページをバッファリング
       });
 
       const stream = fs.createWriteStream(outputPath);
@@ -926,6 +953,20 @@ export async function generateDailyDriverReportPDF(
 
       doc.addPage();
       drawDailyDriverReport(doc, data, fontResult ? 'JpFont' : null);
+
+      // ★ 全ページにページ番号を後付け描画
+      const totalPages = doc.bufferedPageRange().count;
+      const fontN = fontResult ? 'JpFont' : 'Helvetica';
+      for (let i = 0; i < totalPages; i++) {
+        doc.switchToPage(i);
+        doc.font(fontN).fontSize(7).fillColor('#000000');
+        doc.text(
+          `${i + 1} / ${totalPages}`,
+          PAGE_W - MARGIN_L - 40,
+          PAGE_H - 10,
+          { width: 40, align: 'right', lineBreak: false }
+        );
+      }
 
       doc.end();
 
