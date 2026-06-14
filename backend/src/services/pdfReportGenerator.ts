@@ -35,11 +35,11 @@ const TITLE_H = 22;
 const HEADER_H = 26;
 const COL_HEADER_H = 24;     // D対応: 2行ヘッダーのため高さ増加 (旧:16)
 const OP_ROW_H = 34;         // 運行記録行（変更なし、2サブ行 each=17pt）
-const OP_ROWS = 6;
+const OP_ROWS_DEFAULT = 6; // ★ 動的化: drawDailyDriverReport で全件ループ
 const FUEL_H = 50;           // E/F対応: 1行化 + 正方形署名欄の高さ（旧:52）
 const INSP_HEADER_H = 16;
 const INSP_ROW_H = 15;       // G対応: 半分に縮小（旧:30）
-const INSP_ROWS = 8;         // ⑦修正: 8行対応
+const INSP_ROWS_PER_COL = 13; // ★ 動的化: 1列最大13行 (26件÷2列)
 const LEGEND_H = 14;
 
 // 運行表カラム幅
@@ -448,10 +448,101 @@ function drawOperationColHeaders(
 }
 
 /**
- * 運行記録6行
- * [B対応] COL_CONTRACTOR定数変更で自動反映
- * [C修正] 空行の積降場所の「—」を削除してブランク
- * [D修正] 時間セルを2行×3列構造（積込始/終/時間 + 積降始/終/時間）
+ * 運行記録全件表示（改ページ対応）
+ * ★ BUG修正: OP_ROWS固定→全件ループ、1ページ溢れ時は改ページしてカラムヘッダー再描画
+ * @returns 描画後のY座標
+ */
+function drawOperationRowsAll(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  yStart: number,
+  trips: TripCycleRow[],
+  fontN: string,
+  fontB: string,
+  pageH: number,
+  marginT: number,
+  marginB: number
+): number {
+  const availableH = pageH - marginT - marginB;
+  let y = yStart;
+
+  const drawSubCols = (trip: TripCycleRow | undefined, ry: number) => {
+    const fOpt = { font: fontN, fontSize: 7, align: 'center' as const };
+    const fSmall = { font: fontN, fontSize: 6, align: 'center' as const };
+    const halfTimeW = Math.floor(COL_TIME / 2);
+    const remTimeW = COL_TIME - halfTimeW;
+    const sub1W = Math.floor(halfTimeW / 3);
+    const sub2W = Math.floor(halfTimeW / 3);
+    const sub3W = halfTimeW - sub1W - sub2W;
+    const sub4W = Math.floor(remTimeW / 3);
+    const sub5W = Math.floor(remTimeW / 3);
+    const sub6W = remTimeW - sub4W - sub5W;
+    const subRowH = OP_ROW_H / 2;
+    let cx = x;
+
+    if (trip) {
+      cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, trip.contractorName,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_CONTRACTOR;
+      cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, trip.loadingLocation,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_LOADING;
+      cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, trip.unloadingLocation, { ...fOpt, align: 'left', pad: 3 }); cx += COL_UNLOADING;
+      cell(doc, cx, ry, COL_ITEM,       OP_ROW_H, trip.itemName,          { ...fOpt, wrap: true, align: 'left', pad: 2 }); cx += COL_ITEM;
+      cell(doc, cx, ry, COL_COUNT,      OP_ROW_H, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
+      cell(doc, cx, ry, COL_TONS,       OP_ROW_H, trip.quantityTons > 0 ? String(trip.quantityTons) : '', fOpt); cx += COL_TONS;
+      cell(doc, cx, ry, COL_CONDITION,  OP_ROW_H, '', fOpt); cx += COL_CONDITION;
+      cell(doc, cx,          ry,           sub1W, subRowH, trip.loadingStartTime, fSmall);
+      cell(doc, cx + sub1W,  ry,           sub2W, subRowH, trip.loadingEndTime,   fSmall);
+      cell(doc, cx + sub1W + sub2W, ry,    sub3W, subRowH, toMinutesOnly(trip.loadingDuration), fSmall);
+      cell(doc, cx,          ry + subRowH, sub1W, subRowH, '');
+      cell(doc, cx + sub1W,  ry + subRowH, sub2W, subRowH, '');
+      cell(doc, cx + sub1W + sub2W, ry + subRowH, sub3W, subRowH, '');
+      cell(doc, cx + halfTimeW,           ry,           sub4W, subRowH, trip.unloadingStartTime, fSmall);
+      cell(doc, cx + halfTimeW + sub4W,   ry,           sub5W, subRowH, trip.unloadingEndTime,   fSmall);
+      cell(doc, cx + halfTimeW + sub4W + sub5W, ry,     sub6W, subRowH, toMinutesOnly(trip.unloadingDuration), fSmall);
+      cell(doc, cx + halfTimeW,           ry + subRowH, sub4W, subRowH, '');
+      cell(doc, cx + halfTimeW + sub4W,   ry + subRowH, sub5W, subRowH, '');
+      cell(doc, cx + halfTimeW + sub4W + sub5W, ry + subRowH, sub6W, subRowH, '');
+    } else {
+      cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, ''); cx += COL_CONTRACTOR;
+      cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, ''); cx += COL_LOADING;
+      cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, ''); cx += COL_UNLOADING;
+      cell(doc, cx, ry, COL_ITEM,       OP_ROW_H, ''); cx += COL_ITEM;
+      cell(doc, cx, ry, COL_COUNT,      OP_ROW_H, ''); cx += COL_COUNT;
+      cell(doc, cx, ry, COL_TONS,       OP_ROW_H, ''); cx += COL_TONS;
+      cell(doc, cx, ry, COL_CONDITION,  OP_ROW_H, ''); cx += COL_CONDITION;
+      const halfTimeW2 = Math.floor(COL_TIME / 2);
+      const remTimeW2 = COL_TIME - halfTimeW2;
+      const s1 = Math.floor(halfTimeW2 / 3);
+      const s2 = Math.floor(halfTimeW2 / 3);
+      const s3 = halfTimeW2 - s1 - s2;
+      const s4 = Math.floor(remTimeW2 / 3);
+      const s5 = Math.floor(remTimeW2 / 3);
+      const s6 = remTimeW2 - s4 - s5;
+      const srH = OP_ROW_H / 2;
+      cell(doc, cx, ry, s1, srH, ''); cell(doc, cx + s1, ry, s2, srH, ''); cell(doc, cx + s1 + s2, ry, s3, srH, '');
+      cell(doc, cx + halfTimeW2, ry, s4, srH, ''); cell(doc, cx + halfTimeW2 + s4, ry, s5, srH, ''); cell(doc, cx + halfTimeW2 + s4 + s5, ry, s6, srH, '');
+      cell(doc, cx, ry + srH, s1, srH, ''); cell(doc, cx + s1, ry + srH, s2, srH, ''); cell(doc, cx + s1 + s2, ry + srH, s3, srH, '');
+      cell(doc, cx + halfTimeW2, ry + srH, s4, srH, ''); cell(doc, cx + halfTimeW2 + s4, ry + srH, s5, srH, ''); cell(doc, cx + halfTimeW2 + s4 + s5, ry + srH, s6, srH, '');
+    }
+  };
+
+  for (let i = 0; i < trips.length; i++) {
+    // 残り高さが1行分なければ改ページ
+    if (y + OP_ROW_H > pageH - marginB) {
+      doc.addPage();
+      y = marginT;
+      // カラムヘッダーを再描画
+      drawOperationColHeaders(doc, x, y, COL_HEADER_H, fontB);
+      y += COL_HEADER_H;
+    }
+    const trip = trips[i];
+    if (trip) drawSubCols(trip, y);
+    y += OP_ROW_H;
+  }
+  return y;
+}
+
+/**
+ * 運行記録6行（後方互換のため残す）
+ * ★ drawDailyDriverReport は drawOperationRowsAll を使用
  */
 function drawOperationRows(
   doc: PDFKit.PDFDocument,
@@ -474,7 +565,7 @@ function drawOperationRows(
   const sub6W = remTimeW - sub4W - sub5W;
   const subRowH = OP_ROW_H / 2;
 
-  for (let i = 0; i < OP_ROWS; i++) {
+  for (let i = 0; i < OP_ROWS_DEFAULT; i++) {
     const ry = y + i * OP_ROW_H;
     const trip = trips[i];
     let cx = x;
@@ -748,9 +839,22 @@ function drawDailyDriverReport(
   drawOperationColHeaders(doc, x0, y, COL_HEADER_H, fontB);
   y += COL_HEADER_H;
 
-  // ④ 運行記録6行 [B/C/D修正]
-  drawOperationRows(doc, x0, y, data.trips, fontN);
-  y += OP_ROW_H * OP_ROWS;
+  // ④ 運行記録 全件表示（★改ページ対応）
+  y = drawOperationRowsAll(doc, x0, y, data.trips, fontN, fontB, PAGE_H, MARGIN_T, 12);
+
+  // ⑤ 給油・署名セクション＋点検チェックリストを一体で改ページ判定
+  // 必要高さ = FUEL_H + INSP_HEADER_H + INSP_ROW_H * inspRows + LEGEND_H
+  const inspRows = Math.max(
+    data.leftInspItems.length,
+    data.middleInspItems.length,
+    1
+  );
+  const bottomBlockH = FUEL_H + INSP_HEADER_H + INSP_ROW_H * inspRows + LEGEND_H + 4;
+  if (y + bottomBlockH > PAGE_H - 12) {
+    // 給油+点検ブロックが入らないので改ページ（★指示: 絶対に分断禁止）
+    doc.addPage();
+    y = MARGIN_T;
+  }
 
   // ⑤ 給油・署名セクション [E/F修正: 1行 + 正方形署名欄]
   drawFuelSection(doc, x0, y, CONTENT_W, data, fontN, fontB);
@@ -760,10 +864,10 @@ function drawDailyDriverReport(
   drawInspHeaderRow(doc, x0, y, INSP_HEADER_H, fontB);
   y += INSP_HEADER_H;
 
-  // ⑦修正: 点検行（8行×2列）+ 備考エリア（全8行高さ）
+  // ⑦ 点検行（全件×2列）+ 備考エリア（★26件対応）
   const remarksX = x0 + INSP_GROUP_W * 2;
 
-  for (let i = 0; i < INSP_ROWS; i++) {
+  for (let i = 0; i < inspRows; i++) {
     const ry = y + i * INSP_ROW_H;
     drawInspRow(
       doc, x0, ry, i,
@@ -773,11 +877,11 @@ function drawDailyDriverReport(
     );
   }
 
-  // 備考エリア（8行全体の高さ = INSP_ROW_H * INSP_ROWS）
-  drawRemarksArea(doc, remarksX, y, INSP_ROW_H * INSP_ROWS, data.remarks, fontN);
+  // 備考エリア（全行高さ）
+  drawRemarksArea(doc, remarksX, y, INSP_ROW_H * inspRows, data.remarks, fontN);
 
   // ⑧ 凡例
-  y += INSP_ROW_H * INSP_ROWS + 2;
+  y += INSP_ROW_H * inspRows + 2;
   doc.font(fontN).fontSize(7).fillColor('#000000')
     .text('レ……異常なし　　×……要修理調整', x0 + 2, y, { lineBreak: false });
 }
