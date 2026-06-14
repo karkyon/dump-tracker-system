@@ -448,6 +448,26 @@ function drawOperationColHeaders(
 }
 
 
+
+/**
+ * 日報PDFのページ数をドライランでカウントする
+ */
+function countReportPages(data: DailyDriverReportData): number {
+  let pages = 1;
+  let y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
+  for (let i = 0; i < data.trips.length; i++) {
+    if (y + OP_ROW_H > PAGE_H - 12) {
+      pages++;
+      y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
+    }
+    y += OP_ROW_H;
+  }
+  const inspRows = Math.max(data.leftInspItems.length, data.middleInspItems.length, 1);
+  const bottomBlockH = FUEL_H + INSP_HEADER_H + INSP_ROW_H * inspRows + LEGEND_H + 4;
+  if (y + bottomBlockH > PAGE_H - 12) pages++;
+  return pages;
+}
+
 /**
  * 改ページ後の継続ページ用コンパクトヘッダー
  * タイトル行(TITLE_H) + ヘッダー行(HEADER_H) の2行を描画
@@ -460,9 +480,20 @@ function drawPageHeader(
   w: number,
   data: DailyDriverReportData,
   fontN: string,
-  fontB: string
+  fontB: string,
+  currentPage: number,
+  totalPages: number
 ): number {
   drawTitle(doc, x, y, w, TITLE_H, fontB);
+  if (totalPages > 1) {
+    doc.font(fontN).fontSize(7).fillColor('#000000');
+    doc.text(
+      `${currentPage} / ${totalPages}`,
+      PAGE_W - MARGIN_L - 45,
+      y + (TITLE_H - 7) / 2,
+      { width: 45, align: 'right', lineBreak: false }
+    );
+  }
   y += TITLE_H;
   drawHeaderRow(doc, x, y, w, HEADER_H, data, fontN, fontB);
   y += HEADER_H;
@@ -484,7 +515,9 @@ function drawOperationRowsAll(
   pageH: number,
   marginT: number,
   marginB: number,
-  data: DailyDriverReportData  // ★ 改ページヘッダー再描画用
+  data: DailyDriverReportData,
+  totalPages: number = 1,
+  currentPageRef: { value: number } = { value: 1 }
 ): number {
   let y = yStart;
 
@@ -550,9 +583,10 @@ function drawOperationRowsAll(
     // 残り高さが1行分なければ改ページ
     if (y + OP_ROW_H > pageH - marginB) {
       doc.addPage();
+      currentPageRef.value++;
       y = marginT;
-      // ★ 改ページ後: タイトル行 + 年月日・氏名・車番行 を再描画
-      y = drawPageHeader(doc, x, y, CONTENT_W, data, fontN, fontB);
+      // ★ 改ページ後: タイトル行(ページ番号付) + 年月日・氏名・車番行 を再描画
+      y = drawPageHeader(doc, x, y, CONTENT_W, data, fontN, fontB, currentPageRef.value, totalPages);
       // カラムヘッダーを再描画
       drawOperationColHeaders(doc, x, y, COL_HEADER_H, fontB);
       y += COL_HEADER_H;
@@ -851,8 +885,21 @@ function drawDailyDriverReport(
   const x0 = MARGIN_L;
   let y = MARGIN_T;
 
-  // ① タイトル
+  // ★ Pass1ドライランでtotalPagesを確定してから描画開始
+  const totalPages = countReportPages(data);
+  const currentPageRef = { value: 1 };
+
+  // ① タイトル（1ページ目: ページ番号付き）
   drawTitle(doc, x0, y, CONTENT_W, TITLE_H, fontB);
+  if (totalPages > 1) {
+    doc.font(fontN).fontSize(7).fillColor('#000000');
+    doc.text(
+      `${currentPageRef.value} / ${totalPages}`,
+      PAGE_W - MARGIN_L - 45,
+      y + (TITLE_H - 7) / 2,
+      { width: 45, align: 'right', lineBreak: false }
+    );
+  }
   y += TITLE_H;
 
   // ② ヘッダー行 [A修正: 始/終均等幅]
@@ -864,22 +911,17 @@ function drawDailyDriverReport(
   y += COL_HEADER_H;
 
   // ④ 運行記録 全件表示（★改ページ対応）
-  y = drawOperationRowsAll(doc, x0, y, data.trips, fontN, fontB, PAGE_H, MARGIN_T, 12, data);
+  y = drawOperationRowsAll(doc, x0, y, data.trips, fontN, fontB, PAGE_H, MARGIN_T, 12, data, totalPages, currentPageRef);
 
   // ⑤ 給油・署名セクション＋点検チェックリストを一体で改ページ判定
-  // 必要高さ = FUEL_H + INSP_HEADER_H + INSP_ROW_H * inspRows + LEGEND_H
-  const inspRows = Math.max(
-    data.leftInspItems.length,
-    data.middleInspItems.length,
-    1
-  );
+  const inspRows = Math.max(data.leftInspItems.length, data.middleInspItems.length, 1);
   const bottomBlockH = FUEL_H + INSP_HEADER_H + INSP_ROW_H * inspRows + LEGEND_H + 4;
   if (y + bottomBlockH > PAGE_H - 12) {
-    // 給油+点検ブロックが入らないので改ページ（★指示: 絶対に分断禁止）
     doc.addPage();
+    currentPageRef.value++;
     y = MARGIN_T;
-    // ★ 改ページ後: タイトル行 + 年月日・氏名・車番行 を再描画
-    y = drawPageHeader(doc, x0, y, CONTENT_W, data, fontN, fontB);
+    // ★ 改ページ後: タイトル行(ページ番号付) + 年月日・氏名・車番行 を再描画
+    y = drawPageHeader(doc, x0, y, CONTENT_W, data, fontN, fontB, currentPageRef.value, totalPages);
   }
 
   // ⑤ 給油・署名セクション [E/F修正: 1行 + 正方形署名欄]
@@ -892,15 +934,9 @@ function drawDailyDriverReport(
 
   // ⑦ 点検行（全件×2列）+ 備考エリア（★26件対応）
   const remarksX = x0 + INSP_GROUP_W * 2;
-
   for (let i = 0; i < inspRows; i++) {
     const ry = y + i * INSP_ROW_H;
-    drawInspRow(
-      doc, x0, ry, i,
-      data.leftInspItems[i],
-      data.middleInspItems[i],
-      fontN, fontB
-    );
+    drawInspRow(doc, x0, ry, i, data.leftInspItems[i], data.middleInspItems[i], fontN, fontB);
   }
 
   // 備考エリア（全行高さ）
@@ -911,6 +947,7 @@ function drawDailyDriverReport(
   doc.font(fontN).fontSize(7).fillColor('#000000')
     .text('レ……異常なし　　×……要修理調整', x0 + 2, y, { lineBreak: false });
 }
+
 
 // =====================================
 // エクスポート関数
@@ -937,7 +974,7 @@ export async function generateDailyDriverReportPDF(
         layout: 'landscape',
         margins: { top: MARGIN_T, bottom: 12, left: MARGIN_L, right: MARGIN_L },
         autoFirstPage: false,
-        bufferPages: true,  // ★ ページ番号後付けのため全ページをバッファリング
+        // bufferPages廃止: 2パス方式でページ番号を直接描画
       });
 
       const stream = fs.createWriteStream(outputPath);
@@ -954,28 +991,7 @@ export async function generateDailyDriverReportPDF(
       doc.addPage();
       drawDailyDriverReport(doc, data, fontResult ? 'JpFont' : null);
 
-      // ★ 全ページにページ番号を後付け描画
-      // bufferPages モードで switchToPage 後に doc.text() を使うと
-      // 内部カーソルが不定になり新規ページが生成されるため、
-      // doc.save()/restore() でステートを保護し、lineBreak:false を明示する
-      const range = doc.bufferedPageRange();
-      const totalPages = range.count;
-      const fontN = fontResult ? 'JpFont' : 'Helvetica';
-      for (let i = 0; i < totalPages; i++) {
-        doc.switchToPage(range.start + i);
-        doc.save();
-        doc.font(fontN).fontSize(7).fillColor('#000000');
-        // y座標を絶対指定し lineBreak:false で新規ページ生成を防止
-        const pageNumText = `${i + 1} / ${totalPages}`;
-        doc.text(
-          pageNumText,
-          PAGE_W - MARGIN_L - 45,
-          PAGE_H - 11,
-          { width: 45, align: 'right', lineBreak: false }
-        );
-        doc.restore();
-      }
-
+      // ★ ページ番号は2パス方式で描画済み
       doc.end();
 
       stream.on('finish', () => {
