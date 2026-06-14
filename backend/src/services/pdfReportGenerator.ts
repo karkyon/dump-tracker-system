@@ -955,17 +955,25 @@ export async function generateDailyDriverReportPDF(
       drawDailyDriverReport(doc, data, fontResult ? 'JpFont' : null);
 
       // ★ 全ページにページ番号を後付け描画
-      const totalPages = doc.bufferedPageRange().count;
+      // bufferPages モードで switchToPage 後に doc.text() を使うと
+      // 内部カーソルが不定になり新規ページが生成されるため、
+      // doc.save()/restore() でステートを保護し、lineBreak:false を明示する
+      const range = doc.bufferedPageRange();
+      const totalPages = range.count;
       const fontN = fontResult ? 'JpFont' : 'Helvetica';
       for (let i = 0; i < totalPages; i++) {
-        doc.switchToPage(i);
+        doc.switchToPage(range.start + i);
+        doc.save();
         doc.font(fontN).fontSize(7).fillColor('#000000');
+        // y座標を絶対指定し lineBreak:false で新規ページ生成を防止
+        const pageNumText = `${i + 1} / ${totalPages}`;
         doc.text(
-          `${i + 1} / ${totalPages}`,
-          PAGE_W - MARGIN_L - 40,
-          PAGE_H - 10,
-          { width: 40, align: 'right', lineBreak: false }
+          pageNumText,
+          PAGE_W - MARGIN_L - 45,
+          PAGE_H - 11,
+          { width: 45, align: 'right', lineBreak: false }
         );
+        doc.restore();
       }
 
       doc.end();
