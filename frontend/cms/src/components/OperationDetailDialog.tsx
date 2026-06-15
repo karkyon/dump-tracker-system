@@ -1186,11 +1186,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       }
 
       // ✅ Google Map インスタンス初期化
+      // mapId は AdvancedMarkerElement に必須。環境変数 → サンプルID の順でフォールバック
+      const resolvedMapId = (import.meta as any).env?.VITE_GOOGLE_MAP_ID || '90f87356969d889c';
       const map = new google.maps.Map(mapRef.current!, {
         center: { lat: centerLat, lng: centerLng },
         zoom: 13,
         mapTypeId: google.maps.MapTypeId.ROADMAP,
-        ...((import.meta as any).env?.VITE_GOOGLE_MAP_ID ? { mapId: (import.meta as any).env.VITE_GOOGLE_MAP_ID } : {}),
+        mapId: resolvedMapId,
       });
       mapInstanceRef.current = map;
 
@@ -1300,15 +1302,39 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
             `user-select:none`,
           ].join(';');
           evPinEl.textContent = label.short;
-          const marker = new (google.maps as any).marker.AdvancedMarkerElement({
-            position: { lat: point.latitude, lng: point.longitude },
-            map: map,
-            title: `${point.sequenceNumber > 0 ? point.sequenceNumber + '. ' : ''}${label.full}`,
-            content: evPinEl,
-          });
+          // AdvancedMarkerElement（mapId必須）→ フォールバック: 旧Marker
+          let marker: any;
+          if ((google.maps as any).marker?.AdvancedMarkerElement) {
+            marker = new (google.maps as any).marker.AdvancedMarkerElement({
+              position: { lat: point.latitude, lng: point.longitude },
+              map: map,
+              title: `${point.sequenceNumber > 0 ? point.sequenceNumber + '. ' : ''}${label.full}`,
+              content: evPinEl,
+            });
+          } else {
+            // フォールバック: 旧 google.maps.Marker（mapId不要）
+            marker = new google.maps.Marker({
+              position: { lat: point.latitude, lng: point.longitude },
+              map: map,
+              title: `${point.sequenceNumber > 0 ? point.sequenceNumber + '. ' : ''}${label.full}`,
+              icon: {
+                url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+                  `<svg xmlns="http://www.w3.org/2000/svg" width="${markerSize*2}" height="${markerSize*2}">` +
+                  `<circle cx="${markerSize}" cy="${markerSize}" r="${markerSize-2}" fill="${label.color}" stroke="white" stroke-width="2.5"/>` +
+                  `<text x="${markerSize}" y="${markerSize + fontSize/3}" text-anchor="middle" fill="white" font-size="${fontSize}" font-weight="bold" font-family="sans-serif">${label.short}</text>` +
+                  `</svg>`
+                )}`,
+                scaledSize: new google.maps.Size(markerSize*2, markerSize*2),
+                anchor: new google.maps.Point(markerSize, markerSize),
+              },
+            });
+          }
 
-          // クリックで情報ウィンドウ表示
-          marker.addListener('click', () => {
+          // クリックで情報ウィンドウ表示（AdvancedMarker/旧Marker両対応）
+          const markerTarget = (google.maps as any).marker?.AdvancedMarkerElement
+            ? marker
+            : marker;
+          markerTarget.addListener('click', () => {
             const content = `
               <div style="padding:8px;min-width:160px;font-family:sans-serif;font-size:12px;">
                 <div style="font-weight:bold;font-size:13px;margin-bottom:4px;color:#1f2937;">
@@ -1324,7 +1350,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
               </div>
             `;
             infoWindow.setContent(content);
-            infoWindow.open(map, marker);
+            infoWindow.open({ map, anchor: marker });
           });
         });
 
