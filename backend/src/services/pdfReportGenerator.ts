@@ -466,7 +466,7 @@ function countReportPages(data: DailyDriverReportData): number {
   let y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
   for (const trip of data.trips) {
     const rowCount = (trip.rows && trip.rows.length > 0) ? trip.rows.length : 1;
-    const blockH = GRP_ROW_H + OP_ROW_H * rowCount;
+    const blockH = OP_ROW_H * rowCount;  // グループ行廃止: 1行統合
     if (y + blockH > PAGE_H - 12) {
       pages++;
       y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
@@ -569,38 +569,37 @@ function drawOperationRowsAll(
           unloadingMinutes: trip.unloadingDuration  ?? '',
         }];
 
-    const totalH = GRP_ROW_H + OP_ROW_H * rows.length;
+    // 全行数 = rows.length（グループ行は廃止、1行目に統合）
+    const totalH = OP_ROW_H * rows.length;
     if (needBreak(totalH)) doPageBreak();
 
-    // ── グループ行 ──
-    let cx = x;
-    const gy = y;
-    const gh = GRP_ROW_H;
-    cell(doc, cx, gy, COL_CONTRACTOR, gh, trip.contractorName,   { ...fLeft }); cx += COL_CONTRACTOR;
-    cell(doc, cx, gy, COL_LOADING,    gh, trip.loadingLocation,   { ...fLeft }); cx += COL_LOADING;
-    cell(doc, cx, gy, COL_UNLOADING,  gh, trip.unloadingLocation, { ...fLeft }); cx += COL_UNLOADING;
-    cell(doc, cx, gy, COL_ITEM,       gh, trip.itemName,          { ...fLeft, wrap: true }); cx += COL_ITEM;
-    cell(doc, cx, gy, COL_COUNT,      gh, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
-    cell(doc, cx, gy, COL_TONS,       gh, trip.quantityTons > 0  ? String(trip.quantityTons)  : '', fOpt); cx += COL_TONS;
-    cell(doc, cx, gy, COL_CONDITION,  gh, '○', fOpt); cx += COL_CONDITION;
-    cell(doc, cx, gy, halfTimeW, gh, '', fOpt); cx += halfTimeW;
-    cell(doc, cx, gy, COL_MOVE,  gh, '', fOpt); cx += COL_MOVE;
-    cell(doc, cx, gy, remTimeW,  gh, '', fOpt);
-    y += gh;
-
-    // ── 時刻行 ──
-    for (const row of rows) {
-      if (needBreak(OP_ROW_H)) doPageBreak();
-      cx = x;
+    rows.forEach((row, rowIdx) => {
+      if (rowIdx > 0 && needBreak(OP_ROW_H)) doPageBreak();
+      let cx = x;
       const ry = y;
       const rh = OP_ROW_H;
-      cell(doc, cx, ry, COL_CONTRACTOR, rh, ''); cx += COL_CONTRACTOR;
-      cell(doc, cx, ry, COL_LOADING,    rh, ''); cx += COL_LOADING;
-      cell(doc, cx, ry, COL_UNLOADING,  rh, ''); cx += COL_UNLOADING;
-      cell(doc, cx, ry, COL_ITEM,       rh, ''); cx += COL_ITEM;
-      cell(doc, cx, ry, COL_COUNT,      rh, ''); cx += COL_COUNT;
-      cell(doc, cx, ry, COL_TONS,       rh, ''); cx += COL_TONS;
-      cell(doc, cx, ry, COL_CONDITION,  rh, ''); cx += COL_CONDITION;
+
+      // 1行目: 客先名・場所・品名・台数・トン数・積付を表示
+      // 2行目以降: 左側は空欄
+      if (rowIdx === 0) {
+        cell(doc, cx, ry, COL_CONTRACTOR, rh, trip.contractorName,   { ...fLeft }); cx += COL_CONTRACTOR;
+        cell(doc, cx, ry, COL_LOADING,    rh, trip.loadingLocation,   { ...fLeft }); cx += COL_LOADING;
+        cell(doc, cx, ry, COL_UNLOADING,  rh, trip.unloadingLocation, { ...fLeft }); cx += COL_UNLOADING;
+        cell(doc, cx, ry, COL_ITEM,       rh, trip.itemName,          { ...fLeft, wrap: true }); cx += COL_ITEM;
+        cell(doc, cx, ry, COL_COUNT,      rh, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
+        cell(doc, cx, ry, COL_TONS,       rh, trip.quantityTons > 0  ? String(trip.quantityTons)  : '', fOpt); cx += COL_TONS;
+        cell(doc, cx, ry, COL_CONDITION,  rh, '○', fOpt); cx += COL_CONDITION;
+      } else {
+        cell(doc, cx, ry, COL_CONTRACTOR, rh, ''); cx += COL_CONTRACTOR;
+        cell(doc, cx, ry, COL_LOADING,    rh, ''); cx += COL_LOADING;
+        cell(doc, cx, ry, COL_UNLOADING,  rh, ''); cx += COL_UNLOADING;
+        cell(doc, cx, ry, COL_ITEM,       rh, ''); cx += COL_ITEM;
+        cell(doc, cx, ry, COL_COUNT,      rh, ''); cx += COL_COUNT;
+        cell(doc, cx, ry, COL_TONS,       rh, ''); cx += COL_TONS;
+        cell(doc, cx, ry, COL_CONDITION,  rh, ''); cx += COL_CONDITION;
+      }
+
+      // 時刻データ（全行共通）
       cell(doc, cx,    ry, s1, rh, row.loadingStart,    fSmall); cx += s1;
       cell(doc, cx,    ry, s2, rh, row.loadingEnd,      fSmall); cx += s2;
       cell(doc, cx,    ry, s3, rh, row.loadingMinutes,  fSmall); cx += s3;
@@ -609,9 +608,8 @@ function drawOperationRowsAll(
       cell(doc, cx,    ry, s5, rh, row.unloadingEnd,      fSmall); cx += s5;
       cell(doc, cx,    ry, s6, rh, row.unloadingMinutes,  fSmall);
       y += rh;
-    }
+    });
   }
-
   return y;
 }
 
