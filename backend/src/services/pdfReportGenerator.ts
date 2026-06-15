@@ -450,8 +450,7 @@ function drawOperationColHeaders(
   cx += halfTimeW;
 
   // 移動時間列
-  cell(doc, cx, y, COL_MOVE, h, '移動
-時間', f6);
+  cell(doc, cx, y, COL_MOVE, h, '移動時間', f6);
   cx += COL_MOVE;
 
   // 荷降時間グループ（上段ラベル + 下段3列）
