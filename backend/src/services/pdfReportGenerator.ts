@@ -407,9 +407,7 @@ function drawHeaderRow(
 
 /**
  * 運行記録テーブルのカラムヘッダー
- * [D修正] 積み込み時間を2行×3列ヘッダーに変更
- *         上行: 積込時間 | 積降時間
- *         下行: 始|終|時間 | 始|終|時間
+ * 新構造: 客先名|積込場所|荷降場所|品名|台数|トン数|積付状況|積込時間(始終時間)|移動時間|荷降時間(始終時間)
  */
 function drawOperationColHeaders(
   doc: PDFKit.PDFDocument,
@@ -423,56 +421,58 @@ function drawOperationColHeaders(
   const f6 = { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 6, bg };
 
   let cx = x;
-  // [B対応] COL_CONTRACTOR=164で自動反映
-  cell(doc, cx, y, COL_CONTRACTOR, h, '客先名', f8); cx += COL_CONTRACTOR;
+  cell(doc, cx, y, COL_CONTRACTOR, h, '客先名',   f8); cx += COL_CONTRACTOR;
   cell(doc, cx, y, COL_LOADING,    h, '積込場所', f8); cx += COL_LOADING;
   cell(doc, cx, y, COL_UNLOADING,  h, '荷降場所', f8); cx += COL_UNLOADING;
-  cell(doc, cx, y, COL_ITEM,       h, '品名', f8); cx += COL_ITEM;
-  cell(doc, cx, y, COL_COUNT,      h, '台数', f8); cx += COL_COUNT;
-  cell(doc, cx, y, COL_TONS,       h, 'トン数', f8); cx += COL_TONS;
+  cell(doc, cx, y, COL_ITEM,       h, '品名',     f8); cx += COL_ITEM;
+  cell(doc, cx, y, COL_COUNT,      h, '台数',     f8); cx += COL_COUNT;
+  cell(doc, cx, y, COL_TONS,       h, 'トン数',   f8); cx += COL_TONS;
   cell(doc, cx, y, COL_CONDITION,  h, '積付状況', f8); cx += COL_CONDITION;
 
-  // [D修正] 積み込み時間列: 2行×3列ヘッダー
-  // COL_TIME を左半分(積込)と右半分(積降)に分割
-  const halfTimeW = Math.floor(COL_TIME / 2);
-  const remTimeW = COL_TIME - halfTimeW;
-  const subH = h / 2;  // 各サブ行の高さ
-
-  // 上段ラベル: 積込時間 | 積降時間
-  cell(doc, cx,            y, halfTimeW, subH, '積 込 時 間', f8);
-  cell(doc, cx + halfTimeW, y, remTimeW,  subH, '荷 降 時 間', f8);
-
-  // 下段: 3サブ列ラベル（積込側）
+  // ★ 時間列: drawOperationRowsAll と完全一致した幅計算
+  // timeAreaW = COL_TIME - COL_MOVE （積込+荷降の合計）
+  const timeAreaW = COL_TIME - COL_MOVE;
+  const halfTimeW = Math.floor(timeAreaW / 2);
+  const remTimeW  = timeAreaW - halfTimeW;
   const sub1W = Math.floor(halfTimeW / 3);
   const sub2W = Math.floor(halfTimeW / 3);
   const sub3W = halfTimeW - sub1W - sub2W;
-  cell(doc, cx,            y + subH, sub1W, subH, '始', f6);
-  cell(doc, cx + sub1W,    y + subH, sub2W, subH, '終', f6);
-  cell(doc, cx + sub1W + sub2W, y + subH, sub3W, subH, '時間', f6);
-
-  // 下段: 3サブ列ラベル（積降側）
   const sub4W = Math.floor(remTimeW / 3);
   const sub5W = Math.floor(remTimeW / 3);
   const sub6W = remTimeW - sub4W - sub5W;
-  cell(doc, cx + halfTimeW,           y + subH, sub4W, subH, '始', f6);
-  cell(doc, cx + halfTimeW + sub4W,   y + subH, sub5W, subH, '終', f6);
-  cell(doc, cx + halfTimeW + sub4W + sub5W, y + subH, sub6W, subH, '時間', f6);
+  const subH = h / 2;
+
+  // 積込時間グループ（上段ラベル + 下段3列）
+  cell(doc, cx,               y,      halfTimeW, subH, '積 込 時 間', f8);
+  cell(doc, cx,               y+subH, sub1W,     subH, '始', f6);
+  cell(doc, cx+sub1W,         y+subH, sub2W,     subH, '終', f6);
+  cell(doc, cx+sub1W+sub2W,   y+subH, sub3W,     subH, '時間', f6);
+  cx += halfTimeW;
+
+  // 移動時間列
+  cell(doc, cx, y, COL_MOVE, h, '移動
+時間', f6);
+  cx += COL_MOVE;
+
+  // 荷降時間グループ（上段ラベル + 下段3列）
+  cell(doc, cx,             y,      remTimeW, subH, '荷 降 時 間', f8);
+  cell(doc, cx,             y+subH, sub4W,    subH, '始', f6);
+  cell(doc, cx+sub4W,       y+subH, sub5W,    subH, '終', f6);
+  cell(doc, cx+sub4W+sub5W, y+subH, sub6W,    subH, '時間', f6);
 }
 
 
-
-/**
- * 日報PDFのページ数をドライランでカウントする
- */
 function countReportPages(data: DailyDriverReportData): number {
   let pages = 1;
   let y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
-  for (let i = 0; i < data.trips.length; i++) {
-    if (y + OP_ROW_H > PAGE_H - 12) {
+  for (const trip of data.trips) {
+    const rowCount = (trip.rows && trip.rows.length > 0) ? trip.rows.length : 1;
+    const blockH = GRP_ROW_H + OP_ROW_H * rowCount;
+    if (y + blockH > PAGE_H - 12) {
       pages++;
       y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
     }
-    y += OP_ROW_H;
+    y += blockH;
   }
   const inspRows = Math.max(data.leftInspItems.length, data.middleInspItems.length, 1);
   const bottomBlockH = FUEL_H + INSP_HEADER_H + INSP_ROW_H * inspRows + LEGEND_H + 4;

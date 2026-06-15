@@ -302,8 +302,8 @@ function calcTimeDuration(startStr: string, endStr: string): string {
  * operation_details から TripCycleRow の配列を生成する
  * LOADING/UNLOADING をペアリングして1サイクル = 1行とする
  */
-function buildTripCycles(operationDetailsList: any[][]): any[] {
-  // 全運行の全detailsを統合してシーケンス順にソート
+function buildGroupedTrips(operationDetailsList: any[][]): any[] {
+  // 全detailsを統合してシーケンス順ソート
   const allDetails: any[] = [];
   for (const details of operationDetailsList) {
     allDetails.push(...details);
@@ -314,137 +314,156 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
     return sa - sb;
   });
 
-  // ②修正: UNLOADING重複排除（同一場所・60秒以内）
-  const deduped: any[] = [];
-  for (let i = 0; i < allDetails.length; i++) {
-    const cur = allDetails[i];
-    const at = cur.activity_type ?? cur.activityType ?? '';
-    if (at === 'UNLOADING' || at === 'UNLOADING_START' || at === 'UNLOADING_COMPLETE') {
-      const prev = deduped.slice().reverse().find((d: any) => {
-        const da = d.activity_type ?? d.activityType ?? '';
-        return da === 'UNLOADING' || da === 'UNLOADING_START' || da === 'UNLOADING_COMPLETE';
-      });
-      if (prev) {
-        const prevLoc = prev.locations?.name ?? prev.location?.name ?? '';
-        const curLoc  = cur.locations?.name  ?? cur.location?.name  ?? '';
-        const prevT = prev.actual_start_time ?? prev.actualStartTime;
-        const curT  = cur.actual_start_time  ?? cur.actualStartTime;
-        if (prevLoc === curLoc && prevT && curT) {
-          const diffMs = Math.abs(new Date(curT).getTime() - new Date(prevT).getTime());
-          if (diffMs <= 60000) {
-            // マージ: actualEndTime は後勝ち
-            const idx = deduped.lastIndexOf(prev);
-            if (cur.actual_end_time ?? cur.actualEndTime) {
-              deduped[idx].actual_end_time = cur.actual_end_time;
-              deduped[idx].actualEndTime   = cur.actualEndTime;
-            }
-            continue; // スキップ
-          }
-        }
-      }
-    }
-    deduped.push(cur);
-  }
-  // deduped を allDetails として使用
-  allDetails.length = 0;
-  allDetails.push(...deduped);
+  // LOADING_TYPES / UNLOADING_TYPES
+  const LOADING_TYPES   = ['LOADING','LOADING_START','LOADING_COMPLETE','LOADING_ARRIVED','LOADING_COMPLETED'];
+  const UNLOADING_TYPES = ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE','UNLOADING_ARRIVED','UNLOADING_COMPLETED'];
 
-  const LOADING_TYPES = ['LOADING', 'LOADING_START', 'LOADING_COMPLETE', 'LOADING_ARRIVED', 'LOADING_COMPLETED'];
-  const UNLOADING_TYPES = ['UNLOADING', 'UNLOADING_START', 'UNLOADING_COMPLETE', 'UNLOADING_ARRIVED', 'UNLOADING_COMPLETED'];
-
-  interface CycleAccumulator {
+  // ---------- Pass1: サイクル列挙 ----------
+  interface RawCycle {
     contractorName: string;
     loadingLocation: string;
     unloadingLocation: string;
     itemName: string;
-    vehicleCount: number;
     quantityTons: number;
-    loadingCondition: string;
-    loadingStartTime: string;
-    loadingEndTime: string;
-    unloadingStartTime: string;   // NEW: 荷降開始時刻
-    unloadingEndTime: string;     // NEW: 荷降終了時刻
-    hasLoading: boolean;
-    hasUnloading: boolean;
+    loadingStart: string;
+    loadingEnd: string;
+    unloadingStart: string;
+    unloadingEnd: string;
   }
 
-  const cycles: CycleAccumulator[] = [];
-  let current: CycleAccumulator | null = null;
+  const rawCycles: RawCycle[] = [];
+  let cur: Partial<RawCycle> | null = null;
 
   for (const d of allDetails) {
-    const actType: string = d.activity_type ?? d.activityType ?? '';
-    const locationName: string = d.locations?.name ?? d.location?.name ?? '';
-    // ★ customItemName: notes の [手入力品目: XXX] を抽出し、DB品目名より優先
-    const dbItemName: string = d.items?.name ?? d.item?.name ?? '';
+    const at: string = (d.activity_type ?? d.activityType ?? '').toUpperCase();
+    const locName: string = d.locations?.name ?? d.location?.name ?? '';
+    const dbItem: string = d.items?.name ?? d.item?.name ?? '';
     const notesStr: string = d.notes ?? '';
-    const customItemMatch = notesStr.match(/\[手入力品目:\s*(.+?)\]/);
-    const customItemName: string = customItemMatch?.[1]?.trim() ?? '';
-    const itemName: string = customItemName || dbItemName;
-    const qty: number = d.quantity_tons != null ? Number(d.quantity_tons) : (d.quantityTons != null ? Number(d.quantityTons) : 0);
+    const customMatch = notesStr.match(/\[手入力品目:\s*(.+?)\]/);
+    const itemName: string = customMatch?.[1]?.trim() ?? dbItem;
+    const qty: number = d.quantity_tons != null ? Number(d.quantity_tons)
+                      : d.quantityTons  != null ? Number(d.quantityTons) : 0;
     const startT: string = formatTime(d.actual_start_time ?? d.actualStartTime);
-    const endT: string = formatTime(d.actual_end_time ?? d.actualEndTime);
-    const notes: string = d.notes ?? '';
+    const endT: string   = formatTime(d.actual_end_time   ?? d.actualEndTime);
 
-    if (LOADING_TYPES.includes(actType)) {
-      if (current && !current.hasUnloading) {
-        // 前のローディングが未完了なら閉じる
-        cycles.push(current);
-      }
-      // ⑤a: detail に付加された _opCustomerName を contractorName として使用
-      const contractorName: string = (d as any)._opCustomerName ?? '';
-      current = {
-        contractorName,
-        loadingLocation: locationName,
+    if (LOADING_TYPES.some(t => at === t)) {
+      if (cur && cur.loadingStart) rawCycles.push(cur as RawCycle);
+      cur = {
+        contractorName: (d as any)._opCustomerName ?? '',
+        loadingLocation: locName,
         unloadingLocation: '',
         itemName,
-        vehicleCount: 1,
-        quantityTons: qty,
-        loadingCondition: notes,
-        loadingStartTime: startT,
-        loadingEndTime: endT,
-        unloadingStartTime: '',   // NEW
-        unloadingEndTime: '',     // NEW
-        hasLoading: true,
-        hasUnloading: false,
+        quantityTons: qty > 0 ? qty : 0,
+        loadingStart: startT,
+        loadingEnd: endT,
+        unloadingStart: '',
+        unloadingEnd: '',
       };
-    } else if (UNLOADING_TYPES.includes(actType)) {
-      if (current && current.hasLoading) {
-        current.unloadingLocation = locationName;
-        current.unloadingStartTime = startT;   // NEW: 荷降開始時刻
-        current.unloadingEndTime = endT;       // NEW: 荷降終了時刻
-        current.hasUnloading = true;
-        // 荷降ろし時のトン数があれば上書き
-        if (qty > 0 && current.quantityTons === 0) current.quantityTons = qty;
-        cycles.push(current);
-        current = null;
+    } else if (UNLOADING_TYPES.some(t => at === t)) {
+      if (cur) {
+        cur.unloadingLocation = locName;
+        cur.unloadingStart    = startT;
+        cur.unloadingEnd      = endT;
+        if (qty > 0 && (cur.quantityTons ?? 0) === 0) cur.quantityTons = qty;
+        rawCycles.push(cur as RawCycle);
+        cur = null;
       } else {
-        // ローディングなしでアンローディングが来た場合
-        cycles.push({
-          contractorName: '',
+        rawCycles.push({
+          contractorName: (d as any)._opCustomerName ?? '',
           loadingLocation: '',
-          unloadingLocation: locationName,
-          itemName,
-          vehicleCount: 1,
-          quantityTons: qty,
-          loadingCondition: '',
-          loadingStartTime: '',
-          loadingEndTime: '',
-          unloadingStartTime: startT,   // ← 追加
-          unloadingEndTime: endT,       // ← 追加
-          hasLoading: false,
-          hasUnloading: true,
+          unloadingLocation: locName,
+          itemName, quantityTons: qty,
+          loadingStart: '', loadingEnd: '',
+          unloadingStart: startT, unloadingEnd: endT,
         });
       }
     }
   }
+  if (cur) rawCycles.push(cur as RawCycle);
 
-  // 未閉じのサイクルを追加
-  if (current) {
-    cycles.push(current);
+  // ---------- 移動時間計算ユーティリティ ----------
+  const toMinutes = (hhmm: string): number => {
+    if (!hhmm) return -1;
+    const parts = hhmm.split(':');
+    const h = parseInt(parts[0] ?? '0', 10);
+    const m = parseInt(parts[1] ?? '0', 10);
+    return h * 60 + m;
+  };
+  const diffMinutes = (startHHMM: string, endHHMM: string): number => {
+    const s = toMinutes(startHHMM);
+    const e = toMinutes(endHHMM);
+    if (s < 0 || e < 0) return -1;
+    let d = e - s;
+    if (d < 0) d += 24 * 60;
+    return d;
+  };
+  const minutesStr = (m: number): string => m < 0 ? '' : `${m}分`;
+
+  // ---------- Pass2: グループ化 ----------
+  // グループキー: 客先名|積込場所|荷降場所|品目名
+  const groupMap = new Map<string, any>();
+  const groupOrder: string[] = [];
+
+  for (let i = 0; i < rawCycles.length; i++) {
+    const c = rawCycles[i]!;
+    const key = `${c.contractorName}|${c.loadingLocation}|${c.unloadingLocation}|${c.itemName}`;
+
+    // 移動時間 = 積込終了 → 荷降開始
+    const moveMin = diffMinutes(c.loadingEnd, c.unloadingStart);
+    // 積込時間(分)
+    const loadMin = diffMinutes(c.loadingStart, c.loadingEnd);
+    // 荷降時間(分)
+    const unlMin  = diffMinutes(c.unloadingStart, c.unloadingEnd);
+
+    const timeRow = {
+      loadingStart:    c.loadingStart,
+      loadingEnd:      c.loadingEnd,
+      loadingMinutes:  minutesStr(loadMin),
+      moveMinutes:     minutesStr(moveMin),
+      unloadingStart:  c.unloadingStart,
+      unloadingEnd:    c.unloadingEnd,
+      unloadingMinutes: minutesStr(unlMin),
+    };
+
+    if (groupMap.has(key)) {
+      const g = groupMap.get(key)!;
+      g.vehicleCount++;
+      g.totalTons += c.quantityTons;
+      g.rows.push(timeRow);
+    } else {
+      groupMap.set(key, {
+        contractorName:    c.contractorName,
+        loadingLocation:   c.loadingLocation,
+        unloadingLocation: c.unloadingLocation,
+        itemName:          c.itemName,
+        vehicleCount:      1,
+        totalTons:         c.quantityTons,
+        loadingCondition:  '',
+        rows: [timeRow],
+        // 後方互換フィールド（旧TripCycleRow互換）
+        quantityTons: c.quantityTons,
+        loadingStartTime:    c.loadingStart,
+        loadingEndTime:      c.loadingEnd,
+        loadingDuration:     minutesStr(loadMin),
+        unloadingStartTime:  c.unloadingStart,
+        unloadingEndTime:    c.unloadingEnd,
+        unloadingDuration:   minutesStr(unlMin),
+      });
+      groupOrder.push(key);
+    }
   }
 
-  return cycles;
+  const result = groupOrder.map(k => {
+    const g = groupMap.get(k)!;
+    g.quantityTons = g.totalTons;  // 後方互換: quantityTons = 合計
+    return g;
+  });
+
+  return result;
 }
+
+// 後方互換エイリアス
+const buildTripCycles = buildGroupedTrips;
 
 class ReportService {
   private readonly db: PrismaClient;
@@ -1717,21 +1736,23 @@ class ReportService {
       vehiclePlateNumber: vehiclePlate,
       startOdometer: startOdo,
       endOdometer: endOdo,
-      trips: cycles.map((c: any) => ({  // FB3修正: スライス制限撤廃（全サイクル出力）
-        contractorName: c.contractorName,
-        loadingLocation: c.loadingLocation,
+      trips: cycles.map((c: any) => ({
+        contractorName:    c.contractorName,
+        loadingLocation:   c.loadingLocation,
         unloadingLocation: c.unloadingLocation,
-        itemName: c.itemName,
-        vehicleCount: c.vehicleCount,
-        quantityTons: c.quantityTons > 0 ? parseFloat(fmtNum(c.quantityTons, 2)) : 0,
-        loadingCondition: c.loadingCondition,
-        loadingStartTime: c.loadingStartTime,
-        loadingEndTime: c.loadingEndTime || c.unloadingStartTime,  // ⑤修正: 積込終了=荷降移動開始時刻
-       loadingDuration: calcTimeDuration(c.loadingStartTime, c.loadingEndTime || c.unloadingStartTime),  // ⑤fix: 積込終了なければ荷降開始で代替
-       unloadingStartTime: c.unloadingStartTime ?? '',                               // NEW(D)
-       unloadingEndTime: c.unloadingEndTime ?? '',                                   // NEW(D)
-       unloadingDuration: calcTimeDuration(c.unloadingStartTime ?? '', c.unloadingEndTime ?? ''), // NEW(D)
-       imageUrl: (c as any).imageUrl || undefined,  // REQ-020
+        itemName:          c.itemName,
+        vehicleCount:      c.vehicleCount,
+        quantityTons:      c.totalTons > 0 ? parseFloat(fmtNum(c.totalTons, 2)) : 0,
+        loadingCondition:  c.loadingCondition ?? '',
+        // 後方互換フィールド（1件目の時刻を代表値として設定）
+        loadingStartTime:   c.rows?.[0]?.loadingStart   ?? c.loadingStartTime   ?? '',
+        loadingEndTime:     c.rows?.[0]?.loadingEnd     ?? c.loadingEndTime     ?? '',
+        loadingDuration:    c.rows?.[0]?.loadingMinutes ?? c.loadingDuration    ?? '',
+        unloadingStartTime: c.rows?.[0]?.unloadingStart ?? c.unloadingStartTime ?? '',
+        unloadingEndTime:   c.rows?.[0]?.unloadingEnd   ?? c.unloadingEndTime   ?? '',
+        unloadingDuration:  c.rows?.[0]?.unloadingMinutes ?? c.unloadingDuration ?? '',
+        // ★ 新規: グループ内全時刻行
+        rows: c.rows ?? [],
       })),
       fuelLiters,
       fuelOdometerKm,
