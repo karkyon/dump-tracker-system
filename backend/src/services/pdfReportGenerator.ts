@@ -34,7 +34,8 @@ const CONTENT_W = PAGE_W - MARGIN_L * 2;  // 811.89
 const TITLE_H = 22;
 const HEADER_H = 26;
 const COL_HEADER_H = 24;     // D対応: 2行ヘッダーのため高さ増加 (旧:16)
-const OP_ROW_H = 34;         // 運行記録行（変更なし、2サブ行 each=17pt）
+const OP_ROW_H = 20;         // ★ 時刻行（1行構造）
+const GRP_ROW_H = 20;         // ★ グループヘッダー行
 const OP_ROWS_DEFAULT = 6; // ★ 動的化: drawDailyDriverReport で全件ループ
 const FUEL_H = 50;           // E/F対応: 1行化 + 正方形署名欄の高さ（旧:52）
 const INSP_HEADER_H = 16;
@@ -49,7 +50,8 @@ const COL_UNLOADING = 128;   // 荷降場所（変更なし）
 const COL_ITEM = 68;         // ②修正: 現在幅の110%に拡大
 const COL_COUNT = 32;        // 台数（変更なし）
 const COL_TONS = 38;         // トン数（変更なし）
-const COL_CONDITION = 38;    // 積付状況（変更なし）
+const COL_CONDITION = 30;    // 積付状況
+const COL_MOVE = 30;         // ★ 移動時間列
 // D対応: 積み込み時間列（残り幅 = 約221pt, 3等分 ≈ 73.6pt/sub-col）
 const COL_TIME = CONTENT_W - COL_CONTRACTOR - COL_LOADING - COL_UNLOADING
                - COL_ITEM - COL_COUNT - COL_TONS - COL_CONDITION;
@@ -68,23 +70,33 @@ const SIGN_CELL_W = FUEL_H;  // = 50pt（正方形）
 // データ型定義
 // =====================================
 
-/** 1運行サイクル（積込→積降）の記録 */
+/** グループ内の1時刻行 */
+export interface TripTimeRow {
+  loadingStart: string;
+  loadingEnd: string;
+  loadingMinutes: string;
+  moveMinutes: string;
+  unloadingStart: string;
+  unloadingEnd: string;
+  unloadingMinutes: string;
+}
+
+/** 1グループ（同一客先+積込場所+荷降場所+品目）の記録 */
 export interface TripCycleRow {
-  contractorName: string;       // 業者名
-  loadingLocation: string;      // 積込場所
-  unloadingLocation: string;    // 荷降場所
-  itemName: string;             // 品名
-  vehicleCount: number;         // 台数
-  quantityTons: number;         // トン数
-  loadingCondition: string;     // 積付状況
-  // D対応: 積込時間（3フィールド）
-  loadingStartTime: string;     // 積込開始時刻 hh:mm (A-1)
-  loadingEndTime: string;       // 積込終了時刻 hh:mm (A-2)
-  loadingDuration: string;      // 積込所要時間 hh時間mm分 (A-3)
-  // D対応: 積降時間（3フィールド）
-  unloadingStartTime: string;   // 積降開始時刻 hh:mm (A-4)
-  unloadingEndTime: string;     // 積降終了時刻 hh:mm (A-5)
-  unloadingDuration: string;    // 積降所要時間 hh時間mm分 (A-6)
+  contractorName: string;
+  loadingLocation: string;
+  unloadingLocation: string;
+  itemName: string;
+  vehicleCount: number;
+  quantityTons: number;
+  loadingCondition: string;
+  loadingStartTime: string;
+  loadingEndTime: string;
+  loadingDuration: string;
+  unloadingStartTime: string;
+  unloadingEndTime: string;
+  unloadingDuration: string;
+  rows?: TripTimeRow[];
 }
 
 /** 点検チェック1項目 */
@@ -501,9 +513,8 @@ function drawPageHeader(
 }
 
 /**
- * 運行記録全件表示（改ページ対応）
- * ★ BUG修正: OP_ROWS固定→全件ループ、1ページ溢れ時は改ページしてカラムヘッダー再描画
- * @returns 描画後のY座標
+ * 運行記録全件表示（グループ化・移動時間対応版）
+ * グループ行(1行) + 時刻行(N行) 構造
  */
 function drawOperationRowsAll(
   doc: PDFKit.PDFDocument,
@@ -521,87 +532,91 @@ function drawOperationRowsAll(
 ): number {
   let y = yStart;
 
-  const drawSubCols = (trip: TripCycleRow | undefined, ry: number) => {
-    const fOpt = { font: fontN, fontSize: 7, align: 'center' as const };
-    const fSmall = { font: fontN, fontSize: 6, align: 'center' as const };
-    const halfTimeW = Math.floor(COL_TIME / 2);
-    const remTimeW = COL_TIME - halfTimeW;
-    const sub1W = Math.floor(halfTimeW / 3);
-    const sub2W = Math.floor(halfTimeW / 3);
-    const sub3W = halfTimeW - sub1W - sub2W;
-    const sub4W = Math.floor(remTimeW / 3);
-    const sub5W = Math.floor(remTimeW / 3);
-    const sub6W = remTimeW - sub4W - sub5W;
-    const subRowH = OP_ROW_H / 2;
-    let cx = x;
+  const timeAreaW = COL_TIME - COL_MOVE;
+  const halfTimeW = Math.floor(timeAreaW / 2);
+  const remTimeW  = timeAreaW - halfTimeW;
+  const s1 = Math.floor(halfTimeW / 3);
+  const s2 = Math.floor(halfTimeW / 3);
+  const s3 = halfTimeW - s1 - s2;
+  const s4 = Math.floor(remTimeW / 3);
+  const s5 = Math.floor(remTimeW / 3);
+  const s6 = remTimeW - s4 - s5;
 
-    if (trip) {
-      cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, trip.contractorName,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_CONTRACTOR;
-      cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, trip.loadingLocation,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_LOADING;
-      cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, trip.unloadingLocation, { ...fOpt, align: 'left', pad: 3 }); cx += COL_UNLOADING;
-      cell(doc, cx, ry, COL_ITEM,       OP_ROW_H, trip.itemName,          { ...fOpt, wrap: true, align: 'left', pad: 2 }); cx += COL_ITEM;
-      cell(doc, cx, ry, COL_COUNT,      OP_ROW_H, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
-      cell(doc, cx, ry, COL_TONS,       OP_ROW_H, trip.quantityTons > 0 ? String(trip.quantityTons) : '', fOpt); cx += COL_TONS;
-      cell(doc, cx, ry, COL_CONDITION,  OP_ROW_H, '', fOpt); cx += COL_CONDITION;
-      cell(doc, cx,          ry,           sub1W, subRowH, trip.loadingStartTime, fSmall);
-      cell(doc, cx + sub1W,  ry,           sub2W, subRowH, trip.loadingEndTime,   fSmall);
-      cell(doc, cx + sub1W + sub2W, ry,    sub3W, subRowH, toMinutesOnly(trip.loadingDuration), fSmall);
-      cell(doc, cx,          ry + subRowH, sub1W, subRowH, '');
-      cell(doc, cx + sub1W,  ry + subRowH, sub2W, subRowH, '');
-      cell(doc, cx + sub1W + sub2W, ry + subRowH, sub3W, subRowH, '');
-      cell(doc, cx + halfTimeW,           ry,           sub4W, subRowH, trip.unloadingStartTime, fSmall);
-      cell(doc, cx + halfTimeW + sub4W,   ry,           sub5W, subRowH, trip.unloadingEndTime,   fSmall);
-      cell(doc, cx + halfTimeW + sub4W + sub5W, ry,     sub6W, subRowH, toMinutesOnly(trip.unloadingDuration), fSmall);
-      cell(doc, cx + halfTimeW,           ry + subRowH, sub4W, subRowH, '');
-      cell(doc, cx + halfTimeW + sub4W,   ry + subRowH, sub5W, subRowH, '');
-      cell(doc, cx + halfTimeW + sub4W + sub5W, ry + subRowH, sub6W, subRowH, '');
-    } else {
-      cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, ''); cx += COL_CONTRACTOR;
-      cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, ''); cx += COL_LOADING;
-      cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, ''); cx += COL_UNLOADING;
-      cell(doc, cx, ry, COL_ITEM,       OP_ROW_H, ''); cx += COL_ITEM;
-      cell(doc, cx, ry, COL_COUNT,      OP_ROW_H, ''); cx += COL_COUNT;
-      cell(doc, cx, ry, COL_TONS,       OP_ROW_H, ''); cx += COL_TONS;
-      cell(doc, cx, ry, COL_CONDITION,  OP_ROW_H, ''); cx += COL_CONDITION;
-      const halfTimeW2 = Math.floor(COL_TIME / 2);
-      const remTimeW2 = COL_TIME - halfTimeW2;
-      const s1 = Math.floor(halfTimeW2 / 3);
-      const s2 = Math.floor(halfTimeW2 / 3);
-      const s3 = halfTimeW2 - s1 - s2;
-      const s4 = Math.floor(remTimeW2 / 3);
-      const s5 = Math.floor(remTimeW2 / 3);
-      const s6 = remTimeW2 - s4 - s5;
-      const srH = OP_ROW_H / 2;
-      cell(doc, cx, ry, s1, srH, ''); cell(doc, cx + s1, ry, s2, srH, ''); cell(doc, cx + s1 + s2, ry, s3, srH, '');
-      cell(doc, cx + halfTimeW2, ry, s4, srH, ''); cell(doc, cx + halfTimeW2 + s4, ry, s5, srH, ''); cell(doc, cx + halfTimeW2 + s4 + s5, ry, s6, srH, '');
-      cell(doc, cx, ry + srH, s1, srH, ''); cell(doc, cx + s1, ry + srH, s2, srH, ''); cell(doc, cx + s1 + s2, ry + srH, s3, srH, '');
-      cell(doc, cx + halfTimeW2, ry + srH, s4, srH, ''); cell(doc, cx + halfTimeW2 + s4, ry + srH, s5, srH, ''); cell(doc, cx + halfTimeW2 + s4 + s5, ry + srH, s6, srH, '');
-    }
+  const fOpt   = { font: fontN, fontSize: 7, align: 'center' as const };
+  const fSmall = { font: fontN, fontSize: 6, align: 'center' as const };
+  const fLeft  = { font: fontN, fontSize: 7, align: 'left'   as const, pad: 3 };
+
+  const needBreak = (h: number): boolean => y + h > pageH - marginB;
+
+  const doPageBreak = () => {
+    doc.addPage();
+    currentPageRef.value++;
+    y = marginT;
+    y = drawPageHeader(doc, x, y, CONTENT_W, data, fontN, fontB, currentPageRef.value, totalPages);
+    drawOperationColHeaders(doc, x, y, COL_HEADER_H, fontB);
+    y += COL_HEADER_H;
   };
 
-  for (let i = 0; i < trips.length; i++) {
-    // 残り高さが1行分なければ改ページ
-    if (y + OP_ROW_H > pageH - marginB) {
-      doc.addPage();
-      currentPageRef.value++;
-      y = marginT;
-      // ★ 改ページ後: タイトル行(ページ番号付) + 年月日・氏名・車番行 を再描画
-      y = drawPageHeader(doc, x, y, CONTENT_W, data, fontN, fontB, currentPageRef.value, totalPages);
-      // カラムヘッダーを再描画
-      drawOperationColHeaders(doc, x, y, COL_HEADER_H, fontB);
-      y += COL_HEADER_H;
+  for (const trip of trips) {
+    const rows: TripTimeRow[] = (trip.rows && trip.rows.length > 0)
+      ? trip.rows
+      : [{
+          loadingStart:     trip.loadingStartTime   ?? '',
+          loadingEnd:       trip.loadingEndTime     ?? '',
+          loadingMinutes:   trip.loadingDuration    ?? '',
+          moveMinutes:      '',
+          unloadingStart:   trip.unloadingStartTime ?? '',
+          unloadingEnd:     trip.unloadingEndTime   ?? '',
+          unloadingMinutes: trip.unloadingDuration  ?? '',
+        }];
+
+    const totalH = GRP_ROW_H + OP_ROW_H * rows.length;
+    if (needBreak(totalH)) doPageBreak();
+
+    // ── グループ行 ──
+    let cx = x;
+    const gy = y;
+    const gh = GRP_ROW_H;
+    cell(doc, cx, gy, COL_CONTRACTOR, gh, trip.contractorName,   { ...fLeft }); cx += COL_CONTRACTOR;
+    cell(doc, cx, gy, COL_LOADING,    gh, trip.loadingLocation,   { ...fLeft }); cx += COL_LOADING;
+    cell(doc, cx, gy, COL_UNLOADING,  gh, trip.unloadingLocation, { ...fLeft }); cx += COL_UNLOADING;
+    cell(doc, cx, gy, COL_ITEM,       gh, trip.itemName,          { ...fLeft, wrap: true }); cx += COL_ITEM;
+    cell(doc, cx, gy, COL_COUNT,      gh, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
+    cell(doc, cx, gy, COL_TONS,       gh, trip.quantityTons > 0  ? String(trip.quantityTons)  : '', fOpt); cx += COL_TONS;
+    cell(doc, cx, gy, COL_CONDITION,  gh, '○', fOpt); cx += COL_CONDITION;
+    cell(doc, cx, gy, halfTimeW, gh, '', fOpt); cx += halfTimeW;
+    cell(doc, cx, gy, COL_MOVE,  gh, '', fOpt); cx += COL_MOVE;
+    cell(doc, cx, gy, remTimeW,  gh, '', fOpt);
+    y += gh;
+
+    // ── 時刻行 ──
+    for (const row of rows) {
+      if (needBreak(OP_ROW_H)) doPageBreak();
+      cx = x;
+      const ry = y;
+      const rh = OP_ROW_H;
+      cell(doc, cx, ry, COL_CONTRACTOR, rh, ''); cx += COL_CONTRACTOR;
+      cell(doc, cx, ry, COL_LOADING,    rh, ''); cx += COL_LOADING;
+      cell(doc, cx, ry, COL_UNLOADING,  rh, ''); cx += COL_UNLOADING;
+      cell(doc, cx, ry, COL_ITEM,       rh, ''); cx += COL_ITEM;
+      cell(doc, cx, ry, COL_COUNT,      rh, ''); cx += COL_COUNT;
+      cell(doc, cx, ry, COL_TONS,       rh, ''); cx += COL_TONS;
+      cell(doc, cx, ry, COL_CONDITION,  rh, ''); cx += COL_CONDITION;
+      cell(doc, cx,    ry, s1, rh, row.loadingStart,    fSmall); cx += s1;
+      cell(doc, cx,    ry, s2, rh, row.loadingEnd,      fSmall); cx += s2;
+      cell(doc, cx,    ry, s3, rh, row.loadingMinutes,  fSmall); cx += s3;
+      cell(doc, cx,    ry, COL_MOVE, rh, row.moveMinutes, fSmall); cx += COL_MOVE;
+      cell(doc, cx,    ry, s4, rh, row.unloadingStart,    fSmall); cx += s4;
+      cell(doc, cx,    ry, s5, rh, row.unloadingEnd,      fSmall); cx += s5;
+      cell(doc, cx,    ry, s6, rh, row.unloadingMinutes,  fSmall);
+      y += rh;
     }
-    const trip = trips[i];
-    if (trip) drawSubCols(trip, y);
-    y += OP_ROW_H;
   }
+
   return y;
 }
 
-/**
- * 運行記録6行（後方互換のため残す）
- * ★ drawDailyDriverReport は drawOperationRowsAll を使用
- */
+
 function drawOperationRows(
   doc: PDFKit.PDFDocument,
   x: number,
