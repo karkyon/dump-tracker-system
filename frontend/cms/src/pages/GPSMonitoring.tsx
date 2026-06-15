@@ -114,13 +114,24 @@ const mapVehicleStatus = (
   if (apiStatus === 'IN_USE' || hasActiveOperation) {
     if (!hasPosition) return 'in_op_offline';
 
-    // 最新のOperationDetailのactivityTypeでサブステータスを判別
+    // ★ 最新のOperationDetailのactivityTypeでサブステータスを判別
+    // BUG修正: includes('LOADING') は 'UNLOADING' にもマッチするため厳密判定に変更
     if (lastActivityType) {
       const t = lastActivityType.toUpperCase();
-      if (t.includes('LOADING'))   return 'loading';
-      if (t.includes('UNLOADING')) return 'unloading';
-      if (t.includes('BREAK'))     return 'break';
-      if (t.includes('REFUEL') || t === 'REFUELING') return 'refueling';
+      // 移動中（LOADING/UNLOADING完了後の次イベント待ち）
+      if (t === 'IN_TRANSIT') return 'in_operation';
+      // 荷降中（LOADING より先に判定: UNLOADINGはLOADINGを含まないため順序重要）
+      if (t === 'UNLOADING' || t === 'UNLOADING_START' || t === 'UNLOADING_ARRIVED') return 'unloading';
+      // 積込中
+      if (t === 'LOADING' || t === 'LOADING_START' || t === 'LOADING_ARRIVED') return 'loading';
+      // 積込完了・荷降完了 → 次イベント待ち（移動中）
+      if (t === 'LOADING_COMPLETE' || t === 'LOADING_COMPLETED') return 'in_operation';
+      if (t === 'UNLOADING_COMPLETE' || t === 'UNLOADING_COMPLETED') return 'in_operation';
+      // 休憩中（BREAK_START = 休憩中、BREAK_END = 休憩終了済み → 運行中）
+      if (t === 'BREAK_START' || t === 'BREAK') return 'break';
+      if (t === 'BREAK_END') return 'in_operation';  // 休憩終了後は運行中に戻す
+      // 給油中
+      if (t === 'FUELING' || t === 'REFUELING') return 'refueling';
     }
     // activityTypeが取れない場合は運行中（汎用）
     return 'in_operation';

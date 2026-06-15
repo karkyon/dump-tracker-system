@@ -61,10 +61,16 @@ export class GpsService {
                 }
               },
               // 🆕 最新のOperationDetailを取得してactivityTypeをGPSモニタリングに返す
+              // ★ sequenceNumberで確実に最新を取得（actualStartTimeはnull可のため不正確）
               operationDetails: {
-                orderBy: { actualStartTime: 'desc' },
+                orderBy: { sequenceNumber: 'desc' },
                 take: 1,
-                select: { activityType: true }
+                select: {
+                  activityType: true,
+                  actualStartTime: true,
+                  actualEndTime: true,
+                  sequenceNumber: true,
+                }
               }
             }
           }
@@ -97,7 +103,17 @@ export class GpsService {
               name: activeOperation.usersOperationsDriverIdTousers.name
             } : null,
             // 🆕 最新のactivityType（積込中/荷降中/休憩中/給油中の判別用）
-            lastActivityType: activeOperation.operationDetails?.[0]?.activityType ?? null
+            // ★ 最新detailのactivityTypeを返す。LOADING/UNLOADING は actualEndTime があれば完了済み
+            // BREAK_START は actualEndTime なし = 休憩中、BREAK_END = 休憩終了済み
+            lastActivityType: (() => {
+              const d = activeOperation.operationDetails?.[0];
+              if (!d) return null;
+              // LOADING/UNLOADING で actualEndTime あり → 完了済み → 運行中(汎用)として次の状態待ち
+              if ((d.activityType === 'LOADING' || d.activityType === 'UNLOADING') && d.actualEndTime) {
+                return 'IN_TRANSIT';  // 移動中（次のイベント待ち）
+              }
+              return d.activityType;
+            })()
           } : null
         };
       });
@@ -139,10 +155,16 @@ export class GpsService {
                 }
               },
               // 🆕 最新のOperationDetailを取得してactivityTypeをGPSモニタリングに返す
+              // ★ sequenceNumberで確実に最新を取得（actualStartTimeはnull可のため不正確）
               operationDetails: {
-                orderBy: { actualStartTime: 'desc' },
+                orderBy: { sequenceNumber: 'desc' },
                 take: 1,
-                select: { activityType: true }
+                select: {
+                  activityType: true,
+                  actualStartTime: true,
+                  actualEndTime: true,
+                  sequenceNumber: true,
+                }
               }
             }
           }
