@@ -1144,91 +1144,104 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     try {
       // ✅ イベントタイプ→日本語ラベルのマッピング
       const getEventLabel = (eventType: string): { short: string; full: string; color: string } => {
+        // ★ Trade Colors準拠・全eventType対応・?廃止
         const labels: Record<string, { short: string; full: string; color: string }> = {
-          TRIP_START:      { short: 'S',  full: '運行開始',   color: '#10B981' },
-          TRIP_END:        { short: 'E',  full: '運行終了',   color: '#EF4444' },
-          PRE_INSPECTION:  { short: '前', full: '運行前点検', color: '#6366F1' },
-          POST_INSPECTION: { short: '後', full: '運行後点検', color: '#8B5CF6' },
-          LOADING:         { short: '積', full: '積込',       color: '#F59E0B' },
-          UNLOADING:       { short: '降', full: '荷降',       color: '#F97316' },
-          BREAK_START:     { short: '休', full: '休憩開始',   color: '#64748B' },
-          BREAK_END:       { short: '再', full: '休憩終了',   color: '#64748B' },
-          FUELING:         { short: '油', full: '給油',       color: '#06B6D4' },
-          REFUELING:       { short: '油', full: '給油',       color: '#06B6D4' },
-          TRANSPORTING:    { short: '運', full: '輸送中',     color: '#3B82F6' },
-          WAITING:         { short: '待', full: '待機中',     color: '#94A3B8' },
-          GPS_LOG:         { short: '●', full: 'GPS記録',    color: '#3B82F6' },
+          TRIP_START:          { short: '始', full: '運行開始',   color: '#10B981' },
+          TRIP_END:            { short: '終', full: '運行終了',   color: '#F44336' },
+          PRE_INSPECTION:      { short: '前', full: '運行前点検', color: '#6366F1' },
+          POST_INSPECTION:     { short: '後', full: '運行後点検', color: '#8B5CF6' },
+          LOADING:             { short: '積', full: '積込',       color: '#2196F3' },
+          LOADING_START:       { short: '積', full: '積込開始',   color: '#2196F3' },
+          LOADING_COMPLETE:    { short: '積', full: '積込完了',   color: '#1565C0' },
+          LOADING_ARRIVED:     { short: '積', full: '積込到着',   color: '#2196F3' },
+          LOADING_COMPLETED:   { short: '積', full: '積込完了',   color: '#1565C0' },
+          UNLOADING:           { short: '降', full: '荷降',       color: '#4CAF50' },
+          UNLOADING_START:     { short: '降', full: '荷降開始',   color: '#4CAF50' },
+          UNLOADING_COMPLETE:  { short: '降', full: '荷降完了',   color: '#2E7D32' },
+          UNLOADING_ARRIVED:   { short: '降', full: '荷降到着',   color: '#4CAF50' },
+          UNLOADING_COMPLETED: { short: '降', full: '荷降完了',   color: '#2E7D32' },
+          BREAK_START:         { short: '休', full: '休憩開始',   color: '#9C27B0' },
+          BREAK_END:           { short: '休', full: '休憩終了',   color: '#6A1B9A' },
+          BREAK:               { short: '休', full: '休憩',       color: '#9C27B0' },
+          FUELING:             { short: '油', full: '給油',       color: '#FF9800' },
+          REFUELING:           { short: '油', full: '給油',       color: '#FF9800' },
+          FUEL:                { short: '油', full: '給油',       color: '#FF9800' },
+          TRANSPORTING:        { short: '運', full: '輸送中',     color: '#2196F3' },
+          WAITING:             { short: '待', full: '待機中',     color: '#9C27B0' },
+          GPS_LOG:             { short: '●', full: 'GPS記録',    color: '#3B82F6' },
         };
-        return labels[eventType] || { short: '?', full: eventType, color: '#9CA3AF' };
+        return labels[eventType] ?? { short: '●', full: eventType, color: '#94A3B8' };
       };
 
       // ✅ 地図の中心座標を計算
-      // routeGpsLogs があればそこから、なければ activeGpsPoints から計算
       let centerLat = 34.6937;  // 大阪デフォルト
       let centerLng = 135.5023;
 
       if (routeGpsLogs.length > 0) {
-        centerLat = routeGpsLogs.reduce((sum, p) => sum + p.latitude, 0) / routeGpsLogs.length;
-        centerLng = routeGpsLogs.reduce((sum, p) => sum + p.longitude, 0) / routeGpsLogs.length;
-        console.log('📍 [Map Debug] Center from routeGpsLogs:', { centerLat, centerLng });
+        const firstLog = routeGpsLogs[0];
+        if (firstLog) { centerLat = firstLog.latitude; centerLng = firstLog.longitude; }
       } else if (activeGpsPoints.length > 0) {
-        centerLat = activeGpsPoints.reduce((sum, p) => sum + p.latitude, 0) / activeGpsPoints.length;
-        centerLng = activeGpsPoints.reduce((sum, p) => sum + p.longitude, 0) / activeGpsPoints.length;
-        console.log('📍 [Map Debug] Center from activeGpsPoints:', { centerLat, centerLng });
+        const firstPt = activeGpsPoints[0];
+        if (firstPt) { centerLat = firstPt.latitude; centerLng = firstPt.longitude; }
       }
 
-      // 地図初期化
-      console.log('🗺️ [Map Debug] Creating Google Maps instance...');
-      const map = new google.maps.Map(mapRef.current, {
+      // ✅ Google Map インスタンス初期化
+      const map = new google.maps.Map(mapRef.current!, {
         center: { lat: centerLat, lng: centerLng },
-        zoom: 14,
+        zoom: 13,
         mapTypeId: google.maps.MapTypeId.ROADMAP,
-        mapId: 'DEMO_MAP_ID',
+        ...((import.meta as any).env?.VITE_GOOGLE_MAP_ID ? { mapId: (import.meta as any).env.VITE_GOOGLE_MAP_ID } : {}),
       });
-
       mapInstanceRef.current = map;
-      console.log('✅ [Map Debug] Google Maps instance created');
 
-      // =====================================================================
-      // ✅ Step1: 走行軌跡描画（routeGpsLogs）
-      // ✅ 修正: localStorage 設定に依存せず、routeGpsLogs がある場合は常時描画
-      //          Edge の Tracking Prevention による localStorage ブロック対策
-      // =====================================================================
       if (routeGpsLogs.length > 0) {
-        // ✅ Fix-A: インターバルフィルターを廃止し全GPS点を描画
-        // 理由: デフォルト5分間隔フィルタにより数件しか描画されず
-        //       「三角形軌跡」になっていた。DBにある全点を描画する。
-        // 「描画インターバル設定」はシステム設定で引き続き保持するが
-        // ここでは使用せず常に全点描画とする。
-        console.log(`📡 [Map Debug] routeGpsLogs全点描画: ${routeGpsLogs.length}件`);
+        // ★ GPS欠落区間（5分以上のギャップ）を点線で表示
+        const GAP_THRESHOLD_MS = 5 * 60 * 1000;
+        let segStart = 0;
+        for (let i = 1; i <= routeGpsLogs.length; i++) {
+          const isLastSeg = i === routeGpsLogs.length;
+          const prevLog = routeGpsLogs[i - 1];
+          const currLog = routeGpsLogs[i];
+          const isGap = !isLastSeg && prevLog && currLog &&
+            (new Date(currLog.recordedAt).getTime() - new Date(prevLog.recordedAt).getTime()) > GAP_THRESHOLD_MS;
 
-        // 走行軌跡ライン（青色・視認しやすく）
-        new google.maps.Polyline({
-          path: routeGpsLogs.map(p => ({ lat: p.latitude, lng: p.longitude })),
-          geodesic: true,
-          strokeColor: '#2563EB',  // blue-600
-          strokeOpacity: 0.75,
-          strokeWeight: 3,
-          map: map
-        });
-
-        // 走行軌跡ポイント（小さい青ドット）
-        routeGpsLogs.forEach(log => {
-          new google.maps.Marker({
-            position: { lat: log.latitude, lng: log.longitude },
-            map: map,
-            title: `GPS記録: ${new Date(log.recordedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}${log.speedKmh != null ? ` (${log.speedKmh.toFixed(1)} km/h)` : ''}`,
-            icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 4,
-              fillColor: '#3B82F6',  // blue-500
-              fillOpacity: 0.7,
-              strokeColor: '#FFFFFF',
-              strokeWeight: 1
+          if (isGap || isLastSeg) {
+            // 通常区間: 実線（青）
+            const segPath = routeGpsLogs.slice(segStart, i).map(log => ({ lat: log.latitude, lng: log.longitude }));
+            if (segPath.length >= 2) {
+              new google.maps.Polyline({
+                path: segPath,
+                geodesic: true,
+                strokeColor: '#3B82F6',
+                strokeOpacity: 0.85,
+                strokeWeight: 3,
+                map: map,
+              });
             }
-          });
-        });
+            if (isGap && prevLog && currLog) {
+              // 欠落区間: 点線（グレー）
+              new google.maps.Polyline({
+                path: [
+                  { lat: prevLog.latitude, lng: prevLog.longitude },
+                  { lat: currLog.latitude, lng: currLog.longitude },
+                ],
+                geodesic: true,
+                strokeColor: '#64748B',
+                strokeOpacity: 0,
+                strokeWeight: 2,
+                icons: [{
+                  icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, strokeColor: '#64748B', scale: 3 },
+                  offset: '0',
+                  repeat: '12px',
+                }],
+                map: map,
+              });
+              segStart = i;
+            }
+          }
+        }
 
+        // GPS記録ポイントのインフォウィンドウ（個別マーカーはrouteGpsLogs数が多いため省略）
         console.log('✅ [Map Debug] 走行軌跡描画完了:', routeGpsLogs.length, '点');
       } else {
         console.log('ℹ️ [Map Debug] routeGpsLogs なし - 走行軌跡描画スキップ');
@@ -1263,11 +1276,29 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           const label = getEventLabel(point.eventType);
           const isFirst = index === 0;
           const isLast = index === activeGpsPoints.length - 1;
-          const scale = isFirst || isLast ? 12 : 9;
 
           // BUG-011: AdvancedMarkerElement 移行
           const evPinEl = document.createElement('div');
-          evPinEl.style.cssText = `width:${scale*2}px;height:${scale*2}px;border-radius:50%;background:${label.color};border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:bold;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.4);`;
+          const markerSize = isFirst || isLast ? 28 : 22;
+          const fontSize = isFirst || isLast ? 11 : 9;
+          evPinEl.style.cssText = [
+            `width:${markerSize}px`,
+            `height:${markerSize}px`,
+            `border-radius:50%`,
+            `background:${label.color}`,
+            `border:2.5px solid #fff`,
+            `display:flex`,
+            `align-items:center`,
+            `justify-content:center`,
+            `color:#fff`,
+            `font-size:${fontSize}px`,
+            `font-weight:bold`,
+            `cursor:pointer`,
+            `box-shadow:0 2px 6px rgba(0,0,0,.45)`,
+            `font-family:'Noto Sans JP',sans-serif`,
+            `line-height:1`,
+            `user-select:none`,
+          ].join(';');
           evPinEl.textContent = label.short;
           const marker = new (google.maps as any).marker.AdvancedMarkerElement({
             position: { lat: point.latitude, lng: point.longitude },
