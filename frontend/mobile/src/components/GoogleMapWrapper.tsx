@@ -22,19 +22,17 @@ let globalPolylineInstance: any = null;
 let isGlobalMapInitialized = false;
 let initializationInProgress = false;
 
-// 📍 三角矢印付きマーカーSVG生成（回転対応）
+// 📍 三角矢印付きマーカーSVG生成
+// ★ 矢印は常に上向き固定（ヘッドアップ地図で進行方向が上になるため回転不要）
+// heading引数は互換性のために残すが使用しない
 const createCustomMarkerSVG = (distance: number, speed: number, heading: number = 0): string => {
+  void heading; // ヘッドアップ地図では地図自体が回転するのでマーカーSVG回転は不要
   return `
     <svg width="60" height="80" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <g id="arrow-marker">
-          <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)" />
-          <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
-          <path d="M 30 13 L 38 25 L 22 25 Z" fill="#ffffff" stroke="#1a73e8" stroke-width="1.5"/>
-          <circle cx="30" cy="28" r="4" fill="#ffffff"/>
-        </g>
-      </defs>
-      <use href="#arrow-marker" transform="rotate(${heading} 30 28)"/>
+      <circle cx="30" cy="30" r="24" fill="rgba(0,0,0,0.3)" />
+      <circle cx="30" cy="28" r="22" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>
+      <path d="M 30 13 L 38 25 L 22 25 Z" fill="#ffffff" stroke="#1a73e8" stroke-width="1.5"/>
+      <circle cx="30" cy="28" r="4" fill="#ffffff"/>
       <rect x="8" y="52" width="44" height="24" rx="4" fill="#ffffff" stroke="#4285F4" stroke-width="2"/>
       <text x="30" y="62" text-anchor="middle" font-family="Arial" font-size="9" font-weight="bold" fill="#1a73e8">
         ${speed.toFixed(0)} km/h
