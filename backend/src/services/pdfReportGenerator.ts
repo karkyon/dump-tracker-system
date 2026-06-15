@@ -5,7 +5,7 @@
 // 修正: 2026-03-11 (修正指示A〜G全対応)
 //   A: キロ始/終セル幅均等化
 //   B: 業者名列幅2倍（82→164pt）
-//   C: 空行積降場所の「—」削除
+//   C: 空行荷降場所の「—」削除
 //   D: 積み込み時間を2行×3列構造（積込始/終/時間 + 積降始/終/時間）
 //   E: 給油セクション下の空白行削除（1行化）
 //   F: 署名欄を正方形デザイン
@@ -45,7 +45,7 @@ const LEGEND_H = 14;
 // 運行表カラム幅
 const COL_CONTRACTOR = 115;  // ①修正: 現在幅の70%に縮小
 const COL_LOADING = 128;     // 積込場所（変更なし）
-const COL_UNLOADING = 128;   // 積降場所（変更なし）
+const COL_UNLOADING = 128;   // 荷降場所（変更なし）
 const COL_ITEM = 68;         // ②修正: 現在幅の110%に拡大
 const COL_COUNT = 32;        // 台数（変更なし）
 const COL_TONS = 38;         // トン数（変更なし）
@@ -72,7 +72,7 @@ const SIGN_CELL_W = FUEL_H;  // = 50pt（正方形）
 export interface TripCycleRow {
   contractorName: string;       // 業者名
   loadingLocation: string;      // 積込場所
-  unloadingLocation: string;    // 積降場所
+  unloadingLocation: string;    // 荷降場所
   itemName: string;             // 品名
   vehicleCount: number;         // 台数
   quantityTons: number;         // トン数
@@ -349,23 +349,23 @@ function drawHeaderRow(
   const fLbl = { font: fontB, fallbackFont: 'Helvetica-Bold', fontSize: 7, bg: '#F0F0F0' };
   const fVal = { font: fontN, fontSize: 8 };
 
-  // 年
-  const yearLblW = 55; cell(doc, cx, y, yearLblW, h, '年', fLbl); cx += yearLblW;
-  const yearValW = 35; cell(doc, cx, y, yearValW, h, year, fVal); cx += yearValW;
+  // ★ 修正①: 値→ラベルの順で配置
+  // 年値 → 年ラベル
+  const yearValW = 45; cell(doc, cx, y, yearValW, h, year, fVal); cx += yearValW;
+  const yearLblW = 28; cell(doc, cx, y, yearLblW, h, '年', fLbl); cx += yearLblW;
 
-  // 月
-  const monthLblW = 30; cell(doc, cx, y, monthLblW, h, '月', fLbl); cx += monthLblW;
+  // 月値 → 月ラベル
   const monthValW = 28; cell(doc, cx, y, monthValW, h, month, fVal); cx += monthValW;
+  const monthLblW = 22; cell(doc, cx, y, monthLblW, h, '月', fLbl); cx += monthLblW;
 
-  // 日
-  const dayLblW = 28; cell(doc, cx, y, dayLblW, h, '日', fLbl); cx += dayLblW;
+  // 日値 → 日ラベル
   const dayValW = 28; cell(doc, cx, y, dayValW, h, day, fVal); cx += dayValW;
+  const dayLblW = 22; cell(doc, cx, y, dayLblW, h, '日', fLbl); cx += dayLblW;
 
-  // 曜日
-  const dowLblW = 30; cell(doc, cx, y, dowLblW, h, '曜日', fLbl); cx += dowLblW;
-  // ⑤b: 曜日から「曜」を除去して表示
+  // 曜日値 → 曜日ラベル
   const dowDisplay = (data.dayOfWeek ?? '').replace('曜', '');
-  const dowValW = 28; cell(doc, cx, y, dowValW, h, dowDisplay, fVal); cx += dowValW;
+  const dowValW = 22; cell(doc, cx, y, dowValW, h, dowDisplay, fVal); cx += dowValW;
+  const dowLblW = 30; cell(doc, cx, y, dowLblW, h, '曜日', fLbl); cx += dowLblW;
 
   // 氏名
   const nameLblW = 35; cell(doc, cx, y, nameLblW, h, '氏名', fLbl); cx += nameLblW;
@@ -412,9 +412,9 @@ function drawOperationColHeaders(
 
   let cx = x;
   // [B対応] COL_CONTRACTOR=164で自動反映
-  cell(doc, cx, y, COL_CONTRACTOR, h, '業者名', f8); cx += COL_CONTRACTOR;
+  cell(doc, cx, y, COL_CONTRACTOR, h, '客先名', f8); cx += COL_CONTRACTOR;
   cell(doc, cx, y, COL_LOADING,    h, '積込場所', f8); cx += COL_LOADING;
-  cell(doc, cx, y, COL_UNLOADING,  h, '積降場所', f8); cx += COL_UNLOADING;
+  cell(doc, cx, y, COL_UNLOADING,  h, '荷降場所', f8); cx += COL_UNLOADING;
   cell(doc, cx, y, COL_ITEM,       h, '品名', f8); cx += COL_ITEM;
   cell(doc, cx, y, COL_COUNT,      h, '台数', f8); cx += COL_COUNT;
   cell(doc, cx, y, COL_TONS,       h, 'トン数', f8); cx += COL_TONS;
@@ -428,7 +428,7 @@ function drawOperationColHeaders(
 
   // 上段ラベル: 積込時間 | 積降時間
   cell(doc, cx,            y, halfTimeW, subH, '積 込 時 間', f8);
-  cell(doc, cx + halfTimeW, y, remTimeW,  subH, '積 降 時 間', f8);
+  cell(doc, cx + halfTimeW, y, remTimeW,  subH, '荷 降 時 間', f8);
 
   // 下段: 3サブ列ラベル（積込側）
   const sub1W = Math.floor(halfTimeW / 3);
@@ -632,7 +632,7 @@ function drawOperationRows(
       // データあり行
       cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, trip.contractorName,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_CONTRACTOR;
       cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, trip.loadingLocation,   { ...fOpt, align: 'left', pad: 3 }); cx += COL_LOADING;
-      // [C対応] データあり行は積降場所をそのまま表示
+      // [C対応] データあり行は荷降場所をそのまま表示
       cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, trip.unloadingLocation, { ...fOpt, align: 'left', pad: 3 }); cx += COL_UNLOADING;
       cell(doc, cx, ry, COL_ITEM,       OP_ROW_H, trip.itemName,          {...fOpt, wrap: true, align: 'left', pad: 2}); cx += COL_ITEM;  // ②修正: 全品目wrap表示
       cell(doc, cx, ry, COL_COUNT,      OP_ROW_H, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
@@ -655,7 +655,7 @@ function drawOperationRows(
       cell(doc, cx + halfTimeW + sub4W + sub5W, ry + subRowH, sub6W, subRowH, '');
 
     } else {
-      // [C修正] 空行: 積降場所は「—」なしのブランク
+      // [C修正] 空行: 荷降場所は「—」なしのブランク
       cell(doc, cx, ry, COL_CONTRACTOR, OP_ROW_H, ''); cx += COL_CONTRACTOR;
       cell(doc, cx, ry, COL_LOADING,    OP_ROW_H, ''); cx += COL_LOADING;
       cell(doc, cx, ry, COL_UNLOADING,  OP_ROW_H, ''); cx += COL_UNLOADING;  // [C修正] '—'→''
@@ -764,14 +764,33 @@ function drawFuelSection(
   }
 
   // [F修正] 署名欄: 正方形セル (SIGN_CELL_W × FUEL_H = 50 × 50pt)
-  const roles = ['運転手', '運行管理者', '整備管理者'];
-  roles.forEach((role, i) => {
+  // ★ 修正③: 運転手欄のみ運転手名を大フォントで中央印字、他は役割ラベルのみ
+  const signRoles = ['運転手', '運行管理者', '整備管理者'];
+  signRoles.forEach((role, i) => {
     const cellW = SIGN_CELL_W;
     // 外枠（正方形）
     doc.rect(cx, y, cellW, rowH).strokeColor('#000000').lineWidth(0.8).stroke();
-    // ラベル（上部に小さく表示）
-    doc.font(fontB).fontSize(6.5).fillColor('#000000');
-    doc.text(role, cx + 2, y + 3, { width: cellW - 4, align: 'center', lineBreak: false });
+    if (i === 0 && data.driverName) {
+      // 運転手欄: 小ラベル（上部）+ 運転手名を大フォントで中央に印字
+      doc.font(fontB).fontSize(6).fillColor('#000000');
+      doc.text(role, cx + 2, y + 2, { width: cellW - 4, align: 'center', lineBreak: false });
+      // 運転手名: フォントサイズを自動調整（最大9pt、枠内に収まるサイズ）
+      const nameMaxW = cellW - 6;
+      let nameFontSize = 9;
+      doc.font(fontN).fontSize(nameFontSize);
+      while (doc.widthOfString(data.driverName) > nameMaxW && nameFontSize > 5) {
+        nameFontSize -= 0.5;
+        doc.font(fontN).fontSize(nameFontSize);
+      }
+      const nameLineH = nameFontSize * 1.3;
+      const nameTy = y + (rowH - nameLineH) / 2 + 3; // 上部ラベル分を考慮して少し下
+      doc.font(fontN).fontSize(nameFontSize).fillColor('#000000');
+      doc.text(data.driverName, cx + 3, nameTy, { width: nameMaxW, align: 'center', lineBreak: false });
+    } else {
+      // 運行管理者・整備管理者: ラベルのみ（上部に小さく）
+      doc.font(fontB).fontSize(6.5).fillColor('#000000');
+      doc.text(role, cx + 2, y + 3, { width: cellW - 4, align: 'center', lineBreak: false });
+    }
     cx += cellW;
   });
 }

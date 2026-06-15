@@ -362,8 +362,8 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
     loadingCondition: string;
     loadingStartTime: string;
     loadingEndTime: string;
-    unloadingStartTime: string;   // NEW: 積降開始時刻
-    unloadingEndTime: string;     // NEW: 積降終了時刻
+    unloadingStartTime: string;   // NEW: 荷降開始時刻
+    unloadingEndTime: string;     // NEW: 荷降終了時刻
     hasLoading: boolean;
     hasUnloading: boolean;
   }
@@ -410,8 +410,8 @@ function buildTripCycles(operationDetailsList: any[][]): any[] {
     } else if (UNLOADING_TYPES.includes(actType)) {
       if (current && current.hasLoading) {
         current.unloadingLocation = locationName;
-        current.unloadingStartTime = startT;   // NEW: 積降開始時刻
-        current.unloadingEndTime = endT;       // NEW: 積降終了時刻
+        current.unloadingStartTime = startT;   // NEW: 荷降開始時刻
+        current.unloadingEndTime = endT;       // NEW: 荷降終了時刻
         current.hasUnloading = true;
         // 荷降ろし時のトン数があれば上書き
         if (qty > 0 && current.quantityTons === 0) current.quantityTons = qty;
@@ -1575,7 +1575,7 @@ class ReportService {
         customer: {
           select: { id: true, name: true },
         },
-        // 運行詳細（積込・積降・給油など）
+        // 運行詳細（積込・荷降・給油など）
         operationDetails: {
           include: {
             locations: { select: { id: true, name: true } },
@@ -1726,8 +1726,8 @@ class ReportService {
         quantityTons: c.quantityTons > 0 ? parseFloat(fmtNum(c.quantityTons, 2)) : 0,
         loadingCondition: c.loadingCondition,
         loadingStartTime: c.loadingStartTime,
-        loadingEndTime: c.loadingEndTime || c.unloadingStartTime,  // ⑤修正: 積込終了=積降移動開始時刻
-       loadingDuration: calcTimeDuration(c.loadingStartTime, c.loadingEndTime || c.unloadingStartTime),  // ⑤fix: 積込終了なければ積降開始で代替
+        loadingEndTime: c.loadingEndTime || c.unloadingStartTime,  // ⑤修正: 積込終了=荷降移動開始時刻
+       loadingDuration: calcTimeDuration(c.loadingStartTime, c.loadingEndTime || c.unloadingStartTime),  // ⑤fix: 積込終了なければ荷降開始で代替
        unloadingStartTime: c.unloadingStartTime ?? '',                               // NEW(D)
        unloadingEndTime: c.unloadingEndTime ?? '',                                   // NEW(D)
        unloadingDuration: calcTimeDuration(c.unloadingStartTime ?? '', c.unloadingEndTime ?? ''), // NEW(D)
