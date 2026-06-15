@@ -315,10 +315,15 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
   });
 
   // LOADING_TYPES / UNLOADING_TYPES
-  const LOADING_TYPES   = ['LOADING','LOADING_START','LOADING_COMPLETE','LOADING_ARRIVED','LOADING_COMPLETED'];
-  const UNLOADING_TYPES = ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE','UNLOADING_ARRIVED','UNLOADING_COMPLETED'];
+  // ★ ARRIVED = 開始イベント、COMPLETED = 完了イベント として区別する
+  const LOADING_START_TYPES    = ['LOADING','LOADING_START','LOADING_ARRIVED'];
+  const LOADING_COMPLETE_TYPES = ['LOADING_COMPLETE','LOADING_COMPLETED'];
+  const UNLOADING_START_TYPES  = ['UNLOADING','UNLOADING_START','UNLOADING_ARRIVED'];
+  const UNLOADING_COMPLETE_TYPES = ['UNLOADING_COMPLETE','UNLOADING_COMPLETED'];
 
   // ---------- Pass1: サイクル列挙 ----------
+  // LOADING_ARRIVED(開始) → LOADING_COMPLETED(完了) を1サイクルにマージ
+  // UNLOADING_ARRIVED(開始) → UNLOADING_COMPLETED(完了) を1サイクルにマージ
   interface RawCycle {
     contractorName: string;
     loadingLocation: string;
@@ -333,6 +338,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
 
   const rawCycles: RawCycle[] = [];
   let cur: Partial<RawCycle> | null = null;
+  let loadingOpen = false;   // LOADING_ARRIVED後・LOADING_COMPLETED前
+  let unloadingOpen = false; // UNLOADING_ARRIVED後・UNLOADING_COMPLETED前
 
   for (const d of allDetails) {
     const at: string = (d.activity_type ?? d.activityType ?? '').toUpperCase();
@@ -345,37 +352,90 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
                       : d.quantityTons  != null ? Number(d.quantityTons) : 0;
     const startT: string = formatTime(d.actual_start_time ?? d.actualStartTime);
     const endT: string   = formatTime(d.actual_end_time   ?? d.actualEndTime);
+    const customerName: string = (d as any)._opCustomerName ?? '';
 
-    if (LOADING_TYPES.some(t => at === t)) {
-      if (cur && cur.loadingStart) rawCycles.push(cur as RawCycle);
+    if (LOADING_START_TYPES.some(t => at === t)) {
+      // 積込開始: 前の未完了サイクルがあれば閉じる
+      if (cur && loadingOpen) rawCycles.push(cur as RawCycle);
       cur = {
-        contractorName: (d as any)._opCustomerName ?? '',
-        loadingLocation: locName,
+        contractorName: customerName,
+        loadingLocation: locName || (cur != null ? cur.loadingLocation : '') || '',
         unloadingLocation: '',
-        itemName,
+        itemName: itemName || (cur != null ? cur.itemName : '') || '',
         quantityTons: qty > 0 ? qty : 0,
         loadingStart: startT,
-        loadingEnd: endT,
+        loadingEnd: '',          // COMPLETEDで補完
         unloadingStart: '',
         unloadingEnd: '',
       };
-    } else if (UNLOADING_TYPES.some(t => at === t)) {
+      loadingOpen = true;
+      unloadingOpen = false;
+    } else if (LOADING_COMPLETE_TYPES.some(t => at === t)) {
+      // 積込完了: 同一サイクルに loadingEnd・品目・トン数を補完
+      if (cur && loadingOpen) {
+        // 品目名: COMPLETEDの方が正確（quantityTons・itemId あり）
+        if (itemName) cur.itemName = itemName;
+        if (qty > 0) cur.quantityTons = qty;
+        if (locName && !cur.loadingLocation) cur.loadingLocation = locName;
+        if (!cur.contractorName && customerName) cur.contractorName = customerName;
+        // loadingEnd: actualStartTime of COMPLETED = 完了時刻
+        cur.loadingEnd = startT || endT;
+      } else if (!cur) {
+        // ARRIVEDなしでCOMPLETEDのみ来た場合（旧データ互換）
+        cur = {
+          contractorName: customerName,
+          loadingLocation: locName,
+          unloadingLocation: '',
+          itemName,
+          quantityTons: qty > 0 ? qty : 0,
+          loadingStart: startT,
+          loadingEnd: endT,
+          unloadingStart: '',
+          unloadingEnd: '',
+        };
+        loadingOpen = true;
+      }
+    } else if (UNLOADING_START_TYPES.some(t => at === t)) {
+      // 荷降開始
       if (cur) {
+        // 積込サイクル継続中に荷降到着 → 荷降情報をセット
         cur.unloadingLocation = locName;
         cur.unloadingStart    = startT;
-        cur.unloadingEnd      = endT;
+        cur.unloadingEnd      = '';   // COMPLETEDで補完
         if (qty > 0 && (cur.quantityTons ?? 0) === 0) cur.quantityTons = qty;
-        rawCycles.push(cur as RawCycle);
-        cur = null;
+        if (customerName && !cur.contractorName) cur.contractorName = customerName;
+        loadingOpen = false;
+        unloadingOpen = true;
       } else {
-        rawCycles.push({
-          contractorName: (d as any)._opCustomerName ?? '',
+        // 積込なしで荷降到着（単独荷降）
+        cur = {
+          contractorName: customerName,
           loadingLocation: '',
           unloadingLocation: locName,
           itemName, quantityTons: qty,
           loadingStart: '', loadingEnd: '',
-          unloadingStart: startT, unloadingEnd: endT,
-        });
+          unloadingStart: startT, unloadingEnd: '',
+        };
+        loadingOpen = false;
+        unloadingOpen = true;
+      }
+    } else if (UNLOADING_COMPLETE_TYPES.some(t => at === t)) {
+      // 荷降完了: 同一サイクルに unloadingEnd を補完してpush
+      if (cur && unloadingOpen) {
+        cur.unloadingEnd = startT || endT;
+        if (!cur.unloadingLocation && locName) cur.unloadingLocation = locName;
+        rawCycles.push(cur as RawCycle);
+        cur = null;
+        unloadingOpen = false;
+      } else if (cur && !unloadingOpen) {
+        // ARRIVEDなしでCOMPLETEDのみ（旧データ互換）
+        cur.unloadingLocation = locName || cur.unloadingLocation || '';
+        cur.unloadingStart    = startT;
+        cur.unloadingEnd      = endT;
+        rawCycles.push(cur as RawCycle);
+        cur = null;
+      } else {
+        // curなし（孤立COMPLETED）は無視
       }
     }
   }
