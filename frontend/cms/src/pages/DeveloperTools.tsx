@@ -104,6 +104,21 @@ const LogViewerTab: React.FC = () => {
     } catch {}
   };
 
+  const handleDownloadArchive = async (name: string) => {
+    try {
+      const res = await apiClient.get(`/logs/archives/${encodeURIComponent(name)}/download`, { responseType: 'blob' }) as any;
+      const blob = new Blob([res.data], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(`❌ ダウンロード失敗: ${e.message}`);
+    }
+  };
+
   const handleArchive = async () => {
     if (!confirm(
       '【退避 & クリア】\n\n' +
@@ -240,10 +255,14 @@ const LogViewerTab: React.FC = () => {
             {archives.length===0
               ? <span style={{color:textMuted,fontSize:11}}>アーカイブなし（「退避 & クリア」で保存されます）</span>
               : archives.map(a=>(
-                <div key={a.name} style={{display:'flex',gap:8,fontSize:11,color:text,padding:'2px 0',borderBottom:`1px solid ${border}`}}>
+                <div key={a.name} style={{display:'flex',gap:8,fontSize:11,color:text,padding:'2px 0',borderBottom:`1px solid ${border}`,alignItems:'center'}}>
                   <span style={{flex:1,fontFamily:'monospace'}}>{a.name}</span>
                   <span style={{color:textMuted}}>{a.sizeMB}MB</span>
                   <span style={{color:textMuted}}>{new Date(a.createdAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</span>
+                  <button onClick={()=>handleDownloadArchive(a.name)} title="ダウンロード"
+                    style={{display:'flex',alignItems:'center',gap:2,padding:'1px 6px',border:`1px solid ${border}`,background:bg2,color:iconColor,borderRadius:4,cursor:'pointer',fontSize:10}}>
+                    <Download size={10}/>
+                  </button>
                 </div>
               ))
             }

@@ -153,6 +153,20 @@ router.get('/archives', authenticateToken(), requireAdmin, asyncHandler(async (r
 }));
 
 /** DELETE /api/v1/logs/archives/:name */
+/** GET /api/v1/logs/archives/:name/download - アーカイブファイルダウンロード */
+router.get('/archives/:name/download', authenticateToken(), requireAdmin, asyncHandler(async (req: Request, res: Response) => {
+  const name = req.params['name'];
+  if (!name || name.includes('..') || name.includes('/')) {
+    return res.status(400).json({ success: false, message: '無効なファイル名' });
+  }
+  const archiveDir = path.join(process.cwd(), 'logs', 'archives');
+  const filePath = path.join(archiveDir, name);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'ファイルが見つかりません' });
+  }
+  return res.download(filePath, name);
+}));
+
 router.delete('/archives/:name', authenticateToken(), requireAdmin, asyncHandler(async (req: Request, res: Response) => {
   const name = req.params['name'];
   if (!name || name.includes('..') || name.includes('/')) {
