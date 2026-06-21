@@ -55,7 +55,7 @@ export const NAVIGATION_ITEMS = [
   },
   {
     id: 'locations',
-    name: '積込・積下場所管理',
+    name: '積込・荷降場所管理',
     path: '/locations',
     icon: 'MapPin'
   },

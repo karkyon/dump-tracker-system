@@ -378,9 +378,9 @@ const LocationManagement: React.FC = () => {
       {/* ページヘッダー */}
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-bold text-gray-900">積込・積降場所マスタ</h1>
+          <h1 className="text-2xl font-bold text-gray-900">積込・荷降場所マスタ</h1>
           <p className="mt-2 text-sm text-gray-700">
-            積込場所・積降場所の登録・編集・削除を行います
+            積込場所・荷降場所の登録・編集・削除を行います
           </p>
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">

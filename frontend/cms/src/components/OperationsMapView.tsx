@@ -215,7 +215,10 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
     if (!mapsLoaded || !mapInstanceRef.current) return;
 
     // 既存マーカーを削除
-    markersRef.current.forEach(m => { m.map = null; });
+    // ✅ 修正: 生成しているのは従来の google.maps.Marker のため setMap(null) で削除する。
+    //    m.map = null は AdvancedMarkerElement 用のプロパティで、Marker には効かず
+    //    古いマーカーが地図上に残り続けるバグの原因だった。
+    markersRef.current.forEach(m => { m.setMap(null); });
     markersRef.current = [];
 
     const withCoords = locations.filter(l => l.latitude != null && l.longitude != null);

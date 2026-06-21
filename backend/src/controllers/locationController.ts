@@ -562,23 +562,22 @@ class LocationController {
       const dateTo = req.query.dateTo ? new Date(req.query.dateTo as string) : undefined;
 
       // ---- 種別・キーワード検索（任意） ----
+      // ✅ 修正: locationType は「マスタの固定属性」では事前フィルタしない。
+      //    同一場所が積込・荷降の両方で使われるケースがあり、マスタ上 PICKUP 登録でも
+      //    実際には UNLOADING の実績がある場合があるため、ここで除外すると
+      //    「荷降のみ」フィルタで実績があるのに表示されない不具合が起きる。
+      //    集計（loadingCount/unloadingCount算出）後に、実績ベースでフィルタする。
       const locationTypeParam = req.query.locationType as string | undefined;
       const search = (req.query.search as string | undefined)?.trim();
 
       const locationWhere: any = { isActive: true };
-      if (locationTypeParam && locationTypeParam !== 'ALL') {
-        locationWhere.locationType = locationTypeParam;
-      }
-      // ✅ 修正: search は場所名（location.name）のみで判定する。
-      //    address や客先名（operationDetails経由）まで対象にすると、
-      //    検索語と無関係な場所が大量にヒットしてしまうため（例:「エヌエス日進」という
-      //    客先が他の現場でも取引していると、その現場まで表示されてしまう）。
-      //    「場所・客先名で検索」という入力欄の見た目通り、場所名で絞り込む動作に統一する。
+      // ✅ search は場所名（location.name）のみで判定する。
+      //    address や客先名まで対象にすると、検索語と無関係な場所が大量にヒットしてしまうため。
       if (search) {
         locationWhere.name = { contains: search, mode: 'insensitive' };
       }
 
-      // ---- 場所マスタ取得 ----
+      // ---- 場所マスタ取得（locationType による事前フィルタなし） ----
       const locations = await db.location.findMany({
         where: locationWhere,
         select: {
@@ -659,7 +658,7 @@ class LocationController {
       }
 
       // ---- レスポンス整形 ----
-      const summary = locations.map(loc => {
+      let summary = locations.map(loc => {
         const agg = aggMap.get(loc.id);
         let topCustomerName: string | null = null;
         if (agg && agg.customerCounts.size > 0) {
@@ -684,6 +683,22 @@ class LocationController {
           lastUsedAt: agg?.lastDate ? agg.lastDate.toISOString() : null
         };
       });
+
+      // ✅ 修正: locationType フィルタは集計後（実績ベース）で適用する。
+      //    PICKUP指定 → loadingCount > 0 の場所のみ／DELIVERY指定 → unloadingCount > 0 の場所のみ。
+      //    実績がまだ無い場所は、マスタの登録種別で判定してフィルタに含める。
+      if (locationTypeParam && locationTypeParam !== 'ALL') {
+        summary = summary.filter(loc => {
+          const hasAnyRecord = loc.loadingCount > 0 || loc.unloadingCount > 0;
+          if (locationTypeParam === 'PICKUP') {
+            return hasAnyRecord ? loc.loadingCount > 0 : loc.locationType === 'PICKUP';
+          }
+          if (locationTypeParam === 'DELIVERY') {
+            return hasAnyRecord ? loc.unloadingCount > 0 : loc.locationType === 'DELIVERY';
+          }
+          return true;
+        });
+      }
 
       logger.info('位置マップサマリー取得', {
         count: summary.length,
