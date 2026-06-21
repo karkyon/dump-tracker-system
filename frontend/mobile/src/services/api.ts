@@ -591,6 +591,23 @@ class APIServiceClass {
     }
   }
 
+  /**
+   * 🆕 運行詳細イベント新規作成（記録漏れの後追い登録用）
+   * POST /api/v1/operation-details
+   */
+  async createOperationDetail(data: Record<string, any>): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        '/operation-details',
+        data
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('[API] 運行詳細イベント追加エラー:', error);
+      throw error;
+    }
+  }
+
   // =============================================================================
   // 🆕🆕🆕 D5/D6機能: 積込・積降記録API
   // =============================================================================

@@ -263,7 +263,9 @@ class LocationServiceWrapper {
       if (filterConditions.search) {
         whereCondition.OR = [
           { name: { contains: filterConditions.search, mode: 'insensitive' } },
-          { address: { contains: filterConditions.search, mode: 'insensitive' } }
+          { address: { contains: filterConditions.search, mode: 'insensitive' } },
+          // 🆕 場所名・住所だけでなく「その場所で過去に取引した客先名」でも検索できるようにする
+          { operationDetails: { some: { operations: { customer: { name: { contains: filterConditions.search, mode: 'insensitive' } } } } } }
         ];
       }
 

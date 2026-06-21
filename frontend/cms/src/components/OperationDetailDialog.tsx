@@ -956,6 +956,327 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   );
 };
 
+
+// =====================================================================
+// 🆕 CmsActivityAddModal
+// 運行履歴タイムラインに、記録漏れイベントを後から追加するモーダル
+// （CmsActivityEditModal は既存イベントの編集専用のため、追加用に新設）
+// =====================================================================
+
+interface CmsActivityAddModalProps {
+  operationId: string;
+  items: { id: string; name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+const ADD_EVENT_TYPES: { value: string; label: string }[] = [
+  { value: 'LOADING', label: '積込' },
+  { value: 'UNLOADING', label: '荷降' },
+  { value: 'FUELING', label: '給油' },
+  { value: 'BREAK_START', label: '休憩開始' },
+  { value: 'BREAK_END', label: '休憩終了' },
+];
+
+const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, items, onClose, onSaved }) => {
+  const [eventType, setEventType] = React.useState('LOADING');
+  const [locQuery, setLocQuery] = React.useState('');
+  const [locResults, setLocResults] = React.useState<{ id: string; name: string; address: string }[]>([]);
+  const [locSearching, setLocSearching] = React.useState(false);
+  const [selectedLocationId, setSelectedLocationId] = React.useState('');
+  const [selectedLocationName, setSelectedLocationName] = React.useState('');
+  const [showNewLocationForm, setShowNewLocationForm] = React.useState(false);
+  const [newLocName, setNewLocName] = React.useState('');
+  const [newLocAddress, setNewLocAddress] = React.useState('');
+  const [newLocLat, setNewLocLat] = React.useState('');
+  const [newLocLng, setNewLocLng] = React.useState('');
+  const [startHHMM, setStartHHMM] = React.useState('');
+  const [endHHMM, setEndHHMM] = React.useState('');
+  const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
+  const [quantity, setQuantity] = React.useState('');
+  const [fuelAmt, setFuelAmt] = React.useState('');
+  const [fuelCost, setFuelCost] = React.useState('');
+  const [notes, setNotes] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+
+  const isLoadOrUnload = eventType === 'LOADING' || eventType === 'UNLOADING';
+  const isFuelType = eventType === 'FUELING';
+  const isBreakType = eventType === 'BREAK_START' || eventType === 'BREAK_END';
+
+  React.useEffect(() => {
+    if (!locQuery || locQuery.trim().length < 1) { setLocResults([]); return; }
+    const t = setTimeout(async () => {
+      setLocSearching(true);
+      try {
+        const res = await apiClient.get('/locations', { params: { search: locQuery, limit: 10 } });
+        const d: any = res;
+        const arr = d?.data?.data ?? d?.data ?? [];
+        setLocResults(Array.isArray(arr) ? arr : []);
+      } catch { setLocResults([]); }
+      finally { setLocSearching(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [locQuery]);
+
+  const toggleItem = (id: string) =>
+    setSelectedItemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const handleCreateLocation = async () => {
+    if (!newLocName.trim() || !newLocLat || !newLocLng) {
+      setSaveError('地点名・緯度・経度は必須です'); return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await apiClient.post('/locations', {
+        name: newLocName.trim(),
+        address: newLocAddress.trim() || '住所未設定',
+        latitude: parseFloat(newLocLat),
+        longitude: parseFloat(newLocLng),
+        locationType: eventType === 'LOADING' ? 'PICKUP' : 'DELIVERY',
+      });
+      const d: any = res;
+      const created = d?.data?.data ?? d?.data ?? d;
+      if (created?.id) {
+        setSelectedLocationId(created.id);
+        setSelectedLocationName(created.name || newLocName.trim());
+        setShowNewLocationForm(false);
+        setLocQuery('');
+        setLocResults([]);
+      } else {
+        setSaveError('地点登録に失敗しました');
+      }
+    } catch (e: any) {
+      setSaveError(e?.response?.data?.message || '地点登録に失敗しました');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const mergeHM = (hhmm: string): string => {
+    const now = new Date();
+    if (!hhmm) return now.toISOString();
+    const parts = hhmm.split(':');
+    const h = parseInt(parts[0] ?? '0', 10);
+    const m = parseInt(parts[1] ?? '0', 10);
+    const jstOff = 9 * 60 * 60 * 1000;
+    const jstNow = new Date(now.getTime() + jstOff);
+    const y = jstNow.getUTCFullYear();
+    const mo = jstNow.getUTCMonth();
+    const day = jstNow.getUTCDate();
+    const utcMs = Date.UTC(y, mo, day, h, m, 0, 0) - jstOff;
+    return new Date(utcMs).toISOString();
+  };
+
+  const handleSave = async () => {
+    setSaveError(null);
+    if (!startHHMM) { setSaveError('時刻を入力してください'); return; }
+    if (isLoadOrUnload && !selectedLocationId) { setSaveError('場所を選択してください'); return; }
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        operationId,
+        activityType: eventType,
+        actualStartTime: mergeHM(startHHMM),
+        quantityTons: 0,
+        notes: notes || undefined,
+      };
+      if (isLoadOrUnload) {
+        payload.locationId = selectedLocationId;
+        if (endHHMM) payload.actualEndTime = mergeHM(endHHMM);
+        if (selectedItemIds.length > 0) {
+          payload.itemId = selectedItemIds[0];
+          payload.selectedItemIds = selectedItemIds;
+        }
+        if (quantity) payload.quantityTons = parseFloat(quantity);
+      }
+      if (isFuelType) {
+        if (fuelAmt) payload.quantityTons = parseFloat(fuelAmt);
+        if (fuelCost) payload.fuelCostYen = parseFloat(fuelCost);
+      }
+      const res = await apiClient.post('/operation-details', payload);
+      const d: any = res;
+      if (d?.success || d?.data?.id || d?.id) {
+        onSaved();
+      } else {
+        setSaveError('保存に失敗しました');
+      }
+    } catch (e: any) {
+      setSaveError(e?.response?.data?.message || e?.message || '保存に失敗しました');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9900] flex items-center justify-center bg-black bg-opacity-60 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 text-white flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #1d4ed8cc 100%)' }}>
+          <span className="font-semibold text-base">イベント追加</span>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-white hover:bg-opacity-20 transition-colors">×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {saveError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{saveError}</div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-2">種別</p>
+            <div className="flex gap-2 flex-wrap">
+              {ADD_EVENT_TYPES.map(t => (
+                <button key={t.value} type="button" onClick={() => setEventType(t.value)}
+                  className="px-3 py-1.5 rounded-lg text-sm border"
+                  style={{
+                    background: eventType === t.value ? '#eff6ff' : '#fff',
+                    borderColor: eventType === t.value ? '#3b82f6' : '#e5e7eb',
+                    color: eventType === t.value ? '#1d4ed8' : '#374151',
+                    fontWeight: eventType === t.value ? 600 : 400,
+                  }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isLoadOrUnload && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">場所</p>
+              {selectedLocationId ? (
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-blue-800">{selectedLocationName}</span>
+                  <button type="button" onClick={() => { setSelectedLocationId(''); setSelectedLocationName(''); }}
+                    className="text-xs text-blue-600 underline">変更</button>
+                </div>
+              ) : (
+                <>
+                  <input type="text" value={locQuery} onChange={e => setLocQuery(e.target.value)}
+                    placeholder="現場名・客先名で検索"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2" />
+                  {locSearching && <p className="text-xs text-gray-400">検索中...</p>}
+                  {locResults.length > 0 && (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden mb-2">
+                      {locResults.map(l => (
+                        <button key={l.id} type="button"
+                          onClick={() => { setSelectedLocationId(l.id); setSelectedLocationName(l.name); }}
+                          className="w-full text-left px-3 py-2 text-sm border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
+                          <p className="font-medium text-gray-800">{l.name}</p>
+                          <p className="text-xs text-gray-500">{l.address}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {!showNewLocationForm ? (
+                    <button type="button" onClick={() => setShowNewLocationForm(true)}
+                      className="w-full text-sm text-blue-600 border border-blue-300 rounded-lg py-2 hover:bg-blue-50">
+                      + 新規地点を登録
+                    </button>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+                      <input type="text" value={newLocName} onChange={e => setNewLocName(e.target.value)}
+                        placeholder="地点名" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                      <input type="text" value={newLocAddress} onChange={e => setNewLocAddress(e.target.value)}
+                        placeholder="住所（任意）" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="text" value={newLocLat} onChange={e => setNewLocLat(e.target.value)}
+                          placeholder="緯度" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                        <input type="text" value={newLocLng} onChange={e => setNewLocLng(e.target.value)}
+                          placeholder="経度" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                      </div>
+                      <p className="text-xs text-gray-400">Googleマップでピンを長押しすると緯度経度をコピーできます</p>
+                      <button type="button" onClick={handleCreateLocation} disabled={saving}
+                        className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50">
+                        この内容で登録する
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">{isBreakType ? '時刻' : '到着時刻'}<span className="text-red-500 ml-1">*</span></p>
+              <input type="time" value={startHHMM} onChange={e => setStartHHMM(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            {isLoadOrUnload && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">完了時刻（任意）</p>
+                <input type="time" value={endHHMM} onChange={e => setEndHHMM(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            )}
+          </div>
+
+          {isLoadOrUnload && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">品目・数量</p>
+              <div className="flex gap-2 flex-wrap mb-2">
+                {items.map(it => (
+                  <button key={it.id} type="button" onClick={() => toggleItem(it.id)}
+                    className="px-3 py-1.5 rounded-lg text-sm border"
+                    style={{
+                      background: selectedItemIds.includes(it.id) ? '#eff6ff' : '#fff',
+                      borderColor: selectedItemIds.includes(it.id) ? '#3b82f6' : '#e5e7eb',
+                      color: selectedItemIds.includes(it.id) ? '#1d4ed8' : '#374151',
+                    }}>
+                    {it.name}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-500">数量</p>
+                <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
+                  className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
+                <span className="text-xs text-gray-500">t</span>
+              </div>
+            </div>
+          )}
+
+          {isFuelType && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">給油量（L）</p>
+                <input type="number" value={fuelAmt} onChange={e => setFuelAmt(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">金額（円）</p>
+                <input type="number" value={fuelCost} onChange={e => setFuelCost(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-1">備考</p>
+            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="備考を入力（任意）"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-5 py-4 border-t border-gray-200 flex-shrink-0">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            キャンセル
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="flex-[2] py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+            style={{ background: saving ? '#9ca3af' : '#1d4ed8' }}>
+            {saving ? '追加中...' : '追加する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   operationId,
   isOpen,
@@ -1020,6 +1341,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const [editEvent, setEditEvent] = useState<CmsEditEvent | null>(null);
   const [editItems, setEditItems] = useState<{ id: string; name: string }[]>([]);
   const [editCustomers, setEditCustomers] = useState<{ id: string; name: string }[]>([]);
+  // 🆕 イベント追加モーダル（記録漏れの後追い登録用）
+  const [addEventOpen, setAddEventOpen] = useState(false);
 
   // ✅ Google Maps用State
   const mapRef = useRef<HTMLDivElement>(null);
@@ -2311,6 +2634,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                       <Clock className="w-5 h-5 text-gray-600" />
                       <h2 className="text-lg font-semibold text-gray-900">運行タイムライン（統合版）</h2>
                       <span className="text-sm text-gray-500">({operationDebugTimelineEvents.length}件)</span>
+                      <button
+                        type="button"
+                        onClick={() => setAddEventOpen(true)}
+                        className="ml-2 flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+                      >
+                        + イベント追加
+                      </button>
                     </div>
                     <button
                       onClick={() => setShowOperationTimeline(!showOperationTimeline)}
@@ -3074,6 +3404,19 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         onDeleted={(id) => {
           setEditEvent(null);
           setOperationDebugTimelineEvents(prev => prev.filter(e => e.id !== id));
+        }}
+      />
+    )}
+
+    {/* 🆕 イベント追加モーダル */}
+    {addEventOpen && (
+      <CmsActivityAddModal
+        operationId={operationId}
+        items={editItems}
+        onClose={() => setAddEventOpen(false)}
+        onSaved={() => {
+          setAddEventOpen(false);
+          fetchIntegratedTimeline(operationId);
         }}
       />
     )}

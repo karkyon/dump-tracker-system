@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiService } from '../services/api';
+import ActivityAddSheet from '../components/ActivityAddSheet';
 
 // =====================================
 // 型定義
@@ -100,6 +101,8 @@ const OperationHistoryDetail: React.FC = () => {
 
   const [detail, setDetail] = useState<OperationDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // 🆕 イベント追加シート（記録漏れの後追い登録用）
+  const [addEventOpen, setAddEventOpen] = useState(false);
 
   // =====================================
   // 詳細データ取得
@@ -407,6 +410,31 @@ const OperationHistoryDetail: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* 🆕 イベント追加 FAB（記録漏れの後追い登録用） */}
+      <button
+        type="button"
+        onClick={() => setAddEventOpen(true)}
+        style={{
+          position: 'fixed', right: 20, bottom: 24, width: 56, height: 56, borderRadius: '50%',
+          background: '#1565C0', color: '#fff', border: 'none', fontSize: 28, lineHeight: '56px',
+          textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', cursor: 'pointer', zIndex: 500,
+        }}
+        aria-label="イベントを追加"
+      >
+        +
+      </button>
+
+      {addEventOpen && (
+        <ActivityAddSheet
+          operationId={id || ''}
+          onClose={() => setAddEventOpen(false)}
+          onSaved={() => {
+            setAddEventOpen(false);
+            fetchDetail();
+          }}
+        />
+      )}
     </div>
   );
 };

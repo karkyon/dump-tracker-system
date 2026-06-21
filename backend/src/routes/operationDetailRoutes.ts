@@ -221,7 +221,7 @@ router.get('/:id', validateId, operationDetailController.getOperationDetailById)
  *       403:
  *         description: 権限エラー
  */
-router.post('/', requireManager, operationDetailController.createOperationDetail);
+router.post('/', requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as any), operationDetailController.createOperationDetail);
 
 /**
  * @swagger

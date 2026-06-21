@@ -595,6 +595,8 @@ export class OperationDetailController {
   /**
    * 運行詳細作成
    * POST /operation-details
+   * 🆕 運行履歴「イベント追加」機能: sequenceNumber未指定時は自動採番、
+   *    日時文字列をDateに変換、複数品目(selectedItemIds)はoperation_detail_itemsへ保存
    */
   createOperationDetail = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
@@ -602,7 +604,43 @@ export class OperationDetailController {
 
     logger.info('運行詳細作成', { userId, data });
 
+    // 🆕 sequenceNumber未指定の場合は運行内最大値+1で自動採番
+    if (data.sequenceNumber === undefined && data.operationId) {
+      const existingForSeq = await this.operationDetailService.findMany({
+        where: { operationId: data.operationId },
+        orderBy: { sequenceNumber: 'desc' },
+        take: 1
+      });
+      const seqArr = Array.isArray(existingForSeq) ? existingForSeq : [];
+      const maxSeq = seqArr[0]?.sequenceNumber ?? 0;
+      data.sequenceNumber = maxSeq + 1;
+    }
+
+    // 🆕 日時文字列をDateに変換
+    if (data.actualStartTime && typeof data.actualStartTime === 'string') {
+      data.actualStartTime = new Date(data.actualStartTime);
+    }
+    if (data.actualEndTime && typeof data.actualEndTime === 'string') {
+      data.actualEndTime = new Date(data.actualEndTime);
+    }
+
     const operationDetail = await this.operationDetailService.create(data);
+
+    // 🆕 複数品目（積込/積降の selectedItemIds）を operation_detail_items に保存
+    if (Array.isArray(data.selectedItemIds) && data.selectedItemIds.length > 0) {
+      const db = DatabaseService.getInstance();
+      for (let i = 0; i < data.selectedItemIds.length; i++) {
+        await db.operationDetailItem.create({
+          data: {
+            operationDetailId: operationDetail.id,
+            itemId: data.selectedItemIds[i],
+            quantityTons: Number(data.quantityTons ?? 0),
+            sequenceOrder: i
+          }
+        });
+      }
+      logger.info('✅ [createOperationDetail] operationDetailItems保存完了', { count: data.selectedItemIds.length });
+    }
 
     return sendSuccess(res, operationDetail);  // ✅ 修正: 第3引数削除
   });
