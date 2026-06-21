@@ -569,13 +569,13 @@ class LocationController {
       if (locationTypeParam && locationTypeParam !== 'ALL') {
         locationWhere.locationType = locationTypeParam;
       }
-      // ✅ 修正: address は検索対象から除外（地名の偶然一致による過剰ヒットを防止）。
-      //    場所名 または その場所で実際に使われた客先名（operationDetails経由）で検索する。
+      // ✅ 修正: search は場所名（location.name）のみで判定する。
+      //    address や客先名（operationDetails経由）まで対象にすると、
+      //    検索語と無関係な場所が大量にヒットしてしまうため（例:「エヌエス日進」という
+      //    客先が他の現場でも取引していると、その現場まで表示されてしまう）。
+      //    「場所・客先名で検索」という入力欄の見た目通り、場所名で絞り込む動作に統一する。
       if (search) {
-        locationWhere.OR = [
-          { name: { contains: search, mode: 'insensitive' } },
-          { operationDetails: { some: { operations: { customer: { name: { contains: search, mode: 'insensitive' } } } } } }
-        ];
+        locationWhere.name = { contains: search, mode: 'insensitive' };
       }
 
       // ---- 場所マスタ取得 ----

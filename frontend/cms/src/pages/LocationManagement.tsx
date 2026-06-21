@@ -172,7 +172,7 @@ const LocationManagement: React.FC = () => {
     {
       key: 'usageStats',
       header: '積込/荷降実績',
-      width: '230px',
+      width: '320px',
       render: (_value: string, row: any) => {
         const stats = usageStatsMap[row.id];
         if (usageStatsLoading && !stats) {
@@ -182,10 +182,10 @@ const LocationManagement: React.FC = () => {
           return <span className="text-xs text-gray-400">-</span>;
         }
         const Cell = ({ label, s }: { label: string; s: UsageStat }) => (
-          <div className="flex items-center gap-1 text-[11px]">
-            <span className="text-gray-500 w-9">{label}</span>
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-gray-500 w-10">{label}</span>
             <span className="font-bold text-blue-700">積{s.loading}</span>
-            <span className="font-bold text-red-700">荷{s.unloading}</span>
+            <span className="font-bold text-red-700">降{s.unloading}</span>
           </div>
         );
         return (
