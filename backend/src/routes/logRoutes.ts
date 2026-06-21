@@ -9,6 +9,69 @@ import { execSync } from 'child_process';
 
 const router = Router();
 
+// =====================================
+// 🗄️ 自動退避（ログファイルサイズ監視）
+// =====================================
+// log-config.json の autoArchiveEnabled が有効かつ combined.log のサイズが
+// autoArchiveThresholdMB を超えていたら、定期チェックで自動的にアーカイブする。
+// （POST /archive と同等の処理。手動アーカイブとは独立して動作）
+const AUTO_ARCHIVE_CHECK_INTERVAL_MS = 10 * 60 * 1000; // 10分ごとにチェック
+
+function performAutoArchive(): { archiveFile: string; sizeMB: string } | null {
+  const logPath = path.join(process.cwd(), 'logs', 'combined.log');
+  const archiveDir = path.join(process.cwd(), 'logs', 'archives');
+  if (!fs.existsSync(logPath)) return null;
+  if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const archivePath = path.join(archiveDir, `combined-${stamp}.log`);
+  const stat = fs.statSync(logPath);
+  const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
+  fs.copyFileSync(logPath, archivePath);
+  fs.writeFileSync(logPath, '');
+  const configPath = path.join(process.cwd(), 'logs', 'log-config.json');
+  let maxArchives = 10;
+  if (fs.existsSync(configPath)) {
+    try { maxArchives = JSON.parse(fs.readFileSync(configPath, 'utf-8')).maxArchives ?? 10; } catch {}
+  }
+  const archives = fs.readdirSync(archiveDir)
+    .filter(f => f.startsWith('combined-') && f.endsWith('.log')).sort();
+  if (archives.length > maxArchives) {
+    archives.slice(0, archives.length - maxArchives).forEach(f => {
+      try { fs.unlinkSync(path.join(archiveDir, f)); } catch {}
+    });
+  }
+  return { archiveFile: path.basename(archivePath), sizeMB };
+}
+
+function checkAutoArchive(): void {
+  try {
+    const configPath = path.join(process.cwd(), 'logs', 'log-config.json');
+    const defaults = { maxFileSizeMB: 50, maxArchives: 10, autoArchiveEnabled: false, autoArchiveThresholdMB: 100, retentionDays: 30 };
+    let config: any = defaults;
+    if (fs.existsSync(configPath)) {
+      try { config = { ...defaults, ...JSON.parse(fs.readFileSync(configPath, 'utf-8')) }; } catch {}
+    }
+    if (!config.autoArchiveEnabled) return;
+
+    const logPath = path.join(process.cwd(), 'logs', 'combined.log');
+    if (!fs.existsSync(logPath)) return;
+    const stat = fs.statSync(logPath);
+    const sizeMB = stat.size / 1024 / 1024;
+    if (sizeMB <= config.autoArchiveThresholdMB) return;
+
+    const result = performAutoArchive();
+    if (result) {
+      console.log(`[AutoArchive] 自動退避を実行しました: ${result.archiveFile} (${result.sizeMB}MB)`);
+    }
+  } catch (e: any) {
+    console.error('[AutoArchive] 自動退避チェック中にエラー:', e.message);
+  }
+}
+
+setInterval(checkAutoArchive, AUTO_ARCHIVE_CHECK_INTERVAL_MS);
+checkAutoArchive();
+
 // noUncheckedIndexedAccess: true 対応 — 配列要素を安全に string 化
 function safeStr(v: string | undefined, fallback = '?'): string {
   return v !== undefined && v !== '' ? v : fallback;

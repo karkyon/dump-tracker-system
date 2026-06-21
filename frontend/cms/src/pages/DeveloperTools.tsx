@@ -365,10 +365,9 @@ const ServerLogLevelTab: React.FC = () => {
         </div>
         <div className="text-xs text-gray-600 mb-4 space-y-1">
           <p>アーカイブ世代数・自動退避閾値を設定します。</p>
-          <p className="text-red-600">
-            ⚠️ 現在 <code className="bg-gray-100 px-1 rounded text-gray-700">combined.log</code> は
-            <strong> 自動ローテーションなし</strong>の単一ファイル蓄積です。
-            本番前に自動退避を有効にするか <code className="bg-gray-100 px-1 rounded text-gray-700">winston-daily-rotate-file</code> を実装してください。
+          <p className="text-green-700">
+            ✅ 自動退避を有効にすると、サーバーが10分おきに <code className="bg-gray-100 px-1 rounded text-gray-700">combined.log</code> のサイズを確認し、
+            「自動退避閾値」を超えた時点で自動的にアーカイブ（コピー保存→クリア）します。
           </p>
         </div>
         <div className="grid grid-cols-2 gap-4">
