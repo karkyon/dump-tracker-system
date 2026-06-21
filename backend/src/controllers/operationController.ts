@@ -49,15 +49,17 @@ export class OperationController {
       status,
       vehicleId,
       startDate,
-      endDate
+      endDate,
+      search
     } = req.query as PaginationQuery & {
       status?: string;
       vehicleId?: string;
       startDate?: string;
       endDate?: string;
+      search?: string;
     };
 
-    logger.info('運行一覧取得', { userId, page, limit, status, vehicleId });
+    logger.info('運行一覧取得', { userId, page, limit, status, vehicleId, search });
 
     // WHERE句構築
     const where: any = {};
@@ -67,6 +69,19 @@ export class OperationController {
       where.actualStartTime = {};
       if (startDate) where.actualStartTime.gte = new Date(startDate);
       if (endDate) where.actualStartTime.lte = new Date(endDate);
+    }
+
+    // ✅ キーワード検索: 運行番号・運転手名・車両番号・客先名・積込/積卸場所名
+    const searchTerm = (search as string | undefined)?.trim();
+    if (searchTerm) {
+      where.OR = [
+        { operationNumber: { contains: searchTerm, mode: 'insensitive' } },
+        { notes: { contains: searchTerm, mode: 'insensitive' } },
+        { vehicles: { plateNumber: { contains: searchTerm, mode: 'insensitive' } } },
+        { usersOperationsDriverIdTousers: { name: { contains: searchTerm, mode: 'insensitive' } } },
+        { customer: { name: { contains: searchTerm, mode: 'insensitive' } } },
+        { operationDetails: { some: { locations: { name: { contains: searchTerm, mode: 'insensitive' } } } } }
+      ];
     }
 
     // ✅ Service層に委譲

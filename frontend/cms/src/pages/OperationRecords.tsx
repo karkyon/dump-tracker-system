@@ -137,7 +137,8 @@ const OperationRecords: React.FC = () => {
           limit: pagination.pageSize,
           ...(vehicleFilter && { vehicleId: vehicleFilter }),
           ...(driverFilter && { driverId: driverFilter }),
-          ...(dateFilter && { startDate: dateFilter })
+          ...(dateFilter && { startDate: dateFilter }),
+          ...(searchQuery.trim() && { search: searchQuery.trim() })
         }
       });
       if (response.success && response.data) {
@@ -210,13 +211,20 @@ const OperationRecords: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleFilter, driverFilter, dateFilter]);
 
-  const filteredRecords = operations.filter((record) => {
-    const vehiclePlate = record.vehicles?.plateNumber || '';
-    const driverName = record.usersOperationsDriverIdTousers?.name || '';
-    const opNumber = record.operationNumber || '';
-    const matchesSearch = vehiclePlate.toLowerCase().includes(searchQuery.toLowerCase()) || driverName.toLowerCase().includes(searchQuery.toLowerCase()) || opNumber.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  // ✅ キーワード検索: 入力後500msデバウンスして再検索（マップ表示からのジャンプ含む）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPagination(prev => ({ ...prev, page: 1 }));
+      fetchOperations();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  // ✅ 修正: 検索は既にバックエンド（/operations?search=...）で行われているため、
+  //    ここでのクライアント側再フィルタは行わない（二重フィルタによる0件化バグの原因だった）。
+  //    場所名・客先名等の検索キーワードはバックエンドのwhere句でのみ判定する。
+  const filteredRecords = operations;
 
   const handleViewDetail = (record: Operation) => {
     setSelectedRecord(record);
@@ -273,35 +281,37 @@ const OperationRecords: React.FC = () => {
         )}
       </div>
 
-      {/* 表示切替タブ: 一覧表示 / マップ表示 */}
-      <div className="flex gap-1">
-        <button
-          onClick={() => setActiveView('LIST')}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-lg border ${
-            activeView === 'LIST'
-              ? 'bg-white border-gray-200 border-b-white text-gray-900'
-              : 'bg-transparent border-transparent text-gray-500'
-          }`}
-        >
-          📋 一覧表示
-        </button>
-        <button
-          onClick={() => setActiveView('MAP')}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-lg border ${
-            activeView === 'MAP'
-              ? 'bg-white border-gray-200 border-b-white text-gray-900'
-              : 'bg-transparent border-transparent text-gray-500'
-          }`}
-        >
-          🗺️ マップ表示
-        </button>
-      </div>
+      {/* タブ＋検索フィルタ＋一覧/実績表示を1枚の白カードに統合 */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        {/* 表示切替タブ */}
+        <div className="flex gap-1 px-4 pt-3 border-b border-gray-200 bg-gray-50">
+          <button
+            onClick={() => setActiveView('LIST')}
+            className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-t border-l border-r -mb-px ${
+              activeView === 'LIST'
+                ? 'bg-white border-gray-200 text-gray-900'
+                : 'bg-transparent border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            📋 一覧表示
+          </button>
+          <button
+            onClick={() => setActiveView('MAP')}
+            className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-t border-l border-r -mb-px ${
+              activeView === 'MAP'
+                ? 'bg-white border-gray-200 text-gray-900'
+                : 'bg-transparent border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            📊 実績表示
+          </button>
+        </div>
 
       {activeView === 'MAP' ? (
         <OperationsMapView onJumpToList={handleJumpToList} />
       ) : (
       <>
-      <div className="bg-white p-6 rounded-lg shadow">
+      <div className="p-6">
         <h2 className="text-lg font-semibold mb-4">検索・フィルター</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input label="キーワード検索" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="運転手名、車両、等々で検索" />
@@ -323,7 +333,7 @@ const OperationRecords: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
+      <div className="border border-gray-200 rounded-lg mt-4">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-lg font-semibold">運行記録一覧 ({filteredRecords.length}件)</h2>
           <div className="flex items-center gap-2">
@@ -352,6 +362,7 @@ const OperationRecords: React.FC = () => {
           initialOperation={selectedRecord} isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} />}
       </>
       )}
+      </div>
     </div>
   );
 };

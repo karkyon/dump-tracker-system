@@ -161,7 +161,7 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
     const bounds = new window.google.maps.LatLngBounds();
 
     withCoords.forEach(loc => {
-      const color = loc.locationType === 'DELIVERY' ? '#dc2626' : '#2563eb';
+      const color = loc.locationType === 'DELIVERY' ? '#dc2626' : '#2563eb'; // 荷降=赤 / 積込=青
       const pinSvg = {
         path: 'M13 0C5.8 0 0 5.8 0 13c0 9 13 21 13 21s13-12 13-21C26 5.8 20.2 0 13 0z',
         fillColor: color,
@@ -180,7 +180,7 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
       });
 
       marker.addListener('click', () => {
-        const typeLabel = loc.locationType === 'DELIVERY' ? '積下場所' : '積込場所';
+        const typeLabel = loc.locationType === 'DELIVERY' ? '荷降場所' : '積込場所';
         const typeBg = loc.locationType === 'DELIVERY' ? '#fee2e2' : '#dbeafe';
         const typeColor = loc.locationType === 'DELIVERY' ? '#b91c1c' : '#1d4ed8';
 
@@ -268,9 +268,9 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
               onChange={(e) => setTypeFilter(e.target.value as 'ALL' | 'PICKUP' | 'DELIVERY')}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
             >
-              <option value="ALL">すべて（積込・積下）</option>
+              <option value="ALL">すべて（積込・荷降）</option>
               <option value="PICKUP">積込のみ</option>
-              <option value="DELIVERY">積下のみ</option>
+              <option value="DELIVERY">荷降のみ</option>
             </select>
           </div>
           <div>
@@ -333,7 +333,7 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
                         color: loc.locationType === 'DELIVERY' ? '#b91c1c' : '#1d4ed8'
                       }}
                     >
-                      {loc.locationType === 'DELIVERY' ? '積下' : '積込'}
+                      {loc.locationType === 'DELIVERY' ? '荷降' : '積込'}
                     </span>
                   </div>
                   <div className="text-base font-extrabold text-green-700">
