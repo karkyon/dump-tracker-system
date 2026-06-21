@@ -799,6 +799,13 @@ export const debugAPI = {
   async getOperationDebugInfo(operationId: string): Promise<ApiResponse<any>> {
     console.log('[Debug API] Get operation debug info', { operationId });
     return apiClient.get(`/debug/operations/${operationId}/full`);
+  },
+
+  /**
+   * エクスポートファイル一覧取得（backend/exports/ 配下の一括出力ファイル）
+   */
+  async getExportFiles(): Promise<ApiResponse<any>> {
+    return apiClient.get('/debug/exports');
   }
 };
 

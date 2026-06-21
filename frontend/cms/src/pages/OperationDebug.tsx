@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { 
   Search, FileText, CheckCircle, XCircle, AlertCircle, 
   ChevronDown, ChevronUp, MapPin, Clock, Fuel, Coffee,
-  Truck, Navigation, Package, Play, Square, ClipboardCheck
+  Truck, Navigation, Package, Play, Square, ClipboardCheck, Download
 } from 'lucide-react';
 import { debugAPI } from '../utils/api';
 import { apiClient } from '../utils/api';
@@ -131,10 +131,37 @@ const OperationDebug: React.FC = () => {
   const [showInspectionItems, setShowInspectionItems] = useState(true);
   const [showOperationTimeline, setShowOperationTimeline] = useState(true);
   const [showRawData, setShowRawData] = useState(false);
+  const [showExports, setShowExports] = useState(false);
+  const [exportFiles, setExportFiles] = useState<{ name: string; sizeMB: string; createdAt: string }[]>([]);
 
   // =====================================
   // API呼び出し
   // =====================================
+
+  const fetchExportFiles = async () => {
+    try {
+      const response = await debugAPI.getExportFiles();
+      const files = (response.data as any)?.data?.files || (response.data as any)?.files || [];
+      setExportFiles(files);
+    } catch (error) {
+      console.error('❌ エクスポートファイル一覧取得エラー:', error);
+    }
+  };
+
+  const handleDownloadExport = async (name: string) => {
+    try {
+      const res = await apiClient.get(`/debug/exports/${encodeURIComponent(name)}/download`, { responseType: 'blob' }) as any;
+      const blob = new Blob([res.data], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(`ダウンロード失敗: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
 
   const fetchRecentOperations = async () => {
     try {
@@ -789,6 +816,39 @@ const OperationDebug: React.FC = () => {
           検索結果がありません。運行IDを確認してください。
         </div>
       )}
+
+      {/* エクスポートファイル一覧（backend/exports/ 配下の一括出力ファイル） */}
+      <div className="bg-white rounded-lg shadow-sm p-4">
+        <button
+          onClick={() => { setShowExports(v => !v); if (!showExports) fetchExportFiles(); }}
+          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+        >
+          {showExports ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <span>エクスポートファイル一覧（backend/exports/）</span>
+        </button>
+        {showExports && (
+          <div className="mt-3 space-y-1">
+            {exportFiles.length === 0 ? (
+              <p className="text-xs text-gray-400">エクスポートファイルがありません</p>
+            ) : (
+              exportFiles.map(f => (
+                <div key={f.name} className="flex items-center gap-3 text-xs text-gray-600 py-1 border-b border-gray-100">
+                  <span className="flex-1 font-mono truncate">{f.name}</span>
+                  <span className="text-gray-400">{f.sizeMB}MB</span>
+                  <span className="text-gray-400">{new Date(f.createdAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</span>
+                  <button
+                    onClick={() => handleDownloadExport(f.name)}
+                    title="ダウンロード"
+                    className="flex items-center gap-1 px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50"
+                  >
+                    <Download className="w-3 h-3" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

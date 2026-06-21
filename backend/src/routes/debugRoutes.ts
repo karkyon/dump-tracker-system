@@ -639,6 +639,57 @@ router.get(
 );
 
 
+// ============================================================
+// ✅ エクスポートファイル一覧・ダウンロード API (ADMIN専用)
+// ============================================================
+// backend/exports/ 配下に生成された一括エクスポートファイル
+// （例: scripts/export-operation-debug-week.sh の出力）を一覧・DLする。
+
+router.get(
+  '/exports',
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodePath = require('path') as typeof import('path');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    const exportDir = nodePath.join(process.cwd(), 'exports');
+    if (!fs.existsSync(exportDir)) {
+      return sendSuccess(res as any, { files: [], total: 0 });
+    }
+    const files = fs.readdirSync(exportDir)
+      .filter((f: string) => !f.startsWith('.'))
+      .map((f: string) => {
+        const fp = nodePath.join(exportDir, f);
+        const stat = fs.statSync(fp);
+        return { name: f, sizeMB: (stat.size / 1024 / 1024).toFixed(2), createdAt: stat.mtime.toISOString() };
+      })
+      .sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt));
+    return sendSuccess(res as any, { files, total: files.length });
+  })
+);
+
+router.get(
+  '/exports/:name/download',
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const { name } = req.params;
+    if (!name || name.includes('..') || name.includes('/')) {
+      return sendError(res as any, '無効なファイル名', 400);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodePath = require('path') as typeof import('path');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    const exportDir = nodePath.join(process.cwd(), 'exports');
+    const filePath = nodePath.join(exportDir, name);
+    if (!fs.existsSync(filePath)) {
+      return sendError(res as any, 'ファイルが見つかりません', 404);
+    }
+    return (res as any).download(filePath, name);
+  })
+);
+
 export default router;
 
 // =====================================
