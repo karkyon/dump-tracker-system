@@ -578,15 +578,28 @@ const GPSMonitoring: React.FC = () => {
   // フィルタリング & 集計
   // =====================================
 
-  const filteredVehicles = vehicles.filter(vehicle => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      vehicle.vehicleNumber.toLowerCase().includes(q) ||
-      vehicle.driverName.toLowerCase().includes(q) ||
-      vehicle.currentAddress.toLowerCase().includes(q);
-    const matchesStatus = !statusFilter || vehicle.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // 表示順: 運行中 → 運行中(オフライン) → 積込中 → 荷降中 → 休憩中 → 給油中 → オフライン
+  const STATUS_SORT_ORDER: Record<VehicleLocation['status'], number> = {
+    in_operation: 0,
+    in_op_offline: 1,
+    loading: 2,
+    unloading: 3,
+    break: 4,
+    refueling: 5,
+    offline: 6,
+  };
+
+  const filteredVehicles = vehicles
+    .filter(vehicle => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        vehicle.vehicleNumber.toLowerCase().includes(q) ||
+        vehicle.driverName.toLowerCase().includes(q) ||
+        vehicle.currentAddress.toLowerCase().includes(q);
+      const matchesStatus = !statusFilter || vehicle.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => (STATUS_SORT_ORDER[a.status] ?? 99) - (STATUS_SORT_ORDER[b.status] ?? 99));
 
   const statusCounts = vehicles.reduce<Record<string, number>>((acc, v) => {
     acc[v.status] = (acc[v.status] ?? 0) + 1;
@@ -648,7 +661,7 @@ const GPSMonitoring: React.FC = () => {
       )}
 
       {/* メインコンテンツ: 地図(広く) + 右側車両一覧 */}
-      <div className="flex gap-4" style={{ minHeight: '600px' }}>
+      <div className="flex gap-4" style={{ height: '750px' }}>
 
         {/* 地図エリア（flex-1で最大幅確保） */}
         <div className="flex-1 min-w-0">
@@ -663,8 +676,8 @@ const GPSMonitoring: React.FC = () => {
               )}
             </h2>
 
-            <div className="relative rounded-lg overflow-hidden flex-1" style={{ minHeight: '550px' }}>
-              <div ref={mapRef} className="w-full h-full bg-gray-100" style={{ minHeight: '550px' }} />
+            <div className="relative rounded-lg overflow-hidden flex-1">
+              <div ref={mapRef} className="w-full h-full bg-gray-100" />
 
               {!mapsLoaded && (
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-purple-100 flex flex-col items-center justify-center">
