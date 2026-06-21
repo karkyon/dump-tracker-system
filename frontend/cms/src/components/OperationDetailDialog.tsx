@@ -1026,6 +1026,20 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
     return () => clearTimeout(t);
   }, [locQuery, eventType]);
 
+  // 🆕 車両の積載量(capacityTons)を数量の初期値にする
+  React.useEffect(() => {
+    if (!vehicleId) return;
+    (async () => {
+      try {
+        const res = await apiClient.get(`/vehicles/${vehicleId}`);
+        const d: any = res;
+        const v = d?.data?.data ?? d?.data ?? d;
+        const cap = v?.capacityTons ?? v?.capacity;
+        if (cap) setQuantity(prev => prev || String(cap));
+      } catch { /* 取得失敗は無視（手入力で対応） */ }
+    })();
+  }, [vehicleId]);
+
   const toggleItem = (id: string) =>
     setSelectedItemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -1082,12 +1096,16 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
     if (isLoadOrUnload && !selectedLocationId) { setSaveError('場所を選択してください'); return; }
     setSaving(true);
     try {
+      let finalNotes = notes || '';
+      if (customItemName.trim()) {
+        finalNotes = `品目: ${customItemName.trim()}` + (finalNotes ? ` / ${finalNotes}` : '');
+      }
       const payload: Record<string, any> = {
         operationId,
         activityType: eventType,
         actualStartTime: mergeHM(startHHMM),
         quantityTons: 0,
-        notes: notes || undefined,
+        notes: finalNotes || undefined,
       };
       if (isLoadOrUnload) {
         payload.locationId = selectedLocationId;
@@ -1185,16 +1203,25 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
                     <div className="border border-gray-200 rounded-lg p-3 space-y-2">
                       <input type="text" value={newLocName} onChange={e => setNewLocName(e.target.value)}
                         placeholder="地点名" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                      {mapsLoaded ? (
+                        <LocationMapPicker
+                          initialPosition={{
+                            lat: newLocLat ? parseFloat(newLocLat) : 34.6937,
+                            lng: newLocLng ? parseFloat(newLocLng) : 135.5023,
+                          }}
+                          onPositionChange={(pos, address) => {
+                            setNewLocLat(String(pos.lat));
+                            setNewLocLng(String(pos.lng));
+                            if (address) setNewLocAddress(address);
+                          }}
+                          height={260}
+                        />
+                      ) : (
+                        <p className="text-xs text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">地図を読み込み中...</p>
+                      )}
                       <input type="text" value={newLocAddress} onChange={e => setNewLocAddress(e.target.value)}
-                        placeholder="住所（任意）" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="text" value={newLocLat} onChange={e => setNewLocLat(e.target.value)}
-                          placeholder="緯度" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-                        <input type="text" value={newLocLng} onChange={e => setNewLocLng(e.target.value)}
-                          placeholder="経度" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-                      </div>
-                      <p className="text-xs text-gray-400">Googleマップでピンを長押しすると緯度経度をコピーできます</p>
-                      <button type="button" onClick={handleCreateLocation} disabled={saving}
+                        placeholder="住所（地図クリックで自動入力されます）" className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                      <button type="button" onClick={handleCreateLocation} disabled={saving || !newLocLat || !newLocLng}
                         className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50">
                         この内容で登録する
                       </button>
@@ -1235,7 +1262,20 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
                     {it.name}
                   </button>
                 ))}
+                <button type="button" onClick={() => setShowCustomItem(v => !v)}
+                  className="px-3 py-1.5 rounded-lg text-sm border"
+                  style={{
+                    background: showCustomItem ? '#eff6ff' : '#fff',
+                    borderColor: showCustomItem ? '#3b82f6' : '#e5e7eb',
+                    color: showCustomItem ? '#1d4ed8' : '#374151',
+                  }}>
+                  + その他（手入力）
+                </button>
               </div>
+              {showCustomItem && (
+                <input type="text" value={customItemName} onChange={e => setCustomItemName(e.target.value)}
+                  placeholder="品目名を入力" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2" />
+              )}
               <div className="flex items-center gap-2">
                 <p className="text-xs text-gray-500">数量</p>
                 <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
@@ -3420,6 +3460,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       <CmsActivityAddModal
         operationId={operationId}
         items={editItems}
+        vehicleId={operation?.vehicleId}
+        mapsLoaded={mapsLoaded}
         onClose={() => setAddEventOpen(false)}
         onSaved={() => {
           setAddEventOpen(false);

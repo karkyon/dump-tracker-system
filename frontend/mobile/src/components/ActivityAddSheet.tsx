@@ -6,8 +6,99 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { apiService } from '../services/api';
 
+// =====================================================================
+// 🆕 MobileLocationPinMap
+// 新規地点登録用の簡易地図ピッカー（タップ/ドラッグで位置指定 + 逆ジオコーディング）
+// =====================================================================
+interface MobileLocationPinMapProps {
+  accentColor: string;
+  lat?: number;
+  lng?: number;
+  onPositionChange: (lat: number, lng: number, address?: string) => void;
+}
+
+const MobileLocationPinMap: React.FC<MobileLocationPinMapProps> = ({ accentColor, lat, lng, onPositionChange }) => {
+  const mapRef = React.useRef<HTMLDivElement>(null);
+  const markerRef = React.useRef<any>(null);
+  const [ready, setReady] = useState(false);
+  const [available, setAvailable] = useState(true);
+
+  const defaultLat = lat ?? 34.6937;
+  const defaultLng = lng ?? 135.5023;
+
+  const reverseGeocode = (position: { lat: number; lng: number }) => {
+    try {
+      const g = (window as any).google;
+      if (!g?.maps) { onPositionChange(position.lat, position.lng, undefined); return; }
+      const geocoder = new g.maps.Geocoder();
+      geocoder.geocode({ location: position }, (results: any, status: string) => {
+        if (status === 'OK' && results && results[0]) {
+          onPositionChange(position.lat, position.lng, results[0].formatted_address);
+        } else {
+          onPositionChange(position.lat, position.lng, undefined);
+        }
+      });
+    } catch {
+      onPositionChange(position.lat, position.lng, undefined);
+    }
+  };
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const g = (window as any).google;
+    if (!g?.maps) { setAvailable(false); return; }
+
+    const map = new g.maps.Map(mapRef.current, {
+      center: { lat: defaultLat, lng: defaultLng },
+      zoom: 16,
+      disableDefaultUI: true,
+      zoomControl: true,
+      gestureHandling: 'greedy',
+    });
+    const marker = new g.maps.Marker({
+      position: { lat: defaultLat, lng: defaultLng },
+      map,
+      draggable: true,
+    });
+    markerRef.current = marker;
+
+    marker.addListener('dragend', () => {
+      const pos = marker.getPosition();
+      if (!pos) return;
+      reverseGeocode({ lat: pos.lat(), lng: pos.lng() });
+    });
+
+    map.addListener('click', (e: any) => {
+      if (!e.latLng) return;
+      marker.setPosition(e.latLng);
+      reverseGeocode({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+    });
+
+    setReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!available) {
+    return (
+      <div style={{ fontSize: 11, color: '#9ca3af', padding: '10px', textAlign: 'center', border: '0.5px dashed #d1d5db', borderRadius: 7 }}>
+        地図を利用できません。住所欄に直接入力してください
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div ref={mapRef} style={{ width: '100%', height: 180, borderRadius: 7, overflow: 'hidden', background: '#e5e7eb' }} />
+      <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>
+        {ready ? '📍 地図をタップ、またはピンをドラッグして位置を指定' : '地図を読み込み中...'}
+      </div>
+    </div>
+  );
+};
+
 interface ActivityAddSheetProps {
   operationId: string;
+  vehicleId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -22,7 +113,7 @@ const ADD_EVENT_TYPES: { value: string; label: string; color: string }[] = [
 
 const DEFAULT_EVENT_CFG: { value: string; label: string; color: string } = ADD_EVENT_TYPES[0] ?? { value: 'LOADING', label: '積込', color: '#1565C0' };
 
-const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClose, onSaved }) => {
+const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, vehicleId, onClose, onSaved }) => {
   const [eventType, setEventType] = useState('LOADING');
 
   const [locQuery, setLocQuery] = useState('');
@@ -34,6 +125,7 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClos
   const [newLocName, setNewLocName] = useState('');
   const [newLocLat, setNewLocLat] = useState('');
   const [newLocLng, setNewLocLng] = useState('');
+  const [newLocAddress, setNewLocAddress] = useState('');
 
   const [items, setItems] = useState<{ id: string; name: string }[]>([]);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -43,6 +135,8 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClos
   const [fuelAmt, setFuelAmt] = useState('');
   const [fuelCost, setFuelCost] = useState('');
   const [notes, setNotes] = useState('');
+  const [customItemName, setCustomItemName] = useState('');
+  const [showCustomItem, setShowCustomItem] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const isLoadOrUnload = eventType === 'LOADING' || eventType === 'UNLOADING';
@@ -60,26 +154,41 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClos
     })();
   }, []);
 
+  // 🆕 車両の積載量(capacityTons)を数量の初期値にする
+  useEffect(() => {
+    if (!vehicleId) return;
+    (async () => {
+      try {
+        const res = await (apiService as any).getVehicleById(vehicleId);
+        const v: any = res?.data?.data ?? res?.data ?? res;
+        const cap = v?.capacityTons ?? v?.capacity;
+        if (cap) setQuantity(prev => prev || String(cap));
+      } catch { /* 取得失敗は無視 */ }
+    })();
+  }, [vehicleId]);
+
   useEffect(() => {
     if (!locQuery || locQuery.trim().length < 1) { setLocResults([]); return; }
     const t = setTimeout(async () => {
       setLocSearching(true);
       try {
-        const res = await apiService.getLocations({ search: locQuery, limit: 10 });
+        // 🆕 種別に応じて場所をフィルタ（積込→PICKUP/BOTH、荷降→DELIVERY/BOTH）
+        const typeFilter = eventType === 'LOADING' ? ['PICKUP', 'BOTH'] : ['DELIVERY', 'BOTH'];
+        const res = await apiService.getLocations({ search: locQuery, limit: 10, locationType: typeFilter } as any);
         const arr: any = res?.data ?? [];
         setLocResults(Array.isArray(arr) ? arr : []);
       } catch { setLocResults([]); }
       finally { setLocSearching(false); }
     }, 350);
     return () => clearTimeout(t);
-  }, [locQuery]);
+  }, [locQuery, eventType]);
 
   const toggleItem = (id: string) =>
     setSelectedItemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const handleCreateLocation = async () => {
     if (!newLocName.trim() || !newLocLat || !newLocLng) {
-      toast.error('地点名・緯度・経度は必須です');
+      toast.error('地点名・地図上の位置は必須です');
       return;
     }
     setSaving(true);
@@ -89,7 +198,8 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClos
         latitude: parseFloat(newLocLat),
         longitude: parseFloat(newLocLng),
         locationType: eventType === 'LOADING' ? 'PICKUP' : 'DELIVERY',
-      });
+        address: newLocAddress || undefined,
+      } as any);
       const created: any = res?.data ?? res;
       if (created?.id) {
         setSelectedLocationId(created.id);
@@ -127,12 +237,16 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClos
     if (isLoadOrUnload && !selectedLocationId) { toast.error('場所を選択してください'); return; }
     setSaving(true);
     try {
+      let finalNotes = notes || '';
+      if (customItemName.trim()) {
+        finalNotes = `品目: ${customItemName.trim()}` + (finalNotes ? ` / ${finalNotes}` : '');
+      }
       const payload: Record<string, any> = {
         operationId,
         activityType: eventType,
         actualStartTime: mergeHM(startHHMM),
         quantityTons: 0,
-        notes: notes || undefined,
+        notes: finalNotes || undefined,
       };
       if (isLoadOrUnload) {
         payload.locationId = selectedLocationId;
@@ -229,13 +343,20 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClos
                 ) : (
                   <div style={{ marginTop: 6, border: '0.5px solid #e5e7eb', borderRadius: 7, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <input type="text" value={newLocName} onChange={e => setNewLocName(e.target.value)} placeholder="地点名" style={inputStyle} />
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <input type="text" value={newLocLat} onChange={e => setNewLocLat(e.target.value)} placeholder="緯度" style={inputStyle} />
-                      <input type="text" value={newLocLng} onChange={e => setNewLocLng(e.target.value)} placeholder="経度" style={inputStyle} />
-                    </div>
-                    <div style={{ fontSize: 10, color: '#9ca3af' }}>地図appでピンを長押しすると緯度経度をコピーできます</div>
-                    <div onClick={handleCreateLocation}
-                      style={{ textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#fff', background: cfg.color, borderRadius: 7, padding: '8px', cursor: 'pointer' }}>
+                    <MobileLocationPinMap
+                      accentColor={cfg.color}
+                      lat={newLocLat ? parseFloat(newLocLat) : undefined}
+                      lng={newLocLng ? parseFloat(newLocLng) : undefined}
+                      onPositionChange={(plat, plng, address) => {
+                        setNewLocLat(String(plat));
+                        setNewLocLng(String(plng));
+                        if (address) setNewLocAddress(address);
+                      }}
+                    />
+                    <input type="text" value={newLocAddress} onChange={e => setNewLocAddress(e.target.value)}
+                      placeholder="住所（地図タップで自動入力）" style={inputStyle} />
+                    <div onClick={saving ? undefined : handleCreateLocation}
+                      style={{ textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#fff', background: cfg.color, borderRadius: 7, padding: '8px', cursor: 'pointer', opacity: (!newLocLat || !newLocLng) ? 0.5 : 1 }}>
                       この内容で登録する
                     </div>
                   </div>
@@ -273,7 +394,20 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, onClos
                   {it.name}
                 </div>
               ))}
+              <div onClick={() => setShowCustomItem(v => !v)}
+                style={{
+                  padding: '6px 10px', borderRadius: 7, fontSize: 12, cursor: 'pointer',
+                  background: showCustomItem ? `${cfg.color}22` : '#f3f4f6',
+                  border: `0.5px solid ${showCustomItem ? cfg.color : '#d1d5db'}`,
+                  color: showCustomItem ? cfg.color : '#374151',
+                }}>
+                + その他
+              </div>
             </div>
+            {showCustomItem && (
+              <input type="text" value={customItemName} onChange={e => setCustomItemName(e.target.value)}
+                placeholder="品目名を入力" style={{ width: '100%', background: '#f3f4f6', border: '0.5px solid #d1d5db', borderRadius: 7, padding: '7px 8px', fontSize: 13, color: '#111827', boxSizing: 'border-box', marginBottom: 6 }} />
+            )}
             <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>数量（t）</div>
             <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} style={inputStyle} />
           </div>

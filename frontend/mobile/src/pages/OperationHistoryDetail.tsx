@@ -428,6 +428,7 @@ const OperationHistoryDetail: React.FC = () => {
       {addEventOpen && (
         <ActivityAddSheet
           operationId={id || ''}
+          vehicleId={detail.vehicle?.id}
           onClose={() => setAddEventOpen(false)}
           onSaved={() => {
             setAddEventOpen(false);
