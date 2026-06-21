@@ -88,8 +88,8 @@ const MobileLocationPinMap: React.FC<MobileLocationPinMapProps> = ({ accentColor
 
   return (
     <div>
-      <div ref={mapRef} style={{ width: '100%', height: 180, borderRadius: 7, overflow: 'hidden', background: '#e5e7eb' }} />
-      <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>
+      <div ref={mapRef} style={{ width: '100%', height: 180, borderRadius: 7, overflow: 'hidden', background: '#e5e7eb', border: `1px solid ${accentColor}33` }} />
+      <div style={{ fontSize: 10, color: accentColor, marginTop: 3 }}>
         {ready ? '📍 地図をタップ、またはピンをドラッグして位置を指定' : '地図を読み込み中...'}
       </div>
     </div>
