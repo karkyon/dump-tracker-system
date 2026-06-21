@@ -14,6 +14,7 @@ import {
 import Button from './common/Button';
 import Modal from './common/Modal';
 import { apiClient } from '../utils/api';
+import LocationMapPicker from './maps/LocationMapPicker';
 
 /**
  * 運行記録詳細情報のインターフェース
@@ -966,6 +967,8 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
 interface CmsActivityAddModalProps {
   operationId: string;
   items: { id: string; name: string }[];
+  vehicleId?: string;
+  mapsLoaded?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -978,7 +981,7 @@ const ADD_EVENT_TYPES: { value: string; label: string }[] = [
   { value: 'BREAK_END', label: '休憩終了' },
 ];
 
-const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, items, onClose, onSaved }) => {
+const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, items, vehicleId, mapsLoaded, onClose, onSaved }) => {
   const [eventType, setEventType] = React.useState('LOADING');
   const [locQuery, setLocQuery] = React.useState('');
   const [locResults, setLocResults] = React.useState<{ id: string; name: string; address: string }[]>([]);
@@ -997,6 +1000,8 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
   const [fuelAmt, setFuelAmt] = React.useState('');
   const [fuelCost, setFuelCost] = React.useState('');
   const [notes, setNotes] = React.useState('');
+  const [customItemName, setCustomItemName] = React.useState('');
+  const [showCustomItem, setShowCustomItem] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -1009,7 +1014,9 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
     const t = setTimeout(async () => {
       setLocSearching(true);
       try {
-        const res = await apiClient.get('/locations', { params: { search: locQuery, limit: 10 } });
+        // 🆕 種別に応じて場所をフィルタ（積込→PICKUP/BOTH、荷降→DELIVERY/BOTH）
+        const typeFilter = eventType === 'LOADING' ? ['PICKUP', 'BOTH'] : ['DELIVERY', 'BOTH'];
+        const res = await apiClient.get('/locations', { params: { search: locQuery, limit: 10, locationType: typeFilter } });
         const d: any = res;
         const arr = d?.data?.data ?? d?.data ?? [];
         setLocResults(Array.isArray(arr) ? arr : []);
@@ -1017,7 +1024,7 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
       finally { setLocSearching(false); }
     }, 350);
     return () => clearTimeout(t);
-  }, [locQuery]);
+  }, [locQuery, eventType]);
 
   const toggleItem = (id: string) =>
     setSelectedItemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
