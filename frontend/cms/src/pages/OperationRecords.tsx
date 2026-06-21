@@ -12,6 +12,7 @@ import Table from '../components/common/Table';
 import { apiClient } from '../utils/api';
 // ✅ 修正: OperationDetailDialogをインポート
 import OperationDetailDialog from '../components/OperationDetailDialog';
+import OperationsMapView from '../components/OperationsMapView';
 
 interface Operation {
   id: string;
@@ -106,6 +107,7 @@ const loadGoogleMapsScript = (callback: () => void) => {
 const OperationRecords: React.FC = () => {
   useTLog('OPERATION_RECORDS', '運行記録');
 
+  const [activeView, setActiveView] = useState<'LIST' | 'MAP'>('LIST');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [driverFilter, setDriverFilter] = useState('');
@@ -255,13 +257,50 @@ const OperationRecords: React.FC = () => {
     { key: 'actions', header: '操作', render: (_value: any, record: Operation) => record ? <Button variant="outline" size="sm" onClick={() => handleViewDetail(record)}><Eye className="w-4 h-4" /></Button> : <span>-</span> }
   ];
 
+  // マップビューの「詳細」ボタン押下時: 一覧表示タブへ切替＋場所名で絞り込み
+  const handleJumpToList = (locationName: string) => {
+    setActiveView('LIST');
+    setSearchQuery(locationName);
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">運行記録</h1>
-        <Button onClick={handleExportCSV} variant="outline"><Download className="w-4 h-4 mr-2" />CSV出力 ({pagination.total}件)</Button>
+        {activeView === 'LIST' && (
+          <Button onClick={handleExportCSV} variant="outline"><Download className="w-4 h-4 mr-2" />CSV出力 ({pagination.total}件)</Button>
+        )}
       </div>
 
+      {/* 表示切替タブ: 一覧表示 / マップ表示 */}
+      <div className="flex gap-1">
+        <button
+          onClick={() => setActiveView('LIST')}
+          className={`px-4 py-2 text-sm font-semibold rounded-t-lg border ${
+            activeView === 'LIST'
+              ? 'bg-white border-gray-200 border-b-white text-gray-900'
+              : 'bg-transparent border-transparent text-gray-500'
+          }`}
+        >
+          📋 一覧表示
+        </button>
+        <button
+          onClick={() => setActiveView('MAP')}
+          className={`px-4 py-2 text-sm font-semibold rounded-t-lg border ${
+            activeView === 'MAP'
+              ? 'bg-white border-gray-200 border-b-white text-gray-900'
+              : 'bg-transparent border-transparent text-gray-500'
+          }`}
+        >
+          🗺️ マップ表示
+        </button>
+      </div>
+
+      {activeView === 'MAP' ? (
+        <OperationsMapView onJumpToList={handleJumpToList} />
+      ) : (
+      <>
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-lg font-semibold mb-4">検索・フィルター</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -311,6 +350,8 @@ const OperationRecords: React.FC = () => {
 
       {selectedRecord && <OperationDetailDialog operationId={selectedRecord.id}
           initialOperation={selectedRecord} isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} />}
+      </>
+      )}
     </div>
   );
 };

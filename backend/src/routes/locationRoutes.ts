@@ -65,6 +65,7 @@ import {
   getLocationById,
   getLocationsByType,
   getLocationStatistics,
+  getLocationsMapSummary,
   getNearbyLocations,
   updateLocation
 } from '../controllers/locationController';
@@ -501,6 +502,44 @@ router.get('/by-type/:type', getLocationsByType);
  *       401:
  *         description: 認証エラー
  */
+/**
+ * @swagger
+ * /locations/map-summary:
+ *   get:
+ *     summary: 位置マップサマリー取得（実績回数付き）
+ *     description: |
+ *       運行記録「マップ表示」タブ用エンドポイント。
+ *       全場所をピン表示するためのデータと、各場所の実績回数（紐づく運行明細件数）、
+ *       代表客先名、最終利用日を返す。
+ *     tags:
+ *       - 📍 位置管理 (Location Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: 場所名・住所の部分一致検索
+ *       - in: query
+ *         name: locationType
+ *         schema: { type: string, enum: [PICKUP, DELIVERY, ALL] }
+ *         description: 場所種別フィルタ（省略時は全種別）
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string, format: date }
+ *         description: 実績集計期間の開始日（省略時は全期間）
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string, format: date }
+ *         description: 実績集計期間の終了日（省略時は全期間）
+ *     responses:
+ *       200:
+ *         description: 取得成功
+ *       401:
+ *         description: 認証エラー
+ */
+router.get('/map-summary', getLocationsMapSummary);
+
 router.get('/:id', validateId, getLocationById);
 
 /**

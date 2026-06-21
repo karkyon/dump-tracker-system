@@ -541,6 +541,156 @@ class LocationController {
     }
   });
 
+  /**
+   * 位置マップサマリー取得（実績回数付き）
+   * GET /api/v1/locations/map-summary
+   *
+   * 運行記録「マップ表示」タブ用。
+   * 各場所(location)に紐づく operationDetails 件数を「実績回数」として集計し、
+   * 代表客先名（最も件数の多い客先）・最終利用日を付加して返却する。
+   */
+  getLocationsMapSummary = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        throw new AuthorizationError('認証が必要です');
+      }
+
+      const db = DatabaseService.getInstance();
+
+      // ---- 期間フィルタ（任意） ----
+      const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined;
+      const dateTo = req.query.dateTo ? new Date(req.query.dateTo as string) : undefined;
+
+      // ---- 種別・キーワード検索（任意） ----
+      const locationTypeParam = req.query.locationType as string | undefined;
+      const search = (req.query.search as string | undefined)?.trim();
+
+      const locationWhere: any = { isActive: true };
+      if (locationTypeParam && locationTypeParam !== 'ALL') {
+        locationWhere.locationType = locationTypeParam;
+      }
+      if (search) {
+        locationWhere.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { address: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+
+      // ---- 場所マスタ取得 ----
+      const locations = await db.location.findMany({
+        where: locationWhere,
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          latitude: true,
+          longitude: true,
+          locationType: true
+        },
+        orderBy: { name: 'asc' }
+      });
+
+      if (locations.length === 0) {
+        return res.status(200).json(successResponse([], '位置マップサマリーを取得しました'));
+      }
+
+      const locationIds = locations.map(l => l.id);
+
+      // ---- operationDetails を集計（期間フィルタ適用） ----
+      const detailWhere: any = { locationId: { in: locationIds } };
+      if (dateFrom || dateTo) {
+        detailWhere.actualStartTime = {};
+        if (dateFrom) detailWhere.actualStartTime.gte = dateFrom;
+        if (dateTo) detailWhere.actualStartTime.lte = dateTo;
+      }
+
+      const details = await db.operationDetail.findMany({
+        where: detailWhere,
+        select: {
+          locationId: true,
+          actualStartTime: true,
+          plannedTime: true,
+          operations: {
+            select: {
+              customer: { select: { name: true } }
+            }
+          }
+        }
+      });
+
+      // ---- locationId ごとに集計 ----
+      type Agg = {
+        count: number;
+        lastDate: Date | null;
+        customerCounts: Map<string, number>;
+      };
+      const aggMap = new Map<string, Agg>();
+
+      for (const d of details) {
+        if (!d.locationId) continue;
+        const agg = aggMap.get(d.locationId) || { count: 0, lastDate: null, customerCounts: new Map() };
+        agg.count += 1;
+
+        const ts = d.actualStartTime || d.plannedTime;
+        if (ts && (!agg.lastDate || ts > agg.lastDate)) {
+          agg.lastDate = ts;
+        }
+
+        const customerName = d.operations?.customer?.name;
+        if (customerName) {
+          agg.customerCounts.set(customerName, (agg.customerCounts.get(customerName) || 0) + 1);
+        }
+
+        aggMap.set(d.locationId, agg);
+      }
+
+      // ---- レスポンス整形 ----
+      const summary = locations.map(loc => {
+        const agg = aggMap.get(loc.id);
+        let topCustomerName: string | null = null;
+        if (agg && agg.customerCounts.size > 0) {
+          const sorted = [...agg.customerCounts.entries()].sort((a, b) => b[1] - a[1]);
+          topCustomerName = sorted[0]?.[0] ?? null;
+        }
+
+        return {
+          id: loc.id,
+          name: loc.name,
+          address: loc.address,
+          latitude: loc.latitude ? Number(loc.latitude) : null,
+          longitude: loc.longitude ? Number(loc.longitude) : null,
+          locationType: loc.locationType,
+          customerName: topCustomerName,
+          operationCount: agg?.count || 0,
+          lastUsedAt: agg?.lastDate ? agg.lastDate.toISOString() : null
+        };
+      });
+
+      logger.info('位置マップサマリー取得', {
+        count: summary.length,
+        dateFrom: dateFrom?.toISOString(),
+        dateTo: dateTo?.toISOString(),
+        userId: req.user.userId
+      });
+
+      return res.status(200).json(successResponse(summary, '位置マップサマリーを取得しました'));
+
+    } catch (error) {
+      logger.error('位置マップサマリー取得エラー', { error, userId: req.user?.userId });
+
+      if (error instanceof ValidationError) {
+        const errorRes = errorResponse(error.message, error.statusCode, error.code);
+        return res.status(error.statusCode).json(errorRes);
+      } else if (error instanceof AuthorizationError) {
+        const errorRes = errorResponse(error.message, error.statusCode, error.code);
+        return res.status(error.statusCode).json(errorRes);
+      } else {
+        const errorRes = errorResponse('位置マップサマリーの取得に失敗しました', 500, 'GET_LOCATIONS_MAP_SUMMARY_ERROR');
+        return res.status(500).json(errorRes);
+      }
+    }
+  });
+
   // =====================================
   // ヘルパーメソッド
   // =====================================
@@ -605,7 +755,8 @@ export const {
   deleteLocation,
   getLocationStatistics,
   getNearbyLocations,
-  getLocationsByType
+  getLocationsByType,
+  getLocationsMapSummary
 } = locationController;
 
 // クラスエクスポート
