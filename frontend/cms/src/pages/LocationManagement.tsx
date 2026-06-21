@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../components/common/Modal';
 import LocationFormModal from '../components/location/LocationFormModal';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate } from '../utils/helpers';
+import { apiClient } from '../utils/api';
 
 const LocationManagement: React.FC = () => {
   const [_locPage, _setLocPage] = React.useState(1);
@@ -40,6 +41,40 @@ const LocationManagement: React.FC = () => {
   // ✅ ソート状態
   const [sortBy, setSortBy] = useState('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // ✅ 実績統計（直近30日/90日/1年の積込・荷降回数）: locationId をキーにしたマップ
+  interface UsageStat { loading: number; unloading: number; }
+  interface LocationUsageStats { last30Days: UsageStat; last90Days: UsageStat; last365Days: UsageStat; }
+  const [usageStatsMap, setUsageStatsMap] = useState<Record<string, LocationUsageStats>>({});
+  const [usageStatsLoading, setUsageStatsLoading] = useState(false);
+
+  const fetchUsageStats = React.useCallback(async () => {
+    setUsageStatsLoading(true);
+    try {
+      const response = await apiClient.get('/locations/usage-stats');
+      if (response.success && response.data) {
+        const data: any = response.data;
+        const list: Array<{ locationId: string } & LocationUsageStats> = Array.isArray(data) ? data : (data.data || []);
+        const map: Record<string, LocationUsageStats> = {};
+        list.forEach(item => {
+          map[item.locationId] = {
+            last30Days: item.last30Days,
+            last90Days: item.last90Days,
+            last365Days: item.last365Days
+          };
+        });
+        setUsageStatsMap(map);
+      }
+    } catch (err) {
+      console.error('[LocationManagement] 実績統計取得エラー:', err);
+    } finally {
+      setUsageStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsageStats();
+  }, [fetchUsageStats]);
 
   // ✅ ソートハンドラ
   const handleSort = (key: string) => {
@@ -133,6 +168,34 @@ const LocationManagement: React.FC = () => {
           {value || '-'}
         </span>
       ),
+    },
+    {
+      key: 'usageStats',
+      header: '積込/荷降実績',
+      width: '230px',
+      render: (_value: string, row: any) => {
+        const stats = usageStatsMap[row.id];
+        if (usageStatsLoading && !stats) {
+          return <span className="text-xs text-gray-400">読込中...</span>;
+        }
+        if (!stats) {
+          return <span className="text-xs text-gray-400">-</span>;
+        }
+        const Cell = ({ label, s }: { label: string; s: UsageStat }) => (
+          <div className="flex items-center gap-1 text-[11px]">
+            <span className="text-gray-500 w-9">{label}</span>
+            <span className="font-bold text-blue-700">積{s.loading}</span>
+            <span className="font-bold text-red-700">荷{s.unloading}</span>
+          </div>
+        );
+        return (
+          <div className="space-y-0.5">
+            <Cell label="30日" s={stats.last30Days} />
+            <Cell label="90日" s={stats.last90Days} />
+            <Cell label="1年" s={stats.last365Days} />
+          </div>
+        );
+      },
     },
     {
       key: 'locationType',

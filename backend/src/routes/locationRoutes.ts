@@ -66,6 +66,7 @@ import {
   getLocationsByType,
   getLocationStatistics,
   getLocationsMapSummary,
+  getLocationsUsageStats,
   getNearbyLocations,
   updateLocation
 } from '../controllers/locationController';
@@ -539,6 +540,25 @@ router.get('/by-type/:type', getLocationsByType);
  *         description: 認証エラー
  */
 router.get('/map-summary', getLocationsMapSummary);
+
+/**
+ * @swagger
+ * /locations/usage-stats:
+ *   get:
+ *     summary: 位置別実績統計取得（直近30日/90日/1年）
+ *     description: |
+ *       積込・積卸場所マスタ一覧画面用。全場所の直近期間別の積込/荷降回数を一括取得する。
+ *     tags:
+ *       - 📍 位置管理 (Location Management)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 取得成功
+ *       401:
+ *         description: 認証エラー
+ */
+router.get('/usage-stats', getLocationsUsageStats);
 
 router.get('/:id', validateId, getLocationById);
 

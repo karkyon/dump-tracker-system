@@ -569,10 +569,12 @@ class LocationController {
       if (locationTypeParam && locationTypeParam !== 'ALL') {
         locationWhere.locationType = locationTypeParam;
       }
+      // ✅ 修正: address は検索対象から除外（地名の偶然一致による過剰ヒットを防止）。
+      //    場所名 または その場所で実際に使われた客先名（operationDetails経由）で検索する。
       if (search) {
         locationWhere.OR = [
           { name: { contains: search, mode: 'insensitive' } },
-          { address: { contains: search, mode: 'insensitive' } }
+          { operationDetails: { some: { operations: { customer: { name: { contains: search, mode: 'insensitive' } } } } } }
         ];
       }
 
@@ -596,18 +598,22 @@ class LocationController {
 
       const locationIds = locations.map(l => l.id);
 
-      // ---- operationDetails を集計（期間フィルタ適用） ----
-      const detailWhere: any = { locationId: { in: locationIds } };
+      // ---- operationDetails を取得（期間フィルタ適用・全期間も含めて1回で取得） ----
+      // ✅ 修正: activityType も取得し、積込(LOADING)/荷降(UNLOADING)を区別して集計する。
+      //    1つの場所が両方の用途で使われるケースに対応（マスタのlocationTypeだけでは判定しない）。
+      const detailWhereBase: any = { locationId: { in: locationIds } };
+      const detailWhereFiltered: any = { ...detailWhereBase };
       if (dateFrom || dateTo) {
-        detailWhere.actualStartTime = {};
-        if (dateFrom) detailWhere.actualStartTime.gte = dateFrom;
-        if (dateTo) detailWhere.actualStartTime.lte = dateTo;
+        detailWhereFiltered.actualStartTime = {};
+        if (dateFrom) detailWhereFiltered.actualStartTime.gte = dateFrom;
+        if (dateTo) detailWhereFiltered.actualStartTime.lte = dateTo;
       }
 
       const details = await db.operationDetail.findMany({
-        where: detailWhere,
+        where: detailWhereFiltered,
         select: {
           locationId: true,
+          activityType: true,
           actualStartTime: true,
           plannedTime: true,
           operations: {
@@ -618,9 +624,10 @@ class LocationController {
         }
       });
 
-      // ---- locationId ごとに集計 ----
+      // ---- locationId ごとに集計（積込/荷降を分離） ----
       type Agg = {
-        count: number;
+        loadingCount: number;
+        unloadingCount: number;
         lastDate: Date | null;
         customerCounts: Map<string, number>;
       };
@@ -628,8 +635,15 @@ class LocationController {
 
       for (const d of details) {
         if (!d.locationId) continue;
-        const agg = aggMap.get(d.locationId) || { count: 0, lastDate: null, customerCounts: new Map() };
-        agg.count += 1;
+        const agg = aggMap.get(d.locationId) || {
+          loadingCount: 0,
+          unloadingCount: 0,
+          lastDate: null,
+          customerCounts: new Map<string, number>()
+        };
+
+        if (d.activityType === 'LOADING') agg.loadingCount += 1;
+        else if (d.activityType === 'UNLOADING') agg.unloadingCount += 1;
 
         const ts = d.actualStartTime || d.plannedTime;
         if (ts && (!agg.lastDate || ts > agg.lastDate)) {
@@ -653,6 +667,9 @@ class LocationController {
           topCustomerName = sorted[0]?.[0] ?? null;
         }
 
+        const loadingCount = agg?.loadingCount || 0;
+        const unloadingCount = agg?.unloadingCount || 0;
+
         return {
           id: loc.id,
           name: loc.name,
@@ -661,7 +678,9 @@ class LocationController {
           longitude: loc.longitude ? Number(loc.longitude) : null,
           locationType: loc.locationType,
           customerName: topCustomerName,
-          operationCount: agg?.count || 0,
+          loadingCount,
+          unloadingCount,
+          operationCount: loadingCount + unloadingCount,
           lastUsedAt: agg?.lastDate ? agg.lastDate.toISOString() : null
         };
       });
@@ -688,6 +707,95 @@ class LocationController {
         const errorRes = errorResponse('位置マップサマリーの取得に失敗しました', 500, 'GET_LOCATIONS_MAP_SUMMARY_ERROR');
         return res.status(500).json(errorRes);
       }
+    }
+  });
+
+  /**
+   * 位置別実績統計取得（直近30日/90日/1年の積込・荷降回数）
+   * GET /api/v1/locations/usage-stats
+   *
+   * 積込・積卸場所マスタ一覧画面用。全場所の直近期間別の積込/荷降回数を一括取得する。
+   */
+  getLocationsUsageStats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        throw new AuthorizationError('認証が必要です');
+      }
+
+      const db = DatabaseService.getInstance();
+
+      const locations = await db.location.findMany({
+        where: { isActive: true },
+        select: { id: true }
+      });
+
+      if (locations.length === 0) {
+        return res.status(200).json(successResponse([], '位置別実績統計を取得しました'));
+      }
+
+      const locationIds = locations.map(l => l.id);
+      const now = new Date();
+      const day30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const day90 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const day365 = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+
+      // 直近1年分のみ取得し、フロント/メモリ側で30日・90日・365日に振り分ける
+      // （365日を超えるレコードはこの集計には不要）
+      const details = await db.operationDetail.findMany({
+        where: {
+          locationId: { in: locationIds },
+          actualStartTime: { gte: day365 }
+        },
+        select: {
+          locationId: true,
+          activityType: true,
+          actualStartTime: true,
+          plannedTime: true
+        }
+      });
+
+      type PeriodAgg = { loading: number; unloading: number };
+      type LocAgg = { d30: PeriodAgg; d90: PeriodAgg; d365: PeriodAgg };
+      const makeEmpty = (): PeriodAgg => ({ loading: 0, unloading: 0 });
+      const aggMap = new Map<string, LocAgg>();
+
+      for (const d of details) {
+        if (!d.locationId) continue;
+        const ts = d.actualStartTime || d.plannedTime;
+        if (!ts) continue;
+
+        const agg = aggMap.get(d.locationId) || { d30: makeEmpty(), d90: makeEmpty(), d365: makeEmpty() };
+
+        const bump = (bucket: PeriodAgg) => {
+          if (d.activityType === 'LOADING') bucket.loading += 1;
+          else if (d.activityType === 'UNLOADING') bucket.unloading += 1;
+        };
+
+        if (ts >= day365) bump(agg.d365);
+        if (ts >= day90) bump(agg.d90);
+        if (ts >= day30) bump(agg.d30);
+
+        aggMap.set(d.locationId, agg);
+      }
+
+      const result = locationIds.map(id => {
+        const agg = aggMap.get(id) || { d30: makeEmpty(), d90: makeEmpty(), d365: makeEmpty() };
+        return {
+          locationId: id,
+          last30Days: agg.d30,
+          last90Days: agg.d90,
+          last365Days: agg.d365
+        };
+      });
+
+      logger.info('位置別実績統計取得', { count: result.length, userId: req.user.userId });
+
+      return res.status(200).json(successResponse(result, '位置別実績統計を取得しました'));
+
+    } catch (error) {
+      logger.error('位置別実績統計取得エラー', { error, userId: req.user?.userId });
+      const errorRes = errorResponse('位置別実績統計の取得に失敗しました', 500, 'GET_LOCATIONS_USAGE_STATS_ERROR');
+      return res.status(500).json(errorRes);
     }
   });
 
@@ -756,7 +864,8 @@ export const {
   getLocationStatistics,
   getNearbyLocations,
   getLocationsByType,
-  getLocationsMapSummary
+  getLocationsMapSummary,
+  getLocationsUsageStats
 } = locationController;
 
 // クラスエクスポート

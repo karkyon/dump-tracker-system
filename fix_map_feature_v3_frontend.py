@@ -1,4 +1,85 @@
-// frontend/cms/src/components/OperationsMapView.tsx
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+fix_map_feature_v3_frontend.py
+=====================================
+運行記録マップ機能 実績集計バグ修正 + 機能強化（フロントエンド部分）
+
+backend側の fix_map_feature_v3_backend.py 実行・コンパイル成功後に実行すること。
+
+② OperationsMapView.tsx 全面改修:
+   - loadingCount / unloadingCount 対応
+   - ピン色: 積込のみ=青、荷降のみ=赤、両方=紫
+   - InfoWindow・ランキングで「積込:X回 / 荷降:Y回」を分離表示
+   - 初期表示・フィルタ後にランキング1位を地図中央に自動配置
+
+③ LocationManagement.tsx:
+   - /locations/usage-stats を追加取得
+   - テーブルに「直近30日/90日/1年」の積込・荷降回数列を追加
+
+完了後:
+  - backend / frontend/cms / frontend/mobile の3パッケージで tsc --noEmit を実行
+  - 全て RC=0 の場合のみ git add/commit/push を実行
+  - 本スクリプト自身を自動削除
+=====================================
+"""
+import subprocess
+import sys
+import os
+
+ROOT = os.path.expanduser("~/projects/dump-tracker")
+
+
+def patch(filepath, old, new, label):
+    full = os.path.join(ROOT, filepath)
+    if not os.path.exists(full):
+        print(f"❌ [{label}] ファイルが存在しません: {full}")
+        sys.exit(1)
+    with open(full, "r", encoding="utf-8") as f:
+        content = f.read()
+    count = content.count(old)
+    if count == 0:
+        print(f"❌ [{label}] 置換対象が見つかりません: {filepath}")
+        sys.exit(1)
+    if count > 1:
+        print(f"❌ [{label}] 置換対象が複数({count}件)見つかりました。一意になるよう調整してください: {filepath}")
+        sys.exit(1)
+    content = content.replace(old, new)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ [{label}] パッチ適用完了: {filepath}")
+
+
+def overwrite_file(filepath, content, label):
+    full = os.path.join(ROOT, filepath)
+    if not os.path.exists(full):
+        print(f"❌ [{label}] ファイルが存在しません: {full}")
+        sys.exit(1)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ [{label}] ファイル上書き完了: {filepath}")
+
+
+def run(cmd, cwd=None, label=""):
+    print(f"\n▶ 実行: {cmd} (cwd={cwd or ROOT})")
+    result = subprocess.run(
+        cmd, shell=True, cwd=cwd or ROOT,
+        capture_output=True, text=True
+    )
+    print(result.stdout[-4500:] if result.stdout else "")
+    if result.returncode != 0:
+        print(f"❌ [{label}] 失敗 (RC={result.returncode})")
+        print(result.stderr[-4500:] if result.stderr else "")
+    else:
+        print(f"✅ [{label}] 成功 (RC=0)")
+    return result.returncode
+
+
+# =====================================================================
+# ② OperationsMapView.tsx 全面改修（上書き）
+# =====================================================================
+
+OPERATIONS_MAP_VIEW_TSX = r"""// frontend/cms/src/components/OperationsMapView.tsx
 // 運行記録「実績表示」タブ本体
 // 積込・荷降場所をGoogle Maps上にピン表示し、ピンクリックで実績回数（積込/荷降を分けて）表示する。
 // 「詳細」ボタン押下で一覧表示タブへ場所名で絞り込みジャンプする（onJumpToList経由）。
@@ -404,3 +485,210 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
 };
 
 export default OperationsMapView;
+"""
+
+
+# =====================================================================
+# ③ LocationManagement.tsx に実績統計列を追加
+# =====================================================================
+
+LM_IMPORT_OLD = """import LocationFormModal from '../components/location/LocationFormModal';
+import { SectionLoading } from '../components/ui/LoadingSpinner';
+import { formatDate } from '../utils/helpers';"""
+
+LM_IMPORT_NEW = """import LocationFormModal from '../components/location/LocationFormModal';
+import { SectionLoading } from '../components/ui/LoadingSpinner';
+import { formatDate } from '../utils/helpers';
+import { apiClient } from '../utils/api';"""
+
+LM_STATE_OLD = """  // ✅ ソート状態
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');"""
+
+LM_STATE_NEW = """  // ✅ ソート状態
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // ✅ 実績統計（直近30日/90日/1年の積込・荷降回数）: locationId をキーにしたマップ
+  interface UsageStat { loading: number; unloading: number; }
+  interface LocationUsageStats { last30Days: UsageStat; last90Days: UsageStat; last365Days: UsageStat; }
+  const [usageStatsMap, setUsageStatsMap] = useState<Record<string, LocationUsageStats>>({});
+  const [usageStatsLoading, setUsageStatsLoading] = useState(false);
+
+  const fetchUsageStats = React.useCallback(async () => {
+    setUsageStatsLoading(true);
+    try {
+      const response = await apiClient.get('/locations/usage-stats');
+      if (response.success && response.data) {
+        const data: any = response.data;
+        const list: Array<{ locationId: string } & LocationUsageStats> = Array.isArray(data) ? data : (data.data || []);
+        const map: Record<string, LocationUsageStats> = {};
+        list.forEach(item => {
+          map[item.locationId] = {
+            last30Days: item.last30Days,
+            last90Days: item.last90Days,
+            last365Days: item.last365Days
+          };
+        });
+        setUsageStatsMap(map);
+      }
+    } catch (err) {
+      console.error('[LocationManagement] 実績統計取得エラー:', err);
+    } finally {
+      setUsageStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsageStats();
+  }, [fetchUsageStats]);"""
+
+LM_COLUMNS_OLD = """    {
+      key: 'locationType',
+      header: '場所種別',
+      width: '96px',
+      render: (value: string) => {
+        const config: Record<string, { label: string; className: string }> = {
+          PICKUP:      { label: '積込',      className: 'bg-blue-100 text-blue-800' },
+          DEPOT:       { label: '積込',      className: 'bg-blue-100 text-blue-800' },
+          DELIVERY:    { label: '積降',      className: 'bg-green-100 text-green-800' },
+          DESTINATION: { label: '積降',      className: 'bg-green-100 text-green-800' },
+          BOTH:        { label: '積込・積降', className: 'bg-purple-100 text-purple-800' },
+        };
+        const c = config[value] ??"""
+
+LM_COLUMNS_NEW = """    {
+      key: 'usageStats',
+      header: '積込/荷降実績',
+      width: '230px',
+      render: (_value: string, row: any) => {
+        const stats = usageStatsMap[row.id];
+        if (usageStatsLoading && !stats) {
+          return <span className="text-xs text-gray-400">読込中...</span>;
+        }
+        if (!stats) {
+          return <span className="text-xs text-gray-400">-</span>;
+        }
+        const Cell = ({ label, s }: { label: string; s: UsageStat }) => (
+          <div className="flex items-center gap-1 text-[11px]">
+            <span className="text-gray-500 w-9">{label}</span>
+            <span className="font-bold text-blue-700">積{s.loading}</span>
+            <span className="font-bold text-red-700">荷{s.unloading}</span>
+          </div>
+        );
+        return (
+          <div className="space-y-0.5">
+            <Cell label="30日" s={stats.last30Days} />
+            <Cell label="90日" s={stats.last90Days} />
+            <Cell label="1年" s={stats.last365Days} />
+          </div>
+        );
+      },
+    },
+    {
+      key: 'locationType',
+      header: '場所種別',
+      width: '96px',
+      render: (value: string) => {
+        const config: Record<string, { label: string; className: string }> = {
+          PICKUP:      { label: '積込',      className: 'bg-blue-100 text-blue-800' },
+          DEPOT:       { label: '積込',      className: 'bg-blue-100 text-blue-800' },
+          DELIVERY:    { label: '積降',      className: 'bg-green-100 text-green-800' },
+          DESTINATION: { label: '積降',      className: 'bg-green-100 text-green-800' },
+          BOTH:        { label: '積込・積降', className: 'bg-purple-100 text-purple-800' },
+        };
+        const c = config[value] ??"""
+
+
+def main():
+    print("=" * 70)
+    print("運行記録マップ機能 実績集計修正 + 実績表示強化スクリプト（フロント） 開始")
+    print("=" * 70)
+
+    # ② OperationsMapView.tsx 全面上書き
+    overwrite_file(
+        "frontend/cms/src/components/OperationsMapView.tsx",
+        OPERATIONS_MAP_VIEW_TSX,
+        "OperationsMapView.tsx 全面改修（loadingCount/unloadingCount対応）"
+    )
+
+    # ③ LocationManagement.tsx 実績統計列追加
+    patch(
+        "frontend/cms/src/pages/LocationManagement.tsx",
+        LM_IMPORT_OLD,
+        LM_IMPORT_NEW,
+        "LocationManagement.tsx: apiClient import追加"
+    )
+    patch(
+        "frontend/cms/src/pages/LocationManagement.tsx",
+        LM_STATE_OLD,
+        LM_STATE_NEW,
+        "LocationManagement.tsx: 実績統計state・fetch追加"
+    )
+    patch(
+        "frontend/cms/src/pages/LocationManagement.tsx",
+        LM_COLUMNS_OLD,
+        LM_COLUMNS_NEW,
+        "LocationManagement.tsx: 積込/荷降実績列追加"
+    )
+
+    print("\n" + "=" * 70)
+    print("パッチ適用完了。TypeScriptコンパイルチェックを実行します。")
+    print("=" * 70)
+
+    rc_backend = run(
+        "./node_modules/.bin/tsc --noEmit",
+        cwd=os.path.join(ROOT, "backend"),
+        label="backend tsc"
+    )
+    rc_cms = run(
+        "npx tsc --noEmit",
+        cwd=os.path.join(ROOT, "frontend/cms"),
+        label="frontend/cms tsc"
+    )
+    rc_mobile = run(
+        "npx tsc --noEmit",
+        cwd=os.path.join(ROOT, "frontend/mobile"),
+        label="frontend/mobile tsc"
+    )
+
+    print("\n" + "=" * 70)
+    print(f"コンパイル結果: backend={rc_backend} / cms={rc_cms} / mobile={rc_mobile}")
+    print("=" * 70)
+
+    if rc_backend == 0 and rc_cms == 0 and rc_mobile == 0:
+        print("\n✅ 全パッケージ コンパイルエラー0件。GitHubへPushします。")
+        run("git add -A", label="git add")
+        commit_msg = (
+            "fix: 場所別実績集計の精度向上 + 実績表示機能強化\\n\\n"
+            "- fix: getLocationsMapSummary を全面改修。activityType（LOADING/UNLOADING）で\\n"
+            "  集計を分離し、同一場所が積込・荷降の両方で使われるケースで実績が欠落するバグを解消\\n"
+            "- fix: search対象から address を除外し、地名の偶然一致による過剰ヒットを解消\\n"
+            "  （客先名での検索は operationDetails 経由で対応）\\n"
+            "- feat: OperationsMapView.tsx でピン色を 積込のみ=青/荷降のみ=赤/両方=紫 に変更\\n"
+            "- feat: InfoWindow・ランキングで積込/荷降回数を分離表示\\n"
+            "- feat: 初期表示・フィルタ後にランキング1位の場所を地図中央へ自動配置\\n"
+            "- feat: getLocationsUsageStats 新規追加（直近30/90/365日の積込・荷降回数）\\n"
+            "- feat: LocationManagement.tsx（積込・積卸場所マスタ一覧）に\\n"
+            "  直近30日/90日/1年の積込・荷降実績列を追加"
+        )
+        run(f'git commit -m "{commit_msg}"', label="git commit")
+        rc_push = run("git push", label="git push")
+        if rc_push == 0:
+            print("\n✅✅✅ GitHubへのPushが完了しました。")
+        else:
+            print("\n⚠️ git push に失敗しました。手動で確認してください。")
+    else:
+        print("\n❌❌❌ コンパイルエラーが残っています。GitHubへはPushしません。")
+        print("上記のtscエラー出力を確認し、修正が必要です。")
+
+    self_path = os.path.abspath(__file__)
+    try:
+        os.remove(self_path)
+        print(f"\n🗑 スクリプト自身を削除しました: {self_path}")
+    except Exception as e:
+        print(f"\n⚠️ スクリプト自身の削除に失敗: {e}")
+
+
+if __name__ == "__main__":
+    main()
