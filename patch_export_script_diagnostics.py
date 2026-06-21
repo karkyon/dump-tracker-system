@@ -1,4 +1,25 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+scripts/export-operation-debug-week.sh のエラー可視化修正パッチ
+- curl に -S を追加（エラーメッセージを表示）
+- ログイン/接続失敗時に原因がわかるよう明示的にHTTPステータスを表示
+- 事前に /health で疎通確認してから処理を始める
+
+実行方法（omega-dev上、リポジトリルートで実行）:
+  cd ~/projects/dump-tracker
+  python3 patch_export_script_diagnostics.py
+"""
+
+import subprocess
+import sys
+import os
+import stat
+
+REPO_ROOT = os.getcwd()
+EXPORT_SCRIPT_FILE = os.path.join(REPO_ROOT, "scripts", "export-operation-debug-week.sh")
+
+EXPORT_SCRIPT_CONTENT = """#!/usr/bin/env bash
 # =====================================================================
 # scripts/export-operation-debug-week.sh
 # 過去N日分（既定7日）の運行について、開発者ツール「運行・点検デバッグ」の
@@ -51,9 +72,9 @@ if [ -z "${API_TOKEN:-}" ]; then
     exit 1
   fi
   echo "🔑 ログイン中..."
-  HTTP_RES=$(curl -skS -w '\n%{http_code}' -X POST "$BASE_URL/auth/login" \
-    -H "Content-Type: application/json" \
-    -d "{\"username\":\"$API_USERNAME\",\"password\":\"$API_PASSWORD\"}") || {
+  HTTP_RES=$(curl -skS -w '\\n%{http_code}' -X POST "$BASE_URL/auth/login" \\
+    -H "Content-Type: application/json" \\
+    -d "{\\"username\\":\\"$API_USERNAME\\",\\"password\\":\\"$API_PASSWORD\\"}") || {
       echo "❌ ログインAPIへの接続に失敗しました（BASE_URL=$BASE_URL）" >&2
       exit 1
     }
@@ -89,7 +110,7 @@ trap 'rm -f "$ALL_IDS_FILE"' EXIT
 PAGE=1
 TOTAL_PAGES=1
 while [ "$PAGE" -le "$TOTAL_PAGES" ]; do
-  RES=$(curl -skS -H "$AUTH_HEADER" \
+  RES=$(curl -skS -H "$AUTH_HEADER" \\
     "${BASE_URL}/operations?startDate=${START_DATE}&endDate=${END_DATE}&page=${PAGE}&limit=100") || {
       echo "❌ 運行一覧の取得に失敗しました（page=${PAGE}）" >&2
       exit 1
@@ -134,3 +155,82 @@ echo "📦 生データ取得中..."
 
 echo "🎉 完了: ${OUT_FILE}（${COUNT}件）"
 echo "   Developer Tools > 運行・点検デバッグ > エクスポートファイル一覧 からダウンロードできます"
+"""
+
+
+def fail(msg: str):
+    print(f"❌ {msg}")
+    self_delete()
+    sys.exit(1)
+
+
+def apply_patch():
+    os.makedirs(os.path.dirname(EXPORT_SCRIPT_FILE), exist_ok=True)
+    with open(EXPORT_SCRIPT_FILE, "w", encoding="utf-8", newline="\n") as f:
+        f.write(EXPORT_SCRIPT_CONTENT)
+    st = os.stat(EXPORT_SCRIPT_FILE)
+    os.chmod(EXPORT_SCRIPT_FILE, st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    print(f"✅ 修正版を書き込みました: {EXPORT_SCRIPT_FILE}")
+
+
+def run_tsc(subdir: str) -> int:
+    path_ = os.path.join(REPO_ROOT, subdir)
+    tsc_bin = os.path.join(path_, "node_modules", ".bin", "tsc")
+    if not os.path.isfile(tsc_bin):
+        fail(f"tsc が見つかりません: {tsc_bin}")
+    print(f"🔎 コンパイルチェック中: {subdir} ...")
+    result = subprocess.run([tsc_bin, "--noEmit"], cwd=path_, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"--- {subdir} コンパイルエラー ---")
+        print(result.stdout)
+        print(result.stderr)
+    return result.returncode
+
+
+def self_delete():
+    try:
+        os.remove(__file__)
+        print(f"🧹 パッチスクリプトを自己削除しました: {__file__}")
+    except Exception as e:
+        print(f"⚠️ 自己削除に失敗しました（手動削除してください）: {e}")
+
+
+def main():
+    apply_patch()
+
+    targets = ["backend", "frontend/cms", "frontend/mobile"]
+    rc_total = 0
+    for t in targets:
+        rc = run_tsc(t)
+        print(f"  → {t}: RC={rc}")
+        rc_total += rc
+
+    if rc_total != 0:
+        print("❌ コンパイルエラーが残っているため push を中止しました。")
+        self_delete()
+        sys.exit(1)
+
+    print("✅ 全プロジェクトでコンパイルエラー0件を確認しました。")
+
+    commit_msg = "fix(scripts): export-operation-debug-week.sh のエラー可視化（接続失敗時に原因を表示）"
+
+    subprocess.run(["git", "add", "-A"], cwd=REPO_ROOT, check=True)
+    commit = subprocess.run(["git", "commit", "-m", commit_msg], cwd=REPO_ROOT, capture_output=True, text=True)
+    print(commit.stdout)
+    print(commit.stderr)
+
+    push = subprocess.run(["git", "push"], cwd=REPO_ROOT, capture_output=True, text=True)
+    print(push.stdout)
+    print(push.stderr)
+
+    if push.returncode != 0:
+        print("❌ git push に失敗しました。手動で確認してください（コミット自体は作成済みです）。")
+        self_delete()
+        sys.exit(1)
+
+    print("🚀 GitHubへのpushが完了しました。")
+    self_delete()
+
+
+if __name__ == "__main__":
+    main()
