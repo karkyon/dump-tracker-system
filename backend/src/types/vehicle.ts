@@ -132,6 +132,9 @@ export interface VehicleResponseDTO {
   isActive: boolean;
   createdAt: Date;  // 🔧 修正: Date型に統一
   updatedAt: Date;  // 🔧 修正: Date型に統一
+  // 🆕 オペレーションパターン
+  loadingPattern?: number;
+  unloadingPattern?: number;
 
   assignedDriver?: {
     id: string;

@@ -45,7 +45,23 @@ const VehicleManagement: React.FC = () => {
 
   // フォームデータ
   // 🆕 P4-03: region（管轄区域）フィールドを追加
-  const [formData, setFormData] = useState({
+interface VehicleFormData {
+  plateNumber: string;
+  model: string;
+  manufacturer: string;
+  year: number;
+  capacity: number;
+  fuelType: 'GASOLINE' | 'DIESEL' | 'HYBRID' | 'ELECTRIC';
+  currentMileage: number;
+  status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
+  notes: string;
+  inspectionExpiry: string;
+  region: TransportRegion | '';
+  loadingPattern: number;
+  unloadingPattern: number;
+}
+
+  const [formData, setFormData] = useState<VehicleFormData>({
     plateNumber: '',
     model: '',
     manufacturer: '',
@@ -265,6 +281,8 @@ const VehicleManagement: React.FC = () => {
       notes: '',
       inspectionExpiry: '',  // REQ-007
       region: '',  // 🆕 P4-03
+      loadingPattern: 2,    // 🆕 デフォルト P2
+      unloadingPattern: 2,  // 🆕 デフォルト U2
     });
     setCapacityInput('');
     setMileageInput('');
@@ -293,6 +311,8 @@ const VehicleManagement: React.FC = () => {
       notes: vehicle.notes || '',
       inspectionExpiry: vehicle.inspectionExpiry ? (typeof vehicle.inspectionExpiry === 'string' ? vehicle.inspectionExpiry.split('T')[0] : new Date(vehicle.inspectionExpiry).toISOString().split('T')[0]) : '',  // REQ-007
       region: (vehicle.region as TransportRegion) || '',  // 🆕 P4-03
+      loadingPattern: (vehicle as any).loadingPattern ?? 2,    // 🆕
+      unloadingPattern: (vehicle as any).unloadingPattern ?? 2, // 🆕
     });
     setCapacityInput(String(vehicle.capacity ?? ''));
     setMileageInput(String(vehicle.currentMileage ?? ''));
@@ -325,6 +345,8 @@ const VehicleManagement: React.FC = () => {
       currentMileage: _mil,
       region: formData.region || null,  // 🆕 P4-03: 空文字を null に変換
       inspectionExpiry: formData.inspectionExpiry || undefined,  // REQ-007: 空文字を undefined に変換
+      loadingPattern: formData.loadingPattern ?? 2,    // 🆕
+      unloadingPattern: formData.unloadingPattern ?? 2, // 🆕
     };
     const success = await createVehicle(payload);
 
@@ -591,6 +613,36 @@ const VehicleManagement: React.FC = () => {
             </p>
           </div>
 
+          {/* 🆕 積込オペレーションパターン（新規作成モーダル） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">積込パターン</label>
+            <select
+              className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              value={(formData as any).loadingPattern ?? 2}
+              onChange={(e) => setFormData({ ...formData, loadingPattern: Number(e.target.value) } as any)}
+            >
+              <option value={1}>P1: 到着→品目選択→積込開始→積込完了（吸引車等）</option>
+              <option value={2}>P2: 到着→品目選択→積込完了（一般ダンプ）</option>
+              <option value={3}>P3: 到着→品目選択＝即完了（小型車等）</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">積込作業時間の計測方式を選択します</p>
+          </div>
+
+          {/* 🆕 荷降オペレーションパターン（新規作成モーダル） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">荷降パターン</label>
+            <select
+              className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              value={(formData as any).unloadingPattern ?? 2}
+              onChange={(e) => setFormData({ ...formData, unloadingPattern: Number(e.target.value) } as any)}
+            >
+              <option value={1}>U1: 到着→荷降開始→荷降完了</option>
+              <option value={2}>U2: 到着→荷降完了（標準）</option>
+              <option value={3}>U3: 到着＝即完了</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">荷降作業時間の計測方式を選択します</p>
+          </div>
+
           <Input
             label="車検期限"
             type="date"
@@ -731,6 +783,36 @@ const VehicleManagement: React.FC = () => {
             <p className="mt-1 text-xs text-gray-500">
               実績報告書の地域別集計に使用します（任意）
             </p>
+          </div>
+
+          {/* 🆕 積込オペレーションパターン（編集モーダル） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">積込パターン</label>
+            <select
+              className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              value={(formData as any).loadingPattern ?? 2}
+              onChange={(e) => setFormData({ ...formData, loadingPattern: Number(e.target.value) } as any)}
+            >
+              <option value={1}>P1: 到着→品目選択→積込開始→積込完了（吸引車等）</option>
+              <option value={2}>P2: 到着→品目選択→積込完了（一般ダンプ）</option>
+              <option value={3}>P3: 到着→品目選択＝即完了（小型車等）</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">積込作業時間の計測方式を選択します</p>
+          </div>
+
+          {/* 🆕 荷降オペレーションパターン（編集モーダル） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">荷降パターン</label>
+            <select
+              className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              value={(formData as any).unloadingPattern ?? 2}
+              onChange={(e) => setFormData({ ...formData, unloadingPattern: Number(e.target.value) } as any)}
+            >
+              <option value={1}>U1: 到着→荷降開始→荷降完了</option>
+              <option value={2}>U2: 到着→荷降完了（標準）</option>
+              <option value={3}>U3: 到着＝即完了</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">荷降作業時間の計測方式を選択します</p>
           </div>
 
           <Input

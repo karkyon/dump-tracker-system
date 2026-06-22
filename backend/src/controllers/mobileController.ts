@@ -1215,6 +1215,9 @@ export class MobileController {
               lastOperationDate: lastOp?.actualStartTime
                 ? new Date(lastOp.actualStartTime).toISOString().split('T')[0]
                 : null,
+              // 🆕 オペレーションパターン（車両マスタから直接取得）
+              loadingPattern: (v as any).loadingPattern ?? 2,
+              unloadingPattern: (v as any).unloadingPattern ?? 2,
             };
           } catch {
             return { ...v, lastDriver: null, lastOperationDate: null };

@@ -33,6 +33,8 @@ interface VehicleData {
   inspectionExpiry?: string; // REQ-007: 車検期限
   status: string;
   notes?: string;
+  loadingPattern?: number;   // 🆕 オペレーションパターン
+  unloadingPattern?: number; // 🆕 オペレーションパターン
 }
 
 // ✅ 修正: 表示用の車両データ型
@@ -46,6 +48,8 @@ interface VehicleDisplay {
   status: string;          // 🆕 車両ステータス追加 (ACTIVE / MAINTENANCE / INACTIVE / RETIRED)
   lastDriver?: string;
   lastOperationDate?: string;
+  loadingPattern?: number;   // 🆕 オペレーションパターン
+  unloadingPattern?: number; // 🆕 オペレーションパターン
 }
 
 const VehicleInfo: React.FC = () => {
@@ -151,6 +155,8 @@ const VehicleInfo: React.FC = () => {
             inspectionExpiry: v.inspectionExpiry ?? undefined,  // REQ-007
             status: v.status,  // 🆕 ステータスをそのまま保持
             // ✅ BUG-048修正: notesテキスト解析を廃止→APIから直接取得
+            loadingPattern: (v as any).loadingPattern ?? 2,
+            unloadingPattern: (v as any).unloadingPattern ?? 2,
             lastDriver: (v as any).lastDriver ?? '未割当',
             lastOperationDate: (v as any).lastOperationDate ?? '－'
           };
@@ -321,6 +327,8 @@ const VehicleInfo: React.FC = () => {
         vehicleType: vehicleInfo.vehicleType,
         startMileage: parseInt(startMileage),
         capacity: vehicleInfo.capacity,  // REQ-004: 積載量をStoreに保存
+        loadingPattern: vehicleInfo.loadingPattern ?? 2,   // 🆕
+        unloadingPattern: vehicleInfo.unloadingPattern ?? 2, // 🆕
       });
       
       if (user) {

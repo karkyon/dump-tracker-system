@@ -12,12 +12,12 @@ import { persist } from 'zustand/middleware';
 export type OperationPhase = 
   | 'TO_LOADING' 
   | 'AT_LOADING' 
-  | 'LOADING_IN_PROGRESS' 
+  | 'LOADING_IN_PROGRESS'      // 積込作業中（P1のみ: S〜E 時間計測中）
   | 'TO_UNLOADING' 
   | 'AT_UNLOADING' 
+  | 'UNLOADING_IN_PROGRESS'    // 荷降作業中（U1のみ: S〜E 時間計測中）
   | 'BREAK' 
   | 'REFUEL';
-// UNLOADING_IN_PROGRESS は廃止（積降開始ボタン廃止）
 
 /**
  * 運行状態インターフェース
@@ -48,6 +48,9 @@ export interface OperationState {
   unloadingLocationId: string | null;
   customerId: string | null;      // 🆕 客先ID
   customerName: string | null;    // 🆕 客先名
+  // 🆕 オペレーションパターン（車両別設定）
+  loadingPattern: number;         // 1=開始+完了, 2=品目選択後完了のみ, 3=即時完了
+  unloadingPattern: number;       // 1=開始+完了, 2=到着後完了のみ, 3=即時完了
   
   // 運行ステータス
   status: 'IDLE' | 'INSPECTING' | 'IN_PROGRESS' | 'COMPLETED';
@@ -63,6 +66,8 @@ export interface OperationState {
     vehicleType: string;
     startMileage: number;
     capacity?: number;  // REQ-004
+    loadingPattern?: number;   // 🆕 オペレーションパターン
+    unloadingPattern?: number; // 🆕 オペレーションパターン
   }) => void;
   
   setDriverInfo: (info: {
@@ -120,6 +125,8 @@ export const useOperationStore = create<OperationState>()(
   unloadingLocationId: null,
       customerId: null,           // 🆕
       customerName: null,         // 🆕
+      loadingPattern: 2,          // 🆕 デフォルト: P2（品目選択後完了のみ）
+      unloadingPattern: 2,        // 🆕 デフォルト: U2（到着後完了のみ）
       totalDistanceKm: null,      // ✅ Fix-S11-8
 
       // Actions
@@ -131,6 +138,8 @@ export const useOperationStore = create<OperationState>()(
           vehicleType: info.vehicleType,
           startMileage: info.startMileage,
           vehicleCapacity: info.capacity ?? null,  // REQ-004
+          loadingPattern: info.loadingPattern ?? 2,    // 🆕
+          unloadingPattern: info.unloadingPattern ?? 2, // 🆕
           status: 'IDLE'
         });
         

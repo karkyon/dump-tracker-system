@@ -404,6 +404,9 @@ model Vehicle {
   createdAt          DateTime?           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime?           @default(now()) @map("updated_at") @db.Timestamptz(6)
   vehicleType        String?             @map("vehicle_type") @db.VarChar(20)
+  // 🆕 オペレーションパターン（1=開始+完了, 2=品目選択後完了のみ, 3=即時完了）
+  loadingPattern     Int                 @default(2) @map("loading_pattern")
+  unloadingPattern   Int                 @default(2) @map("unloading_pattern")
   // 🆕 P1-04: 地方運輸局管轄区域（実績報告書の地域別集計に使用）
   region             TransportRegion?    @map("region")
   gpsLogs            GpsLog[]

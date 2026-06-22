@@ -930,13 +930,44 @@ const OperationRecord: React.FC = () => {
    * REQ-019: 積込開始ハンドラー（積込作業時間計測開始）
    * POST /trips/:id/loading/start で actualStartTime を記録
    */
-  const handleLoadingStart = () => {
-    console.log('[D4-ボタン] 積込開始ボタン押下:', { operationId: operationStore.operationId, phase: operation.phase, loadingLocation: operationStore.loadingLocation });
-    // ④修正: API呼び出しなし（LoadingInputで既にLOADINGレコード作成済み）
-    // フェーズをLOADING_IN_PROGRESSに変更するのみ
-    setOperation(prev => ({ ...prev, phase: 'LOADING_IN_PROGRESS' }));
-    operationStore.setPhase('LOADING_IN_PROGRESS');
-    toast.success('積込を開始しました（積込完了ボタンで次へ進んでください）');
+  /**
+   * 🆕 P1専用: 積込開始ハンドラー
+   * startLoadingAtLocation API → actualStartTime(S) 記録
+   * → LOADING_IN_PROGRESS フェーズへ（この状態の時間が積込作業時間）
+   */
+  const handleLoadingStart = async () => {
+    const currentOperationId = operationStore.operationId;
+    console.log('[D4-ボタン] 積込開始ボタン押下(P1):', { operationId: currentOperationId, phase: operation.phase });
+    if (!currentOperationId) { toast.error('運行IDが見つかりません'); return; }
+    const loadingLocationId = operationStore.loadingLocationId;
+    if (!loadingLocationId) { toast.error('積込場所IDが見つかりません'); return; }
+    try {
+      setIsSubmitting(true);
+      await retryWithBackoff(
+        () => apiService.startLoadingAtLocation(currentOperationId, {
+          locationId: loadingLocationId,
+          startTime: new Date(),
+          latitude: currentPosition?.coords.latitude,
+          longitude: currentPosition?.coords.longitude,
+          accuracy: currentPosition?.coords.accuracy,
+          notes: '積込開始',
+        }),
+        3, 1000, '積込開始'
+      );
+      setOperation(prev => ({ ...prev, phase: 'LOADING_IN_PROGRESS' }));
+      operationStore.setPhase('LOADING_IN_PROGRESS');
+      toast.success('積込を開始しました（積込完了ボタンで完了してください）');
+      apiService.logOperationEvent({
+        eventType: 'LOADING_ARRIVED', operationId: currentOperationId,
+        locationId: loadingLocationId, locationName: operationStore.loadingLocation || undefined,
+        phase: 'LOADING_IN_PROGRESS', result: 'success',
+      }).catch(() => {});
+    } catch (error) {
+      console.error('積込開始エラー:', error);
+      toast.error('積込開始に失敗しました');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   /**
@@ -988,9 +1019,40 @@ const OperationRecord: React.FC = () => {
   };
 
   /**
-   * ✅ 既存: 荷降開始ハンドラー
+   * 🆕 U1専用: 荷降開始ハンドラー（UNLOADING_IN_PROGRESSフェーズへ）
+   * startUnloadingAtLocation API → actualStartTime(S) 記録
+   * この状態の時間が荷降作業時間
    */
-// handleUnloadingStart は廃止（荷降開始ボタン廃止・UNLOADING_IN_PROGRESS廃止）
+  const handleUnloadingStart = async () => {
+    const currentOperationId = operationStore.operationId;
+    console.log('[D4-ボタン] 荷降開始ボタン押下(U1):', { operationId: currentOperationId, phase: operation.phase });
+    if (!currentOperationId) { toast.error('運行IDが見つかりません'); return; }
+    const unloadingLocationId = operationStore.unloadingLocationId
+      ?? (window as any).selectedUnloadingLocation?.id ?? undefined;
+    if (!unloadingLocationId) { toast.error('荷降場所IDが見つかりません'); return; }
+    try {
+      setIsSubmitting(true);
+      await retryWithBackoff(
+        () => apiService.startUnloadingAtLocation(currentOperationId, {
+          locationId: unloadingLocationId,
+          startTime: new Date(),
+          latitude: currentPosition?.coords.latitude,
+          longitude: currentPosition?.coords.longitude,
+          accuracy: currentPosition?.coords.accuracy,
+          notes: '荷降開始',
+        }),
+        3, 1000, '荷降開始'
+      );
+      setOperation(prev => ({ ...prev, phase: 'UNLOADING_IN_PROGRESS' }));
+      operationStore.setPhase('UNLOADING_IN_PROGRESS');
+      toast.success('荷降を開始しました（荷降完了ボタンで完了してください）');
+    } catch (error) {
+      console.error('荷降開始エラー:', error);
+      toast.error('荷降開始に失敗しました');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   /**
    * ✅ 既存: 荷降完了ハンドラー
@@ -1274,28 +1336,50 @@ const OperationRecord: React.FC = () => {
           </div>
         );
 
-      case 'AT_LOADING':
+      case 'AT_LOADING': {
+        // P1: 積込開始ボタン（startLoadingAtLocation API → LOADING_IN_PROGRESS）
+        // P2: 積込完了ボタン（completeLoading API → TO_UNLOADING）
+        const _lp: number = (operationStore.loadingPattern as number | undefined) ?? 2;
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button
-              onClick={handleLoadingStart}
-              disabled={isSubmitting}
-              style={{
-                padding: '20px 16px',
-                fontSize: '20px',
-                fontWeight: 'bold',
-                color: 'white',
-                background: isSubmitting ? '#ccc' : '#4CAF50',
-                border: 'none',
-                borderRadius: '10px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                width: '100%'
-              }}
-            >
-              🚛 積込開始
-            </button>
+            {_lp === 1 ? (
+              <button
+                onClick={handleLoadingStart}
+                disabled={isSubmitting}
+                style={{
+                  padding: '20px 16px', fontSize: '20px', fontWeight: 'bold',
+                  color: 'white', background: isSubmitting ? '#ccc' : '#4CAF50',
+                  border: 'none', borderRadius: '10px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer', width: '100%'
+                }}
+              >
+                🚛 積込開始
+              </button>
+            ) : (
+              <>
+                <div style={{
+                  padding: '10px 16px', fontSize: '13px', color: '#666',
+                  background: '#E3F2FD', borderRadius: '8px', textAlign: 'center'
+                }}>
+                  📍 積込場所に到着中 — 積込が完了したら下のボタンを押してください
+                </div>
+                <button
+                  onClick={handleLoadingComplete}
+                  disabled={isSubmitting}
+                  style={{
+                    padding: '20px 16px', fontSize: '20px', fontWeight: 'bold',
+                    color: 'white', background: isSubmitting ? '#ccc' : '#FF9800',
+                    border: 'none', borderRadius: '10px',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer', width: '100%'
+                  }}
+                >
+                  ✅ 積込完了
+                </button>
+              </>
+            )}
           </div>
         );
+      }
 
       case 'LOADING_IN_PROGRESS':
         return (
@@ -1343,33 +1427,69 @@ const OperationRecord: React.FC = () => {
           </div>
         );
 
-      case 'AT_UNLOADING':
-        // 🆕 荷降開始ボタン廃止: 荷降完了ボタンのみ表示（距離検知で自動移行も可）
+      case 'AT_UNLOADING': {
+        // U1: 荷降開始ボタン（startUnloadingAtLocation API → UNLOADING_IN_PROGRESS）
+        // U2: 荷降完了ボタン（completeUnloading API → TO_LOADING）
+        const _up: number = (operationStore.unloadingPattern as number | undefined) ?? 2;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {_up === 1 ? (
+              <button
+                onClick={handleUnloadingStart}
+                disabled={isSubmitting}
+                style={{
+                  padding: '20px 16px', fontSize: '20px', fontWeight: 'bold',
+                  color: 'white', background: isSubmitting ? '#ccc' : '#4CAF50',
+                  border: 'none', borderRadius: '10px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer', width: '100%'
+                }}
+              >
+                🏗️ 荷降開始
+              </button>
+            ) : (
+              <>
+                <div style={{
+                  padding: '10px 16px', fontSize: '13px', color: '#666',
+                  background: '#FFF3E0', borderRadius: '8px', textAlign: 'center'
+                }}>
+                  📍 荷降場所に到着中 — 積降が完了したら下のボタンを押してください
+                </div>
+                <button
+                  onClick={handleUnloadingComplete}
+                  disabled={isSubmitting}
+                  style={{
+                    padding: '20px 16px', fontSize: '20px', fontWeight: 'bold',
+                    color: 'white', background: isSubmitting ? '#ccc' : '#FF9800',
+                    border: 'none', borderRadius: '10px',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer', width: '100%'
+                  }}
+                >
+                  ✅ 荷降完了
+                </button>
+              </>
+            )}
+          </div>
+        );
+      }
+
+      case 'UNLOADING_IN_PROGRESS':
+        // U1専用: 荷降作業中（UNLOADING_IN_PROGRESS）→ 荷降完了ボタン
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{
-              padding: '10px 16px',
-              fontSize: '13px',
-              color: '#666',
-              background: '#FFF3E0',
-              borderRadius: '8px',
-              textAlign: 'center'
+              padding: '10px 16px', fontSize: '13px', color: '#666',
+              background: '#E8F5E9', borderRadius: '8px', textAlign: 'center'
             }}>
-              📍 荷降場所に到着中 — 積降が完了したら下のボタンを押してください
+              🏗️ 荷降作業中 — 完了したら下のボタンを押してください
             </div>
             <button
               onClick={handleUnloadingComplete}
               disabled={isSubmitting}
               style={{
-                padding: '20px 16px',
-                fontSize: '20px',
-                fontWeight: 'bold',
-                color: 'white',
-                background: isSubmitting ? '#ccc' : '#FF9800',
-                border: 'none',
-                borderRadius: '10px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                width: '100%'
+                padding: '20px 16px', fontSize: '20px', fontWeight: 'bold',
+                color: 'white', background: isSubmitting ? '#ccc' : '#FF9800',
+                border: 'none', borderRadius: '10px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer', width: '100%'
               }}
             >
               ✅ 荷降完了
