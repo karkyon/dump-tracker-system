@@ -604,17 +604,31 @@ const OperationRecord: React.FC = () => {
       });
 
       if (dialogType === 'LOADING') {
-        // 🔧 修正: recordLoadingArrival はLoadingConfirmation.tsvで呼び出し。
-        // ここでは状態更新と遷移のみ行う（二重呼び出し修正）
-        console.log('🚛 積込場所選択完了 → LoadingConfirmation画面へ遷移');
-        
+        console.log('🚛 積込場所選択完了 → startLoadingAtLocation呼び出し後LoadingInput画面へ遷移');
+
+        // ★ GPS状態修正: navigate前にLOADINGレコードをDBに作成
+        // これによりGPSモニタリングが「運行中」→「積込中」に正しく変わる
+        try {
+          await apiService.startLoadingAtLocation(currentOperationId, {
+            locationId: selectedLocation.location.id,
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy,
+            startTime: new Date(),
+          });
+          console.log('✅ startLoadingAtLocation完了 → GPSステータス: 積込中');
+        } catch (startLoadingErr) {
+          // 失敗しても遷移は継続（LoadingInputで再度API呼ぶフローは維持）
+          console.warn('⚠️ startLoadingAtLocation失敗（遷移は継続）:', startLoadingErr);
+        }
+
         // 状態更新（座標も保存）
         setOperation(prev => ({
           ...prev,
           phase: 'AT_LOADING',
           loadingLocation: selectedLocation.location.name
         }));
-        // 🆕 積込場所の座標をstoreに保存（距離検知用）
+        // 積込場所の座標をstoreに保存（距離検知用）
         operationStore.setLoadingLocationWithCoords(
           selectedLocation.location.name,
           selectedLocation.location.latitude ?? currentPosition.coords.latitude,
@@ -622,7 +636,7 @@ const OperationRecord: React.FC = () => {
         );
 
         toast.success(`積込場所「${selectedLocation.location.name}」に到着しました`);
-        
+
         console.log('📍 次: D5積込場所入力画面へ遷移');
         navigate('/loading-input', {
           state: {
@@ -761,7 +775,21 @@ const OperationRecord: React.FC = () => {
 
         toast.success(`新規地点「${registeredLocation.name}」を登録しました`);
 
-        // ✅ 【修正】LoadingInput画面へ遷移（既存地点選択フローと同じ）
+        // ★ GPS状態修正: navigate前にLOADINGレコードをDBに作成
+        try {
+          await apiService.startLoadingAtLocation(currentOperationId, {
+            locationId: registeredLocation.id,
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy,
+            startTime: new Date(),
+          });
+          console.log('✅ [新規地点] startLoadingAtLocation完了 → GPSステータス: 積込中');
+        } catch (startLoadingErr) {
+          console.warn('⚠️ [新規地点] startLoadingAtLocation失敗（遷移は継続）:', startLoadingErr);
+        }
+
+        // LoadingInput画面へ遷移（既存地点選択フローと同じ）
         setShowRegistrationDialog(false);
         setRegistrationLocationType(null);
         navigate('/loading-input', {
