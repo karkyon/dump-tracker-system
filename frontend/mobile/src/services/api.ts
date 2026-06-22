@@ -132,8 +132,8 @@ export interface RecordUnloadingArrivalRequest {
  */
 export interface StartUnloadingRequest {
   locationId: string;        // 積降場所ID
-  latitude: number;          // GPS緯度
-  longitude: number;         // GPS経度
+  latitude?: number;         // GPS緯度（オプション）
+  longitude?: number;        // GPS経度（オプション）
   accuracy?: number;         // GPS測位精度（メートル）
   startTime?: Date | string; // 開始時刻（省略時は現在時刻）
   notes?: string;            // メモ（オプション）
