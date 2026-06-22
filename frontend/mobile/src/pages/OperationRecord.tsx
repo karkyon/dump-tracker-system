@@ -947,9 +947,9 @@ const OperationRecord: React.FC = () => {
         () => apiService.startLoadingAtLocation(currentOperationId, {
           locationId: loadingLocationId,
           startTime: new Date(),
-          latitude: currentPosition?.coords.latitude,
-          longitude: currentPosition?.coords.longitude,
-          accuracy: currentPosition?.coords.accuracy,
+          latitude: currentPosition?.coords.latitude ?? undefined,
+          longitude: currentPosition?.coords.longitude ?? undefined,
+          accuracy: currentPosition?.coords.accuracy ?? undefined,
           notes: '積込開始',
         }),
         3, 1000, '積込開始'
@@ -1036,9 +1036,9 @@ const OperationRecord: React.FC = () => {
         () => apiService.startUnloadingAtLocation(currentOperationId, {
           locationId: unloadingLocationId,
           startTime: new Date(),
-          latitude: currentPosition?.coords.latitude,
-          longitude: currentPosition?.coords.longitude,
-          accuracy: currentPosition?.coords.accuracy,
+          latitude: currentPosition?.coords.latitude ?? undefined,
+          longitude: currentPosition?.coords.longitude ?? undefined,
+          accuracy: currentPosition?.coords.accuracy ?? undefined,
           notes: '荷降開始',
         }),
         3, 1000, '荷降開始'
@@ -1339,7 +1339,7 @@ const OperationRecord: React.FC = () => {
       case 'AT_LOADING': {
         // P1: 積込開始ボタン（startLoadingAtLocation API → LOADING_IN_PROGRESS）
         // P2: 積込完了ボタン（completeLoading API → TO_UNLOADING）
-        const _lp: number = (operationStore.loadingPattern as number | undefined) ?? 2;
+        const _lp: number = Number(operationStore.loadingPattern ?? 2);
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {_lp === 1 ? (
@@ -1430,7 +1430,7 @@ const OperationRecord: React.FC = () => {
       case 'AT_UNLOADING': {
         // U1: 荷降開始ボタン（startUnloadingAtLocation API → UNLOADING_IN_PROGRESS）
         // U2: 荷降完了ボタン（completeUnloading API → TO_LOADING）
-        const _up: number = (operationStore.unloadingPattern as number | undefined) ?? 2;
+        const _up: number = Number(operationStore.unloadingPattern ?? 2);
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {_up === 1 ? (

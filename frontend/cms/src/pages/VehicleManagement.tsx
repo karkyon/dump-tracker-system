@@ -73,6 +73,8 @@ interface VehicleFormData {
     notes: '',
     inspectionExpiry: '',  // REQ-007: 車検期限
     region: '' as TransportRegion | '',  // 🆕 P4-03: 管轄区域（地方運輸局）
+    loadingPattern: 2,    // 🆕 デフォルト P2
+    unloadingPattern: 2,  // 🆕 デフォルト U2
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});

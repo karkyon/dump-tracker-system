@@ -411,7 +411,7 @@ const LoadingInput: React.FC = () => {
       }
 
       console.log('🚛 積込場所到着記録API呼び出し開始');
-      const _lp: number = (operationStore as any).loadingPattern ?? 2;
+      const _lp: number = Number((operationStore as any).loadingPattern ?? 2);
       console.log('[D5-送信] 積込確認ボタン押下 (loadingPattern=' + _lp + '):', JSON.stringify({
         operationId: currentOperationId,
         locationId: formData.locationId,
@@ -433,7 +433,7 @@ const LoadingInput: React.FC = () => {
 
       // ✅ 複数品目は selectedItemIds で送信（notes 埋め込み廃止）
       // P3(即時完了)の場合は endTime も渡して S=E 同時記録
-      const _lpNow: number = (operationStore as any).loadingPattern ?? 2;
+      const _lpNow: number = Number((operationStore as any).loadingPattern ?? 2);
       const _nowTime = new Date();
       const response = await apiService.recordLoadingArrival(currentOperationId, {
         locationId: formData.locationId,
