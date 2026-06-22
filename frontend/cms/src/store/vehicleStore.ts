@@ -351,10 +351,16 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
       const backendData = denormalizeVehicle(vehicleData);
       
       console.log('[VehicleStore] バックエンドに送信するデータ:', backendData);
+      console.log('[VehicleStore] 🔑 送信データ完全ダンプ:', JSON.stringify(backendData, null, 2));
+      console.log('[VehicleStore] 🔑 loadingPattern送信値:', backendData.loadingPattern, 'typeof:', typeof backendData.loadingPattern);
+      console.log('[VehicleStore] 🔑 unloadingPattern送信値:', backendData.unloadingPattern, 'typeof:', typeof backendData.unloadingPattern);
 
       const response = await vehicleAPI.updateVehicle(id, backendData);
 
       console.log('[VehicleStore] updateVehicle APIレスポンス:', response);
+      console.log('[VehicleStore] 🔑 APIレスポンス完全ダンプ:', JSON.stringify(response, null, 2));
+      console.log('[VehicleStore] 🔑 レスポンス loadingPattern:', (response as any)?.data?.loadingPattern);
+      console.log('[VehicleStore] 🔑 レスポンス unloadingPattern:', (response as any)?.data?.unloadingPattern);
 
       if (response.success) {
         // 更新成功後、一覧を再取得

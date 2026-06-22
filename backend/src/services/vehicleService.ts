@@ -527,7 +527,15 @@ class VehicleService {
     }
   ): Promise<VehicleResponseDTO> {
     try {
-      logger.info('車両更新開始', { vehicleId, updateData, context });
+      logger.info('🔑🔑🔑 [vehicleService.updateVehicle] 更新開始 完全ダンプ', {
+        vehicleId,
+        updateDataFull: JSON.stringify(updateData),
+        loadingPattern: (updateData as any).loadingPattern,
+        loadingPatternType: typeof (updateData as any).loadingPattern,
+        unloadingPattern: (updateData as any).unloadingPattern,
+        unloadingPatternType: typeof (updateData as any).unloadingPattern,
+        context
+      });
 
       await this.checkVehicleAccessPermission(vehicleId, context.userId, context.userRole);
 
@@ -574,6 +582,11 @@ class VehicleService {
 
         // ✅ FIX: VIN暗号化削除 (vinフィールド存在しない)
 
+        logger.info('🔑🔑🔑 [vehicleService] Prisma update 直前 updateDataPrepared 完全ダンプ', {
+          updateDataPreparedFull: JSON.stringify(updateDataPrepared),
+          loadingPattern: updateDataPrepared.loadingPattern,
+          unloadingPattern: updateDataPrepared.unloadingPattern,
+        });
         const vehicle = await tx.vehicle.update({
           where: { id: vehicleId },
           data: updateDataPrepared,
@@ -581,6 +594,11 @@ class VehicleService {
             operations: true,
             maintenanceRecords: true
           }
+        });
+        logger.info('🔑🔑🔑 [vehicleService] Prisma update 完了 完全ダンプ', {
+          vehicleFull: JSON.stringify(vehicle),
+          loadingPattern: (vehicle as any).loadingPattern,
+          unloadingPattern: (vehicle as any).unloadingPattern,
         });
 
         // ✅ FIX: 監査ログの修正
@@ -1073,6 +1091,11 @@ class VehicleService {
    * 車両データをResponseDTOに変換
    */
   private mapVehicleToResponseDTO(vehicle: any): VehicleResponseDTO {
+    logger.info('🔑🔑🔑 [vehicleService.mapVehicleToResponseDTO] 変換前 vehicle 完全ダンプ', {
+      vehicleFull: JSON.stringify(vehicle),
+      loadingPattern: vehicle.loadingPattern,
+      unloadingPattern: vehicle.unloadingPattern,
+    });
     return {
       id: vehicle.id,
       plateNumber: vehicle.plateNumber,

@@ -278,6 +278,15 @@ export class VehicleController {
       const userId = req.user?.userId;
       const userRole = req.user?.role;
 
+      logger.info('🔑🔑🔑 [vehicleController.updateVehicle] リクエスト受信完全ダンプ', {
+        vehicleId,
+        requestBody: JSON.stringify(req.body),
+        loadingPattern: (req.body as any).loadingPattern,
+        loadingPatternType: typeof (req.body as any).loadingPattern,
+        unloadingPattern: (req.body as any).unloadingPattern,
+        unloadingPatternType: typeof (req.body as any).unloadingPattern,
+      });
+
       if (!vehicleId) {
         throw new ValidationError('車両IDが指定されていません');
       }
@@ -295,9 +304,12 @@ export class VehicleController {
         notifyDriver: true
       });
 
-      logger.info('車両更新完了', {
+      logger.info('🔑🔑🔑 [vehicleController.updateVehicle] 更新完了 完全ダンプ', {
         vehicleId,
         plateNumber: updatedVehicle.plateNumber,
+        loadingPattern: (updatedVehicle as any).loadingPattern,
+        unloadingPattern: (updatedVehicle as any).unloadingPattern,
+        updatedVehicleFull: JSON.stringify(updatedVehicle),
         updatedBy: userId,
         userRole
       });
