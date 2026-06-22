@@ -795,6 +795,7 @@ const OperationRecord: React.FC = () => {
 
           // operationStoreにも保存
           operationStore.setUnloadingLocation(registeredLocation.name, registeredLocation.id);
+          // U3フォールバック対応
           operationStore.setPhase('AT_UNLOADING');
 
           // ✅ 【修正】荷降開始ボタンが参照する window.selectedUnloadingLocation を設定
@@ -1339,7 +1340,15 @@ const OperationRecord: React.FC = () => {
       case 'AT_LOADING': {
         // P1: 積込開始ボタン（startLoadingAtLocation API → LOADING_IN_PROGRESS）
         // P2: 積込完了ボタン（completeLoading API → TO_UNLOADING）
+        // P3: 即時完了（LoadingInputで既に完了済み）→ AT_LOADINGになるはずがないがフォールバック
         const _lp: number = Number(operationStore.loadingPattern ?? 2);
+        // P3フォールバック: 万一AT_LOADINGに留まっていたら自動でTO_UNLOADINGへ
+        if (_lp === 3) {
+          console.warn('[P3フォールバック] AT_LOADING+P3を検出 → TO_UNLOADINGに自動遷移');
+          operationStore.setPhase('TO_UNLOADING');
+          setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
+          return null;
+        }
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {_lp === 1 ? (
@@ -1430,7 +1439,15 @@ const OperationRecord: React.FC = () => {
       case 'AT_UNLOADING': {
         // U1: 荷降開始ボタン（startUnloadingAtLocation API → UNLOADING_IN_PROGRESS）
         // U2: 荷降完了ボタン（completeUnloading API → TO_LOADING）
+        // U3: 即時完了（UnloadingArrivalで既に完了済み）→ AT_UNLOADINGになるはずがないがフォールバック
         const _up: number = Number(operationStore.unloadingPattern ?? 2);
+        // U3フォールバック: 万一AT_UNLOADINGに留まっていたら自動でTO_LOADINGへ
+        if (_up === 3) {
+          console.warn('[U3フォールバック] AT_UNLOADING+U3を検出 → TO_LOADINGに自動遷移');
+          operationStore.setPhase('TO_LOADING');
+          setOperation(prev => ({ ...prev, phase: 'TO_LOADING' }));
+          return null;
+        }
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {_up === 1 ? (

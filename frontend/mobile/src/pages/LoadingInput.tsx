@@ -499,9 +499,15 @@ const LoadingInput: React.FC = () => {
         toast('写真のアップロードに失敗しましたが運行は記録されました', { icon: '⚠️' });
       }
 
-      // REQ-019修正: 積込確認後はAT_LOADINGに留める（自動移動検知でTO_UNLOADINGへ移行）
-      console.log('🔄 フェーズ維持: AT_LOADING（積込確認完了・自動移動検知待ち）');
-      operationStore.setPhase('AT_LOADING');
+      // P3(即時完了)の場合は積込完了済みなのでTO_UNLOADINGへ、それ以外はAT_LOADINGに留まる
+      const _lpAfter: number = Number(operationStore.loadingPattern ?? 2);
+      if (_lpAfter === 3) {
+        console.log('🔄 [P3] 即時完了: フェーズ → TO_UNLOADING');
+        operationStore.setPhase('TO_UNLOADING');
+      } else {
+        console.log('🔄 フェーズ維持: AT_LOADING（積込確認完了・自動移動検知待ち）');
+        operationStore.setPhase('AT_LOADING');
+      }
       operationStore.setLoadingLocation(formData.locationName, formData.locationId);
       // 🚛 運行イベントログ（積込到着）
       apiService.logOperationEvent({
