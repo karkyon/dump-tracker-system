@@ -1099,7 +1099,10 @@ class VehicleService {
       region: vehicle.region ?? null,
       inspectionExpiry: vehicle.inspectionExpiry,  // REQ-007: 車検期限
       nextMaintenanceDate: vehicle.inspectionExpiry,
-      maintenanceStatus: this.getMaintenanceStatus(vehicle)
+      maintenanceStatus: this.getMaintenanceStatus(vehicle),
+      // 🆕 オペレーションパターン（DBから直接返す）
+      loadingPattern: vehicle.loadingPattern ?? 2,
+      unloadingPattern: vehicle.unloadingPattern ?? 2,
     };
   }
 
