@@ -313,8 +313,8 @@ interface VehicleFormData {
       notes: vehicle.notes || '',
       inspectionExpiry: vehicle.inspectionExpiry ? (typeof vehicle.inspectionExpiry === 'string' ? vehicle.inspectionExpiry.split('T')[0] : new Date(vehicle.inspectionExpiry).toISOString().split('T')[0]) : '',  // REQ-007
       region: (vehicle.region as TransportRegion) || '',  // 🆕 P4-03
-      loadingPattern: (vehicle as any).loadingPattern ?? 2,    // 🆕
-      unloadingPattern: (vehicle as any).unloadingPattern ?? 2, // 🆕
+      loadingPattern: vehicle.loadingPattern ?? 2,
+      unloadingPattern: vehicle.unloadingPattern ?? 2,
     });
     setCapacityInput(String(vehicle.capacity ?? ''));
     setMileageInput(String(vehicle.currentMileage ?? ''));

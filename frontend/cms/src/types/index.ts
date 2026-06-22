@@ -66,6 +66,9 @@ export interface Vehicle {
 
   // 🆕 P4-03: 管轄区域（地方運輸局）実績報告書の地域別集計に使用
   region?: TransportRegion | null;
+  // 🆕 オペレーションパターン
+  loadingPattern?: number;
+  unloadingPattern?: number;
 }
 
 // =====================================
