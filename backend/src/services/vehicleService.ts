@@ -439,6 +439,13 @@ class VehicleService {
           inspectionExpiry: (vehicleData as any).nextMaintenanceDate,
           notes: vehicleData.notes,
           region: (vehicleData as any).region ?? null,
+          // 🆕 オペレーションパターン
+          loadingPattern:   (vehicleData as any).loadingPattern !== undefined
+                          ? Number((vehicleData as any).loadingPattern)
+                          : 2,
+          unloadingPattern: (vehicleData as any).unloadingPattern !== undefined
+                          ? Number((vehicleData as any).unloadingPattern)
+                          : 2,
         };
 
         // ✅ FIX: VIN暗号化削除 (vinフィールド存在しない)
@@ -553,6 +560,13 @@ class VehicleService {
           inspectionExpiry: (updateData as any).inspectionExpiry !== undefined
                           ? ((updateData as any).inspectionExpiry ? new Date((updateData as any).inspectionExpiry) : null)
                           : undefined,  // REQ-007: 車検期限
+          // 🆕 オペレーションパターン（DBカラム: loading_pattern / unloading_pattern）
+          loadingPattern:   (updateData as any).loadingPattern !== undefined
+                          ? Number((updateData as any).loadingPattern)
+                          : undefined,
+          unloadingPattern: (updateData as any).unloadingPattern !== undefined
+                          ? Number((updateData as any).unloadingPattern)
+                          : undefined,
           region:        (updateData as any).region !== undefined
                           ? ((updateData as any).region || null)
                           : undefined,
