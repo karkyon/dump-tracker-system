@@ -564,7 +564,9 @@ export const locationAPI = {
    * 場所一覧取得
    */
   async getLocations(params?: any): Promise<ApiResponse<any>> {
-    return apiClient.get('/locations', { params });
+    // ✅ FB-FvBuKFy0: 50件上限バグ修正 - limit:500で全件取得
+    const merged = { limit: 500, ...params };
+    return apiClient.get('/locations', { params: merged });
   },
 
   /**

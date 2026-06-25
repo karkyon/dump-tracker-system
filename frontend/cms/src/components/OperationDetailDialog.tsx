@@ -2785,6 +2785,59 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               );
                             })()}
                           </div>
+
+                          {/* ✅ FB-画像2: 客先別・品目別・経路・回数 集計テーブル */}
+                          {(() => {
+                            // LOADING_COMPLETED から客先×品目×経路(積込→荷降)×回数を集計
+                            type RouteKey = string; // `客先|品目|積込→荷降`
+                            const routeMap = new Map<RouteKey, { customer: string; item: string; route: string; count: number }>();
+                            const unloadingEvents = _evs.filter(e => e.eventType === 'UNLOADING_ARRIVED');
+
+                            completedLoadings.forEach(le => {
+                              const customer = (le as any).customerName ?? '—';
+                              const item     = le.items?.name ?? '—';
+                              const loadLoc  = le.location?.name ?? '—';
+                              // 対応する荷降場所: 同一インデックス順で最も近いUNLOADING_ARRIVED
+                              const leIdx  = _evs.indexOf(le);
+                              const nextUnl = unloadingEvents.find(ue => _evs.indexOf(ue) > leIdx);
+                              const unlLoc  = nextUnl?.location?.name ?? '—';
+                              const route   = `${loadLoc}〜${unlLoc}`;
+                              const key: RouteKey = `${customer}|${item}|${route}`;
+                              const prev = routeMap.get(key);
+                              if (prev) { prev.count++; }
+                              else { routeMap.set(key, { customer, item, route, count: 1 }); }
+                            });
+                            const rows = Array.from(routeMap.values());
+                            if (rows.length === 0) return null;
+                            return (
+                              <div className="mt-3">
+                                <span className="text-xs text-gray-500 block mb-1 font-semibold">客先別集計:</span>
+                                <div className="overflow-x-auto rounded border border-gray-200">
+                                  <table className="min-w-full text-xs">
+                                    <thead>
+                                      <tr className="bg-gray-50">
+                                        <th className="px-2 py-1 text-left text-gray-500 font-medium border-b border-gray-200">客先</th>
+                                        <th className="px-2 py-1 text-left text-gray-500 font-medium border-b border-gray-200">経路</th>
+                                        <th className="px-2 py-1 text-left text-gray-500 font-medium border-b border-gray-200">品目</th>
+                                        <th className="px-2 py-1 text-center text-gray-500 font-medium border-b border-gray-200">回数</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {rows.map((r, i) => (
+                                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                          <td className="px-2 py-1 text-gray-800 font-medium whitespace-nowrap">{r.customer}</td>
+                                          <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{r.route}</td>
+                                          <td className="px-2 py-1 text-indigo-700 whitespace-nowrap">{r.item}</td>
+                                          <td className="px-2 py-1 text-center font-bold text-blue-700">{r.count}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
                         );
                       })()}
                       {/* ─────────────────────────────────────────────

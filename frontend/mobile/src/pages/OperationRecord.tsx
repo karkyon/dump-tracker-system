@@ -108,6 +108,10 @@ const OperationRecord: React.FC = () => {
   const [isCustomerChanging, setIsCustomerChanging] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
+  // ✅ FB-J1o6dgv8: 経過時間を「積込開始から」「休憩中は停止」に変更
+  const firstLoadingStartRef = React.useRef<Date | null>(null);
+  const breakStartRef        = React.useRef<Date | null>(null);
+  const breakTotalSecondsRef = React.useRef<number>(0);
 
   // ✅ 既存の詳細情報表示状態
   // 旧 showDetails state は削除済み（showDetailPanel に統合）
@@ -391,21 +395,30 @@ const OperationRecord: React.FC = () => {
     }
   }, [currentPosition, operation.phase]);
 
-  // ✅ 経過時間計算（既存）
+  // ✅ FB-J1o6dgv8: 経過時間 = 積込開始から / 休憩中は停止
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      if (operation.startTime) {
-        const elapsed = Math.floor((Date.now() - operation.startTime.getTime()) / 1000);
-        const hours = Math.floor(elapsed / 3600);
-        const minutes = Math.floor((elapsed % 3600) / 60);
-        const seconds = elapsed % 60;
-        setElapsedTime({ hours, minutes, seconds });
+      const baseRef = firstLoadingStartRef.current;
+      if (!baseRef) {
+        // 積込未開始は 00:00:00 固定
+        setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+        return;
       }
+      // BREAK 中: 現在の休憩経過もポーズ計算から除外
+      const currentBreakSec = (operation.phase === 'BREAK' && breakStartRef.current)
+        ? Math.floor((Date.now() - breakStartRef.current.getTime()) / 1000)
+        : 0;
+      const totalExcludeSec = breakTotalSecondsRef.current + currentBreakSec;
+      const elapsed = Math.max(0, Math.floor((Date.now() - baseRef.getTime()) / 1000) - totalExcludeSec);
+      const hours   = Math.floor(elapsed / 3600);
+      const minutes = Math.floor((elapsed % 3600) / 60);
+      const seconds = elapsed % 60;
+      setElapsedTime({ hours, minutes, seconds });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [operation.startTime]);
+  }, [operation.startTime, operation.phase]);
 
   // ✅ マップ更新処理（既存）
   useEffect(() => {
@@ -985,6 +998,11 @@ const OperationRecord: React.FC = () => {
       );
       setOperation(prev => ({ ...prev, phase: 'LOADING_IN_PROGRESS' }));
       operationStore.setPhase('LOADING_IN_PROGRESS');
+      // ✅ FB-J1o6dgv8: 最初の積込開始時刻を記録（経過時間のゼロ点）
+      if (!firstLoadingStartRef.current) {
+        firstLoadingStartRef.current = new Date();
+        breakTotalSecondsRef.current = 0;
+      }
       toast.success('積込を開始しました（積込完了ボタンで完了してください）');
       apiService.logOperationEvent({
         eventType: 'LOADING_ARRIVED', operationId: currentOperationId,
@@ -1672,12 +1690,7 @@ const OperationRecord: React.FC = () => {
             {String(elapsedTime.seconds).padStart(2, '0')}
           </span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontSize: '14px', color: '#666' }}>走行距離</span>
-          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#333' }}>
-            {(totalDistance || 0).toFixed(1)} km
-          </span>
-        </div>
+        {/* ✅ FB-LUKAeaX8/3YRGMstF: 走行距離は非表示（ドライバー要望） */}
       </div>
 
       {/* フェーズバナー */}
@@ -1694,7 +1707,7 @@ const OperationRecord: React.FC = () => {
         現在のフェーズ: {getPhaseLabel(operation.phase)}
      </div>
       {showMap && (
-        <div style={{ height: '35vh', position: 'relative', flexShrink: 0 }}>
+        <div style={{ height: '50vh', position: 'relative', flexShrink: 0 }}>
           <GoogleMapWrapper onMapReady={() => setIsMapReady(true)} />
           
           {/* ✅ 既存: 方位インジケーター */}
