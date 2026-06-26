@@ -390,6 +390,9 @@ export class OperationDetailController {
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
               imageUrl: detail.imageUrl || null,  // REQ-020: 積載物写真URL
+              // ✅ FB-画像2: 客先情報を COMPLETED にも付与
+              customerId: operation?.customerId ?? null,
+              customerName: (operation as any)?.customer?.name ?? null,
               detailItems: (detail.operationDetailItems || []).map((di: any) => ({
                 id: di.id,
                 itemId: di.itemId,
@@ -433,6 +436,9 @@ export class OperationDetailController {
               gpsLocation: null,
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
+              // ✅ FB-画像2: 客先情報を COMPLETED にも付与
+              customerId: operation?.customerId ?? null,
+              customerName: (operation as any)?.customer?.name ?? null,
               notes: detail.notes || '積降完了'
             });
           }

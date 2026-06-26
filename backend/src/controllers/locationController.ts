@@ -84,12 +84,29 @@ class LocationController {
         };
       }
 
-      // LocationService経由で位置一覧取得
-      const result = await this.locationServiceWrapper.getLocations(
-        filter,
-        req.user.userId,
-        req.user.role as UserRole
-      );
+      // ✅ FB-FvBuKFy0: 場所マスタは全件取得（MAX_PAGE_SIZEをbypass）
+      // LocationService は normalizePaginationParams で100件上限になるため
+      // 件数が多い環境では直接 Prisma で取得する
+      const db = DatabaseService.getInstance();
+      const whereCondition: any = { isActive: true };
+      if (filter.search) {
+        whereCondition.OR = [
+          { name:    { contains: filter.search, mode: 'insensitive' } },
+          { address: { contains: filter.search, mode: 'insensitive' } },
+        ];
+      }
+      if (filter.locationType && filter.locationType.length > 0) {
+        whereCondition.locationType = { in: filter.locationType };
+      }
+      const allLocations = await db.location.findMany({
+        where: whereCondition,
+        orderBy: { name: 'asc' },
+      });
+      const result = {
+        locations: allLocations as any[],  // ✅ Decimal→string 変換は既存DTO層で対応
+        total:     allLocations.length,
+        hasMore:   false,
+      };
 
       // 統一レスポンス形式
       const response: LocationListResponse = {
@@ -98,11 +115,11 @@ class LocationController {
         message: '位置一覧を取得しました',
         meta: {
           total: result.total,
-          page: filter.page || 1,
-          pageSize: filter.limit || 50,
-          totalPages: Math.ceil(result.total / (filter.limit || 50)),
-          hasNextPage: result.hasMore,
-          hasPreviousPage: (filter.page || 1) > 1
+          page: 1,
+          pageSize: result.total,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false
         },
         timestamp: new Date().toISOString()
       };

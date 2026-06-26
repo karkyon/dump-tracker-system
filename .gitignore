@@ -241,3 +241,6 @@ ecosystem.config.js
 **/*~
 
 /generated/prisma
+
+# 一時修正スクリプト
+fix_*.py
