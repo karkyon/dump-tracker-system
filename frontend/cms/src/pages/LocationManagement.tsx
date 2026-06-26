@@ -292,8 +292,9 @@ const LocationManagement: React.FC = () => {
       locationType: (['PICKUP', 'DELIVERY', 'BOTH'].includes(location.locationType))
         ? location.locationType as 'PICKUP' | 'DELIVERY' | 'BOTH'
         : 'DELIVERY',
-      latitude: location.latitude || 0,
-      longitude: location.longitude || 0,
+      // ✅ Prisma Decimal型（文字列）を Number に変換（toFixed クラッシュ防止）
+      latitude:  location.latitude  ? Number(location.latitude)  : 0,
+      longitude: location.longitude ? Number(location.longitude) : 0,
     });
     setSelectedLocationId(location.id);
     setShowEditModal(true);

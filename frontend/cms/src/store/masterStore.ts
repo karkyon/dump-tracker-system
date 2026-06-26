@@ -219,13 +219,18 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         // 二重ネスト構造の確認
         let locationsData: Location[];
         
+        // ✅ Prisma Decimal型(文字列)→number 正規化ヘルパー
+        const normalizeLocation = (loc: any) => ({
+          ...loc,
+          latitude:  loc.latitude  != null ? Number(loc.latitude)  : null,
+          longitude: loc.longitude != null ? Number(loc.longitude) : null,
+        });
+
         if (Array.isArray(response.data)) {
-          // response.dataが直接配列の場合
-          locationsData = response.data;
+          locationsData = response.data.map(normalizeLocation);
           console.log('[masterStore] パターン1: 直接配列', locationsData.length);
         } else if (response.data.data && Array.isArray(response.data.data)) {
-          // response.data.dataが配列の場合（二重ネスト）
-          locationsData = response.data.data;
+          locationsData = response.data.data.map(normalizeLocation);
           console.log('[masterStore] パターン2: 二重ネスト', locationsData.length);
         } else {
           console.error('[masterStore] 予期しないデータ構造:', response.data);
