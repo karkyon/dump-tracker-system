@@ -1207,6 +1207,8 @@ const OperationRecord: React.FC = () => {
       
       // operationStoreに現在phaseを保存してからBREAKに切り替え（永続化）
       operationStore.savePreviousPhase(operation.phase);
+      // ✅ FB-J1o6dgv8: 休憩開始時刻を記録（経過時間停止用）
+      breakStartRef.current = new Date();
       operationStore.setPhase('BREAK');
       operationStore.incrementBreakCount();  // 🔧 永続化に反映 (2026-02-01)
       setOperation(prev => ({ 
@@ -1269,7 +1271,14 @@ const OperationRecord: React.FC = () => {
       // (operationStore.phaseはBREAKのため使用不可)
       const restoredPhase = operationStore.previousPhase || 'TO_UNLOADING';
       console.log('⏱️ 休憩終了: フェーズ復元', restoredPhase);
-      
+
+      // ✅ FB-J1o6dgv8: 休憩経過秒を累計に加算（経過時間の再開用）
+      if (breakStartRef.current) {
+        const breakSec = Math.floor((Date.now() - breakStartRef.current.getTime()) / 1000);
+        breakTotalSecondsRef.current += breakSec;
+        breakStartRef.current = null;
+      }
+
       // operationStoreのphaseも更新（永続化）
       operationStore.setPhase(restoredPhase);
       
