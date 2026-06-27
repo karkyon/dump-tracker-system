@@ -279,8 +279,14 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
       // BUG-011: AdvancedMarkerElement は position プロパティで更新
       markerInst.current.position = pos;
       onPinMoved(lat, lng);
+    } else if (!mapInst.current && lat != null && lng != null && (window as any).google?.maps) {
+      // ✅ FIX-GPSPIN-CMS: mapInstが未初期化かつlat/lngが後から確定した場合に再初期化
+      if (mapRef.current) {
+        const r = initMap(mapRef.current);
+        if (r) { mapInst.current = r.map; markerInst.current = r.marker; setLoaded(true); }
+      }
     }
-  }, [lat, lng]);
+  }, [lat, lng, initMap]);
 
   React.useEffect(() => {
     const tryInit = () => {
@@ -292,11 +298,11 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
         return;
       }
       // ✅ Fix③: google-maps-scriptが既にある場合は再利用、なければ新規作成
-      if (!document.getElementById('google-maps-script') && !document.getElementById(CMS_MAPS_SCRIPT_ID)) {
+      if (!document.getElementById('google-maps-script')) {
         const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
         const s = document.createElement('script');
         s.id = 'google-maps-script';
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&callback=__cmsMapsReady`;
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=__cmsMapsReady`;
         s.async = true;
         (window as any).__cmsMapsReady = () => {
           if (mapRef.current && !mapInst.current) {
@@ -1446,7 +1452,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       console.log('📥 [Maps Loading Debug] Creating new Google Maps script tag...');
       const script = document.createElement('script');
       script.id = 'google-maps-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker,places`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async`;
       script.async = true;
       script.defer = true;
       script.onload = () => {

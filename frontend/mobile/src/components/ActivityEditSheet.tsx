@@ -186,6 +186,23 @@ const GpsPinMap: React.FC<GpsPinMapProps> = ({ accentColor, initialLat, initialL
     }
   }, [createMap]);
 
+  // ✅ FIX-GPSPIN: initialLat/Lng が後から確定した場合（activity変更後）に
+  //    地図センターとマーカー位置を更新する
+  useEffect(() => {
+    if (initialLat == null || initialLng == null) return;
+    const pos = { lat: initialLat, lng: initialLng };
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.panTo(pos);
+    }
+    if (markerRef.current) {
+      if (typeof markerRef.current.setPosition === 'function') {
+        markerRef.current.setPosition(pos);
+      } else {
+        markerRef.current.position = pos;
+      }
+    }
+  }, [initialLat, initialLng]);
+
   useEffect(() => {
     const tryInit = (): (() => void) | void => {
       if (typeof google !== 'undefined' && google.maps) {
