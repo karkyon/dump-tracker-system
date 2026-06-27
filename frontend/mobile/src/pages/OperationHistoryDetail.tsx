@@ -341,25 +341,28 @@ const OperationHistoryDetail: React.FC = () => {
           const used = new Set<string>();
           let lgNum = 0, ugNum = 0;
           for (let i = 0; i < sorted.length; i++) {
-            const a = sorted[i];
+            const a = sorted[i]!; // noUncheckedIndexedAccess対応
             if (used.has(a.id)) continue;
             const at = a.activityType;
             if (['LOADING','LOADING_START'].includes(at)) {
               lgNum++;
-              const comp = sorted.slice(i+1).find(b => !used.has(b.id) && ['LOADING_COMPLETE','LOADING_COMPLETED'].includes(b.activityType));
+              const _comp = sorted.slice(i+1).find(b => !used.has(b.id) && ['LOADING_COMPLETE','LOADING_COMPLETED'].includes(b.activityType));
+              const comp: ActivityRecord | null = _comp ?? null;
               if (comp) used.add(comp.id);
-              groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, arrived: a, completed: comp ?? null });
+              groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, arrived: a, completed: comp });
             } else if (['UNLOADING','UNLOADING_START'].includes(at)) {
               ugNum++;
-              const comp = sorted.slice(i+1).find(b => !used.has(b.id) && ['UNLOADING_COMPLETE','UNLOADING_COMPLETED'].includes(b.activityType));
-              if (comp) used.add(comp.id);
-              groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, arrived: a, completed: comp ?? null });
+              const _comp2 = sorted.slice(i+1).find(b => !used.has(b.id) && ['UNLOADING_COMPLETE','UNLOADING_COMPLETED'].includes(b.activityType));
+              const comp2: ActivityRecord | null = _comp2 ?? null;
+              if (comp2) used.add(comp2.id);
+              groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, arrived: a, completed: comp2 });
             } else if (['LOADING_COMPLETE','LOADING_COMPLETED','UNLOADING_COMPLETE','UNLOADING_COMPLETED'].includes(at)) {
               groups.push({ type: 'SINGLE', act: a });
             } else if (['BREAK_START','BREAK'].includes(at)) {
-              const endAct = sorted.slice(i+1).find(b => !used.has(b.id) && b.activityType === 'BREAK_END');
+              const _endAct = sorted.slice(i+1).find(b => !used.has(b.id) && b.activityType === 'BREAK_END');
+              const endAct: ActivityRecord | null = _endAct ?? null;
               if (endAct) used.add(endAct.id);
-              groups.push({ type: 'BREAK', start: a, end: endAct ?? null });
+              groups.push({ type: 'BREAK', start: a, end: endAct });
             } else if (at === 'BREAK_END') {
               // 孤立 BREAK_END スキップ
             } else {
@@ -441,16 +444,12 @@ const OperationHistoryDetail: React.FC = () => {
             </div>
           );
         })()}
-        {false && detail.activities.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">運行内容</h2>
-            <div className="space-y-3">
-              {detail.activities
-                .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
-                .map((activity, index) => {
-                  return null; // ✅ 旧レンダリング無効化（上部グループ表示に統合済み）
-                })}
-            </div>
+        {/* 旧アクティビティ描画削除済み */}
+        {false && (
+          <div>
+            {(() => {
+                  return null;
+              })()}
           </div>
         )}
 
