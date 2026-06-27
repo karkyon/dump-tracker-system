@@ -898,7 +898,13 @@ const OperationRecord: React.FC = () => {
         // 表示用はNOTE/OTHERを除く
         setDetailActivities(detail.activities.filter((a: any) =>
           !['NOTE', 'OTHER'].includes(a.activityType || '')
-        ));
+        ).map((a: any) => ({
+          ...a,
+          // ✅ FIX-GPSPIN: APIレスポンスの locationLat/locationLng をActivityRecordに確保
+          locationLat: a.locationLat ?? undefined,
+          locationLng: a.locationLng ?? undefined,
+          locationId: a.locationId ?? undefined,
+        })));
       }
       try {
         const cr = await apiService.getCustomers();

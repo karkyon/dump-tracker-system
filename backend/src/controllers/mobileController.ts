@@ -1629,6 +1629,10 @@ export class MobileController {
           endTime: actEndTime ? new Date(actEndTime).toISOString() : null,
           notes: d.notes || '',
           sequenceNumber: d.sequenceNumber ?? d.sequence_number ?? 0,
+          // ✅ FIX-GPSPIN: 場所マスターのGPS座標をActivityRecordに含める
+          locationLat: d.locations?.latitude != null ? Number(d.locations.latitude) : (d.latitude != null ? Number(d.latitude) : undefined),
+          locationLng: d.locations?.longitude != null ? Number(d.locations.longitude) : (d.longitude != null ? Number(d.longitude) : undefined),
+          locationId: d.locationId || d.location_id || undefined,
         };
       });
 
