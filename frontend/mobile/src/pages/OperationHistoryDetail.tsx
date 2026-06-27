@@ -327,55 +327,128 @@ const OperationHistoryDetail: React.FC = () => {
           )}
         </div>
 
-        {/* アクティビティタイムライン */}
-        {detail.activities.length > 0 && (
+        {/* アクティビティ - グループ表示（積込/荷降1くくり + 休憩1くくり） */}
+        {detail.activities.length > 0 && (() => {
+          const sorted = [...detail.activities].sort(
+            (a, b) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0)
+          );
+          type ActGroup =
+            | { type: 'LOADING_GROUP';   groupNum: number; arrived: ActivityRecord; completed: ActivityRecord | null }
+            | { type: 'UNLOADING_GROUP'; groupNum: number; arrived: ActivityRecord; completed: ActivityRecord | null }
+            | { type: 'BREAK';           start: ActivityRecord; end: ActivityRecord | null }
+            | { type: 'SINGLE';          act: ActivityRecord };
+          const groups: ActGroup[] = [];
+          const used = new Set<string>();
+          let lgNum = 0, ugNum = 0;
+          for (let i = 0; i < sorted.length; i++) {
+            const a = sorted[i];
+            if (used.has(a.id)) continue;
+            const at = a.activityType;
+            if (['LOADING','LOADING_START'].includes(at)) {
+              lgNum++;
+              const comp = sorted.slice(i+1).find(b => !used.has(b.id) && ['LOADING_COMPLETE','LOADING_COMPLETED'].includes(b.activityType));
+              if (comp) used.add(comp.id);
+              groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, arrived: a, completed: comp ?? null });
+            } else if (['UNLOADING','UNLOADING_START'].includes(at)) {
+              ugNum++;
+              const comp = sorted.slice(i+1).find(b => !used.has(b.id) && ['UNLOADING_COMPLETE','UNLOADING_COMPLETED'].includes(b.activityType));
+              if (comp) used.add(comp.id);
+              groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, arrived: a, completed: comp ?? null });
+            } else if (['LOADING_COMPLETE','LOADING_COMPLETED','UNLOADING_COMPLETE','UNLOADING_COMPLETED'].includes(at)) {
+              groups.push({ type: 'SINGLE', act: a });
+            } else if (['BREAK_START','BREAK'].includes(at)) {
+              const endAct = sorted.slice(i+1).find(b => !used.has(b.id) && b.activityType === 'BREAK_END');
+              if (endAct) used.add(endAct.id);
+              groups.push({ type: 'BREAK', start: a, end: endAct ?? null });
+            } else if (at === 'BREAK_END') {
+              // 孤立 BREAK_END スキップ
+            } else {
+              groups.push({ type: 'SINGLE', act: a });
+            }
+          }
+          const fmtTs = (a: ActivityRecord | null, b?: ActivityRecord | null) => {
+            const s = a?.startTime ? new Date(a.startTime).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}) : '--:--';
+            const e = b?.startTime ? new Date(b.startTime).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false})
+              : (a?.endTime ? new Date(a.endTime).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}) : null);
+            return e && e !== s ? `${s} ～ ${e}` : s;
+          };
+          return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">運行内容</h2>
+              <div className="space-y-3">
+                {groups.map((g, gi) => {
+                  if (g.type === 'LOADING_GROUP' || g.type === 'UNLOADING_GROUP') {
+                    const isL = g.type === 'LOADING_GROUP';
+                    const bdr = isL ? TC.LOADING_BORDER : TC.UNLOADING_BORDER;
+                    const hBg = isL ? TC.LOADING_BG : TC.UNLOADING_BG;
+                    const hFg = isL ? TC.LOADING_FG : TC.UNLOADING_FG;
+                    const lbl = isL ? '積込' : '荷降';
+                    const loc = g.arrived.locationName || g.completed?.locationName || '';
+                    return (
+                      <div key={gi} style={{ border: `2px solid ${bdr}`, borderRadius: 10, overflow: 'hidden' }}>
+                        <div style={{ background: hBg, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: hFg }}>
+                            🚛 {lbl}{g.groupNum > 1 ? `（${g.groupNum}回目）` : ''}
+                          </span>
+                          {loc && <span style={{ fontSize: 11, color: '#6b7280' }}>─ {loc}</span>}
+                          <span style={{ marginLeft: 'auto', fontSize: 11, color: hFg, fontWeight: 600 }}>{fmtTs(g.arrived, g.completed)}</span>
+                        </div>
+                        <div style={{ padding: '5px 12px', borderBottom: g.completed ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12, color: '#374151' }}>● 到着</span>
+                          <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(g.arrived.startTime)}</span>
+                        </div>
+                        {g.completed && (
+                          <div style={{ padding: '5px 12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: 12, color: '#374151' }}>● {lbl}完了</span>
+                              <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(g.completed.startTime || g.completed.endTime)}</span>
+                            </div>
+                            {g.completed.itemName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {g.completed.itemName} × {g.completed.quantity}{g.completed.unit}</div>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  if (g.type === 'BREAK') {
+                    return (
+                      <div key={gi} style={{ border: `2px solid ${TC.BREAK_BORDER}`, borderRadius: 10, overflow: 'hidden' }}>
+                        <div style={{ background: TC.BREAK_BG, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: TC.BREAK_FG }}>☕ 休憩</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 11, color: TC.BREAK_FG, fontWeight: 600 }}>{fmtTs(g.start, g.end)}</span>
+                        </div>
+                        {g.start.locationName && <div style={{ padding: '4px 12px', fontSize: 11, color: '#6b7280' }}>📍 {g.start.locationName}</div>}
+                      </div>
+                    );
+                  }
+                  const act = g.act;
+                  const info = getActivityInfo(act.activityType);
+                  const isF = ['FUELING','FUEL'].includes(act.activityType);
+                  return (
+                    <div key={gi} style={{ border: `1.5px solid ${isF ? TC.FUEL_BORDER : TC.OTHER_BORDER}`, borderRadius: 10, padding: '8px 12px', background: isF ? TC.FUEL_BG : TC.OTHER_BG }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: isF ? TC.FUEL_FG : TC.OTHER_FG }}>{info.icon} {info.label}</span>
+                        <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(act.startTime)}</span>
+                      </div>
+                      {act.locationName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>📍 {act.locationName}</div>}
+                      {act.itemName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {act.itemName} × {act.quantity}{act.unit}</div>}
+                      {act.notes && !['積込完了','荷降完了','運行開始'].includes(act.notes) && (
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{act.notes}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+        {false && detail.activities.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">運行内容</h2>
             <div className="space-y-3">
               {detail.activities
                 .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
                 .map((activity, index) => {
-                  const actInfo = getActivityInfo(activity.activityType);
-                  return (
-                    <div key={activity.id} className="flex gap-3">
-                      {/* タイムラインライン */}
-                      <div className="flex flex-col items-center">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${actInfo.color}`}>
-                          {actInfo.icon}
-                        </div>
-                        {index < detail.activities.length - 1 && (
-                          <div className="w-0.5 h-full bg-gray-200 mt-1" />
-                        )}
-                      </div>
-
-                      {/* アクティビティ内容 */}
-                      <div className="flex-1 pb-3">
-                        <div className="flex items-center justify-between">
-                          <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${actInfo.color}`}>
-                            {actInfo.label}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {formatTime(activity.startTime ?? '')}
-                          </span>
-                        </div>
-                        {activity.locationName && (
-                          <div className="mt-1 flex items-center gap-1 text-sm text-gray-600">
-                            <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                            {activity.locationName}
-                          </div>
-                        )}
-                        {activity.itemName && (
-                          <div className="mt-0.5 text-sm text-gray-500">
-                            品目: {activity.itemName}
-                            {activity.quantity > 0 && ` × ${activity.quantity}${activity.unit}`}
-                          </div>
-                        )}
-                        {activity.notes && (
-                          <div className="mt-0.5 text-xs text-gray-400">{activity.notes}</div>
-                        )}
-                      </div>
-                    </div>
-                  );
+                  return null; // ✅ 旧レンダリング無効化（上部グループ表示に統合済み）
                 })}
             </div>
           </div>

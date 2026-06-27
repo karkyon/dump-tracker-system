@@ -1866,14 +1866,14 @@ const OperationRecord: React.FC = () => {
                       }}>
                         {label}
                       </span>
-                      {(act.locationName || (isU && operation.unloadingLocation)) && (
+                      {(locDisplay || (isU && operation.unloadingLocation)) && (
                         <div style={{
                           fontSize: 11, color: '#4b5563', marginTop: 3,
                           display: 'flex', alignItems: 'center', gap: 3,
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>
                           <span style={{ color: '#9ca3af', fontSize: 10 }}>📍</span>
-                          {act.locationName || (isU ? operation.unloadingLocation : '')}
+                          {locDisplay || (isU ? operation.unloadingLocation : '')}
                         </div>
                       )}
                       {isB && act.endTime && (
