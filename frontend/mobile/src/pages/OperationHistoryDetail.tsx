@@ -72,19 +72,30 @@ interface OperationDetail {
 }
 
 // =====================================
-// アクティビティ種別ラベル変換
+// アクティビティ種別ラベル変換 (✅ トレードカラー統一)
 // =====================================
+// ✅ トレードカラー定数: 積込=#2196F3 / 荷降=#4CAF50 / 休憩=#9C27B0 / 給油=#FF9800
+const TC = {
+  LOADING_BG: '#E3F2FD', LOADING_FG: '#1565C0', LOADING_BORDER: '#2196F3',
+  UNLOADING_BG: '#E8F5E9', UNLOADING_FG: '#2E7D32', UNLOADING_BORDER: '#4CAF50',
+  BREAK_BG: '#F3E5F5', BREAK_FG: '#6A1B9A', BREAK_BORDER: '#9C27B0',
+  FUEL_BG: '#FFF3E0', FUEL_FG: '#E65100', FUEL_BORDER: '#FF9800',
+  OTHER_BG: '#F9FAFB', OTHER_FG: '#6B7280', OTHER_BORDER: '#E5E7EB',
+};
 const ACTIVITY_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  LOADING: { label: '積込', color: 'text-blue-700 bg-blue-50', icon: '📦' },
-  LOADING_START: { label: '積込到着', color: 'text-blue-600 bg-blue-50', icon: '🚛' },
+  LOADING: { label: '積込', color: 'text-blue-800 bg-blue-50', icon: '📍' },
+  LOADING_START: { label: '積込到着', color: 'text-blue-700 bg-blue-50', icon: '📍' },
   LOADING_COMPLETE: { label: '積込完了', color: 'text-blue-800 bg-blue-100', icon: '✅' },
-  UNLOADING: { label: '積降', color: 'text-orange-700 bg-orange-50', icon: '📤' },
-  UNLOADING_START: { label: '荷降到着', color: 'text-orange-600 bg-orange-50', icon: '🏗️' },
-  UNLOADING_COMPLETE: { label: '荷降完了', color: 'text-orange-800 bg-orange-100', icon: '✅' },
-  BREAK_START: { label: '休憩開始', color: 'text-gray-600 bg-gray-50', icon: '☕' },
-  BREAK_END: { label: '休憩終了', color: 'text-gray-600 bg-gray-50', icon: '▶️' },
-  FUEL: { label: '給油', color: 'text-green-700 bg-green-50', icon: '⛽' },
-  FUELING: { label: '給油', color: 'text-green-700 bg-green-50', icon: '⛽' }, // ✅ 追加: FUELINGも給油として表示
+  LOADING_COMPLETED: { label: '積込完了', color: 'text-blue-800 bg-blue-100', icon: '✅' },
+  UNLOADING: { label: '荷降', color: 'text-green-800 bg-green-50', icon: '📍' },
+  UNLOADING_START: { label: '荷降到着', color: 'text-green-700 bg-green-50', icon: '📍' },
+  UNLOADING_COMPLETE: { label: '荷降完了', color: 'text-green-800 bg-green-100', icon: '✅' },
+  UNLOADING_COMPLETED: { label: '荷降完了', color: 'text-green-800 bg-green-100', icon: '✅' },
+  BREAK: { label: '休憩', color: 'text-purple-800 bg-purple-50', icon: '☕' },
+  BREAK_START: { label: '休憩', color: 'text-purple-800 bg-purple-50', icon: '☕' },
+  BREAK_END: { label: '休憩終了', color: 'text-purple-700 bg-purple-50', icon: '☕' },
+  FUEL: { label: '給油', color: 'text-orange-700 bg-orange-50', icon: '⛽' },
+  FUELING: { label: '給油', color: 'text-orange-700 bg-orange-50', icon: '⛽' },
 };
 
 // =====================================
