@@ -1823,7 +1823,10 @@ const OperationRecord: React.FC = () => {
                 const badgeFg = isL ? '#1565C0' : isU ? '#2E7D32' : isF ? '#F57F17' : isB ? '#6A1B9A' : '#6b7280';
                 const label   = LABELS[act.activityType] || act.activityType;
                 const icon    = ICONS[act.activityType] || '•';
-                const timeStr = act.startTime ? new Date(act.startTime).toTimeString().slice(0, 5) : '--:--';
+                const startStr = act.startTime ? new Date(act.startTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+                const endStr   = act.endTime   ? new Date(act.endTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }) : null;
+                const timeStr  = (isL || isU) && endStr && endStr !== startStr
+                  ? `${startStr} ～ ${endStr}` : startStr;
                 const isLast  = idx === arr.length - 1;
                 return (
                   <button

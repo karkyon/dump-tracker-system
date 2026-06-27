@@ -2857,27 +2857,88 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         const groups: RenderGroup[] = [];
                         let loadingGroupNum  = 0;
                         let unloadingGroupNum = 0;
-                        let idx = 0;
                         const evs = operationDebugTimelineEvents;
  
-                        while (idx < evs.length) {
-                          const ev = evs[idx];
+                        // ✅ FIX-GROUPING: detailIdプレフィックスでペアリング
+                        // {uuid}-arrived と {uuid}-completed を同一グループにマージ
+                        // 直後イベント前提のロジックから、IDマッチング方式に変更
+                        const getDetailId = (id: string) =>
+                          id.replace(/-arrived$/, '').replace(/-completed$/, '');
+ 
+                        // BREAK_START + BREAK_END ペアも事前にマップ化
+                        const breakEndMap = new Map<string, OperationDebugTimelineEvent>();
+                        for (const ev of evs) {
+                          if (ev.eventType === 'BREAK_END') {
+                            breakEndMap.set(ev.id, ev);
+                          }
+                        }
+                        const usedEvIds = new Set<string>();
+ 
+                        // LOADING_ARRIVED → 同じdetailIdのLOADING_COMPLETEDをマップ化
+                        const loadingCompletedMap = new Map<string, OperationDebugTimelineEvent>();
+                        const unloadingCompletedMap = new Map<string, OperationDebugTimelineEvent>();
+                        for (const ev of evs) {
+                          if (ev.eventType === 'LOADING_COMPLETED') {
+                            loadingCompletedMap.set(getDetailId(ev.id), ev);
+                          } else if (ev.eventType === 'UNLOADING_COMPLETED') {
+                            unloadingCompletedMap.set(getDetailId(ev.id), ev);
+                          }
+                        }
+ 
+                        // BREAK_START の次のBREAK_ENDをsequence順で探す
+                        const breakStartIds = evs
+                          .filter(ev => ev.eventType === 'BREAK_START')
+                          .map(ev => ev.id);
+                        const breakEndList = evs
+                          .filter(ev => ev.eventType === 'BREAK_END')
+                          .sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+                        const breakPairMap = new Map<string, OperationDebugTimelineEvent>();
+                        let bEndIdx = 0;
+                        for (const bStartId of breakStartIds) {
+                          if (bEndIdx < breakEndList.length) {
+                            const bEnd = breakEndList[bEndIdx];
+                            if (bEnd) {
+                              breakPairMap.set(bStartId, bEnd);
+                              usedEvIds.add(bEnd.id);
+                            }
+                            bEndIdx++;
+                          }
+                        }
+ 
+                        for (const ev of evs) {
+                          if (usedEvIds.has(ev.id)) continue;
                           if (ev.eventType === 'LOADING_ARRIVED') {
                             loadingGroupNum++;
-                            const next = idx + 1 < evs.length && evs[idx + 1].eventType === 'LOADING_COMPLETED'
-                              ? evs[idx + 1] : null;
-                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: next });
-                            idx += next ? 2 : 1;
+                            const detailId = getDetailId(ev.id);
+                            const completed = loadingCompletedMap.get(detailId) ?? null;
+                            if (completed) usedEvIds.add(completed.id);
+                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: completed });
                           } else if (ev.eventType === 'UNLOADING_ARRIVED') {
                             unloadingGroupNum++;
-                            const next = idx + 1 < evs.length && evs[idx + 1].eventType === 'UNLOADING_COMPLETED'
-                              ? evs[idx + 1] : null;
-                            groups.push({ type: 'UNLOADING_GROUP', groupNum: unloadingGroupNum, arrivedEvent: ev, completedEvent: next });
-                            idx += next ? 2 : 1;
-                          } else {
-                            // LOADING_COMPLETED / UNLOADING_COMPLETED が孤立している場合も単独表示
+                            const detailId = getDetailId(ev.id);
+                            const completed = unloadingCompletedMap.get(detailId) ?? null;
+                            if (completed) usedEvIds.add(completed.id);
+                            groups.push({ type: 'UNLOADING_GROUP', groupNum: unloadingGroupNum, arrivedEvent: ev, completedEvent: completed });
+                          } else if (ev.eventType === 'LOADING_COMPLETED' || ev.eventType === 'UNLOADING_COMPLETED') {
+                            // 既に対応ARRIVEDと組んでいれば usedEvIds に入っているのでスキップ済み
+                            // 孤立COMPLETEDは単独表示
                             groups.push({ type: 'SINGLE', event: ev });
-                            idx++;
+                          } else if (ev.eventType === 'BREAK_START') {
+                            // ✅ BREAK_START + BREAK_END を1くくりに
+                            const pairedEnd = breakPairMap.get(ev.id) ?? null;
+                            groups.push({ type: 'SINGLE', event: {
+                              ...ev,
+                              // BREAK_START イベントに終了時刻情報を付加して1行表示
+                              eventType: 'BREAK_START' as const,
+                              notes: pairedEnd
+                                ? `休憩開始 → ${new Date(pairedEnd.timestamp ?? '').toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })} 終了`
+                                : (ev.notes ?? null),
+                            }});
+                          } else if (ev.eventType === 'BREAK_END') {
+                            // 対応BREAK_STARTとペア済みなら usedEvIds で除外済み → ここには孤立のみ来る
+                            groups.push({ type: 'SINGLE', event: ev });
+                          } else {
+                            groups.push({ type: 'SINGLE', event: ev });
                           }
                         }
  
