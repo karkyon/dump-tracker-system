@@ -229,8 +229,6 @@ interface OperationDetailDialogProps {
 // =====================================================================
 // ✅ CmsGpsPinMap - CMSタイムライン編集用 GPS ピン調整マップ
 // =====================================================================
-const CMS_MAPS_SCRIPT_ID = 'gmap-script-cms-edit';
-
 interface CmsGpsPinMapProps {
   lat?: number;
   lng?: number;
