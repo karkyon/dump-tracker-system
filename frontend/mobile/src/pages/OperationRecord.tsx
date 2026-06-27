@@ -1827,6 +1827,8 @@ const OperationRecord: React.FC = () => {
                 const endStr   = act.endTime   ? new Date(act.endTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }) : null;
                 const timeStr  = (isL || isU) && endStr && endStr !== startStr
                   ? `${startStr} ～ ${endStr}` : startStr;
+                const locDisplay = act.locationName
+                  ? (act.locationName.length > 0 ? act.locationName : null) : null;
                 const isLast  = idx === arr.length - 1;
                 return (
                   <button
