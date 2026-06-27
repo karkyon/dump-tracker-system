@@ -3059,10 +3059,11 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           if (group.type === 'LOADING_GROUP' || group.type === 'UNLOADING_GROUP') {
                             const isLoading     = group.type === 'LOADING_GROUP';
                             const groupLabel    = isLoading ? '積込' : '荷降';
-                            const borderCls     = isLoading ? 'border-indigo-400' : 'border-purple-400';
-                            const headerBg      = isLoading ? 'bg-indigo-50 border-indigo-200' : 'bg-purple-50 border-purple-200';
-                            const headerTextCls = isLoading ? 'text-indigo-800' : 'text-purple-800';
-                            const arrivedDot    = isLoading ? 'bg-blue-400' : 'bg-orange-400';
+                            // ✅ トレードカラー適用: 積込=#2196F3(blue) / 荷降=#4CAF50(green)
+                            const borderCls     = isLoading ? 'border-blue-400'  : 'border-green-500';
+                            const headerBg      = isLoading ? 'bg-blue-50 border-blue-200'   : 'bg-green-50 border-green-200';
+                            const headerTextCls = isLoading ? 'text-blue-800'   : 'text-green-800';
+                            const arrivedDot    = isLoading ? 'bg-blue-400'     : 'bg-orange-400';
                             const completedDot  = 'bg-green-400';
  
                             return (
