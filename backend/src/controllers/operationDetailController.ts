@@ -355,6 +355,11 @@ export class OperationDetailController {
         } : null;
 
         if (detail.activityType === 'LOADING') {
+          // ✅ FIX: 品目なし・完了なし（到着のみ離脱）の空LOADINGは非表示
+          const _isEmptyLoading = !detail.actualEndTime && !detail.itemId
+            && (Number(detail.quantityTons) === 0 || detail.quantityTons == null)
+            && !(detail.operationDetailItems?.length > 0);
+          if (!_isEmptyLoading) {
           // ─────────────────────────────────────────
           // 🆕 積込: 到着イベント（actualStartTime = 積込場所到着時刻）
           //    モバイルの POST /trips/:id/loading/start に対応
@@ -403,6 +408,7 @@ export class OperationDetailController {
               notes: detail.notes || null
             });
           }
+          } // ✅ FIX: 空LOADING非表示 if(!_isEmptyLoading) の閉じ
 
         } else if (detail.activityType === 'UNLOADING') {
           // ─────────────────────────────────────────
