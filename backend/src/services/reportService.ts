@@ -356,30 +356,24 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
 
     if (LOADING_START_TYPES.some(t => at === t)) {
       // ✅ FIX: 空LOADING除外（到着のみ・品目なし・qty=0・notes='積込開始'）
-      // P1パターンの startLoading 残骸レコードが存在する場合、PDF日報でも除外する
-      const _isEmptyLoading =
-        !endT &&                        // actualEndTime なし
-        !itemName &&                    // 品目なし
-        qty === 0 &&                    // 数量0
-        notes === '積込開始';           // P1 startLoading の notes
-      if (_isEmptyLoading) {
-        // 空LOADINGはサイクルに含めない（スキップ）
-      } else {
-      // 積込開始: 前の未完了サイクルがあれば閉じる
-      if (cur && loadingOpen) rawCycles.push(cur as RawCycle);
-      cur = {
-        contractorName: customerName,
-        loadingLocation: locName || (cur != null ? cur.loadingLocation : '') || '',
-        unloadingLocation: '',
-        itemName: itemName || (cur != null ? cur.itemName : '') || '',
-        quantityTons: qty > 0 ? qty : 0,
-        loadingStart: startT,
-        loadingEnd: '',          // COMPLETEDで補完
-        unloadingStart: '',
-        unloadingEnd: '',
-      };
-      loadingOpen = true;
-      unloadingOpen = false;
+      const _isEmptyLoading = !endT && !itemName && qty === 0 && notes === '積込開始';
+      if (!_isEmptyLoading) {
+        // 積込開始: 前の未完了サイクルがあれば閉じる
+        if (cur && loadingOpen) rawCycles.push(cur as RawCycle);
+        cur = {
+          contractorName: customerName,
+          loadingLocation: locName || (cur != null ? cur.loadingLocation : '') || '',
+          unloadingLocation: '',
+          itemName: itemName || (cur != null ? cur.itemName : '') || '',
+          quantityTons: qty > 0 ? qty : 0,
+          loadingStart: startT,
+          loadingEnd: '',          // COMPLETEDで補完
+          unloadingStart: '',
+          unloadingEnd: '',
+        };
+        loadingOpen = true;
+        unloadingOpen = false;
+      }
     } else if (LOADING_COMPLETE_TYPES.some(t => at === t)) {
       // 積込完了: 同一サイクルに loadingEnd・品目・トン数を補完
       if (cur && loadingOpen) {
