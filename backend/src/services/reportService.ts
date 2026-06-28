@@ -355,6 +355,16 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     const customerName: string = (d as any)._opCustomerName ?? '';
 
     if (LOADING_START_TYPES.some(t => at === t)) {
+      // ✅ FIX: 空LOADING除外（到着のみ・品目なし・qty=0・notes='積込開始'）
+      // P1パターンの startLoading 残骸レコードが存在する場合、PDF日報でも除外する
+      const _isEmptyLoading =
+        !endT &&                        // actualEndTime なし
+        !itemName &&                    // 品目なし
+        qty === 0 &&                    // 数量0
+        notes === '積込開始';           // P1 startLoading の notes
+      if (_isEmptyLoading) {
+        // 空LOADINGはサイクルに含めない（スキップ）
+      } else {
       // 積込開始: 前の未完了サイクルがあれば閉じる
       if (cur && loadingOpen) rawCycles.push(cur as RawCycle);
       cur = {
@@ -395,6 +405,7 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         };
         loadingOpen = true;
       }
+      } // ✅ FIX: 空LOADING除外 if(!_isEmptyLoading) の閉じ
     } else if (UNLOADING_START_TYPES.some(t => at === t)) {
       // 荷降開始
       if (cur) {
