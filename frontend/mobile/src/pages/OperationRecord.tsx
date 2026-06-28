@@ -1807,7 +1807,7 @@ const OperationRecord: React.FC = () => {
                   LOADING: '積込', LOADING_START: '積込到着', LOADING_COMPLETE: '積込完了',
                   UNLOADING: '荷降', UNLOADING_START: '荷降到着', UNLOADING_COMPLETE: '荷降完了',
                   FUELING: '給油', FUEL: '給油',
-                  BREAK: '休憩', BREAK_START: '休憩開始', BREAK_END: '休憩終了',
+                  BREAK: '休憩', BREAK_START: '休憩', BREAK_END: '休憩終了',
                 };
                 // ③ ボタンアイコンと統一
                 const ICONS: Record<string, string> = {
@@ -1874,6 +1874,11 @@ const OperationRecord: React.FC = () => {
                         }}>
                           <span style={{ color: '#9ca3af', fontSize: 10 }}>📍</span>
                           {locDisplay || (isU ? operation.unloadingLocation : '')}
+                        </div>
+                      )}
+                      {(isL || isU) && act.customerName && (
+                        <div style={{ fontSize: 10, color: isL ? '#1565C0' : '#2E7D32', marginTop: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <span>🏢</span>{act.customerName}
                         </div>
                       )}
                       {isB && act.endTime && (

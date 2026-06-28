@@ -33,6 +33,9 @@ interface ActivityRecord {
   endTime: string | null;
   notes: string;
   sequenceNumber: number;
+  customerName?: string | null;
+  locationLat?: number;
+  locationLng?: number;
 }
 
 interface FuelRecord {
@@ -394,6 +397,11 @@ const OperationHistoryDetail: React.FC = () => {
                             🚛 {lbl}{g.groupNum > 1 ? `（${g.groupNum}回目）` : ''}
                           </span>
                           {loc && <span style={{ fontSize: 11, color: '#6b7280' }}>─ {loc}</span>}
+                          {(g.arrived.customerName || g.completed?.customerName) && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: hFg }}>
+                              🏢 {g.arrived.customerName || g.completed?.customerName}
+                            </span>
+                          )}
                           <span style={{ marginLeft: 'auto', fontSize: 11, color: hFg, fontWeight: 600 }}>{fmtTs(g.arrived, g.completed)}</span>
                         </div>
                         <div style={{ padding: '5px 12px', borderBottom: g.completed ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between' }}>

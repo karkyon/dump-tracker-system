@@ -1633,7 +1633,16 @@ export class MobileController {
           locationLat: d.locations?.latitude != null ? Number(d.locations.latitude) : (d.latitude != null ? Number(d.latitude) : undefined),
           locationLng: d.locations?.longitude != null ? Number(d.locations.longitude) : (d.longitude != null ? Number(d.longitude) : undefined),
           locationId: d.locationId || d.location_id || undefined,
+          // ✅ 客先名
+          customerName: (trip as any).customer?.name || null,
         };
+      }).filter((a: any) => {
+        // ✅ FIX: 空LOADING（到着のみ・品目なし・完了なし）は非表示
+        if (a.activityType === 'LOADING') {
+          // customerName は後付けなので元データ d 経由ではなく endTime/itemName で判定
+          if (!a.endTime && !a.itemName && (a.quantity === 0 || !a.quantity)) return false;
+        }
+        return true;
       });
 
       const loadingCount = activities.filter((a: any) =>

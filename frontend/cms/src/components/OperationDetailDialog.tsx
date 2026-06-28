@@ -2329,7 +2329,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
-      BREAK_START: { label: '休憩開始', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK_START: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       BREAK_END: { label: '休憩終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
       TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
@@ -2361,7 +2361,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
-      BREAK_START: { label: '休憩開始', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK_START: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       BREAK_END: { label: '休憩終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
       TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
@@ -3076,8 +3076,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     {group.groupNum > 1 && `（${group.groupNum}回目）`}
                                   </span>
                                   {group.arrivedEvent.location && (
-                                    <span className="text-xs text-gray-500 truncate flex-1">
+                                    <span className="text-xs text-gray-500 truncate">
                                       ─ {group.arrivedEvent.location.name}
+                                    </span>
+                                  )}
+                                  {((group.arrivedEvent as any).customerName || (group.completedEvent as any)?.customerName) && (
+                                    <span className="text-xs font-semibold truncate" style={{ color: isLoading ? '#1565C0' : '#2E7D32' }}>
+                                      🏢 {(group.arrivedEvent as any).customerName || (group.completedEvent as any)?.customerName}
                                     </span>
                                   )}
                                   {/* ヘッダー編集ボタンは廃止 → 各サブ行に個別ボタンを配置 */}
