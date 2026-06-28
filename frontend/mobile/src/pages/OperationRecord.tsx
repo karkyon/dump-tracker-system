@@ -828,17 +828,26 @@ const OperationRecord: React.FC = () => {
         });
         return; // navigate後は後続のsetShowRegistrationDialog等不要
       } else if (registrationLocationType === 'UNLOADING') {
-          console.log('🚛 荷降場所到着記録API呼び出し開始');
-          
-          await apiService.recordUnloadingArrival(currentOperationId, {
-            locationId: registeredLocation.id,
-            latitude: currentPosition.coords.latitude,
-            longitude: currentPosition.coords.longitude,
-            accuracy: currentPosition.coords.accuracy,
-            arrivalTime: new Date()
-          });
-          
-          console.log('✅ 荷降場所到着記録完了');
+          // ✅ FIX-U1: U1パターンは recordUnloadingArrival を呼ばない
+          //    → handleUnloadingStart(荷降開始ボタン)で startUnloading → レコード作成
+          const _upReg: number = Number(operationStore.unloadingPattern ?? 2);
+          if (_upReg !== 1) {
+            console.log(`🚛 荷降場所到着記録API呼び出し開始 (U${_upReg}) [新規地点登録]`);
+            await apiService.recordUnloadingArrival(currentOperationId, {
+              locationId: registeredLocation.id,
+              latitude: currentPosition.coords.latitude,
+              longitude: currentPosition.coords.longitude,
+              accuracy: currentPosition.coords.accuracy,
+              arrivalTime: new Date(),
+              ...(_upReg === 3 ? { endTime: new Date() } : {}),
+            });
+            console.log('✅ 荷降場所到着記録完了');
+          } else {
+            console.log('[U1新規地点] recordUnloadingArrival スキップ。handleUnloadingStartで記録。');
+            (operationStore as any).unloadingLocationLat = currentPosition.coords.latitude;
+            (operationStore as any).unloadingLocationLng = currentPosition.coords.longitude;
+            (operationStore as any).unloadingLocationAccuracy = currentPosition.coords.accuracy;
+          }
           
           // 状態更新
           setOperation(prev => ({
@@ -849,11 +858,9 @@ const OperationRecord: React.FC = () => {
 
           // operationStoreにも保存
           operationStore.setUnloadingLocation(registeredLocation.name, registeredLocation.id);
-          // U3フォールバック対応
           operationStore.setPhase('AT_UNLOADING');
 
-          // ✅ 【修正】荷降開始ボタンが参照する window.selectedUnloadingLocation を設定
-          //    （新規地点登録フローでは、この設定が抜けていたため「荷降場所が選択されていません」エラーが発生していた）
+          // window.selectedUnloadingLocation を設定（handleUnloadingStart/完了で使用）
           (window as any).selectedUnloadingLocation = {
             id: registeredLocation.id,
             name: registeredLocation.name,
