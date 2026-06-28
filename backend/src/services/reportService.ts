@@ -356,7 +356,7 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
 
     if (LOADING_START_TYPES.some(t => at === t)) {
       // ✅ FIX: 空LOADING除外（到着のみ・品目なし・qty=0・notes='積込開始'）
-      const _isEmptyLoading = !endT && !itemName && qty === 0 && notes === '積込開始';
+      const _isEmptyLoading = !endT && !itemName && qty === 0 && notesStr === '積込開始';
       if (!_isEmptyLoading) {
         // 積込開始: 前の未完了サイクルがあれば閉じる
         if (cur && loadingOpen) rawCycles.push(cur as RawCycle);
@@ -399,7 +399,6 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         };
         loadingOpen = true;
       }
-      } // ✅ FIX: 空LOADING除外 if(!_isEmptyLoading) の閉じ
     } else if (UNLOADING_START_TYPES.some(t => at === t)) {
       // 荷降開始
       if (cur) {
