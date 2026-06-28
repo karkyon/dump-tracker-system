@@ -1197,17 +1197,23 @@ class TripService {
         nextSequenceNumber
       });
 
+      // ✅ FIX-P1: P1パターンは startLoading 時に品目情報も受け取る
+      const startItemId = (data as any).itemId as string | undefined;
+      const startQty = (data as any).quantity as number | undefined;
       // operation_detail作成（actualEndTime は null）
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
-        itemId: undefined,  // 積込開始時点では品目未確定
+        itemId: startItemId || undefined,  // P1: 品目情報あり、他パターン: undefined
         sequenceNumber: nextSequenceNumber,
         activityType: 'LOADING' as ActivityType,
         actualStartTime: data.startTime || new Date(),
         actualEndTime: undefined,  // 🔥 重要: 開始時は null
-        quantityTons: 0,  // 積込開始時点では数量0
-        notes: data.notes || '積込開始'
+        quantityTons: startQty ?? 0,  // P1: 数量あり
+        notes: data.notes || '積込開始',
+        locationId: data.locationId || undefined as any,
       };
+      // ✅ P1: selectedItemIds が渡された場合は completeLoading で保存するため保存済みとしてメモ
+      const startSelectedItemIds = (data as any).selectedItemIds as string[] | undefined;
 
       logger.info('🚛 [startLoading] operation_detail作成開始', { detailData });
 
@@ -1238,6 +1244,25 @@ class TripService {
 
           logger.info('🚛✅ [startLoading] GPS記録完了');
         }
+
+      // ✅ P1: selectedItemIds が渡された場合は operationDetailItems に保存
+      if (Array.isArray(startSelectedItemIds) && startSelectedItemIds.length > 0) {
+        const db = DatabaseService.getInstance();
+        for (let i = 0; i < startSelectedItemIds.length; i++) {
+          const sid = startSelectedItemIds[i];
+          if (sid) {
+            await db.operationDetailItem.create({
+              data: {
+                operationDetailId: detail.id,
+                itemId: sid,
+                quantityTons: startQty ?? 0,
+                sequenceOrder: i
+              }
+            });
+          }
+        }
+        logger.info('✅ [startLoading] P1 operationDetailItems保存完了', { count: startSelectedItemIds.length });
+      }
 
       return {
         success: true,

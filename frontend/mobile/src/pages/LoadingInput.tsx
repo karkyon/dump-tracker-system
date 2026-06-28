@@ -432,9 +432,43 @@ const LoadingInput: React.FC = () => {
       const itemId = formData.itemId || undefined;
 
       // ✅ 複数品目は selectedItemIds で送信（notes 埋め込み廃止）
-      // P3(即時完了)の場合は endTime も渡して S=E 同時記録
+      // P1: recordLoadingArrival を呼ばず場所・品目をstoreに保存のみ
+      //     → 積込開始ボタン(handleLoadingStart)でstartLoading APIを呼ぶ
+      // P2: recordLoadingArrival → actualStartTime=今, actualEndTime=null のレコード作成
+      //     → 積込完了ボタン(handleLoadingComplete)でcompleteLoading APIを呼ぶ
+      // P3: recordLoadingArrival(endTime=now) → actualStartTime=actualEndTime=今 → 即完了
       const _lpNow: number = Number((operationStore as any).loadingPattern ?? 2);
       const _nowTime = new Date();
+
+      // ✅ FIX-P1: P1の場合はAPIを呼ばず、場所・品目情報をstoreに保存して遷移
+      if (_lpNow === 1) {
+        console.log('[D5-P1] P1パターン: recordLoadingArrival をスキップ。場所・品目をstoreに保存。');
+        // 場所・品目をstoreに保存（handleLoadingStartで使用）
+        operationStore.setLoadingLocation(formData.locationName, formData.locationId);
+        (operationStore as any).loadingItemId = itemId || undefined;
+        (operationStore as any).loadingCustomItemName = formData.customItemName || undefined;
+        (operationStore as any).loadingSelectedItemIds = formData.selectedItemIds.length > 0 ? formData.selectedItemIds : undefined;
+        (operationStore as any).loadingQuantity = formData.quantity;
+        (operationStore as any).loadingNotes = formData.notes || undefined;
+        (operationStore as any).loadingLocationLat = position.coords.latitude;
+        (operationStore as any).loadingLocationLng = position.coords.longitude;
+        (operationStore as any).loadingLocationAccuracy = position.coords.accuracy;
+        // フェーズ更新してAT_LOADINGへ
+        operationStore.setPhase('AT_LOADING');
+        apiService.logOperationEvent({
+          eventType: 'LOADING_ARRIVED',
+          operationId: currentOperationId,
+          locationId: formData.locationId,
+          locationName: formData.locationName,
+          phase: 'AT_LOADING',
+          result: 'success',
+        }).catch(() => {});
+        toast.success('積込場所に到着しました。積込開始ボタンを押してください。', { duration: 3000, icon: '🚛' });
+        navigate('/operation-record', { replace: true });
+        return;
+      }
+
+      // P2/P3: recordLoadingArrival を呼ぶ
       const response = await apiService.recordLoadingArrival(currentOperationId, {
         locationId: formData.locationId,
         latitude: position.coords.latitude,

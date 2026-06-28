@@ -663,16 +663,29 @@ const OperationRecord: React.FC = () => {
         // 荷降場所選択後は画面遷移せず地図表示のまま
         console.log('📦 荷降場所選択 - 地図画面のまま');
 
-        // ✅ 修正: recordUnloadingArrival を呼び出して operation_details に UNLOADING レコードを作成
-        console.log('🚛 荷降場所到着記録API呼び出し開始');
-        await apiService.recordUnloadingArrival(currentOperationId, {
-          locationId: selectedLocation.location.id,
-          latitude: currentPosition.coords.latitude,
-          longitude: currentPosition.coords.longitude,
-          accuracy: currentPosition.coords.accuracy,
-          arrivalTime: new Date()
-        });
-        console.log('✅ 荷降場所到着記録完了');
+        // ✅ FIX-U1: U1パターンは recordUnloadingArrival を呼ばない
+        //    → handleUnloadingStart(荷降開始ボタン)で startUnloading → レコード作成
+        //    U2/U3: recordUnloadingArrival を呼ぶ
+        const _upNow: number = Number(operationStore.unloadingPattern ?? 2);
+        if (_upNow !== 1) {
+          console.log(`🚛 荷降場所到着記録API呼び出し開始 (U${_upNow})`);
+          await apiService.recordUnloadingArrival(currentOperationId, {
+            locationId: selectedLocation.location.id,
+            latitude: currentPosition.coords.latitude,
+            longitude: currentPosition.coords.longitude,
+            accuracy: currentPosition.coords.accuracy,
+            arrivalTime: new Date(),
+            // U3: 即時完了
+            ...(_upNow === 3 ? { endTime: new Date() } : {}),
+          });
+          console.log('✅ 荷降場所到着記録完了');
+        } else {
+          console.log('[U1] 荷降場所到着: recordUnloadingArrival スキップ。handleUnloadingStartで記録。');
+          // U1: 場所情報をstoreに保存（handleUnloadingStartで使用）
+          (operationStore as any).unloadingLocationLat = currentPosition.coords.latitude;
+          (operationStore as any).unloadingLocationLng = currentPosition.coords.longitude;
+          (operationStore as any).unloadingLocationAccuracy = currentPosition.coords.accuracy;
+        }
 
         // 状態更新
         setOperation(prev => ({
@@ -991,14 +1004,28 @@ const OperationRecord: React.FC = () => {
     if (!loadingLocationId) { toast.error('積込場所IDが見つかりません'); return; }
     try {
       setIsSubmitting(true);
+      // ✅ FIX-P1: startLoading に品目・GPS情報も渡す
+      const _p1ItemId = (operationStore as any).loadingItemId as string | undefined;
+      const _p1CustomItemName = (operationStore as any).loadingCustomItemName as string | undefined;
+      const _p1SelectedItemIds = (operationStore as any).loadingSelectedItemIds as string[] | undefined;
+      const _p1Quantity = (operationStore as any).loadingQuantity as number | undefined;
+      const _p1Notes = (operationStore as any).loadingNotes as string | undefined;
+      const _p1Lat = (operationStore as any).loadingLocationLat as number | undefined;
+      const _p1Lng = (operationStore as any).loadingLocationLng as number | undefined;
+      const _p1Acc = (operationStore as any).loadingLocationAccuracy as number | undefined;
       await retryWithBackoff(
         () => apiService.startLoadingAtLocation(currentOperationId, {
           locationId: loadingLocationId,
           startTime: new Date(),
-          latitude: currentPosition?.coords.latitude ?? undefined,
-          longitude: currentPosition?.coords.longitude ?? undefined,
-          accuracy: currentPosition?.coords.accuracy ?? undefined,
-          notes: '積込開始',
+          latitude: _p1Lat ?? currentPosition?.coords.latitude ?? undefined,
+          longitude: _p1Lng ?? currentPosition?.coords.longitude ?? undefined,
+          accuracy: _p1Acc ?? currentPosition?.coords.accuracy ?? undefined,
+          notes: _p1Notes || '積込開始',
+          // ✅ P1: 場所選択時に保存した品目情報を startLoading に渡す
+          itemId: _p1ItemId,
+          selectedItemIds: _p1SelectedItemIds,
+          quantity: _p1Quantity,
+          customItemName: _p1CustomItemName,
         }),
         3, 1000, '積込開始'
       );
@@ -1085,13 +1112,17 @@ const OperationRecord: React.FC = () => {
     if (!unloadingLocationId) { toast.error('荷降場所IDが見つかりません'); return; }
     try {
       setIsSubmitting(true);
+      // ✅ FIX-U1: storeに保存されたGPS情報を使用
+      const _u1Lat = (operationStore as any).unloadingLocationLat as number | undefined;
+      const _u1Lng = (operationStore as any).unloadingLocationLng as number | undefined;
+      const _u1Acc = (operationStore as any).unloadingLocationAccuracy as number | undefined;
       await retryWithBackoff(
         () => apiService.startUnloadingAtLocation(currentOperationId, {
           locationId: unloadingLocationId,
           startTime: new Date(),
-          latitude: currentPosition?.coords.latitude ?? undefined,
-          longitude: currentPosition?.coords.longitude ?? undefined,
-          accuracy: currentPosition?.coords.accuracy ?? undefined,
+          latitude: _u1Lat ?? currentPosition?.coords.latitude ?? undefined,
+          longitude: _u1Lng ?? currentPosition?.coords.longitude ?? undefined,
+          accuracy: _u1Acc ?? currentPosition?.coords.accuracy ?? undefined,
           notes: '荷降開始',
         }),
         3, 1000, '荷降開始'
