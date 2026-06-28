@@ -163,6 +163,11 @@ export interface StartLoadingRequest {
   accuracy?: number;         // GPS測位精度（メートル）
   startTime?: Date | string; // 開始時刻（省略時は現在時刻）
   notes?: string;            // メモ（オプション）
+  // ✅ P1: 積込開始時に品目情報も渡す（LoadingInputで選択済み）
+  itemId?: string;
+  quantity?: number;
+  customItemName?: string;
+  selectedItemIds?: string[];
 }
 
 /**

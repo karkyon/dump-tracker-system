@@ -360,6 +360,10 @@ export interface StartLoadingRequest {
   accuracy?: number;
   startTime?: Date;
   notes?: string;
+  // ✅ P1: 積込開始時に品目情報も渡す
+  itemId?: string;
+  quantity?: number;
+  customItemName?: string;
 }
 
 /**
