@@ -486,16 +486,41 @@ const GPSMonitoring: React.FC = () => {
 
       if (existingMarkers.has(vehicle.id)) {
         const marker = existingMarkers.get(vehicle.id)!;
-        marker.position = position;
-        marker.content  = createDumpTruckMarkerElement(cfg.color, listNo);
+        // ✅ FIX: AdvancedMarkerElement/旧Marker両対応
+        if (typeof marker.position !== 'undefined') {
+          marker.position = position;
+        } else {
+          marker.setPosition(position);
+        }
+        if (marker.content !== undefined) {
+          marker.content = createDumpTruckMarkerElement(cfg.color, listNo);
+        }
       } else {
         const markerEl = createDumpTruckMarkerElement(cfg.color, listNo);
-        const marker   = new window.google.maps.marker.AdvancedMarkerElement({
-          position, map, title: vehicle.vehicleNumber, content: markerEl,
-        });
+        let marker: any;
+        // ✅ FIX: loading=async では &libraries=marker なしのためAdvancedMarkerElement未定義
+        //    → 旧 google.maps.Marker にフォールバック
+        if (window.google.maps.marker?.AdvancedMarkerElement) {
+          marker = new window.google.maps.marker.AdvancedMarkerElement({
+            position, map, title: vehicle.vehicleNumber, content: markerEl,
+          });
+        } else {
+          // 旧Markerフォールバック
+          marker = new window.google.maps.Marker({
+            position, map, title: vehicle.vehicleNumber,
+            icon: {
+              url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(markerEl.outerHTML)}`,
+              scaledSize: new window.google.maps.Size(42, 28),
+            },
+          });
+        }
         marker.addListener('click', () => {
           infoWindow.setContent(infoContent);
-          infoWindow.open(map, marker);
+          if (window.google.maps.marker?.AdvancedMarkerElement) {
+            infoWindow.open(map, marker);
+          } else {
+            infoWindow.open(map, marker);
+          }
         });
         existingMarkers.set(vehicle.id, marker);
       }
@@ -508,7 +533,12 @@ const GPSMonitoring: React.FC = () => {
     });
 
     existingMarkers.forEach((marker, id) => {
-      if (!currentIds.has(id)) { marker.setMap(null); existingMarkers.delete(id); }
+      if (!currentIds.has(id)) {
+        // ✅ AdvancedMarkerElement/旧Marker両対応
+        if (typeof marker.setMap === 'function') { marker.setMap(null); }
+        else { marker.map = null; }
+        existingMarkers.delete(id);
+      }
     });
   }, [vehicles, mapsLoaded]);
 
