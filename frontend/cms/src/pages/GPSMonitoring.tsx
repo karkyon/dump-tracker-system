@@ -254,11 +254,16 @@ declare global {
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const loadGoogleMapsScript = (callback: () => void): void => {
-  if (window.google && window.google.maps) { callback(); return; }
+  // ✅ FIX: loading=async では onload 時点で google.maps.Map が未定義
+  //    polling で google.maps が利用可能になってから callback を実行する
+  const waitForMaps = () => {
+    if (window.google?.maps?.Map) { callback(); return; }
+    setTimeout(waitForMaps, 100);
+  };
+  if (window.google?.maps?.Map) { callback(); return; }
   const existingScript = document.getElementById('google-maps-script');
   if (existingScript) {
-    if (window.google && window.google.maps) callback();
-    else existingScript.addEventListener('load', callback);
+    waitForMaps();
     return;
   }
   if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') {
@@ -270,9 +275,9 @@ const loadGoogleMapsScript = (callback: () => void): void => {
   script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async&language=ja&region=JP`;
   script.async = true;
   script.defer = true;
-  script.onload = callback;
   script.onerror = () => console.error('[GPSMonitoring] Google Maps API読み込み失敗');
   document.head.appendChild(script);
+  waitForMaps();
 };
 
 // =====================================
