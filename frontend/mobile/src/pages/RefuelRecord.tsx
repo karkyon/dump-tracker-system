@@ -28,6 +28,12 @@ const RefuelRecord: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   // 🆕 BUG-050: 給油時走行距離
   const [mileageAtRefuel, setMileageAtRefuel] = useState<string>('');
+  // 給油開始時刻（OperationRecordの「給油」ボタンクリック時刻）を取得
+  const [fuelStartTimeIso] = useState<string | undefined>(() => {
+    try {
+      return sessionStorage.getItem('fuelStartTime') || undefined;
+    } catch { return undefined; }
+  });
 
   /**
    * 🆕 数値をカンマ区切りに変換
@@ -151,10 +157,12 @@ const RefuelRecord: React.FC = () => {
         fuelAmount: fuelAmountNum,
         fuelCost: fuelCostNum,
         fuelStation: fuelStation || undefined,
-        mileageAtRefuel: mileageAtRefuelNum,  // ✅ 専用パラメータとして送信
+        mileageAtRefuel: mileageAtRefuelNum,
+        startTime: fuelStartTimeIso,  // ✅ 専用パラメータとして送信
         ...gpsCoords,
         notes: notes || undefined             // ✅ 自由記述のみ
       });
+      try { sessionStorage.removeItem('fuelStartTime'); } catch { /* ignore */ }
 
       console.log('✅ 給油記録保存完了');
       toast.success('給油記録を保存しました');

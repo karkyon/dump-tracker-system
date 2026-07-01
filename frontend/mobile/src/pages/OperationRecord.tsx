@@ -122,7 +122,7 @@ const OperationRecord: React.FC = () => {
   const [detailActivities, setDetailActivities] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailCustomers, setDetailCustomers] = useState<{ id: string; name: string }[]>([]);
-  const [detailItems, setDetailItems] = useState<{ id: string; name: string }[]>([]);
+  const [detailItems, setDetailItems] = useState<{ id: string; name: string; itemType?: string; displayOrder?: number }[]>([]);
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
   // ✅ BUG-051完全修正: APIレスポンスの運行客先名を保持（storeのcustomerNameに依存しない）
   const [detailOperationCustomerName, setDetailOperationCustomerName] = useState<string | null>(null);
@@ -1353,6 +1353,8 @@ const OperationRecord: React.FC = () => {
    * ✅ 既存: 給油記録ハンドラー
    */
   const handleRefuel = () => {
+    // ✅ 給油開始時刻（ボタンクリック時刻）を保存（運行時event発生時刻定義準拠）
+    try { sessionStorage.setItem('fuelStartTime', new Date().toISOString()); } catch { /* ignore */ }
     // 給油記録画面へ遷移（実際の記録はRefuelRecord.tsx内で行う）
     navigate('/refuel-record'); // ✅ BUG-GPS-NAV: navigate統一（GPS停止しない）
   };
@@ -1796,213 +1798,213 @@ const OperationRecord: React.FC = () => {
                 </div>
               ))}
             </div>
-            {/* リスト */}
-            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#fff', WebkitOverflowScrolling: 'touch' }}>
-              <div style={{ fontSize: 9, fontWeight: 500, color: '#6b7280', padding: '5px 10px 2px', letterSpacing: '.05em', textTransform: 'uppercase', borderBottom: '0.5px solid #e5e7eb' }}>運行内容 — タップで編集</div>
+            {/* リスト（運行履歴詳細画面と同じグループ表示スタイル） */}
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#fff', WebkitOverflowScrolling: 'touch', padding: '8px 10px' }}>
+              <div style={{ fontSize: 9, fontWeight: 500, color: '#6b7280', padding: '2px 2px 6px', letterSpacing: '.05em', textTransform: 'uppercase' }}>運行内容 — タップで編集</div>
               {detailLoading ? (
                 <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>読み込み中...</div>
               ) : detailActivities.length === 0 ? (
                 <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>アクティビティなし</div>
               ) : (() => {
-                // BREAK_START + BREAK_END → 単一 BREAK にマージ
-                // sequenceNumber でソートしてからインデックスでペアリング（順序依存バグ修正）
-                const sorted = [...detailActivities].sort(
-                  (a: any, b: any) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0)
-                );
-                const merged: any[] = [];
-                const usedIds = new Set<string>();
-                for (let _i = 0; _i < sorted.length; _i++) {
-                  const act = sorted[_i];
-                  if (usedIds.has(act.id)) continue;
-                  if (['BREAK_START', 'BREAK'].includes(act.activityType)) {
-                    // インデックスで次の BREAK_END を探す
-                    let paired: any = null;
-                    for (let _j = _i + 1; _j < sorted.length; _j++) {
-                      if (sorted[_j].activityType === 'BREAK_END') {
-                        paired = sorted[_j];
-                        break;
-                      }
+                // トレードカラー定数（運行履歴詳細画面と統一）
+                const TC = {
+                  LOADING_BG: '#E3F2FD', LOADING_FG: '#1565C0', LOADING_BORDER: '#2196F3',
+                  UNLOADING_BG: '#E8F5E9', UNLOADING_FG: '#2E7D32', UNLOADING_BORDER: '#4CAF50',
+                  BREAK_BG: '#F3E5F5', BREAK_FG: '#6A1B9A', BREAK_BORDER: '#9C27B0',
+                  FUEL_BG: '#FFF3E0', FUEL_FG: '#E65100', FUEL_BORDER: '#FF9800',
+                  OTHER_BG: '#F9FAFB', OTHER_FG: '#6B7280', OTHER_BORDER: '#E5E7EB',
+                };
+                // ✅ すべてのイベントで「開始 ～ 終了」形式に統一表示
+                const fmtRange = (startIso: string | null, endIso: string | null): string => {
+                  const s = startIso ? new Date(startIso).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+                  const e = endIso ? new Date(endIso).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }) : null;
+                  return e ? `${s} ～ ${e}` : s;
+                };
+                const itemsLabel = (act: any): string => {
+                  const names: string[] = Array.isArray(act.itemNames) && act.itemNames.length > 0
+                    ? act.itemNames
+                    : (act.itemName ? [act.itemName] : []);
+                  if (act.customItemName && !names.includes(act.customItemName)) names.push(act.customItemName);
+                  return names.join('、');
+                };
+                const getCustomerAtTime = (loadingSeq: number): string => {
+                  const changeHistory: { seq: number; to: string }[] = [];
+                  for (const a of [...detailAllActivities].sort(
+                    (x: any, y: any) => (x.sequenceNumber ?? 0) - (y.sequenceNumber ?? 0)
+                  )) {
+                    if ((a.activityType === 'NOTE' || a.activityType === 'OTHER') && a.notes) {
+                      const m = String(a.notes).match(/客先変更[:：]\s*.+?[→\-]+\s*(.+)/);
+                      if (m && m[1]) changeHistory.push({ seq: a.sequenceNumber ?? 0, to: m[1].trim() });
                     }
-                    if (paired) usedIds.add(paired.id);
-                    merged.push({
-                      ...act,
-                      activityType: 'BREAK',
-                      endTime: paired?.startTime ?? act.endTime,
-                    });
-                  } else if (act.activityType === 'BREAK_END') {
-                    // 孤立 BREAK_END もスキップ（START と必ずペアとして扱う）
+                  }
+                  let currentCustomer = detailOperationCustomerName || '';
+                  for (const ch of changeHistory) {
+                    if (ch.seq <= loadingSeq) currentCustomer = ch.to;
+                  }
+                  return currentCustomer;
+                };
+
+                // グループ化（積込/荷降1くくり + 休憩1くくり）— 運行履歴詳細画面と同じロジック
+                type ActGroup =
+                  | { type: 'LOADING_GROUP';   groupNum: number; arrived: any; completed: any | null }
+                  | { type: 'UNLOADING_GROUP'; groupNum: number; arrived: any; completed: any | null }
+                  | { type: 'BREAK';           start: any; end: any | null }
+                  | { type: 'SINGLE';          act: any };
+                const sorted = [...detailActivities].sort((a: any, b: any) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0));
+                const groups: ActGroup[] = [];
+                const used = new Set<string>();
+                let lgNum = 0, ugNum = 0;
+                for (let i = 0; i < sorted.length; i++) {
+                  const a = sorted[i];
+                  if (used.has(a.id)) continue;
+                  const at = a.activityType;
+                  if (['LOADING', 'LOADING_START'].includes(at)) {
+                    lgNum++;
+                    const comp = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && ['LOADING_COMPLETE', 'LOADING_COMPLETED'].includes(b.activityType)) ?? null;
+                    if (comp) used.add(comp.id);
+                    groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, arrived: a, completed: comp });
+                  } else if (['UNLOADING', 'UNLOADING_START'].includes(at)) {
+                    ugNum++;
+                    const comp2 = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && ['UNLOADING_COMPLETE', 'UNLOADING_COMPLETED'].includes(b.activityType)) ?? null;
+                    if (comp2) used.add(comp2.id);
+                    groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, arrived: a, completed: comp2 });
+                  } else if (['LOADING_COMPLETE', 'LOADING_COMPLETED', 'UNLOADING_COMPLETE', 'UNLOADING_COMPLETED'].includes(at)) {
+                    groups.push({ type: 'SINGLE', act: a });
+                  } else if (['BREAK_START', 'BREAK'].includes(at)) {
+                    const endAct = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && b.activityType === 'BREAK_END') ?? null;
+                    if (endAct) used.add(endAct.id);
+                    groups.push({ type: 'BREAK', start: a, end: endAct });
+                  } else if (at === 'BREAK_END') {
+                    // 孤立 BREAK_END はスキップ
                   } else {
-                    merged.push(act);
+                    groups.push({ type: 'SINGLE', act: a });
                   }
                 }
-                return merged;
-              })().map((act, idx, arr) => {
-                const isL = ['LOADING','LOADING_START','LOADING_COMPLETE'].includes(act.activityType);
-                const isU = ['UNLOADING','UNLOADING_START','UNLOADING_COMPLETE'].includes(act.activityType);
-                const isF = ['FUELING','FUEL'].includes(act.activityType);
-                const isB = ['BREAK','BREAK_START','BREAK_END'].includes(act.activityType);
-                const LABELS: Record<string, string> = {
-                  LOADING: '積込', LOADING_START: '積込到着', LOADING_COMPLETE: '積込完了',
-                  UNLOADING: '荷降', UNLOADING_START: '荷降到着', UNLOADING_COMPLETE: '荷降完了',
-                  FUELING: '給油', FUEL: '給油',
-                  BREAK: '休憩', BREAK_START: '休憩', BREAK_END: '休憩終了',
-                };
-                // ③ ボタンアイコンと統一
-                const ICONS: Record<string, string> = {
-                  LOADING: '📍', LOADING_START: '🚛', LOADING_COMPLETE: '✅',
-                  UNLOADING: '📍', UNLOADING_START: '📍', UNLOADING_COMPLETE: '✅',
-                  FUELING: '⛽', FUEL: '⛽',
-                  BREAK: '☕', BREAK_START: '☕', BREAK_END: '☕',
-                };
-                // ④ ボタンカラーと同系統の背景色
-                // LOADING:blue(#2196F3) / UNLOADING:green(#4CAF50) / BREAK:purple(#9C27B0) / FUEL:amber(#FFC107)
-                const iconBg  = isL ? '#E3F2FD' : isU ? '#E8F5E9' : isF ? '#FFFDE7' : isB ? '#F3E5F5' : '#f3f4f6';
-                const badgeBg = iconBg;
-                const badgeFg = isL ? '#1565C0' : isU ? '#2E7D32' : isF ? '#F57F17' : isB ? '#6A1B9A' : '#6b7280';
-                const label   = LABELS[act.activityType] || act.activityType;
-                const icon    = ICONS[act.activityType] || '•';
-                const startStr = act.startTime ? new Date(act.startTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
-                const endStr   = act.endTime   ? new Date(act.endTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }) : null;
-                const timeStr  = (isL || isU) && endStr && endStr !== startStr
-                  ? `${startStr} ～ ${endStr}` : startStr;
-                const locDisplay = act.locationName
-                  ? (act.locationName.length > 0 ? act.locationName : null) : null;
-                const isLast  = idx === arr.length - 1;
+
                 return (
-                  <button
-                    key={act.id}
-                    onClick={() => setEditingActivity(act)}
-                    style={{
-                      width: '100%', padding: '8px 10px 8px 10px',
-                      background: '#fff', border: 'none',
-                      borderBottom: isLast ? 'none' : '0.5px solid #f3f4f6',
-                      cursor: 'pointer', display: 'flex', alignItems: 'flex-start',
-                      gap: 9, textAlign: 'left',
-                    }}
-                  >
-                    {/* 左: アイコン + 縦ライン */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 30 }}>
-                      <div style={{
-                        width: 30, height: 30, borderRadius: '50%',
-                        background: iconBg, display: 'flex',
-                        alignItems: 'center', justifyContent: 'center',
-                        fontSize: 14, flexShrink: 0,
-                      }}>
-                        {icon}
-                      </div>
-                      {!isLast && (
-                        <div style={{ width: 2, flex: 1, minHeight: 10, marginTop: 3, background: '#e5e7eb', borderRadius: 1 }} />
-                      )}
-                    </div>
-
-                    {/* 中央: ラベル + 場所 + 品目 */}
-                    <div style={{ flex: 1, minWidth: 0, paddingTop: 5, paddingBottom: isLast ? 0 : 8 }}>
-                      <span style={{
-                        fontSize: 18, fontWeight: 600,
-                        padding: '2px 8px', borderRadius: 10,
-                        background: badgeBg, color: badgeFg,
-                      }}>
-                        {label}
-                      </span>
-                      {(locDisplay || (isU && operation.unloadingLocation)) && (
-                        <div style={{
-                          fontSize: 11, color: '#4b5563', marginTop: 3,
-                          display: 'flex', alignItems: 'center', gap: 3,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          <span style={{ color: '#9ca3af', fontSize: 10 }}>📍</span>
-                          {locDisplay || (isU ? operation.unloadingLocation : '')}
-                        </div>
-                      )}
-                      {(isL || isU) && act.customerName && (
-                        <div style={{ fontSize: 10, color: isL ? '#1565C0' : '#2E7D32', marginTop: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <span>🏢</span>{act.customerName}
-                        </div>
-                      )}
-                      {isB && act.endTime && (
-                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
-                          {act.startTime ? new Date(act.startTime).toTimeString().slice(0, 5) : '--:--'}
-                          {' ～ '}
-                          {new Date(act.endTime).toTimeString().slice(0, 5)}
-                        </div>
-                      )}
-                      {isL && (() => {
-                          // ✅ BUG-051完全修正: NOTE(客先変更)アクティビティを時系列解析して
-                          // この積込時点での正確な客先名を逆算する
-                          const getCustomerAtTime = (loadingSeq: number): string => {
-                            // NOTE アクティビティから客先変更履歴を収集（sequenceNumber昇順）
-                            const changeHistory: { seq: number; to: string }[] = [];
-                            for (const a of [...detailAllActivities].sort(
-                              (x: any, y: any) => (x.sequenceNumber ?? 0) - (y.sequenceNumber ?? 0)
-                            )) {
-                              if ((a.activityType === 'NOTE' || a.activityType === 'OTHER') && a.notes) {
-                                // "客先変更: XXX → YYY" パターンを解析
-                                const m = String(a.notes).match(/客先変更[:：]\s*.+?[→\-]+\s*(.+)/);
-                                if (m && m[1]) {
-                                  changeHistory.push({ seq: a.sequenceNumber ?? 0, to: m[1].trim() });
-                                }
-                              }
-                            }
-                            // この積込より前（seq<=loadingSeq）の最後の客先変更を取得
-                            let currentCustomer = detailOperationCustomerName || '';
-                            for (const ch of changeHistory) {
-                              if (ch.seq <= loadingSeq) {
-                                currentCustomer = ch.to;
-                              }
-                            }
-                            return currentCustomer;
-                          };
-                          const resolvedCustomer = act.customerName || getCustomerAtTime(act.sequenceNumber ?? 0);
-                          return resolvedCustomer || act.itemName;
-                        })() && (
-                        <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>
-                          {/* ✅ BUG-051完全修正: NOTE(客先変更)履歴を時系列解析して積込時点の客先名を特定 */}
-                          {(() => {
-                            const getCustomerAtTime = (loadingSeq: number): string => {
-                              const changeHistory: { seq: number; to: string }[] = [];
-                              for (const a of [...detailAllActivities].sort(
-                                (x: any, y: any) => (x.sequenceNumber ?? 0) - (y.sequenceNumber ?? 0)
-                              )) {
-                                if ((a.activityType === 'NOTE' || a.activityType === 'OTHER') && a.notes) {
-                                  const m = String(a.notes).match(/客先変更[:：]\s*.+?[→\-]+\s*(.+)/);
-                                  if (m && m[1]) {
-                                    changeHistory.push({ seq: a.sequenceNumber ?? 0, to: m[1].trim() });
-                                  }
-                                }
-                              }
-                              let currentCustomer = detailOperationCustomerName || '';
-                              for (const ch of changeHistory) {
-                                if (ch.seq <= loadingSeq) {
-                                  currentCustomer = ch.to;
-                                }
-                              }
-                              return currentCustomer;
-                            };
-                            return act.customerName || getCustomerAtTime(act.sequenceNumber ?? 0) || '';
-                          })()}
-                          {act.itemName ? (
-                            <span> ／ <span style={{ color: '#374151', fontWeight: 500 }}>{act.itemName}</span></span>
-                          ) : null}
-                          {act.quantity != null && Number(act.quantity) > 0 ? (
-                            <span style={{ color: '#374151', fontWeight: 500 }}> × {act.quantity}t</span>
-                          ) : null}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 右: 時刻 ＋ 編集アイコン（時刻を✏️の左に配置） */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      flexShrink: 0, paddingTop: 6,
-                    }}>
-                      <span style={{ fontSize: 18, color: '#9ca3af', letterSpacing: '0.02em', fontWeight: 500 }}>
-                        {timeStr}
-                      </span>
-                      <span style={{ fontSize: 13, color: '#d1d5db' }}>✏️</span>
-                    </div>
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {groups.map((g, gi) => {
+                      if (g.type === 'LOADING_GROUP' || g.type === 'UNLOADING_GROUP') {
+                        const isLd = g.type === 'LOADING_GROUP';
+                        const bdr = isLd ? TC.LOADING_BORDER : TC.UNLOADING_BORDER;
+                        const hBg = isLd ? TC.LOADING_BG : TC.UNLOADING_BG;
+                        const hFg = isLd ? TC.LOADING_FG : TC.UNLOADING_FG;
+                        const lbl = isLd ? '積込' : '荷降';
+                        const loc = g.arrived.locationName || g.completed?.locationName || '';
+                        const custName = isLd
+                          ? (g.arrived.customerName || getCustomerAtTime(g.arrived.sequenceNumber ?? 0))
+                          : (g.arrived.customerName || g.completed?.customerName);
+                        return (
+                          <div key={gi} style={{ border: `2px solid ${bdr}`, borderRadius: 10, overflow: 'hidden' }}>
+                            <div style={{ background: hBg, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: hFg }}>
+                                🚛 {lbl}{g.groupNum > 1 ? `（${g.groupNum}回目）` : ''}
+                              </span>
+                              {loc && <span style={{ fontSize: 11, color: '#6b7280' }}>─ {loc}</span>}
+                              {custName && (
+                                <span style={{ fontSize: 11, fontWeight: 600, color: hFg }}>🏢 {custName}</span>
+                              )}
+                              <span style={{ marginLeft: 'auto', fontSize: 11, color: hFg, fontWeight: 600 }}>
+                                {fmtRange(g.arrived.startTime, g.completed ? (g.completed.startTime || g.completed.endTime) : g.arrived.endTime)}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => setEditingActivity(g.arrived)}
+                              style={{ width: '100%', padding: '5px 12px', borderBottom: g.completed ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                            >
+                              <span style={{ fontSize: 12, color: '#374151' }}>● 到着</span>
+                              <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {fmtRange(g.arrived.startTime, null)}
+                                <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                              </span>
+                            </button>
+                            {g.completed && (
+                              <button
+                                onClick={() => setEditingActivity(g.completed)}
+                                style={{ width: '100%', padding: '5px 12px', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                  <span style={{ fontSize: 12, color: '#374151' }}>● {lbl}完了</span>
+                                  <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    {fmtRange(g.completed.startTime || g.completed.endTime, null)}
+                                    <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                                  </span>
+                                </div>
+                                {itemsLabel(g.completed) && (
+                                  <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2, textAlign: 'left' }}>
+                                    品目: {itemsLabel(g.completed)}
+                                    {g.completed.quantity != null && Number(g.completed.quantity) > 0 ? ` × ${g.completed.quantity}t` : ''}
+                                  </div>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      if (g.type === 'BREAK') {
+                        return (
+                          <button
+                            key={gi}
+                            onClick={() => setEditingActivity(g.start)}
+                            style={{ border: `2px solid ${TC.BREAK_BORDER}`, borderRadius: 10, overflow: 'hidden', width: '100%', background: '#fff', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                          >
+                            <div style={{ background: TC.BREAK_BG, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: TC.BREAK_FG }}>☕ 休憩</span>
+                              <span style={{ marginLeft: 'auto', fontSize: 11, color: TC.BREAK_FG, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {fmtRange(g.start.startTime, g.end ? g.end.startTime : g.start.endTime)}
+                                <span style={{ fontSize: 11, color: TC.BREAK_FG, opacity: 0.6 }}>✏️</span>
+                              </span>
+                            </div>
+                            {g.start.locationName && <div style={{ padding: '4px 12px', fontSize: 11, color: '#6b7280' }}>📍 {g.start.locationName}</div>}
+                          </button>
+                        );
+                      }
+                      const act = g.act;
+                      const isF = ['FUELING', 'FUEL'].includes(act.activityType);
+                      const LABELS: Record<string, string> = {
+                        LOADING_COMPLETE: '積込完了', LOADING_COMPLETED: '積込完了',
+                        UNLOADING_COMPLETE: '荷降完了', UNLOADING_COMPLETED: '荷降完了',
+                        FUELING: '給油', FUEL: '給油',
+                      };
+                      const ICONS: Record<string, string> = {
+                        LOADING_COMPLETE: '✅', LOADING_COMPLETED: '✅',
+                        UNLOADING_COMPLETE: '✅', UNLOADING_COMPLETED: '✅',
+                        FUELING: '⛽', FUEL: '⛽',
+                      };
+                      const label = LABELS[act.activityType] || act.activityType;
+                      const icon = ICONS[act.activityType] || '•';
+                      return (
+                        <button
+                          key={gi}
+                          onClick={() => setEditingActivity(act)}
+                          style={{
+                            width: '100%', textAlign: 'left', cursor: 'pointer',
+                            border: `1.5px solid ${isF ? TC.FUEL_BORDER : TC.OTHER_BORDER}`, borderRadius: 10,
+                            padding: '8px 12px', background: isF ? TC.FUEL_BG : TC.OTHER_BG,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: isF ? TC.FUEL_FG : TC.OTHER_FG }}>{icon} {label}</span>
+                            <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {fmtRange(act.startTime, act.endTime)}
+                              <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                            </span>
+                          </div>
+                          {act.locationName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>📍 {act.locationName}</div>}
+                          {itemsLabel(act) && (
+                            <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
+                              品目: {itemsLabel(act)}{act.quantity != null && Number(act.quantity) > 0 ? ` × ${act.quantity}t` : ''}
+                            </div>
+                          )}
+                          {act.notes && !['積込完了', '荷降完了', '運行開始'].includes(act.notes) && (
+                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{act.notes}</div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 );
-              })}
+              })()}
             </div>
           </div>
         </div>

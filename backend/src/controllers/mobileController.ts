@@ -1591,55 +1591,73 @@ export class MobileController {
       });
       // ============================================================
 
+      // \u30bf\u30b0\u57cb\u3081\u8fbc\u307f\u306e\u5024\u3092 notes \u304b\u3089\u62bd\u51fa\uff08\u624b\u5165\u529b\u54c1\u76ee\u540d\u30fb\u7d66\u6cb9\u6240\u540d\u306a\u3069\uff09
+      const parseNoteTag = (notes: string | null | undefined, tag: string): { value: string | undefined; rest: string } => {
+        if (!notes) return { value: undefined, rest: '' };
+        const openTag = '[' + tag + ':';
+        const startIdx = notes.indexOf(openTag);
+        if (startIdx === -1) return { value: undefined, rest: notes };
+        const endIdx = notes.indexOf(']', startIdx);
+        if (endIdx === -1) return { value: undefined, rest: notes };
+        const value = notes.slice(startIdx + openTag.length, endIdx).trim();
+        const rest = (notes.slice(0, startIdx) + notes.slice(endIdx + 1)).trim();
+        return { value, rest };
+      };
+
       const activities = details.map((d: any) => {
-        // ✅ 修正: PrismaはcamelCaseで返す → actualStartTime を優先参照
-        // snake_caseはフォールバックとして残す（念のため）
+        // \u2705 \u4fee\u6b63: Prisma\u306fcamelCase\u3067\u8fd4\u3059 \u2192 actualStartTime \u3092\u512a\u5148\u53c2\u7167
+        // snake_case\u306f\u30d5\u30a9\u30fc\u30eb\u30d0\u30c3\u30af\u3068\u3057\u3066\u6b8b\u3059\uff08\u5ff5\u306e\u305f\u3081\uff09
         const actStartTime = d.actualStartTime || d.actual_start_time || null;
         const actEndTime = d.actualEndTime || d.actual_end_time || null;
+        const dActivityType = d.activityType || d.activity_type || '';
 
-        // ============================================================
-        // 🔧 DEBUG LOG: 各アクティビティの時刻マッピング確認
-        // ============================================================
-        logger.info('🔍 [D9a] activity 時刻マッピング', {
-          detailId: d.id,
-          activityType: d.activityType || d.activity_type,
-          // 取得した生の値
-          raw_actualStartTime: d.actualStartTime,
-          raw_actual_start_time: d.actual_start_time,
-          raw_actualEndTime: d.actualEndTime,
-          raw_actual_end_time: d.actual_end_time,
-          // マッピング後の値
-          resolved_startTime: actStartTime,
-          resolved_endTime: actEndTime,
-          // ISO変換後
-          iso_startTime: actStartTime ? new Date(actStartTime).toISOString() : null,
-          iso_endTime: actEndTime ? new Date(actEndTime).toISOString() : null,
-        });
-        // ============================================================
+        // \u2705 \u8907\u6570\u54c1\u76ee: operation_detail_items \u304b\u3089\u5168\u54c1\u76ee\u540d\u30fb\u5168\u54c1\u76eeID\u3092\u53d6\u5f97\uff08\u306a\u3051\u308c\u3070\u5358\u4e00 items \u30ea\u30ec\u30fc\u30b7\u30e7\u30f3\u306b\u30d5\u30a9\u30fc\u30eb\u30d0\u30c3\u30af\uff09
+        const multiItems = Array.isArray(d.operationDetailItems) ? d.operationDetailItems : [];
+        const singleItemName = d.items?.name || d.item?.name || d.itemName || '';
+        const itemNames: string[] = multiItems.length > 0
+          ? multiItems.map((mi: any) => mi.items?.name).filter((n: any) => !!n)
+          : (singleItemName ? [singleItemName] : []);
+        const itemIds: string[] = multiItems.length > 0
+          ? multiItems.map((mi: any) => mi.itemId).filter((n: any) => !!n)
+          : (d.itemId ? [d.itemId] : []);
+
+        // \u2705 \u624b\u5165\u529b\u54c1\u76ee\u540d\u30bf\u30b0\u89e3\u6790\uff08[\u624b\u5165\u529b\u54c1\u76ee: XXX]\uff09
+        const { value: customItemName, rest: notesAfterItemTag } = parseNoteTag(d.notes, '\u624b\u5165\u529b\u54c1\u76ee');
+        // \u2705 \u7d66\u6cb9\u6240\u540d\u30bf\u30b0\u89e3\u6790\uff08FUELING\u7528\uff1a[\u7d66\u6cb9\u6240: XXX]\uff09
+        const { value: fuelStationName, rest: notesFinal } = parseNoteTag(notesAfterItemTag, '\u7d66\u6cb9\u6240');
+
+        const resolvedLocationName = dActivityType === 'FUELING'
+          ? (fuelStationName || d.locations?.name || d.location?.name || d.locationName || '')
+          : (d.locations?.name || d.location?.name || d.locationName || '');
 
         return {
           id: d.id,
-          activityType: d.activityType || d.activity_type || '',
-          locationName: d.locations?.name || d.location?.name || d.locationName || '',
-          itemName: d.items?.name || d.item?.name || d.itemName || '',
+          activityType: dActivityType,
+          locationName: resolvedLocationName,
+          itemName: itemNames[0] || '',
+          // \u2705 \u8907\u6570\u54c1\u76ee\u5bfe\u5fdc: \u9078\u629e\u3055\u308c\u305f\u5168\u54c1\u76ee\u540d\u30fb\u5168\u54c1\u76eeID\u3092\u542b\u3081\u308b
+          itemNames,
+          itemIds,
+          customItemName,
           quantity: d.quantityTons ? Number(d.quantityTons) : (d.quantity_tons ? Number(d.quantity_tons) : (d.quantity ? Number(d.quantity) : 0)),
-          unit: 'トン',
-          // ✅ 修正: camelCase(actualStartTime)を優先参照
+          unit: '\u30c8\u30f3',
+          fuelCostYen: d.fuelCostYen ? Number(d.fuelCostYen) : (d.fuel_cost_yen ? Number(d.fuel_cost_yen) : undefined),
+          // \u2705 \u4fee\u6b63: camelCase(actualStartTime)\u3092\u512a\u5148\u53c2\u7167
           startTime: actStartTime ? new Date(actStartTime).toISOString() : null,
           endTime: actEndTime ? new Date(actEndTime).toISOString() : null,
-          notes: d.notes || '',
+          notes: notesFinal || '',
           sequenceNumber: d.sequenceNumber ?? d.sequence_number ?? 0,
-          // ✅ FIX-GPSPIN: 場所マスターのGPS座標をActivityRecordに含める
+          // \u2705 FIX-GPSPIN: \u5834\u6240\u30de\u30b9\u30bf\u30fc\u306eGPS\u5ea7\u6a19\u3092ActivityRecord\u306b\u542b\u3081\u308b
           locationLat: d.locations?.latitude != null ? Number(d.locations.latitude) : (d.latitude != null ? Number(d.latitude) : undefined),
           locationLng: d.locations?.longitude != null ? Number(d.locations.longitude) : (d.longitude != null ? Number(d.longitude) : undefined),
           locationId: d.locationId || d.location_id || undefined,
-          // ✅ 客先名
+          // \u2705 \u5ba2\u5148\u540d
           customerName: (trip as any).customer?.name || null,
         };
       }).filter((a: any) => {
-        // ✅ FIX: 空LOADING（到着のみ・品目なし・完了なし）は非表示
+        // \u2705 FIX: \u7a7aLOADING\uff08\u5230\u7740\u306e\u307f\u30fb\u54c1\u76ee\u306a\u3057\u30fb\u5b8c\u4e86\u306a\u3057\uff09\u306f\u975e\u8868\u793a
         if (a.activityType === 'LOADING') {
-          // customerName は後付けなので元データ d 経由ではなく endTime/itemName で判定
+          // customerName \u306f\u5f8c\u4ed8\u3051\u306a\u306e\u3067\u5143\u30c7\u30fc\u30bf d \u7d4c\u7531\u3067\u306f\u306a\u304f endTime/itemName \u3067\u5224\u5b9a
           if (!a.endTime && !a.itemName && (a.quantity === 0 || !a.quantity)) return false;
         }
         return true;
@@ -1655,18 +1673,20 @@ export class MobileController {
       const fuelActivities = details.filter((d: any) =>
         (d.activityType || d.activity_type) === 'FUELING'
       );
-      const fuelRecords = fuelActivities.map((f: any) => ({
+      const fuelRecords = fuelActivities.map((f: any) => {
+        const { value: fStationName, rest: fNotesRest } = parseNoteTag(f.notes, '給油所');
+        return {
         id: f.id,
         fuelAmount: f.quantityTons ? Number(f.quantityTons) : (f.quantity_tons ? Number(f.quantity_tons) : 0),
-        // ✅ fuelCostYen 専用カラムから取得（notes parse廃止）
         fuelCost: f.fuelCostYen ? Number(f.fuelCostYen) : (f.fuel_cost_yen ? Number(f.fuel_cost_yen) : 0),
-        // ✅ odometerKm 専用カラムから取得
         mileageAtRefuel: f.odometerKm ? Number(f.odometerKm) : (f.odometer_km ? Number(f.odometer_km) : 0),
-        stationName: f.locations?.name || f.location?.name || '',
+        stationName: fStationName || f.locations?.name || f.location?.name || '',
+        notes: fNotesRest || '',
         recordedAt: (f.actualStartTime || f.actual_start_time)
           ? new Date(f.actualStartTime || f.actual_start_time).toISOString()
           : null,
-      }));
+        };
+      });
 
       const vehicleData = (trip as any).vehicles || (trip as any).vehicle;
       const driverData = (trip as any).usersOperationsDriverIdTousers || (trip as any).driver;

@@ -14,12 +14,28 @@ export interface ActivityRecord {
   locationLng?: number;
   itemName?: string;
   itemId?: string;
+  // ✅ 複数品目対応: 選択された全品目名・全品目ID
+  itemNames?: string[];
+  itemIds?: string[];
+  // ✅ 手入力品目名
+  customItemName?: string;
   quantity?: number;
+  // ✅ 給油金額（円）
+  fuelCostYen?: number;
   startTime: string | null;
   endTime: string | null;
   notes?: string;
   sequenceNumber: number;
   customerName?: string;
+}
+
+// ✅ 登録場所（LoadingInputと同様の場所マスタ）
+export interface EditLocationOption {
+  id: string;
+  name: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
 }
 
 interface ActivityEditSheetProps {
@@ -29,7 +45,8 @@ interface ActivityEditSheetProps {
   onSaved: (updatedActivity: ActivityRecord) => void;
   onDeleted?: (activityId: string) => void;
   customers: { id: string; name: string }[];
-  items: { id: string; name: string }[];
+  // ✅ 区分グループ表示のため itemType/displayOrder を任意で受け付け
+  items: { id: string; name: string; itemType?: string; displayOrder?: number }[];
 }
 
 // ── 時分ダイヤル ──
@@ -364,28 +381,55 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
   // GPS ピン座標
   const [pinLat, setPinLat] = useState<number | undefined>(undefined);
   const [pinLng, setPinLng] = useState<number | undefined>(undefined);
+  // ✅ 手入力品目名
+  const [customItemNameInput, setCustomItemNameInput] = useState('');
+  // ✅ 場所選択（登録リストからの選択）
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [localLocations, setLocalLocations] = useState<EditLocationOption[]>([]);
+  const [locationSearchText, setLocationSearchText] = useState('');
 
   useEffect(() => {
     if (!activity) return;
     setStartHHMM(toHHMM(activity.startTime));
     setEndHHMM(toHHMM(activity.endTime));
     setLocationName(activity.locationName || '');
+    setSelectedLocationId(activity.locationId || '');
     setCurrentCustomerId(operationStore.customerId ?? '');
     setCurrentCustomerName(activity.customerName || (operationStore.customerName ?? ''));
-    // 品目初期値（既存のitemIdから）
-    if (activity.itemId) {
+    // ✅ 品目初期値: 複数品目（itemIds）を優先し、なければ単一itemIdにフォールバック
+    if (activity.itemIds && activity.itemIds.length > 0) {
+      setSelectedItemIds(activity.itemIds);
+    } else if (activity.itemId) {
       setSelectedItemIds([activity.itemId]);
     } else {
       setSelectedItemIds([]);
     }
+    // ✅ 手入力品目名の初期値
+    setCustomItemNameInput(activity.customItemName || '');
     setQuantity(activity.quantity != null && activity.quantity > 0 ? String(activity.quantity) : '');
-    setFuelAmount(''); setFuelCost('');
+    // ✅ 給油金額・量を既入力値としてプレフィル（ブランク初期化バグ修正）
+    setFuelAmount(activity.quantity != null && activity.quantity > 0 ? String(activity.quantity) : '');
+    setFuelCost(activity.fuelCostYen != null && activity.fuelCostYen > 0 ? String(activity.fuelCostYen) : '');
     setNotes(activity.notes || '');
     setPinLat(activity.locationLat ?? undefined);
     setPinLng(activity.locationLng ?? undefined);
     setShowDeleteConfirm(false);
     setShowCustomerPicker(false);
+    setShowLocationPicker(false);
   }, [activity]);
+
+  // ✅ 登録地点一覧を取得（積込・荷降の「登録リストから選択」用）
+  useEffect(() => {
+    if (!showLocationPicker || localLocations.length > 0) return;
+    (async () => {
+      try {
+        const res = await (apiService as any).getLocations();
+        const arr = res?.data ?? [];
+        setLocalLocations(Array.isArray(arr) ? arr : []);
+      } catch { /* ignore */ }
+    })();
+  }, [showLocationPicker]);
 
   // 客先一覧を取得
   useEffect(() => {
@@ -432,7 +476,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
 
   const handleSave = async () => {
     if (!startHHMM) { toast.error('開始時刻を入力してください'); return; }
-    if (isLoad(activity.activityType) && selectedItemIds.length === 0) {
+    if (isLoad(activity.activityType) && selectedItemIds.length === 0 && !customItemNameInput.trim()) {
       toast.error('品目を選択してください'); return;
     }
     setIsSaving(true);
@@ -443,18 +487,24 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
         notes,
         locationName,
       };
+      // ✅ 登録リストから選択した場合は locationId を直接送信（マスタ検索を経由しない）
+      if (selectedLocationId) {
+        body.locationId = selectedLocationId;
+      }
       if (pinLat !== undefined && pinLng !== undefined) {
         body.latitude  = pinLat;
         body.longitude = pinLng;
       }
       if (isLoad(activity.activityType)) {
-        // 複数品目の場合、先頭のitemIdをメインとして送信
-        if (selectedItemIds.length > 0) body.itemId = selectedItemIds[0];
+        // ✅ 複数品目対応: 選択された全品目IDを送信（operation_detail_items を再構築）
+        if (selectedItemIds.length > 0) {
+          body.itemId = selectedItemIds[0];
+          body.selectedItemIds = selectedItemIds;
+        }
         if (quantity) body.quantityTons = parseFloat(quantity);
-        // 複数品目はnotesに記録
-        if (selectedItemIds.length > 1) {
-          const names = selectedItemIds.map(id => items.find(i => i.id === id)?.name || id).join('、');
-          body.notes = `品目: ${names}` + (notes ? ` / ${notes}` : '');
+        // ✅ 手入力品目名（マスタにない場合）
+        if (customItemNameInput.trim()) {
+          body.customItemName = customItemNameInput.trim();
         }
       }
       if (isFuel(activity.activityType)) {
@@ -466,16 +516,23 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
       if (res?.success) {
         toast.success('保存しました');
         const firstItemId = selectedItemIds[0] ?? activity.itemId;
+        const savedItemNames = selectedItemIds.length > 0
+          ? selectedItemIds.map(id => items.find(i => i.id === id)?.name || id)
+          : activity.itemNames;
         onSaved({
           ...activity,
           startTime: body.actualStartTime,
           endTime: body.actualEndTime ?? activity.endTime,
           locationName: locationName || activity.locationName,
+          locationId: selectedLocationId || activity.locationId,
           locationLat: pinLat,
           locationLng: pinLng,
           itemId: firstItemId,
+          itemIds: selectedItemIds.length > 0 ? selectedItemIds : activity.itemIds,
+          itemNames: savedItemNames,
+          customItemName: customItemNameInput.trim() || activity.customItemName,
           quantity: body.quantityTons ?? activity.quantity,
-          notes: body.notes ?? notes,
+          notes: notes,
           customerName: currentCustomerName,
         });
       } else {
@@ -536,10 +593,13 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
 
           {/* 積込専用 */}
           {isLoad(activity.activityType) && (<>
-            {/* 積込場所名 */}
+            {/* 積込場所名（手入力 + 登録リストから選択） */}
             <div>
-              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>積込場所名</div>
-              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)} placeholder="例: 翠香園町ダート" style={{ ...inputStyle, fontSize: 15, height: 44 }} />
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>積込場所名</span>
+                <span onClick={() => setShowLocationPicker(true)} style={{ fontSize: 9, color: cfg.color, border: `0.5px solid ${cfg.color}`, borderRadius: 4, padding: '1px 6px', cursor: 'pointer' }}>登録リストから選択</span>
+              </div>
+              <input type="text" value={locationName} onChange={e => { setLocationName(e.target.value); setSelectedLocationId(''); }} placeholder="例: 翠香園町ダート" style={{ ...inputStyle, fontSize: 15, height: 44 }} />
             </div>
             {/* 客先（変更可能） */}
             <div>
@@ -554,42 +614,67 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
                 <span style={{ fontSize: 10, color: cfg.color, flexShrink: 0, marginLeft: 6 }}>変更 ▾</span>
               </div>
             </div>
-            {/* 品目（複数選択チップ） */}
+            {/* 品目（区分ごとにグループ表示・複数選択チップ）※運行中の積込画面と同じ表示 */}
             <div>
               <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, fontWeight: 500 }}>
                 品目<span style={{ fontSize: 9, color: '#9ca3af', marginLeft: 4 }}>（複数選択可）</span>
               </div>
               {items.length === 0 ? (
                 <div style={{ fontSize: 10, color: '#ef4444', padding: '6px 0' }}>※ 品目が読み込まれていません</div>
-              ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {items.map(item => {
-                    const sel = selectedItemIds.includes(item.id);
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => toggleItem(item.id)}
-                        style={{
-                          padding: '6px 12px', borderRadius: 20,
-                          fontSize: 13, fontWeight: sel ? 600 : 400,
-                          cursor: 'pointer',
-                          background: sel ? `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.colorLight} 100%)` : '#f3f4f6',
-                          color: sel ? '#fff' : '#374151',
-                          border: `1.5px solid ${sel ? cfg.color : '#d1d5db'}`,
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        {sel && '✓ '}{item.name}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              ) : (() => {
+                const TYPE_LABEL_MAP: Record<string, string> = {
+                  RECYCLED_MATERIAL: '再生材',
+                  VIRGIN_MATERIAL: 'バージン材',
+                  WASTE: '廃棄物',
+                };
+                const groupKeys = Array.from(new Set(items.map(it => it.itemType || '')));
+                const groups = groupKeys.map(key => ({
+                  key,
+                  label: key ? (TYPE_LABEL_MAP[key] ?? key) : 'その他',
+                  list: items
+                    .filter(it => (it.itemType || '') === key)
+                    .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999)),
+                })).filter(g => g.list.length > 0);
+                return groups.map(group => (
+                  <div key={group.label} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', letterSpacing: '.04em', marginBottom: 4, paddingBottom: 2, borderBottom: '0.5px solid #f3f4f6' }}>
+                      {group.label}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {group.list.map(item => {
+                        const sel = selectedItemIds.includes(item.id);
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => toggleItem(item.id)}
+                            style={{
+                              padding: '6px 12px', borderRadius: 20,
+                              fontSize: 13, fontWeight: sel ? 600 : 400,
+                              cursor: 'pointer',
+                              background: sel ? `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.colorLight} 100%)` : '#f3f4f6',
+                              color: sel ? '#fff' : '#374151',
+                              border: `1.5px solid ${sel ? cfg.color : '#d1d5db'}`,
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {sel && '✓ '}{item.name}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
               {selectedItemIds.length > 0 && (
                 <div style={{ fontSize: 10, color: cfg.color, marginTop: 5 }}>
                   選択中: {selectedItemIds.map(id => items.find(i => i.id === id)?.name || id).join('、')}
                 </div>
               )}
+              {/* 手入力品目（マスタにない品目） */}
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>手入力品目<span style={{ fontSize: 9, color: '#9ca3af', marginLeft: 4 }}>（マスタにない場合）</span></div>
+                <input type="text" value={customItemNameInput} onChange={e => setCustomItemNameInput(e.target.value)} placeholder="例: 特殊土砂" style={inputStyle} />
+              </div>
             </div>
             {/* 重量 */}
             <div>
@@ -618,11 +703,14 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
             </div>
           </>)}
 
-          {/* 積降・休憩共通: 場所名 */}
+          {/* 積降・休憩共通: 場所名（手入力 + 登録リストから選択） */}
           {(isUnl(activity.activityType) || isBreak(activity.activityType)) && (
             <div>
-              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>場所名</div>
-              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)} placeholder="例: ABC建材センター" style={inputStyle} />
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>場所名</span>
+                <span onClick={() => setShowLocationPicker(true)} style={{ fontSize: 9, color: cfg.color, border: `0.5px solid ${cfg.color}`, borderRadius: 4, padding: '1px 6px', cursor: 'pointer' }}>登録リストから選択</span>
+              </div>
+              <input type="text" value={locationName} onChange={e => { setLocationName(e.target.value); setSelectedLocationId(''); }} placeholder="例: ABC建材センター" style={inputStyle} />
             </div>
           )}
 
@@ -698,6 +786,61 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
                   <span>🏢</span>
                   <span style={{ flex: 1 }}>{c.name}</span>
                   {c.id === currentCustomerId && <span style={{ color: cfg.color, fontSize: 12 }}>✓ 現在</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 場所選択ピッカー Modal（登録リストから選択） */}
+      {showLocationPicker && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxHeight: '75vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>場所を選択</span>
+              <div onClick={() => setShowLocationPicker(false)} style={{ fontSize: 12, color: '#6b7280', cursor: 'pointer' }}>✕ 閉じる</div>
+            </div>
+            <div style={{ padding: '8px 16px 0' }}>
+              <input
+                type="text"
+                value={locationSearchText}
+                onChange={e => setLocationSearchText(e.target.value)}
+                placeholder="場所名で検索"
+                style={{ width: '100%', background: '#f3f4f6', border: '0.5px solid #d1d5db', borderRadius: 7, padding: '8px 10px', fontSize: 13, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '8px 12px' }}>
+              {localLocations.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>場所を読み込み中...</div>
+              ) : localLocations
+                  .filter(l => !locationSearchText || l.name.includes(locationSearchText))
+                  .map(l => (
+                <div
+                  key={l.id}
+                  onClick={() => {
+                    setLocationName(l.name);
+                    setSelectedLocationId(l.id);
+                    if (l.latitude != null && l.longitude != null) {
+                      setPinLat(l.latitude);
+                      setPinLng(l.longitude);
+                    }
+                    setShowLocationPicker(false);
+                  }}
+                  style={{
+                    padding: '12px', borderRadius: 8, marginBottom: 6,
+                    background: l.id === selectedLocationId ? `${cfg.color}11` : '#f9fafb',
+                    border: `0.5px solid ${l.id === selectedLocationId ? cfg.color : '#e5e7eb'}`,
+                    cursor: 'pointer', fontSize: 14, color: '#374151',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}
+                >
+                  <span>📍</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
+                    {l.address && <div style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.address}</div>}
+                  </div>
+                  {l.id === selectedLocationId && <span style={{ color: cfg.color, fontSize: 12, flexShrink: 0 }}>✓ 選択中</span>}
                 </div>
               ))}
             </div>

@@ -975,6 +975,7 @@ class APIServiceClass {
       fuelCost?: number;
       fuelStation?: string;
       mileageAtRefuel?: number;
+      startTime?: string;  // 給油開始時刻（「給油」ボタンクリック時刻）
       latitude?: number;     // 🆕 GPS緯度
       longitude?: number;    // 🆕 GPS経度
       accuracy?: number;     // 🆕 GPS測位精度（メートル）

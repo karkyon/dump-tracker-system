@@ -909,7 +909,11 @@ class TripService {
           operationDetails: {
             include: {
               locations: true,
-              items: true
+              items: true,
+              operationDetailItems: {
+                include: { items: true },
+                orderBy: { sequenceOrder: 'asc' }
+              }
             },
             orderBy: { createdAt: 'desc' }
           },
@@ -1632,15 +1636,24 @@ class TripService {
       }
 
       // 🔧 CreateTripDetailRequest形式に変換
+      // 給油開始時刻（給油ボタンクリック）と終了時刻（保存クリック）を区別して記録
+      const fuelStartTime = (fuelData as any).startTime ? new Date((fuelData as any).startTime) : (fuelData.timestamp || new Date());
+      const fuelEndTime = fuelData.timestamp || new Date();
+      // スタンド名は locations マスタに依存せず notes タグ埋め込みで保存
+      const fuelStationName = (fuelData as any).fuelStation as string | undefined;
+      const fuelBaseNotes = fuelData.notes || '';
+      const fuelStationTag = '[' + '給油所' + ': ';
+      const fuelResolvedNotes = fuelStationName && !fuelBaseNotes.includes(fuelStationTag)
+        ? (fuelStationTag + fuelStationName + ']' + (fuelBaseNotes ? ' ' + fuelBaseNotes : ''))
+        : (fuelBaseNotes || undefined);
       const activityData: CreateTripDetailRequest = {
         activityType: 'FUELING' as ActivityType,
         locationId: undefined as any,
         itemId: undefined as any,
-        startTime: fuelData.timestamp || new Date(),
-        endTime: fuelData.timestamp || new Date(),
+        startTime: fuelStartTime,
+        endTime: fuelEndTime,
         quantity: fuelData.fuelAmount,
-        notes: fuelData.notes || undefined,  // ✅ 自由記述のみ（金額・量は専用カラム）
-        // 🆕 GPS座標を operation_details に保存
+        notes: fuelResolvedNotes,
         latitude: fuelData.latitude ? Number(fuelData.latitude) : undefined,
         longitude: fuelData.longitude ? Number(fuelData.longitude) : undefined,
         accuracy: fuelData.accuracy ? Number(fuelData.accuracy) : undefined

@@ -27,6 +27,10 @@ interface ActivityRecord {
   activityType: string;
   locationName: string;
   itemName: string;
+  // ✅ 複数品目対応
+  itemNames?: string[];
+  itemIds?: string[];
+  customItemName?: string;
   quantity: number;
   unit: string;
   startTime: string | null;
@@ -44,6 +48,7 @@ interface FuelRecord {
   fuelCost: number;
   mileageAtRefuel: number;
   stationName: string;
+  notes?: string;
   recordedAt: string | null;
 }
 
@@ -414,7 +419,7 @@ const OperationHistoryDetail: React.FC = () => {
                               <span style={{ fontSize: 12, color: '#374151' }}>● {lbl}完了</span>
                               <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(g.completed.startTime || g.completed.endTime)}</span>
                             </div>
-                            {g.completed.itemName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {g.completed.itemName} × {g.completed.quantity}{g.completed.unit}</div>}
+                            {(g.completed.itemNames && g.completed.itemNames.length > 0 ? g.completed.itemNames.join('、') : g.completed.itemName) && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {g.completed.itemNames && g.completed.itemNames.length > 0 ? g.completed.itemNames.join('、') : g.completed.itemName} × {g.completed.quantity}{g.completed.unit}</div>}
                           </div>
                         )}
                       </div>
@@ -434,14 +439,15 @@ const OperationHistoryDetail: React.FC = () => {
                   const act = g.act;
                   const info = getActivityInfo(act.activityType);
                   const isF = ['FUELING','FUEL'].includes(act.activityType);
+                  const singleItemsLabel = (act.itemNames && act.itemNames.length > 0) ? act.itemNames.join('、') : act.itemName;
                   return (
                     <div key={gi} style={{ border: `1.5px solid ${isF ? TC.FUEL_BORDER : TC.OTHER_BORDER}`, borderRadius: 10, padding: '8px 12px', background: isF ? TC.FUEL_BG : TC.OTHER_BG }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: isF ? TC.FUEL_FG : TC.OTHER_FG }}>{info.icon} {info.label}</span>
-                        <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(act.startTime)}</span>
+                        <span style={{ fontSize: 11, color: '#6b7280' }}>{fmtTs(act, null)}</span>
                       </div>
                       {act.locationName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>📍 {act.locationName}</div>}
-                      {act.itemName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {act.itemName} × {act.quantity}{act.unit}</div>}
+                      {singleItemsLabel && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {singleItemsLabel} × {act.quantity}{act.unit}</div>}
                       {act.notes && !['積込完了','荷降完了','運行開始'].includes(act.notes) && (
                         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{act.notes}</div>
                       )}

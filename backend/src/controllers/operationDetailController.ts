@@ -806,42 +806,44 @@ export class OperationDetailController {
     const rawData = req.body;
 
     if (!id) {
-      throw new ValidationError('IDは必須です');
+      throw new ValidationError('ID\u306f\u5fc5\u9808\u3067\u3059');
     }
 
-    // REQ-021: DRIVER は自分の運行・当日の記録のみ修正可
+    const _db = DatabaseService.getInstance();
+    const _existingDetail = await _db.operationDetail.findUnique({
+      where: { id },
+      include: { operations: { select: { driverId: true, actualStartTime: true, plannedStartTime: true } } }
+    });
+
+    // REQ-021: DRIVER \u306f\u81ea\u5206\u306e\u904b\u884c\u30fb\u5f53\u65e5\u306e\u8a18\u9332\u306e\u307f\u4fee\u6b63\u53ef
     if (userRole === 'DRIVER') {
-      const _db = DatabaseService.getInstance();
-      const _detail = await _db.operationDetail.findUnique({
-        where: { id },
-        include: { operations: { select: { driverId: true, actualStartTime: true, plannedStartTime: true } } }
-      });
-      if (_detail) {
-        if (_detail.operations?.driverId !== userId) {
-          throw new AuthorizationError('この記録を修正する権限がありません');
+      if (_existingDetail) {
+        if (_existingDetail.operations?.driverId !== userId) {
+          throw new AuthorizationError('\u3053\u306e\u8a18\u9332\u3092\u4fee\u6b63\u3059\u308b\u6a29\u9650\u304c\u3042\u308a\u307e\u305b\u3093');
         }
-        const _opDate = _detail.operations?.actualStartTime || _detail.operations?.plannedStartTime;
+        const _opDate = _existingDetail.operations?.actualStartTime || _existingDetail.operations?.plannedStartTime;
         if (_opDate) {
           const _jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
           const _jstOp  = new Date(new Date(_opDate).getTime() + 9 * 60 * 60 * 1000);
           if (_jstNow.toISOString().slice(0, 10) !== _jstOp.toISOString().slice(0, 10)) {
-            throw new AuthorizationError('本日の記録のみ修正できます');
+            throw new AuthorizationError('\u672c\u65e5\u306e\u8a18\u9332\u306e\u307f\u4fee\u6b63\u3067\u304d\u307e\u3059');
           }
         }
       }
     }
 
-    logger.info('運行詳細更新', { userId, id, rawData });
+    logger.info('\u904b\u884c\u8a73\u7d30\u66f4\u65b0', { userId, id, rawData });
 
     // ================================================================
-    // フロントエンドから送られる不正フィールドを除去して安全なDTOを構築
-    // locationName は Prismaスキーマに存在しないため除去
-    // actualStartTime/actualEndTime は文字列→Dateに変換
+    // \u30d5\u30ed\u30f3\u30c8\u30a8\u30f3\u30c9\u304b\u3089\u9001\u3089\u308c\u308b\u4e0d\u6b63\u30d5\u30a3\u30fc\u30eb\u30c9\u3092\u9664\u53bb\u3057\u3066\u5b89\u5168\u306aDTO\u3092\u69cb\u7bc9
+    // locationName \u306f Prisma\u30b9\u30ad\u30fc\u30de\u306b\u5b58\u5728\u3057\u306a\u3044\u305f\u3081\u9664\u53bb\uff08\u5225\u9014 notes \u30bf\u30b0\u3078\u5909\u63db\uff09
+    // actualStartTime/actualEndTime \u306f\u6587\u5b57\u5217\u2192Date\u306b\u5909\u63db
     // ================================================================
     const allowedFields = [
       'sequenceNumber', 'activityType', 'locationId', 'itemId',
       'plannedTime', 'actualStartTime', 'actualEndTime',
       'quantityTons', 'notes', 'imageUrl',  // REQ-020
+      'fuelCostYen', 'odometerKm',          // \u7d66\u6cb9\u91d1\u984d\u30fb\u7d66\u6cb9\u6642\u8d70\u884c\u8ddd\u96e2\uff08\u30e2\u30d0\u30a4\u30eb\u7de8\u96c6\u30b7\u30fc\u30c8\u5bfe\u5fdc\uff09
       'latitude', 'longitude', 'altitude', 'gpsAccuracyMeters', 'gpsRecordedAt'
     ];
 
@@ -852,7 +854,7 @@ export class OperationDetailController {
       }
     }
 
-    // ISO文字列 → Date 変換
+    // ISO\u6587\u5b57\u5217 \u2192 Date \u5909\u63db
     if (data.actualStartTime && typeof data.actualStartTime === 'string') {
       data.actualStartTime = new Date(data.actualStartTime);
     }
@@ -866,26 +868,80 @@ export class OperationDetailController {
       data.gpsRecordedAt = new Date(data.gpsRecordedAt);
     }
 
-    // locationName が送られた場合: 場所マスタを name で検索して locationId に変換
-    if (rawData.locationName && !rawData.locationId) {
-      try {
-        const locs = await this.locationService.findMany({
-          where: { name: rawData.locationName }
-        });
-        const locArr = Array.isArray(locs) ? locs : (locs as any)?.data || [];
-        if (locArr.length > 0 && locArr[0]?.id) {
-          data.locationId = locArr[0].id;
+    // \u73fe\u5728\u306e notes \u3092\u30d9\u30fc\u30b9\u306b\u30bf\u30b0\u57cb\u3081\u8fbc\u307f\u3092\u30de\u30fc\u30b8\u3059\u308b\u30d8\u30eb\u30d1\u30fc
+    const mergeNoteTag = (baseNotes: string, tag: string, value: string): string => {
+      const openTag = '[' + tag + ':';
+      const startIdx = baseNotes.indexOf(openTag);
+      let rest = baseNotes;
+      if (startIdx !== -1) {
+        const endIdx = baseNotes.indexOf(']', startIdx);
+        if (endIdx !== -1) {
+          rest = (baseNotes.slice(0, startIdx) + baseNotes.slice(endIdx + 1)).trim();
         }
-      } catch (e) {
-        // locationName の解決に失敗しても更新は継続
-        logger.warn('locationName → locationId 解決失敗', { locationName: rawData.locationName });
       }
+      const tagged = openTag + ' ' + value + ']';
+      return rest ? `${tagged} ${rest}` : tagged;
+    };
+
+    const currentActivityType = (rawData.activityType as string | undefined)
+      || _existingDetail?.activityType
+      || '';
+    const currentNotesBase = (typeof data.notes === 'string' ? data.notes : (_existingDetail?.notes || '')) as string;
+    let notesWorking = currentNotesBase;
+
+    // locationName \u304c\u9001\u3089\u308c\u305f\u5834\u5408: \u5834\u6240\u30de\u30b9\u30bf\u3092 name \u3067\u691c\u7d22\u3057\u3066 locationId \u306b\u5909\u63db
+    // \uff08\u30d5\u30ed\u30f3\u30c8\u3067\u767b\u9332\u30ea\u30b9\u30c8\u304b\u3089\u9078\u629e\u3055\u308c locationId \u304c\u76f4\u63a5\u9001\u3089\u308c\u305f\u5834\u5408\u306f\u3053\u306e\u51e6\u7406\u306f\u4e0d\u8981\uff09
+    if (rawData.locationName && !rawData.locationId) {
+      if (currentActivityType === 'FUELING') {
+        // \u7d66\u6cb9: \u5834\u6240\u30de\u30b9\u30bf\u3067\u306f\u306a\u304f\u30b9\u30bf\u30f3\u30c9\u540d\u3068\u3057\u3066 notes \u30bf\u30b0\u306b\u4fdd\u5b58
+        notesWorking = mergeNoteTag(notesWorking, '\u7d66\u6cb9\u6240', String(rawData.locationName));
+      } else {
+        try {
+          const locs = await this.locationService.findMany({
+            where: { name: rawData.locationName }
+          });
+          const locArr = Array.isArray(locs) ? locs : (locs as any)?.data || [];
+          if (locArr.length > 0 && locArr[0]?.id) {
+            data.locationId = locArr[0].id;
+          } else {
+            // \u30de\u30b9\u30bf\u306b\u4e00\u81f4\u304c\u306a\u3044\u81ea\u7531\u5165\u529b\u5834\u6240\u540d\u306f notes \u30bf\u30b0\u306b\u4fdd\u5b58
+            notesWorking = mergeNoteTag(notesWorking, '\u5834\u6240\u540d', String(rawData.locationName));
+          }
+        } catch (e) {
+          logger.warn('locationName \u2192 locationId \u89e3\u6c7a\u5931\u6557', { locationName: rawData.locationName });
+          notesWorking = mergeNoteTag(notesWorking, '\u5834\u6240\u540d', String(rawData.locationName));
+        }
+      }
+    }
+
+    // customItemName \u304c\u9001\u3089\u308c\u305f\u5834\u5408: notes \u30bf\u30b0\u306b\u30de\u30fc\u30b8\uff08\u624b\u5165\u529b\u54c1\u76ee\u540d\uff09
+    if (rawData.customItemName) {
+      notesWorking = mergeNoteTag(notesWorking, '\u624b\u5165\u529b\u54c1\u76ee', String(rawData.customItemName));
+    }
+
+    if (notesWorking !== currentNotesBase || data.notes !== undefined) {
+      data.notes = notesWorking;
     }
 
     const operationDetail = await this.operationDetailService.update(id, data);
 
     if (!operationDetail) {
-      return sendNotFound(res, '運行詳細が見つかりません');
+      return sendNotFound(res, '\u904b\u884c\u8a73\u7d30\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093');
+    }
+
+    // \u2705 \u8907\u6570\u54c1\u76ee: selectedItemIds \u304c\u9001\u3089\u308c\u305f\u5834\u5408\u306f operation_detail_items \u3092\u5168\u4ef6\u4f5c\u308a\u76f4\u3059
+    if (Array.isArray(rawData.selectedItemIds) && rawData.selectedItemIds.length > 0) {
+      await _db.operationDetailItem.deleteMany({ where: { operationDetailId: id } });
+      const qty = data.quantityTons !== undefined ? Number(data.quantityTons) : 0;
+      for (let idx = 0; idx < rawData.selectedItemIds.length; idx++) {
+        const sid = rawData.selectedItemIds[idx];
+        if (sid) {
+          await _db.operationDetailItem.create({
+            data: { operationDetailId: id, itemId: sid, quantityTons: qty, sequenceOrder: idx }
+          });
+        }
+      }
+      logger.info('\u2705 [updateOperationDetail] operationDetailItems\u518d\u4fdd\u5b58\u5b8c\u4e86', { id, count: rawData.selectedItemIds.length });
     }
 
     return sendSuccess(res, operationDetail);
