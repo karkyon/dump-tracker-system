@@ -128,7 +128,7 @@ const OperationHistoryDetail: React.FC = () => {
     // ✅ 運行中の画面と全く同じ編集機能をこの画面にも実装
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
   const [insertMode, setInsertMode] = useState(false);
-  const [pickerAfterSeq, setPickerAfterSeq] = useState<number | null>(null);
+  const [pickerContext, setPickerContext] = useState<{ afterSeq: number; prevEndTime: string | null; lastLoadingCustomerId?: string; lastLoadingCustomerName?: string } | null>(null);
   const [creatingActivity, setCreatingActivity] = useState<{ draft: EditSheetActivityRecord; afterSeq: number } | null>(null);
   const [detailCustomers, setDetailCustomers] = useState<{ id: string; name: string }[]>([]);
   const [detailItems, setDetailItems] = useState<{ id: string; name: string; itemType?: string; displayOrder?: number }[]>([]);
@@ -490,13 +490,29 @@ type ActGroup =
               : (a?.endTime ? new Date(a.endTime).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}) : null);
             return e && e !== s ? `${s} ～ ${e}` : s;
           };
+          // ✅ 挿入位置より前の「直前イベントの終了時刻」と「直近の積込イベントの客先」を取得
+          const getInsertDefaults = (afterSeq: number) => {
+            let prevEndTime: string | null = null;
+            let lastLoadingCustomerId: string | undefined;
+            let lastLoadingCustomerName: string | undefined;
+            for (const a of sorted) {
+              if ((a.sequenceNumber ?? 0) > afterSeq) break;
+              const endOrStart = a.endTime || a.startTime;
+              if (endOrStart) prevEndTime = endOrStart;
+              if (a.activityType === 'LOADING') {
+                lastLoadingCustomerId = a.customerId;
+                lastLoadingCustomerName = a.customerName ?? undefined;
+              }
+            }
+            return { afterSeq, prevEndTime, lastLoadingCustomerId, lastLoadingCustomerName };
+          };
           return (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">運行内容</h2>
                 <button
                   type="button"
-                  onClick={() => { setInsertMode(v => !v); setPickerAfterSeq(null); }}
+                  onClick={() => { setInsertMode(v => !v); setPickerContext(null); }}
                   className={`text-xs font-medium px-3 py-1 rounded-full border ${insertMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-blue-600 border-blue-300'}`}
                 >
                   {insertMode ? '追加をやめる' : '＋ イベント追加'}
@@ -505,7 +521,7 @@ type ActGroup =
               <p className="text-[11px] text-gray-400 mb-3">タップして編集できます（運行中の画面と同じ操作です）</p>
               <div className="space-y-3">
                 {insertMode && (
-                  <div onClick={() => setPickerAfterSeq(0)} className="flex justify-center py-1 cursor-pointer">
+                  <div onClick={() => setPickerContext(getInsertDefaults(0))} className="flex justify-center py-1 cursor-pointer">
                     <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#fff', border: '2px dashed #60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', fontSize: 15, fontWeight: 700, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                       ＋
                     </div>
@@ -622,7 +638,7 @@ type ActGroup =
                     <React.Fragment key={gi}>
                       {groupNode}
                       {insertMode && (
-                        <div onClick={() => setPickerAfterSeq(maxSeqOfGroup())} className="flex justify-center py-1 cursor-pointer">
+                        <div onClick={() => setPickerContext(getInsertDefaults(maxSeqOfGroup()))} className="flex justify-center py-1 cursor-pointer">
                           <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#fff', border: '2px dashed #60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', fontSize: 15, fontWeight: 700, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                             ＋
                           </div>
@@ -685,10 +701,10 @@ type ActGroup =
         )}
       </div>
 
-      {pickerAfterSeq !== null && (
+      {pickerContext !== null && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}
-          onClick={() => setPickerAfterSeq(null)}
+          onClick={() => setPickerContext(null)}
         >
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', padding: '14px 16px 20px' }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10, textAlign: 'center' }}>追加するイベントの種類を選択</div>
@@ -702,8 +718,18 @@ type ActGroup =
                 <div
                   key={t.type}
                   onClick={() => {
-                    setCreatingActivity({ draft: createDraftActivity(t.type), afterSeq: pickerAfterSeq! });
-                    setPickerAfterSeq(null);
+                    // ✅ 開始・終了時刻は直前イベントの終了時刻をデフォルトに、
+                    // 荷降イベントは直近の積込イベントと同じ客先をデフォルトにする
+                    const isUnloadingType = t.type === 'UNLOADING';
+                    setCreatingActivity({
+                      draft: createDraftActivity(t.type, {
+                        startTime: pickerContext!.prevEndTime,
+                        customerId: isUnloadingType ? pickerContext!.lastLoadingCustomerId : undefined,
+                        customerName: isUnloadingType ? pickerContext!.lastLoadingCustomerName : undefined,
+                      }),
+                      afterSeq: pickerContext!.afterSeq,
+                    });
+                    setPickerContext(null);
                     setInsertMode(false);
                   }}
                   style={{ padding: '14px 8px', textAlign: 'center', borderRadius: 10, background: t.bg, border: `1.5px solid ${t.color}`, color: t.color, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
@@ -712,7 +738,7 @@ type ActGroup =
                 </div>
               ))}
             </div>
-            <div onClick={() => setPickerAfterSeq(null)} style={{ marginTop: 10, textAlign: 'center', fontSize: 12, color: '#9ca3af', padding: 8, cursor: 'pointer' }}>
+            <div onClick={() => setPickerContext(null)} style={{ marginTop: 10, textAlign: 'center', fontSize: 12, color: '#9ca3af', padding: 8, cursor: 'pointer' }}>
               キャンセル
             </div>
           </div>

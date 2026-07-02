@@ -125,7 +125,7 @@ const OperationRecord: React.FC = () => {
   const [detailItems, setDetailItems] = useState<{ id: string; name: string; itemType?: string; displayOrder?: number }[]>([]);
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
   const [insertMode, setInsertMode] = useState(false);
-  const [pickerAfterSeq, setPickerAfterSeq] = useState<number | null>(null);
+  const [pickerContext, setPickerContext] = useState<{ afterSeq: number; prevEndTime: string | null; lastLoadingCustomerId?: string; lastLoadingCustomerName?: string } | null>(null);
   const [creatingActivity, setCreatingActivity] = useState<{ draft: ActivityRecord; afterSeq: number } | null>(null);
   // ✅ BUG-051完全修正: APIレスポンスの運行客先名を保持（storeのcustomerNameに依存しない）
   const [detailOperationCustomerName, setDetailOperationCustomerName] = useState<string | null>(null);
@@ -1794,7 +1794,7 @@ const OperationRecord: React.FC = () => {
               <span style={{ fontSize: 13, fontWeight: 500 }}>運行詳細情報</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
-                  onClick={() => { setInsertMode(v => !v); setPickerAfterSeq(null); }}
+                  onClick={() => { setInsertMode(v => !v); setPickerContext(null); }}
                   style={{
                     fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 12,
                     border: '1.5px solid rgba(255,255,255,0.6)',
@@ -1906,8 +1906,24 @@ const OperationRecord: React.FC = () => {
                   }
                   return (g.act.sequenceNumber ?? 0);
                 };
+                // ✅ 挿入位置より前の「直前イベントの終了時刻」と「直近の積込イベントの客先」を取得
+                const getInsertDefaults = (afterSeq: number) => {
+                  let prevEndTime: string | null = null;
+                  let lastLoadingCustomerId: string | undefined;
+                  let lastLoadingCustomerName: string | undefined;
+                  for (const a of sorted) {
+                    if ((a.sequenceNumber ?? 0) > afterSeq) break;
+                    const endOrStart = a.endTime || a.startTime;
+                    if (endOrStart) prevEndTime = endOrStart;
+                    if (a.activityType === 'LOADING') {
+                      lastLoadingCustomerId = a.customerId;
+                      lastLoadingCustomerName = a.customerName;
+                    }
+                  }
+                  return { afterSeq, prevEndTime, lastLoadingCustomerId, lastLoadingCustomerName };
+                };
                 const renderInsertMarker = (afterSeq: number, mkey: string) => (
-                  <div key={mkey} onClick={() => setPickerAfterSeq(afterSeq)} style={{ display: 'flex', justifyContent: 'center', padding: '3px 0', cursor: 'pointer' }}>
+                  <div key={mkey} onClick={() => setPickerContext(getInsertDefaults(afterSeq))} style={{ display: 'flex', justifyContent: 'center', padding: '3px 0', cursor: 'pointer' }}>
                     <div style={{
                       width: 26, height: 26, borderRadius: '50%', background: '#fff',
                       border: '2px dashed #60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2254,10 +2270,10 @@ const OperationRecord: React.FC = () => {
         />
       )}
 
-      {pickerAfterSeq !== null && (
+      {pickerContext !== null && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}
-          onClick={() => setPickerAfterSeq(null)}
+          onClick={() => setPickerContext(null)}
         >
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', padding: '14px 16px 20px' }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10, textAlign: 'center' }}>追加するイベントの種類を選択</div>
@@ -2271,8 +2287,18 @@ const OperationRecord: React.FC = () => {
                 <div
                   key={t.type}
                   onClick={() => {
-                    setCreatingActivity({ draft: createDraftActivity(t.type), afterSeq: pickerAfterSeq! });
-                    setPickerAfterSeq(null);
+                    // ✅ 開始・終了時刻は直前イベントの終了時刻をデフォルトに、
+                    // 荷降イベントは直近の積込イベントと同じ客先をデフォルトにする
+                    const isUnloadingType = t.type === 'UNLOADING';
+                    setCreatingActivity({
+                      draft: createDraftActivity(t.type, {
+                        startTime: pickerContext!.prevEndTime,
+                        customerId: isUnloadingType ? pickerContext!.lastLoadingCustomerId : undefined,
+                        customerName: isUnloadingType ? pickerContext!.lastLoadingCustomerName : undefined,
+                      }),
+                      afterSeq: pickerContext!.afterSeq,
+                    });
+                    setPickerContext(null);
                     setInsertMode(false);
                   }}
                   style={{ padding: '14px 8px', textAlign: 'center', borderRadius: 10, background: t.bg, border: `1.5px solid ${t.color}`, color: t.color, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
@@ -2281,7 +2307,7 @@ const OperationRecord: React.FC = () => {
                 </div>
               ))}
             </div>
-            <div onClick={() => setPickerAfterSeq(null)} style={{ marginTop: 10, textAlign: 'center', fontSize: 12, color: '#9ca3af', padding: 8, cursor: 'pointer' }}>
+            <div onClick={() => setPickerContext(null)} style={{ marginTop: 10, textAlign: 'center', fontSize: 12, color: '#9ca3af', padding: 8, cursor: 'pointer' }}>
               キャンセル
             </div>
           </div>

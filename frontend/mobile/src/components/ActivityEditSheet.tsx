@@ -374,7 +374,13 @@ const toISO = (base: string | null, hhmm: string): string => {
   return d.toISOString();
 };
 
-export function createDraftActivity(activityType: string): ActivityRecord {
+export function createDraftActivity(
+  activityType: string,
+  defaults?: { startTime?: string | null; customerId?: string; customerName?: string }
+): ActivityRecord {
+  // ✅ 新規追加時の開始・終了時刻は、直前イベントの終了時刻をデフォルトにする
+  // （休憩も含め全種別共通。ユーザーが編集画面で必要に応じて調整する）
+  const baseTime = defaults?.startTime || new Date().toISOString();
   return {
     id: '',
     activityType,
@@ -384,12 +390,12 @@ export function createDraftActivity(activityType: string): ActivityRecord {
     itemIds: [],
     customItemName: '',
     quantity: 0,
-    startTime: new Date().toISOString(),
-    endTime: null,
+    startTime: baseTime,
+    endTime: baseTime,
     notes: '',
     sequenceNumber: 0,
-    customerName: undefined,
-    customerId: undefined,
+    customerName: defaults?.customerName,
+    customerId: defaults?.customerId,
   };
 }
 
