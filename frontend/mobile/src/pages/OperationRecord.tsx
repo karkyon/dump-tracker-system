@@ -1844,10 +1844,12 @@ const OperationRecord: React.FC = () => {
                   return currentCustomer;
                 };
 
-                // グループ化（積込/荷降1くくり + 休憩1くくり）— 運行履歴詳細画面と同じロジック
+                // グループ化（積込/荷降/休憩1くくり）
+                // ✅ 重要: LOADING/UNLOADING は「1レコードに到着(startTime)〜完了(endTime)を記録する」単一行モデル。
+                //   BREAK のみ BREAK_START/BREAK_END の2レコードモデル。
                 type ActGroup =
-                  | { type: 'LOADING_GROUP';   groupNum: number; arrived: any; completed: any | null }
-                  | { type: 'UNLOADING_GROUP'; groupNum: number; arrived: any; completed: any | null }
+                  | { type: 'LOADING_GROUP';   groupNum: number; act: any }
+                  | { type: 'UNLOADING_GROUP'; groupNum: number; act: any }
                   | { type: 'BREAK';           start: any; end: any | null }
                   | { type: 'SINGLE';          act: any };
                 const sorted = [...detailActivities].sort((a: any, b: any) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0));
@@ -1858,18 +1860,12 @@ const OperationRecord: React.FC = () => {
                   const a = sorted[i];
                   if (used.has(a.id)) continue;
                   const at = a.activityType;
-                  if (['LOADING', 'LOADING_START'].includes(at)) {
+                  if (at === 'LOADING') {
                     lgNum++;
-                    const comp = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && ['LOADING_COMPLETE', 'LOADING_COMPLETED'].includes(b.activityType)) ?? null;
-                    if (comp) used.add(comp.id);
-                    groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, arrived: a, completed: comp });
-                  } else if (['UNLOADING', 'UNLOADING_START'].includes(at)) {
+                    groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a });
+                  } else if (at === 'UNLOADING') {
                     ugNum++;
-                    const comp2 = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && ['UNLOADING_COMPLETE', 'UNLOADING_COMPLETED'].includes(b.activityType)) ?? null;
-                    if (comp2) used.add(comp2.id);
-                    groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, arrived: a, completed: comp2 });
-                  } else if (['LOADING_COMPLETE', 'LOADING_COMPLETED', 'UNLOADING_COMPLETE', 'UNLOADING_COMPLETED'].includes(at)) {
-                    groups.push({ type: 'SINGLE', act: a });
+                    groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, act: a });
                   } else if (['BREAK_START', 'BREAK'].includes(at)) {
                     const endAct = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && b.activityType === 'BREAK_END') ?? null;
                     if (endAct) used.add(endAct.id);
@@ -1890,10 +1886,12 @@ const OperationRecord: React.FC = () => {
                         const hBg = isLd ? TC.LOADING_BG : TC.UNLOADING_BG;
                         const hFg = isLd ? TC.LOADING_FG : TC.UNLOADING_FG;
                         const lbl = isLd ? '積込' : '荷降';
-                        const loc = g.arrived.locationName || g.completed?.locationName || '';
+                        const act = g.act;
+                        const loc = act.locationName || '';
                         const custName = isLd
-                          ? (g.arrived.customerName || getCustomerAtTime(g.arrived.sequenceNumber ?? 0))
-                          : (g.arrived.customerName || g.completed?.customerName);
+                          ? (act.customerName || getCustomerAtTime(act.sequenceNumber ?? 0))
+                          : act.customerName;
+                        const hasCompleted = !!act.endTime;
                         return (
                           <div key={gi} style={{ border: `2px solid ${bdr}`, borderRadius: 10, overflow: 'hidden' }}>
                             <div style={{ background: hBg, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -1905,35 +1903,35 @@ const OperationRecord: React.FC = () => {
                                 <span style={{ fontSize: 11, fontWeight: 600, color: hFg }}>🏢 {custName}</span>
                               )}
                               <span style={{ marginLeft: 'auto', fontSize: 11, color: hFg, fontWeight: 600 }}>
-                                {fmtRange(g.arrived.startTime, g.completed ? (g.completed.startTime || g.completed.endTime) : g.arrived.endTime)}
+                                {fmtRange(act.startTime, act.endTime)}
                               </span>
                             </div>
                             <button
-                              onClick={() => setEditingActivity(g.arrived)}
-                              style={{ width: '100%', padding: '5px 12px', borderBottom: g.completed ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                              onClick={() => setEditingActivity(act)}
+                              style={{ width: '100%', padding: '5px 12px', borderBottom: hasCompleted ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                             >
                               <span style={{ fontSize: 12, color: '#374151' }}>● 到着</span>
                               <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                {fmtRange(g.arrived.startTime, null)}
+                                {fmtRange(act.startTime, null)}
                                 <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
                               </span>
                             </button>
-                            {g.completed && (
+                            {hasCompleted && (
                               <button
-                                onClick={() => setEditingActivity(g.completed)}
+                                onClick={() => setEditingActivity(act)}
                                 style={{ width: '100%', padding: '5px 12px', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                               >
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                   <span style={{ fontSize: 12, color: '#374151' }}>● {lbl}完了</span>
                                   <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    {fmtRange(g.completed.startTime || g.completed.endTime, null)}
+                                    {fmtRange(act.endTime, null)}
                                     <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
                                   </span>
                                 </div>
-                                {itemsLabel(g.completed) && (
+                                {itemsLabel(act) && (
                                   <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2, textAlign: 'left' }}>
-                                    品目: {itemsLabel(g.completed)}
-                                    {g.completed.quantity != null && Number(g.completed.quantity) > 0 ? ` × ${g.completed.quantity}t` : ''}
+                                    品目: {itemsLabel(act)}
+                                    {act.quantity != null && Number(act.quantity) > 0 ? ` × ${act.quantity}t` : ''}
                                   </div>
                                 )}
                               </button>
@@ -1962,13 +1960,9 @@ const OperationRecord: React.FC = () => {
                       const act = g.act;
                       const isF = ['FUELING', 'FUEL'].includes(act.activityType);
                       const LABELS: Record<string, string> = {
-                        LOADING_COMPLETE: '積込完了', LOADING_COMPLETED: '積込完了',
-                        UNLOADING_COMPLETE: '荷降完了', UNLOADING_COMPLETED: '荷降完了',
                         FUELING: '給油', FUEL: '給油',
                       };
                       const ICONS: Record<string, string> = {
-                        LOADING_COMPLETE: '✅', LOADING_COMPLETED: '✅',
-                        UNLOADING_COMPLETE: '✅', UNLOADING_COMPLETED: '✅',
                         FUELING: '⛽', FUEL: '⛽',
                       };
                       const label = LABELS[act.activityType] || act.activityType;
