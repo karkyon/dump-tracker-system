@@ -1950,7 +1950,7 @@ const OperationRecord: React.FC = () => {
                         return (
                           <button
                             key={gi}
-                            onClick={() => setEditingActivity(g.start)}
+                            onClick={() => setEditingActivity({ ...g.start, endTime: g.end ? g.end.startTime : g.start.endTime, pairId: g.end ? g.end.id : undefined } as any)}
                             style={{ border: `2px solid ${TC.BREAK_BORDER}`, borderRadius: 10, overflow: 'hidden', width: '100%', background: '#fff', cursor: 'pointer', textAlign: 'left', padding: 0 }}
                           >
                             <div style={{ background: TC.BREAK_BG, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>

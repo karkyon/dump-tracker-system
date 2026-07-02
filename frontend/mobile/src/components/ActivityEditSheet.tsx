@@ -28,6 +28,9 @@ export interface ActivityRecord {
   sequenceNumber: number;
   customerName?: string;
   customerId?: string;
+  // ✅ 休憩専用: 休憩終了(BREAK_END)レコードのID。休憩開始(BREAK_START)側から編集する際、
+  // ここにペアのIDを入れることで1画面から両レコードを同時編集できるようにする。
+  pairId?: string;
 }
 
 // ✅ 登録場所（LoadingInputと同様の場所マスタ）
@@ -347,6 +350,19 @@ const toHHMM = (iso: string | null): string => {
   try { return new Date(iso).toTimeString().slice(0, 5); } catch { return ''; }
 };
 
+// ✅ 過去に自動生成された「休憩開始」「休憩終了」という定型文をnotesから除去する。
+// これらはユーザーが入力したものではなく、バックエンドが自動で埋めていた文言のため、
+// 備考欄にそのまま表示すると「入力していないのに文字が入っている」ように見えてしまう。
+const stripBreakAutoNotes = (raw: string): string => {
+  if (!raw) return '';
+  let s = raw.trim();
+  if (s.startsWith('休憩開始') || s.startsWith('休憩終了')) {
+    const dashIdx = s.indexOf(' - ');
+    s = dashIdx !== -1 ? s.slice(dashIdx + 3).trim() : '';
+  }
+  return s;
+};
+
 const toISO = (base: string | null, hhmm: string): string => {
   if (!hhmm) return base ?? new Date().toISOString();
   const parts = hhmm.split(':');
@@ -412,7 +428,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     // ✅ 給油金額・量を既入力値としてプレフィル（ブランク初期化バグ修正）
     setFuelAmount(activity.quantity != null && activity.quantity > 0 ? String(activity.quantity) : '');
     setFuelCost(activity.fuelCostYen != null && activity.fuelCostYen > 0 ? String(activity.fuelCostYen) : '');
-    setNotes(activity.notes || '');
+    setNotes(isBreak(activity.activityType) ? stripBreakAutoNotes(activity.notes || '') : (activity.notes || ''));
     setPinLat(activity.locationLat ?? undefined);
     setPinLng(activity.locationLng ?? undefined);
     setShowDeleteConfirm(false);
@@ -475,6 +491,37 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     }
     setIsSaving(true);
     try {
+      // ✅ 休憩は開始(BREAK_START)・終了(BREAK_END)が別レコードのため、
+      // この画面から両方を個別に更新する（場所名は編集対象外）
+      if (isBreak(activity.activityType)) {
+        const startIso = toISO(activity.startTime, startHHMM);
+        const startRes = await (apiService as any).updateActivityRecord(activity.id, {
+          actualStartTime: startIso,
+          notes,
+        });
+        if (!startRes?.success) {
+          toast.error(startRes?.message || '休憩開始の保存に失敗しました');
+          setIsSaving(false);
+          return;
+        }
+        let endIso: string | null = activity.endTime;
+        if (activity.pairId && endHHMM) {
+          endIso = toISO(activity.endTime, endHHMM);
+          const endRes = await (apiService as any).updateActivityRecord(activity.pairId, {
+            actualStartTime: endIso,
+            actualEndTime: endIso,
+          });
+          if (!endRes?.success) {
+            toast.error(endRes?.message || '休憩終了の保存に失敗しました');
+            setIsSaving(false);
+            return;
+          }
+        }
+        toast.success('保存しました');
+        onSaved({ ...activity, startTime: startIso, endTime: endIso, notes });
+        setIsSaving(false);
+        return;
+      }
       const body: Record<string, any> = {
         actualStartTime: toISO(activity.startTime, startHHMM),
         actualEndTime:   endHHMM ? toISO(activity.endTime, endHHMM) : undefined,
@@ -548,15 +595,22 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     if (!showDeleteConfirm) { setShowDeleteConfirm(true); return; }
     setIsDeleting(true);
     try {
-      const res = await (apiService as any).deleteActivityRecord(activity.id);
-      if (res?.success || res?.data?.id) {
-        toast.success('イベントを削除しました');
-        onDeleted?.(activity.id);
-        onClose();
-      } else {
-        toast.error(res?.message || '削除に失敗しました');
-        setShowDeleteConfirm(false);
+      // ✅ 休憩はBREAK_START/BREAK_ENDの2レコード1組のため、片方だけ残らないよう両方削除する
+      const idsToDelete = (isBreak(activity.activityType) && activity.pairId)
+        ? [activity.id, activity.pairId]
+        : [activity.id];
+      for (const delId of idsToDelete) {
+        const res = await (apiService as any).deleteActivityRecord(delId);
+        if (!(res?.success || res?.data?.id)) {
+          toast.error(res?.message || '削除に失敗しました');
+          setShowDeleteConfirm(false);
+          setIsDeleting(false);
+          return;
+        }
       }
+      toast.success('イベントを削除しました');
+      idsToDelete.forEach(delId => onDeleted?.(delId));
+      onClose();
     } catch {
       toast.error('削除に失敗しました');
       setShowDeleteConfirm(false);
@@ -580,14 +634,23 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
           {isLoad(activity.activityType)  && '積込の到着・完了時刻、品目・重量を修正できます。'}
           {isUnl(activity.activityType)   && '積降の到着・完了時刻と場所を修正できます。'}
           {isFuel(activity.activityType)  && '給油の時刻・量・金額・場所を修正できます。'}
-          {isBreak(activity.activityType) && '休憩の開始・終了時刻と場所を修正できます。'}
+          {isBreak(activity.activityType) && '休憩の開始時刻・終了時刻を修正できます。'}
         </div>
         {/* フォーム */}
         <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 9, overflowY: 'auto', flex: 1 }}>
           {/* 時刻 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-            <TimeDial label={isBreak(activity.activityType) ? '開始時刻' : '到着時刻'} value={startHHMM} onChange={setStartHHMM} accentColor={cfg.color} />
-            <TimeDial label={isBreak(activity.activityType) ? '終了時刻' : '完了時刻'} value={endHHMM}   onChange={setEndHHMM}   accentColor={cfg.color} />
+            <TimeDial label={isBreak(activity.activityType) ? '休憩開始時刻' : '到着時刻'} value={startHHMM} onChange={setStartHHMM} accentColor={cfg.color} />
+            {isBreak(activity.activityType) && !activity.pairId ? (
+              <div>
+                <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>休憩終了時刻</div>
+                <div style={{ background: '#f3f4f6', border: '0.5px solid #d1d5db', borderRadius: 7, padding: '7px 10px', fontSize: 12, color: '#9ca3af' }}>
+                  未終了（運行中の画面で休憩終了後に編集できます）
+                </div>
+              </div>
+            ) : (
+              <TimeDial label={isBreak(activity.activityType) ? '休憩終了時刻' : '完了時刻'} value={endHHMM} onChange={setEndHHMM} accentColor={cfg.color} />
+            )}
           </div>
 
           {/* 積込専用 */}
@@ -702,8 +765,8 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
             </div>
           </>)}
 
-          {/* 積降・休憩共通: 場所名（手入力 + 登録リストから選択） */}
-          {(isUnl(activity.activityType) || isBreak(activity.activityType)) && (
+          {/* 積降のみ: 場所名（手入力 + 登録リストから選択）。✅ 休憩には場所名は不要のため非表示 */}
+          {isUnl(activity.activityType) && (
             <div>
               <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>場所名</span>

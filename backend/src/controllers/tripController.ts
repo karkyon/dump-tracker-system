@@ -1447,7 +1447,10 @@ export class TripController {
         activityType: 'BREAK_START',
         startTime: new Date(),
         endTime: undefined,
-        notes: `休憩開始${breakData.location ? `: ${breakData.location}` : ''}${breakData.notes ? ` - ${breakData.notes}` : ''}`,
+        // ✅ 修正: 以前は「休憩開始」等の定型文を自動でnotesに埋め込んでいたため、
+        // 編集画面の備考欄にユーザーが入力していない文字列が表示される原因になっていた。
+        // activityType(BREAK_START/BREAK_END)で種別は判別できるため、notesはユーザー入力のみとする。
+        notes: breakData.notes || '',
         // 🆕 GPS位置情報を operation_details に保存
         latitude: breakData.latitude ? Number(breakData.latitude) : undefined,
         longitude: breakData.longitude ? Number(breakData.longitude) : undefined,
@@ -1626,7 +1629,8 @@ export class TripController {
         activityType: 'BREAK_END',
         startTime: new Date(),
         endTime: new Date(),
-        notes: `休憩終了${breakData.notes ? ` - ${breakData.notes}` : ''}`,
+        // ✅ 修正: 「休憩終了」の自動定型文を廃止（startBreakと同様の理由）
+        notes: breakData.notes || '',
         // 🆕 GPS位置情報を operation_details に保存
         latitude: breakData.latitude ? Number(breakData.latitude) : undefined,
         longitude: breakData.longitude ? Number(breakData.longitude) : undefined,
