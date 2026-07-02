@@ -671,14 +671,45 @@ export class OperationDetailController {
     const db = DatabaseService.getInstance();
     const toDate = (v: any) => (v && typeof v === 'string') ? new Date(v) : (v instanceof Date ? v : undefined);
 
-    // PATTERN 0: 客先変更（全イベント共通で rawData.customerId があれば operations を更新）
-    if (rawData.customerId && rawData._updateCustomer) {
-      const { operationId: opIdForCust } = rawData;
-      if (opIdForCust) {
-        await db.operation.update({ where: { id: opIdForCust }, data: { customerId: rawData.customerId } });
-        logger.info('客先変更完了', { operationId: opIdForCust, customerId: rawData.customerId });
+    // ✅ 修正: 以前はここで運行全体(operations.customerId)を即座に書き換えており、
+    // 1つの積込の客先を変更しただけで運行中の他の積込・荷降まで巻き込んで変わってしまうバグの原因だった。
+    // PATTERN 3/4 側で operation_details.customer_id に個別保存するのでここでのグローバル更新は廃止する。
+    const applyCustomerCascade = async (detailId: string, activityType: string, customerId: string) => {
+      try {
+        const target = await db.operationDetail.findUnique({ where: { id: detailId }, select: { operationId: true } });
+        if (!target) return;
+        const siblings = await db.operationDetail.findMany({
+          where: { operationId: target.operationId },
+          orderBy: { sequenceNumber: 'asc' },
+          select: { id: true, activityType: true, sequenceNumber: true }
+        });
+        const myIndex = siblings.findIndex((s: any) => s.id === detailId);
+        let pairedId: string | null = null;
+        if (myIndex !== -1) {
+          if (activityType === 'LOADING') {
+            for (let k = myIndex + 1; k < siblings.length; k++) {
+              const s = siblings[k];
+              if (!s) continue;
+              if (s.activityType === 'LOADING') break;
+              if (s.activityType === 'UNLOADING') { pairedId = s.id; break; }
+            }
+          } else if (activityType === 'UNLOADING') {
+            for (let k = myIndex - 1; k >= 0; k--) {
+              const s = siblings[k];
+              if (!s) continue;
+              if (s.activityType === 'UNLOADING') break;
+              if (s.activityType === 'LOADING') { pairedId = s.id; break; }
+            }
+          }
+        }
+        if (pairedId) {
+          await db.operationDetail.update({ where: { id: pairedId }, data: { customerId } });
+          logger.info('積込〜荷降ペアへの客先反映完了（CMS）', { detailId, pairedId, customerId });
+        }
+      } catch (e) {
+        logger.warn('積込〜荷降ペアへの客先反映失敗（CMS）', { detailId, error: e instanceof Error ? e.message : String(e) });
       }
-    }
+    };
 
     // PATTERN 1: trip-start-{opId} → operations.actualStartTime
     if (eventId.startsWith('trip-start-')) {
@@ -709,6 +740,7 @@ export class OperationDetailController {
       if (rawData.latitude !== undefined) data.latitude = rawData.latitude;
       if (rawData.longitude !== undefined) data.longitude = rawData.longitude;
       if (rawData.notes !== undefined) data.notes = rawData.notes;
+      if (rawData.customerId !== undefined) data.customerId = rawData.customerId;
       if (rawData.locationName && !rawData.locationId) {
         try {
           const locs = await this.locationService.findMany({ where: { name: rawData.locationName } });
@@ -718,6 +750,9 @@ export class OperationDetailController {
       }
       const updated = await this.operationDetailService.update(detailId, data);
       if (!updated) return sendNotFound(res, '運行詳細が見つかりません');
+      if (data.customerId !== undefined) {
+        await applyCustomerCascade(detailId, (updated as any).activityType, data.customerId);
+      }
       return sendSuccess(res, updated);
     }
 
@@ -730,6 +765,7 @@ export class OperationDetailController {
       if (rawData.itemId !== undefined) data.itemId = rawData.itemId;  // 後方互換
       if (rawData.quantityTons !== undefined) data.quantityTons = rawData.quantityTons;
       if (rawData.notes !== undefined) data.notes = rawData.notes;
+      if (rawData.customerId !== undefined) data.customerId = rawData.customerId;
       if (rawData.latitude !== undefined) data.latitude = rawData.latitude;
       if (rawData.longitude !== undefined) data.longitude = rawData.longitude;
       const updated = await this.operationDetailService.update(detailId, data);
@@ -745,6 +781,9 @@ export class OperationDetailController {
           });
         }
         logger.info('✅ operationDetailItems 更新完了', { detailId, count: rawData.selectedItemIds.length });
+      }
+      if (data.customerId !== undefined) {
+        await applyCustomerCascade(detailId, (updated as any).activityType, data.customerId);
       }
       return sendSuccess(res, updated);
     }

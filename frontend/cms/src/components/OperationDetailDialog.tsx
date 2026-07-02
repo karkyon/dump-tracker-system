@@ -450,7 +450,7 @@ const isBreakStart = (t: string) => t === 'BREAK_START';
 const isBreakEnd   = (t: string) => t === 'BREAK_END';
 
 const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
-  event, operationId, items, customers, onClose, onSaved, onDeleted
+  event, items, customers, onClose, onSaved, onDeleted
 }) => {
   const [startHHMM, setStartHHMM] = React.useState('');
   // endHHMM削除済み（到着編集の完了時刻フィールドなし）
@@ -518,11 +518,10 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   const toggleItem = (id: string) =>
     setSelectedItemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const handleChangeCustomer = async (cid: string, cname: string) => {
-    try {
-      await apiClient.patch(`/mobile/operations/${operationId}/customer`, { customerId: cid });
-      setCurrentCustomerId(cid); setCurrentCustomerName(cname);
-    } catch { setSaveError('客先変更に失敗しました'); }
+  // ✅ 修正: 以前はここで運行全体(operations.customerId)を即座に書き換えており、
+  // 1つの積込の客先を変更しただけで運行中の他の積込・荷降まで巻き込んで変わってしまうバグの原因だった。
+  const handleChangeCustomer = (cid: string, cname: string) => {
+    setCurrentCustomerId(cid); setCurrentCustomerName(cname);
     setShowCustomerPicker(false);
   };
 
@@ -580,11 +579,10 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         if (fuelLevel) body.fuelConsumedLiters = fuelLevel;
         delete body.notes; // notesには保存しない
       }
-      // 客先変更があれば body に含める（timeline-event で直接DB更新）
+      // ✅ 修正: 運行全体(operations.customerId)への一括更新は廃止。
+      // この積込（またはペアの荷降）だけに customerId を保存する（バックエンド側でペア反映も行う）。
       if (isLoadEvt(event.eventType) && currentCustomerId) {
-        body._updateCustomer = true;
         body.customerId = currentCustomerId;
-        body.operationId = operationId;
       }
       // ✅ 統合エンドポイント使用（event.id = 合成IDそのまま）
       const res = await apiClient.put(`/operation-details/timeline-event/${event.id}`, body);
