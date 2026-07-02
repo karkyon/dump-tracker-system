@@ -18,6 +18,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { apiService } from '../services/api';
 import ActivityAddSheet from '../components/ActivityAddSheet';
+import ActivityEditSheet from '../components/ActivityEditSheet';
 
 // =====================================
 // 型定義
@@ -38,6 +39,9 @@ interface ActivityRecord {
   notes: string;
   sequenceNumber: number;
   customerName?: string | null;
+  customerId?: string;
+  locationId?: string;
+  fuelCostYen?: number;
   locationLat?: number;
   locationLng?: number;
 }
@@ -122,6 +126,10 @@ const OperationHistoryDetail: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   // 🆕 イベント追加シート（記録漏れの後追い登録用）
   const [addEventOpen, setAddEventOpen] = useState(false);
+  // ✅ 運行中の画面と全く同じ編集機能をこの画面にも実装
+  const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
+  const [detailCustomers, setDetailCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [detailItems, setDetailItems] = useState<{ id: string; name: string; itemType?: string; displayOrder?: number }[]>([]);
 
   // =====================================
   // 詳細データ取得
@@ -140,6 +148,18 @@ const OperationHistoryDetail: React.FC = () => {
 
       if (response.success && response.data) {
         setDetail(response.data);
+        // ✅ 運行中の画面（OperationRecord）と同じ客先・品目マスタを取得し、編集シートに渡す
+        try {
+          const cr = await apiService.getCustomers();
+          const ci = (cr as any)?.data?.customers ?? (cr as any)?.data ?? cr;
+          if (Array.isArray(ci)) setDetailCustomers(ci);
+        } catch { /* 客先取得失敗は編集シート側でも空リストで動作継続 */ }
+        try {
+          const ir = await (apiService as any).getItems();
+          const ii = ir?.data?.items ?? (Array.isArray(ir?.data) ? ir.data : null) ?? ir;
+          const itemList = Array.isArray(ii) ? ii : [];
+          setDetailItems(itemList);
+        } catch { /* 品目取得失敗は編集シート側でも空リストで動作継続 */ }
       } else {
         toast.error('運行詳細の取得に失敗しました');
         navigate(-1);
@@ -335,6 +355,100 @@ const OperationHistoryDetail: React.FC = () => {
           )}
         </div>
 
+        {/* ✅ CMSと同じ品目・客先別集計サマリー（1運行ごと） */}
+        {detail.activities.length > 0 && (() => {
+          const sortedForSummary = [...detail.activities].sort(
+            (a, b) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0)
+          );
+          const completedLoadings = sortedForSummary.filter(
+            a => a.activityType === 'LOADING' && !!a.endTime
+          );
+          const namesOf = (a: ActivityRecord): string[] =>
+            (a.itemNames && a.itemNames.length > 0) ? a.itemNames : (a.itemName ? [a.itemName] : []);
+          const uniqueItems = [...new Set(completedLoadings.flatMap(namesOf))];
+          const itemCountMap: Record<string, number> = {};
+          completedLoadings.forEach(a => {
+            namesOf(a).forEach(n => { itemCountMap[n] = (itemCountMap[n] || 0) + 1; });
+          });
+          const itemCountEntries = Object.entries(itemCountMap);
+
+          type RouteRow = { customer: string; item: string; route: string; count: number };
+          const routeMap = new Map<string, RouteRow>();
+          completedLoadings.forEach(le => {
+            const idx = sortedForSummary.indexOf(le);
+            const nextUnl = sortedForSummary.slice(idx + 1).find(a => a.activityType === 'UNLOADING');
+            const customer = le.customerName || detail.customerName || '—';
+            const item = namesOf(le).join('、') || '—';
+            const loadLoc = le.locationName || '—';
+            const unlLoc = nextUnl?.locationName || '—';
+            const route = `${loadLoc}〜${unlLoc}`;
+            const key = `${customer}|${item}|${route}`;
+            const prev = routeMap.get(key);
+            if (prev) { prev.count++; } else { routeMap.set(key, { customer, item, route, count: 1 }); }
+          });
+          const routeRows = Array.from(routeMap.values());
+
+          if (uniqueItems.length === 0 && routeRows.length === 0) return null;
+
+          return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">品目・客先サマリー</h2>
+
+              {uniqueItems.length > 0 && (
+                <div className="mb-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-500 flex-shrink-0">運搬品目:</span>
+                  {uniqueItems.map((name, i) => (
+                    <span key={i} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {itemCountEntries.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-xs text-gray-500 block mb-1">品目別台数:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {itemCountEntries.map(([itemName, count]) => (
+                      <span key={itemName} className="text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded font-bold">
+                        {itemName}: {count}台
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {routeRows.length > 0 && (
+                <div>
+                  <span className="text-xs text-gray-500 block mb-1 font-semibold">客先別集計:</span>
+                  <div className="overflow-x-auto rounded border border-gray-200">
+                    <table className="min-w-full text-xs">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="px-2 py-1 text-left text-gray-500 font-medium border-b border-gray-200">客先</th>
+                          <th className="px-2 py-1 text-left text-gray-500 font-medium border-b border-gray-200">経路</th>
+                          <th className="px-2 py-1 text-left text-gray-500 font-medium border-b border-gray-200">品目</th>
+                          <th className="px-2 py-1 text-center text-gray-500 font-medium border-b border-gray-200">回数</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {routeRows.map((r, i) => (
+                          <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-2 py-1 text-gray-800 font-medium whitespace-nowrap">{r.customer}</td>
+                            <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{r.route}</td>
+                            <td className="px-2 py-1 text-indigo-700 whitespace-nowrap">{r.item}</td>
+                            <td className="px-2 py-1 text-center font-bold text-blue-700">{r.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* アクティビティ - グループ表示（積込/荷降1くくり + 休憩1くくり） */}
         {detail.activities.length > 0 && (() => {
           const sorted = [...detail.activities].sort(
@@ -376,7 +490,8 @@ type ActGroup =
           };
           return (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">運行内容</h2>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">運行内容</h2>
+              <p className="text-[11px] text-gray-400 mb-3">タップして編集できます（運行中の画面と同じ操作です）</p>
               <div className="space-y-3">
                 {groups.map((g, gi) => {
                   if (g.type === 'LOADING_GROUP' || g.type === 'UNLOADING_GROUP') {
@@ -403,31 +518,53 @@ type ActGroup =
                           )}
                           <span style={{ marginLeft: 'auto', fontSize: 11, color: hFg, fontWeight: 600 }}>{fmtTs(act, null)}</span>
                         </div>
-                        <div style={{ padding: '5px 12px', borderBottom: hasCompleted ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between' }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditingActivity(act)}
+                          style={{ width: '100%', padding: '5px 12px', borderBottom: hasCompleted ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                        >
                           <span style={{ fontSize: 12, color: '#374151' }}>● 到着</span>
-                          <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(act.startTime)}</span>
-                        </div>
+                          <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {formatTime(act.startTime)}
+                            <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                          </span>
+                        </button>
                         {hasCompleted && (
-                          <div style={{ padding: '5px 12px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setEditingActivity(act)}
+                            style={{ width: '100%', padding: '5px 12px', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                          >
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <span style={{ fontSize: 12, color: '#374151' }}>● {lbl}完了</span>
-                              <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(act.endTime)}</span>
+                              <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {formatTime(act.endTime)}
+                                <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                              </span>
                             </div>
-                            {itemsLbl && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {itemsLbl} × {act.quantity}{act.unit}</div>}
-                          </div>
+                            {itemsLbl && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2, textAlign: 'left' }}>品目: {itemsLbl} × {act.quantity}{act.unit}</div>}
+                          </button>
                         )}
                       </div>
                     );
                   }
                   if (g.type === 'BREAK') {
                     return (
-                      <div key={gi} style={{ border: `2px solid ${TC.BREAK_BORDER}`, borderRadius: 10, overflow: 'hidden' }}>
+                      <button
+                        key={gi}
+                        type="button"
+                        onClick={() => setEditingActivity(g.start)}
+                        style={{ border: `2px solid ${TC.BREAK_BORDER}`, borderRadius: 10, overflow: 'hidden', width: '100%', background: '#fff', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                      >
                         <div style={{ background: TC.BREAK_BG, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 13, fontWeight: 700, color: TC.BREAK_FG }}>☕ 休憩</span>
-                          <span style={{ marginLeft: 'auto', fontSize: 11, color: TC.BREAK_FG, fontWeight: 600 }}>{fmtTs(g.start, g.end)}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 11, color: TC.BREAK_FG, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {fmtTs(g.start, g.end)}
+                            <span style={{ fontSize: 11, color: TC.BREAK_FG, opacity: 0.6 }}>✏️</span>
+                          </span>
                         </div>
                         {g.start.locationName && <div style={{ padding: '4px 12px', fontSize: 11, color: '#6b7280' }}>📍 {g.start.locationName}</div>}
-                      </div>
+                      </button>
                     );
                   }
                   const act = g.act;
@@ -435,17 +572,25 @@ type ActGroup =
                   const isF = ['FUELING','FUEL'].includes(act.activityType);
                   const singleItemsLabel = (act.itemNames && act.itemNames.length > 0) ? act.itemNames.join('、') : act.itemName;
                   return (
-                    <div key={gi} style={{ border: `1.5px solid ${isF ? TC.FUEL_BORDER : TC.OTHER_BORDER}`, borderRadius: 10, padding: '8px 12px', background: isF ? TC.FUEL_BG : TC.OTHER_BG }}>
+                    <button
+                      key={gi}
+                      type="button"
+                      onClick={() => setEditingActivity(act)}
+                      style={{ width: '100%', textAlign: 'left', cursor: 'pointer', border: `1.5px solid ${isF ? TC.FUEL_BORDER : TC.OTHER_BORDER}`, borderRadius: 10, padding: '8px 12px', background: isF ? TC.FUEL_BG : TC.OTHER_BG }}
+                    >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: isF ? TC.FUEL_FG : TC.OTHER_FG }}>{info.icon} {info.label}</span>
-                        <span style={{ fontSize: 11, color: '#6b7280' }}>{fmtTs(act, null)}</span>
+                        <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {fmtTs(act, null)}
+                          <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                        </span>
                       </div>
                       {act.locationName && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>📍 {act.locationName}</div>}
                       {singleItemsLabel && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {singleItemsLabel} × {act.quantity}{act.unit}</div>}
                       {act.notes && !['積込完了','荷降完了','運行開始'].includes(act.notes) && (
                         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{act.notes}</div>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -525,6 +670,26 @@ type ActGroup =
             setAddEventOpen(false);
             fetchDetail();
           }}
+        />
+      )}
+
+      {/* ✅ 運行中の画面（OperationRecord）と全く同じ編集シート。積込・荷降・休憩・給油すべて共通コンポーネントで編集可能 */}
+      {editingActivity && (
+        <ActivityEditSheet
+          activity={{ ...editingActivity, customerName: editingActivity.customerName ?? undefined }}
+          operationId={id || ''}
+          onClose={() => setEditingActivity(null)}
+          onDeleted={() => {
+            setEditingActivity(null);
+            fetchDetail();
+          }}
+          onSaved={() => {
+            // ✅ 客先変更の積込〜荷降ペアへのカスケード等、サーバー側の最新状態を必ず取り直す
+            setEditingActivity(null);
+            fetchDetail();
+          }}
+          customers={detailCustomers}
+          items={detailItems}
         />
       )}
     </div>

@@ -15,6 +15,7 @@ import {
   Search,
   ChevronRight,
   RefreshCw,
+  Package,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiService } from '../services/api';
@@ -324,8 +325,8 @@ const OperationHistory: React.FC = () => {
                 </div>
               )}
 
-              {/* 運行情報グリッド */}
-              <div className="grid grid-cols-3 gap-2 mb-3">
+              {/* 運行情報グリッド（✅ 2x2レイアウトに統一: 運行詳細画面と同じ配置） */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
                 {/* 運行時間 */}
                 <div className="text-center bg-blue-50 rounded-lg py-2">
                   <Clock className="w-4 h-4 text-blue-600 mx-auto mb-1" />
@@ -345,21 +346,19 @@ const OperationHistory: React.FC = () => {
                 </div>
 
                 {/* 積込回数 */}
-                <div className="text-center bg-blue-50 rounded-lg py-2">
-                  <MapPin className="w-4 h-4 text-blue-600 mx-auto mb-1" />
+                <div className="text-center bg-orange-50 rounded-lg py-2">
+                  <Package className="w-4 h-4 text-orange-600 mx-auto mb-1" />
                   <div className="text-xs text-gray-500 mb-0.5">積込回数</div>
-                  <div className="text-sm font-semibold text-blue-700">
+                  <div className="text-sm font-semibold text-orange-700">
                     {operation.loadingCount}回
                   </div>
                 </div>
-              </div>
 
-              {/* 積降回数（2行目） */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="text-center bg-orange-50 rounded-lg py-2">
-                  <MapPin className="w-4 h-4 text-orange-600 mx-auto mb-1" />
+                {/* 積降回数 */}
+                <div className="text-center bg-purple-50 rounded-lg py-2">
+                  <MapPin className="w-4 h-4 text-purple-600 mx-auto mb-1" />
                   <div className="text-xs text-gray-500 mb-0.5">積降回数</div>
-                  <div className="text-sm font-semibold text-orange-700">
+                  <div className="text-sm font-semibold text-purple-700">
                     {operation.unloadingCount}回
                   </div>
                 </div>
