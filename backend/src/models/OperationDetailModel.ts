@@ -65,6 +65,7 @@ export interface OperationDetailCreateDTO {
   activityType: string;
   locationId?: string;
   itemId?: string;
+  customerId?: string;
   plannedTime?: Date;
   actualStartTime?: Date;
   actualEndTime?: Date;
@@ -85,6 +86,7 @@ export interface OperationDetailUpdateDTO {
   activityType?: string;
   locationId?: string;
   itemId?: string;
+  customerId?: string;
   plannedTime?: Date;
   actualStartTime?: Date;
   actualEndTime?: Date;
@@ -311,6 +313,14 @@ export class OperationDetailService {
         logger.info('✅ itemId を設定しました', { itemId: data.itemId });
       } else {
         logger.info('⏭️ itemId が空のため items リレーションをスキップ');
+      }
+
+      // 積込～荷降しごとに独立した客先情報（customerId が有効な場合のみ customers リレーションを設定）
+      if (data.customerId && data.customerId.trim() !== '') {
+        createData.customers = {
+          connect: { id: data.customerId }
+        };
+        logger.info('✅ customerId を設定しました', { customerId: data.customerId });
       }
 
       logger.info('🔧 Prisma createData 構築完了', {

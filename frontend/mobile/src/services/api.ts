@@ -111,6 +111,7 @@ export interface RecordLoadingArrivalRequest {
   itemId?: string;           // 品目ID（オプション）
   selectedItemIds?: string[];  // ✅ 複数品目ID
   customItemName?: string;   // ✅ 手入力品目名（マスタにない場合）
+  customerId?: string;       // ✅ この積込だけの独立した客先
   quantity?: number;         // 積載量（オプション）
   notes?: string;            // メモ（オプション）
 }
@@ -123,6 +124,7 @@ export interface RecordUnloadingArrivalRequest {
   accuracy?: number;         // GPS測位精度（メートル）
   arrivalTime?: Date | string; // 到着時刻（省略時は現在時刻）
   itemId?: string;           // 品目ID（オプション）
+  customerId?: string;       // ✅ この荷降だけの独立した客先
   quantity?: number;         // 積降量（オプション）
   notes?: string;            // メモ（オプション）
 }
@@ -137,6 +139,7 @@ export interface StartUnloadingRequest {
   accuracy?: number;         // GPS測位精度（メートル）
   startTime?: Date | string; // 開始時刻（省略時は現在時刻）
   notes?: string;            // メモ（オプション）
+  customerId?: string;       // ✅ この荷降だけの独立した客先
 }
 
 /**
@@ -168,6 +171,7 @@ export interface StartLoadingRequest {
   quantity?: number;
   customItemName?: string;
   selectedItemIds?: string[];
+  customerId?: string;       // ✅ この積込だけの独立した客先
 }
 
 /**

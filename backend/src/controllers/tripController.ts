@@ -710,6 +710,8 @@ export class TripController {
         ...(Array.isArray((activityData as any).selectedItemIds) && (activityData as any).selectedItemIds.length > 0
           ? { selectedItemIds: (activityData as any).selectedItemIds }
           : {}),
+        // 積込～荷降しごとに独立した客先情報を持たせるため customerId をパススルー
+        ...((activityData as any).customerId ? { customerId: (activityData as any).customerId } : {}),
         // 🆕 GPS データを operation_details に保存
         latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude ? Number(activityData.longitude) : undefined,
@@ -997,6 +999,8 @@ export class TripController {
         startTime: activityData.startTime || new Date(),
         endTime: activityData.endTime,
         notes: activityData.notes || '',
+        // 積込～荷降しごとに独立した客先情報を持たせるため customerId をパススルー
+        ...((activityData as any).customerId ? { customerId: (activityData as any).customerId } : {}),
         // 🆕 GPS データを operation_details に保存
         latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude ? Number(activityData.longitude) : undefined,

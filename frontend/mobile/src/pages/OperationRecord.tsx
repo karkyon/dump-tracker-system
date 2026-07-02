@@ -675,9 +675,11 @@ const OperationRecord: React.FC = () => {
             longitude: currentPosition.coords.longitude,
             accuracy: currentPosition.coords.accuracy,
             arrivalTime: new Date(),
+            // ✅ この荷降だけの独立した客先（作成時点の運行客先を引き継ぐ）
+            customerId: operationStore.customerId || undefined,
             // U3: 即時完了
             ...(_upNow === 3 ? { endTime: new Date() } : {}),
-          });
+          } as any);
           console.log('✅ 荷降場所到着記録完了');
         } else {
           console.log('[U1] 荷降場所到着: recordUnloadingArrival スキップ。handleUnloadingStartで記録。');
@@ -839,8 +841,9 @@ const OperationRecord: React.FC = () => {
               longitude: currentPosition.coords.longitude,
               accuracy: currentPosition.coords.accuracy,
               arrivalTime: new Date(),
+              customerId: operationStore.customerId || undefined,
               ...(_upReg === 3 ? { endTime: new Date() } : {}),
-            });
+            } as any);
             console.log('✅ 荷降場所到着記録完了');
           } else {
             console.log('[U1新規地点] recordUnloadingArrival スキップ。handleUnloadingStartで記録。');
@@ -1020,6 +1023,7 @@ const OperationRecord: React.FC = () => {
       const _p1Lat = (operationStore as any).loadingLocationLat as number | undefined;
       const _p1Lng = (operationStore as any).loadingLocationLng as number | undefined;
       const _p1Acc = (operationStore as any).loadingLocationAccuracy as number | undefined;
+      const _p1CustomerId = (operationStore as any).loadingCustomerId as string | undefined;
       await retryWithBackoff(
         () => apiService.startLoadingAtLocation(currentOperationId, {
           locationId: loadingLocationId,
@@ -1033,7 +1037,9 @@ const OperationRecord: React.FC = () => {
           selectedItemIds: _p1SelectedItemIds,
           quantity: _p1Quantity,
           customItemName: _p1CustomItemName,
-        }),
+          // ✅ この積込だけの独立した客先
+          customerId: _p1CustomerId,
+        } as any),
         3, 1000, '積込開始'
       );
       setOperation(prev => ({ ...prev, phase: 'LOADING_IN_PROGRESS' }));
@@ -1131,7 +1137,8 @@ const OperationRecord: React.FC = () => {
           longitude: _u1Lng ?? currentPosition?.coords.longitude ?? undefined,
           accuracy: _u1Acc ?? currentPosition?.coords.accuracy ?? undefined,
           notes: '荷降開始',
-        }),
+          customerId: operationStore.customerId || undefined,
+        } as any),
         3, 1000, '荷降開始'
       );
       setOperation(prev => ({ ...prev, phase: 'UNLOADING_IN_PROGRESS' }));

@@ -126,6 +126,7 @@ export interface CreateTripDetailRequest {
   accuracy?: number;
   selectedItemIds?: string[];
   customItemName?: string;
+  customerId?: string;
 }
 
 // =====================================

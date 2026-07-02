@@ -71,6 +71,7 @@ interface Item {
 interface FormData {
   locationId: string;
   locationName: string;
+  clientId: string;
   clientName: string;
   selectedItemIds: string[];
   selectedItemNames: string[];
@@ -100,6 +101,7 @@ const LoadingInput: React.FC = () => {
   // REQ-003修正: 客先名は operationStore.customerName（運行開始時に選択した客先）を使用
   // 地点の contactPerson（担当者名）は客先名ではないため使用しない
   const resolvedClientName = operationStore.customerName || '';
+  const resolvedClientId = operationStore.customerId || '';
 
   // REQ-020: 写真撮影
   const [cargoPhotoUrl, setCargoPhotoUrl] = useState<string | null>(null);
@@ -127,6 +129,7 @@ const LoadingInput: React.FC = () => {
   const [formData, setFormData] = useState<FormData>({
     locationId: locationState?.locationId || '',
     locationName: locationState?.locationName || '',
+    clientId: resolvedClientId,
     clientName: resolvedClientName,
     selectedItemIds: [],
     selectedItemNames: [],
@@ -175,7 +178,7 @@ const LoadingInput: React.FC = () => {
       );
       if (res.success) {
         operationStore.setCustomerInfo({ customerId, customerName });
-        setFormData(prev => ({ ...prev, clientName: customerName }));
+        setFormData(prev => ({ ...prev, clientId: customerId, clientName: customerName }));
         toast.success(`客先を「${customerName}」に変更しました`);
         setShowCustomerDialog(false);
         setShowNewCustomerForm(false);
@@ -446,6 +449,7 @@ const LoadingInput: React.FC = () => {
         // 場所・品目をstoreに保存（handleLoadingStartで使用）
         operationStore.setLoadingLocation(formData.locationName, formData.locationId);
         (operationStore as any).loadingItemId = itemId || undefined;
+        (operationStore as any).loadingCustomerId = formData.clientId || undefined;
         (operationStore as any).loadingCustomItemName = formData.customItemName || undefined;
         (operationStore as any).loadingSelectedItemIds = formData.selectedItemIds.length > 0 ? formData.selectedItemIds : undefined;
         (operationStore as any).loadingQuantity = formData.quantity;
@@ -476,6 +480,7 @@ const LoadingInput: React.FC = () => {
         accuracy: position.coords.accuracy,
         arrivalTime: _nowTime,
         itemId: itemId,
+        customerId: formData.clientId || undefined,  // ✅ この積込だけの独立した客先
         selectedItemIds: formData.selectedItemIds.length > 0 ? formData.selectedItemIds : undefined,
         customItemName: formData.customItemName || undefined,  // ✅ 手入力品目名
         quantity: formData.quantity,

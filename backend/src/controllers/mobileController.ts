@@ -1652,7 +1652,8 @@ export class MobileController {
           locationLng: d.locations?.longitude != null ? Number(d.locations.longitude) : (d.longitude != null ? Number(d.longitude) : undefined),
           locationId: d.locationId || d.location_id || undefined,
           // \u2705 \u5ba2\u5148\u540d
-          customerName: (trip as any).customer?.name || null,
+          customerId: d.customerId || d.customer_id || undefined,
+          customerName: d.customers?.name || (trip as any).customer?.name || null,
         };
       }).filter((a: any) => {
         // \u2705 FIX: \u7a7aLOADING\uff08\u5230\u7740\u306e\u307f\u30fb\u54c1\u76ee\u306a\u3057\u30fb\u5b8c\u4e86\u306a\u3057\uff09\u306f\u975e\u8868\u793a

@@ -910,6 +910,8 @@ class TripService {
             include: {
               locations: true,
               items: true,
+              // 積込～荷降しごとに独立した客先情報
+              customers: { select: { id: true, name: true } },
               operationDetailItems: {
                 include: { items: true },
                 orderBy: { sequenceOrder: 'asc' }
@@ -1122,6 +1124,8 @@ class TripService {
         operationId: tripId,
         locationId: activityData.locationId && activityData.locationId.trim() !== '' ? activityData.locationId : undefined as any,
         itemId: activityData.itemId && activityData.itemId.trim() !== '' ? activityData.itemId : undefined,
+        // 積込～荷降しごとに独立した客先情報を持たせる（運行全体で共有していたcustomerIdとは別に個別保持）
+        customerId: (activityData as any).customerId && String((activityData as any).customerId).trim() !== '' ? (activityData as any).customerId : undefined,
         sequenceNumber: nextSequenceNumber,
         activityType: activityData.activityType,
         actualStartTime: activityData.startTime,
@@ -1231,6 +1235,8 @@ class TripService {
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
         itemId: startItemId || undefined,  // P1: 品目情報あり、他パターン: undefined
+        // 積込～荷降しごとに独立した客先情報を持たせる
+        customerId: (data as any).customerId || undefined,
         sequenceNumber: nextSequenceNumber,
         activityType: 'LOADING' as ActivityType,
         actualStartTime: data.startTime || new Date(),
@@ -1365,6 +1371,8 @@ class TripService {
         {
           actualEndTime: data.endTime || new Date(),
           itemId: resolvedItemId,  // ✅ 修正: 既存 itemId を維持
+          // 積込～荷降しごとに独立した客先情報（未送信なら既存値を維持）
+          ...((data as any).customerId ? { customerId: (data as any).customerId } : {}),
           quantityTons: data.quantity !== undefined
             ? data.quantity
             : Number(loadingDetail.quantityTons),
@@ -1473,6 +1481,8 @@ class TripService {
       const detailData: OperationDetailCreateDTO = {
         operationId: tripId,
         itemId: undefined,  // 積降開始時点では品目未確定
+        // この荷降だけの独立した客先
+        customerId: (data as any).customerId || undefined,
         sequenceNumber: nextSequenceNumber,
         activityType: 'UNLOADING' as ActivityType,
         actualStartTime: data.startTime || new Date(),

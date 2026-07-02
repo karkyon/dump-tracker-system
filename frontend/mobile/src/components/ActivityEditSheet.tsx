@@ -27,6 +27,7 @@ export interface ActivityRecord {
   notes?: string;
   sequenceNumber: number;
   customerName?: string;
+  customerId?: string;
 }
 
 // ✅ 登録場所（LoadingInputと同様の場所マスタ）
@@ -357,7 +358,7 @@ const toISO = (base: string | null, hhmm: string): string => {
 };
 
 const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
-  activity, operationId, onClose, onSaved, onDeleted, items
+  activity, onClose, onSaved, onDeleted, items
 }) => {
   const operationStore = useOperationStore();
   const [startHHMM, setStartHHMM] = useState('');
@@ -395,7 +396,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     setEndHHMM(toHHMM(activity.endTime));
     setLocationName(activity.locationName || '');
     setSelectedLocationId(activity.locationId || '');
-    setCurrentCustomerId(operationStore.customerId ?? '');
+    setCurrentCustomerId(activity.customerId || operationStore.customerId || '');
     setCurrentCustomerName(activity.customerName || (operationStore.customerName ?? ''));
     // ✅ 品目初期値: 複数品目（itemIds）を優先し、なければ単一itemIdにフォールバック
     if (activity.itemIds && activity.itemIds.length > 0) {
@@ -424,7 +425,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     if (!showLocationPicker || localLocations.length > 0) return;
     (async () => {
       try {
-        const res = await (apiService as any).getLocations({ limit: 200 });
+        const res = await (apiService as any).getLocations({ limit: 100 });
         const arr = res?.data?.locations ?? (Array.isArray(res?.data) ? res.data : []);
         setLocalLocations(Array.isArray(arr) ? arr : []);
       } catch { /* ignore */ }
@@ -460,17 +461,10 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     );
   };
 
-  // 客先変更
-  const handleChangeCustomer = async (customerId: string, customerName: string) => {
-    try {
-      await (apiService as any).changeOperationCustomer(operationId, customerId);
-      setCurrentCustomerId(customerId);
-      setCurrentCustomerName(customerName);
-      operationStore.setCustomerInfo?.({ customerId, customerName });
-      toast.success(`客先を「${customerName}」に変更しました`);
-    } catch {
-      toast.error('客先変更に失敗しました');
-    }
+  // 客先変更（この積込／荷降だけに反映。運行全体のcustomerIdは変更しない）
+  const handleChangeCustomer = (customerId: string, customerName: string) => {
+    setCurrentCustomerId(customerId);
+    setCurrentCustomerName(customerName);
     setShowCustomerPicker(false);
   };
 
@@ -506,6 +500,10 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
         if (customItemNameInput.trim()) {
           body.customItemName = customItemNameInput.trim();
         }
+        // ✅ 客先はこの積込だけに保存する（運行全体には波及させない）
+        if (currentCustomerId) {
+          body.customerId = currentCustomerId;
+        }
       }
       if (isFuel(activity.activityType)) {
         if (fuelAmount) body.quantityTons = parseFloat(fuelAmount);
@@ -533,6 +531,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
           customItemName: customItemNameInput.trim() || activity.customItemName,
           quantity: body.quantityTons ?? activity.quantity,
           notes: notes,
+          customerId: body.customerId ?? activity.customerId,
           customerName: currentCustomerName,
         });
       } else {
@@ -601,16 +600,17 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
               </div>
               <input type="text" value={locationName} onChange={e => { setLocationName(e.target.value); setSelectedLocationId(''); }} placeholder="例: 翠香園町ダート" style={{ ...inputStyle, fontSize: 15, height: 44 }} />
             </div>
-            {/* 客先（運行全体で共通の項目のため、この画面からは変更不可） */}
+            {/* 客先（この積込／荷降だけの独立した客先） */}
             <div>
-              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>客先（運行全体で共通）</div>
-              <div style={{ ...inputStyle, height: 44, display: 'flex', alignItems: 'center', background: '#f3f4f6', border: '0.5px solid #e5e7eb' }}>
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>客先</div>
+              <div
+                onClick={() => setShowCustomerPicker(true)}
+                style={{ ...inputStyle, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: '#fff', border: `0.5px solid ${cfg.color}55` }}
+              >
                 <span style={{ fontSize: 14, color: currentCustomerName ? '#374151' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  🏢 {currentCustomerName || '未設定'}
+                  🏢 {currentCustomerName || '（タップして選択）'}
                 </span>
-              </div>
-              <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 3 }}>
-                客先は運行全体で共有される項目のため、個別の積込ごとには変更できません。運行中の画面の「客先切替」から変更してください。
+                <span style={{ fontSize: 10, color: cfg.color, flexShrink: 0, marginLeft: 6 }}>変更 ▾</span>
               </div>
             </div>
             {/* 品目（区分ごとにグループ表示・複数選択チップ）※運行中の積込画面と同じ表示 */}
