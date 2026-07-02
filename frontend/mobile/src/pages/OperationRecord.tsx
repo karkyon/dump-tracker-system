@@ -27,7 +27,7 @@ import { LocationSelectionDialog } from '../components/LocationSelectionDialog';
 import type { NearbyLocationResult } from '../hooks/useNearbyLocationDetection';
 import { LocationRegistrationDialog, type NewLocationData } from '../components/LocationRegistrationDialog';
 import { useOperationStore } from '../stores/operationStore';
-import ActivityEditSheet from '../components/ActivityEditSheet';
+import ActivityEditSheet, { createDraftActivity } from '../components/ActivityEditSheet';
 import type { ActivityRecord } from '../components/ActivityEditSheet';
 import { useAuthStore } from '../stores/authStore';
 
@@ -124,6 +124,9 @@ const OperationRecord: React.FC = () => {
   const [detailCustomers, setDetailCustomers] = useState<{ id: string; name: string }[]>([]);
   const [detailItems, setDetailItems] = useState<{ id: string; name: string; itemType?: string; displayOrder?: number }[]>([]);
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
+  const [insertMode, setInsertMode] = useState(false);
+  const [pickerAfterSeq, setPickerAfterSeq] = useState<number | null>(null);
+  const [creatingActivity, setCreatingActivity] = useState<{ draft: ActivityRecord; afterSeq: number } | null>(null);
   // ✅ BUG-051完全修正: APIレスポンスの運行客先名を保持（storeのcustomerNameに依存しない）
   const [detailOperationCustomerName, setDetailOperationCustomerName] = useState<string | null>(null);
   // ✅ BUG-051最終修正: NOTE含む全アクティビティ（客先変更履歴参照用）
@@ -1789,7 +1792,20 @@ const OperationRecord: React.FC = () => {
             {/* ヘッダー */}
             <div style={{ background: '#5048b8', color: '#fff', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 500 }}>運行詳細情報</span>
-              <button onClick={() => setShowDetailPanel(false)} style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => { setInsertMode(v => !v); setPickerAfterSeq(null); }}
+                  style={{
+                    fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 12,
+                    border: '1.5px solid rgba(255,255,255,0.6)',
+                    background: insertMode ? '#fff' : 'rgba(255,255,255,0.15)',
+                    color: insertMode ? '#5048b8' : '#fff', cursor: 'pointer',
+                  }}
+                >
+                  {insertMode ? '追加をやめる' : '＋ イベント追加'}
+                </button>
+                <button onClick={() => setShowDetailPanel(false)} style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              </div>
             </div>
             {/* サマリー */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#e5e7eb', flexShrink: 0 }}>
@@ -1884,9 +1900,29 @@ const OperationRecord: React.FC = () => {
                   }
                 }
 
+                const maxSeqOf = (g: ActGroup): number => {
+                  if (g.type === 'BREAK') {
+                    return g.end ? (g.end.sequenceNumber ?? g.start.sequenceNumber ?? 0) : (g.start.sequenceNumber ?? 0);
+                  }
+                  return (g.act.sequenceNumber ?? 0);
+                };
+                const renderInsertMarker = (afterSeq: number, mkey: string) => (
+                  <div key={mkey} onClick={() => setPickerAfterSeq(afterSeq)} style={{ display: 'flex', justifyContent: 'center', padding: '3px 0', cursor: 'pointer' }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: '50%', background: '#fff',
+                      border: '2px dashed #60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#2563eb', fontSize: 15, fontWeight: 700, boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                    }}>
+                      ＋
+                    </div>
+                  </div>
+                );
+
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {insertMode && renderInsertMarker(0, 'ins-top')}
                     {groups.map((g, gi) => {
+                      const groupNode = (() => {
                       if (g.type === 'LOADING_GROUP' || g.type === 'UNLOADING_GROUP') {
                         const isLd = g.type === 'LOADING_GROUP';
                         const bdr = isLd ? TC.LOADING_BORDER : TC.UNLOADING_BORDER;
@@ -2001,6 +2037,13 @@ const OperationRecord: React.FC = () => {
                             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{act.notes}</div>
                           )}
                         </button>
+                      );
+                      })();
+                      return (
+                        <React.Fragment key={gi}>
+                          {groupNode}
+                          {insertMode && renderInsertMarker(maxSeqOf(g), `ins-${gi}`)}
+                        </React.Fragment>
                       );
                     })}
                   </div>
@@ -2205,6 +2248,55 @@ const OperationRecord: React.FC = () => {
               prev.map(a => a.id === updated.id ? { ...a, ...updated } : a)
             );
             setEditingActivity(null);
+          }}
+          customers={detailCustomers}
+          items={detailItems}
+        />
+      )}
+
+      {pickerAfterSeq !== null && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}
+          onClick={() => setPickerAfterSeq(null)}
+        >
+          <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', padding: '14px 16px 20px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10, textAlign: 'center' }}>追加するイベントの種類を選択</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {[
+                { type: 'LOADING', label: '📦 積込', color: '#1565C0', bg: '#E3F2FD' },
+                { type: 'UNLOADING', label: '🚚 荷降', color: '#2E7D32', bg: '#E8F5E9' },
+                { type: 'BREAK_START', label: '☕ 休憩', color: '#6A1B9A', bg: '#F3E5F5' },
+                { type: 'FUELING', label: '⛽ 給油', color: '#E65100', bg: '#FFF3E0' },
+              ].map(t => (
+                <div
+                  key={t.type}
+                  onClick={() => {
+                    setCreatingActivity({ draft: createDraftActivity(t.type), afterSeq: pickerAfterSeq! });
+                    setPickerAfterSeq(null);
+                    setInsertMode(false);
+                  }}
+                  style={{ padding: '14px 8px', textAlign: 'center', borderRadius: 10, background: t.bg, border: `1.5px solid ${t.color}`, color: t.color, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {t.label}
+                </div>
+              ))}
+            </div>
+            <div onClick={() => setPickerAfterSeq(null)} style={{ marginTop: 10, textAlign: 'center', fontSize: 12, color: '#9ca3af', padding: 8, cursor: 'pointer' }}>
+              キャンセル
+            </div>
+          </div>
+        </div>
+      )}
+
+      {creatingActivity && (
+        <ActivityEditSheet
+          activity={creatingActivity.draft}
+          operationId={operationStore.operationId || ''}
+          createMode={{ insertAfterSequenceNumber: creatingActivity.afterSeq, vehicleId: operationStore.vehicleId || undefined }}
+          onClose={() => setCreatingActivity(null)}
+          onSaved={() => {
+            setCreatingActivity(null);
+            fetchDetailActivities();
           }}
           customers={detailCustomers}
           items={detailItems}

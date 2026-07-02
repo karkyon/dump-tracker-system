@@ -48,6 +48,7 @@ interface ActivityEditSheetProps {
   onClose: () => void;
   onSaved: (updatedActivity: ActivityRecord) => void;
   onDeleted?: (activityId: string) => void;
+  createMode?: { insertAfterSequenceNumber: number; vehicleId?: string };
   customers: { id: string; name: string }[];
   // ✅ 区分グループ表示のため itemType/displayOrder を任意で受け付け
   items: { id: string; name: string; itemType?: string; displayOrder?: number }[];
@@ -373,9 +374,29 @@ const toISO = (base: string | null, hhmm: string): string => {
   return d.toISOString();
 };
 
+export function createDraftActivity(activityType: string): ActivityRecord {
+  return {
+    id: '',
+    activityType,
+    locationName: '',
+    itemName: '',
+    itemNames: [],
+    itemIds: [],
+    customItemName: '',
+    quantity: 0,
+    startTime: new Date().toISOString(),
+    endTime: null,
+    notes: '',
+    sequenceNumber: 0,
+    customerName: undefined,
+    customerId: undefined,
+  };
+}
+
 const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
-  activity, onClose, onSaved, onDeleted, items
+  activity, operationId, onClose, onSaved, onDeleted, items, createMode
 }) => {
+  const isNew = !!createMode;
   const operationStore = useOperationStore();
   const [startHHMM, setStartHHMM] = useState('');
   const [endHHMM,   setEndHHMM]   = useState('');
@@ -484,7 +505,102 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     setShowCustomerPicker(false);
   };
 
+  const handleCreate = async () => {
+    if (!startHHMM) { toast.error('開始時刻を入力してください'); return; }
+    if (isLoad(activity.activityType) && selectedItemIds.length === 0 && !customItemNameInput.trim()) {
+      toast.error('品目を選択してください'); return;
+    }
+    setIsSaving(true);
+    try {
+      const insertAfter = createMode!.insertAfterSequenceNumber;
+      const nowIso = new Date().toISOString();
+
+      if (isBreak(activity.activityType)) {
+        const startPayload: Record<string, any> = {
+          operationId,
+          activityType: 'BREAK_START',
+          insertAfterSequenceNumber: insertAfter,
+          actualStartTime: toISO(nowIso, startHHMM),
+          quantityTons: 0,
+          notes: notes || undefined,
+        };
+        const startRes = await (apiService as any).createOperationDetail(startPayload);
+        const createdStart = startRes?.data;
+        if (!(startRes?.success || createdStart?.id)) {
+          toast.error(startRes?.message || '休憩開始の追加に失敗しました');
+          setIsSaving(false);
+          return;
+        }
+        if (endHHMM && createdStart?.sequenceNumber !== undefined) {
+          const endPayload: Record<string, any> = {
+            operationId,
+            activityType: 'BREAK_END',
+            insertAfterSequenceNumber: createdStart.sequenceNumber,
+            actualStartTime: toISO(nowIso, endHHMM),
+            actualEndTime: toISO(nowIso, endHHMM),
+            quantityTons: 0,
+          };
+          const endRes = await (apiService as any).createOperationDetail(endPayload);
+          if (!(endRes?.success || endRes?.data?.id)) {
+            toast.error(endRes?.message || '休憩終了の追加に失敗しました（休憩開始は追加済みです）');
+            setIsSaving(false);
+            return;
+          }
+        }
+        toast.success('休憩を追加しました');
+        onSaved({ ...activity });
+        setIsSaving(false);
+        return;
+      }
+
+      const payload: Record<string, any> = {
+        operationId,
+        activityType: activity.activityType,
+        insertAfterSequenceNumber: insertAfter,
+        actualStartTime: toISO(nowIso, startHHMM),
+        actualEndTime: endHHMM ? toISO(nowIso, endHHMM) : undefined,
+        quantityTons: 0,
+        notes: notes || undefined,
+      };
+      if (selectedLocationId) {
+        payload.locationId = selectedLocationId;
+      } else if (locationName.trim()) {
+        payload.locationName = locationName.trim();
+      }
+      if (pinLat !== undefined && pinLng !== undefined) {
+        payload.latitude = pinLat;
+        payload.longitude = pinLng;
+      }
+      if (isLoad(activity.activityType)) {
+        if (selectedItemIds.length > 0) {
+          payload.itemId = selectedItemIds[0];
+          payload.selectedItemIds = selectedItemIds;
+        }
+        if (quantity) payload.quantityTons = parseFloat(quantity);
+        if (customItemNameInput.trim()) payload.customItemName = customItemNameInput.trim();
+        if (currentCustomerId) payload.customerId = currentCustomerId;
+      }
+      if (isFuel(activity.activityType)) {
+        if (fuelAmount) payload.quantityTons = parseFloat(fuelAmount);
+        if (fuelCost) payload.fuelCostYen = parseFloat(fuelCost);
+      }
+
+      const res = await (apiService as any).createOperationDetail(payload);
+      if (res?.success || res?.data?.id) {
+        toast.success('イベントを追加しました');
+        onSaved({ ...activity });
+      } else {
+        toast.error(res?.message || '追加に失敗しました');
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || '追加に失敗しました');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSave = async () => {
+    if (isNew) { return handleCreate(); }
     if (!startHHMM) { toast.error('開始時刻を入力してください'); return; }
     if (isLoad(activity.activityType) && selectedItemIds.length === 0 && !customItemNameInput.trim()) {
       toast.error('品目を選択してください'); return;
@@ -626,7 +742,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
         {/* ヘッダー */}
         <div style={{ background: `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.colorLight} 100%)`, color: '#fff', padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 12, opacity: .85, cursor: 'pointer', whiteSpace: 'nowrap', color: '#fff' }} onClick={onClose}>← 詳細へ戻る</span>
-          <span style={{ fontSize: 14, fontWeight: 500, flex: 1, textAlign: 'center', color: '#fff' }}>{cfg.label}</span>
+          <span style={{ fontSize: 14, fontWeight: 500, flex: 1, textAlign: 'center', color: '#fff' }}>{isNew ? cfg.label.replace('編集', '追加') : cfg.label}</span>
           <span style={{ fontSize: 9, fontWeight: 500, padding: '2px 7px', borderRadius: 8, background: 'rgba(255,255,255,0.22)', color: '#fff' }}>{cfg.badge}</span>
         </div>
         {/* バナー */}
@@ -793,6 +909,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
           />
 
           {/* 削除セクション */}
+          {!isNew && (
           <div style={{ borderTop: '0.5px solid #fee2e2', paddingTop: 10, marginTop: 4 }}>
             {!showDeleteConfirm ? (
               <button onClick={() => setShowDeleteConfirm(true)} style={{ width: '100%', padding: '9px', background: '#fff', border: '0.5px solid #fca5a5', borderRadius: 7, color: '#ef4444', fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
@@ -811,13 +928,14 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* フッター */}
         <div style={{ padding: '8px 12px 12px', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 7, borderTop: '0.5px solid #e5e7eb', background: '#fff', flexShrink: 0 }}>
           <div style={{ padding: 9, textAlign: 'center', background: '#f3f4f6', borderRadius: 7, fontSize: 12, color: '#6b7280', border: '0.5px solid #d1d5db', cursor: 'pointer' }} onClick={onClose}>取消</div>
           <div style={{ padding: 9, textAlign: 'center', background: isSaving ? '#9ca3af' : `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.colorLight} 100%)`, borderRadius: 7, fontSize: 13, fontWeight: 500, color: '#fff', cursor: 'pointer' }} onClick={isSaving ? undefined : handleSave}>
-            {isSaving ? '保存中...' : '保存する'}
+            {isSaving ? (isNew ? '追加中...' : '保存中...') : (isNew ? '追加する' : '保存する')}
           </div>
         </div>
       </div>
