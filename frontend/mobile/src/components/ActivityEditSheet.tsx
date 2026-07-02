@@ -584,7 +584,12 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
         }
         if (quantity) payload.quantityTons = parseFloat(quantity);
         if (customItemNameInput.trim()) payload.customItemName = customItemNameInput.trim();
-        if (currentCustomerId) payload.customerId = currentCustomerId;
+      }
+      // ✅ 修正: 客先は積込・荷降どちらの新規追加でも保存する（従来isLoad限定で荷降側が欠落していた）
+      // 荷降は画面上に客先選択UIを出さない設計だが、＋マーカーからの追加時は
+      // pickerContext経由で直前の積込イベントと同じ客先が自動セットされているため、それを保存する。
+      if ((isLoad(activity.activityType) || isUnl(activity.activityType)) && currentCustomerId) {
+        payload.customerId = currentCustomerId;
       }
       if (isFuel(activity.activityType)) {
         if (fuelAmount) payload.quantityTons = parseFloat(fuelAmount);
