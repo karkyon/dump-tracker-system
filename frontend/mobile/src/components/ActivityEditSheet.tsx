@@ -424,8 +424,8 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     if (!showLocationPicker || localLocations.length > 0) return;
     (async () => {
       try {
-        const res = await (apiService as any).getLocations();
-        const arr = res?.data ?? [];
+        const res = await (apiService as any).getLocations({ limit: 200 });
+        const arr = res?.data?.locations ?? (Array.isArray(res?.data) ? res.data : []);
         setLocalLocations(Array.isArray(arr) ? arr : []);
       } catch { /* ignore */ }
     })();
@@ -601,17 +601,16 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
               </div>
               <input type="text" value={locationName} onChange={e => { setLocationName(e.target.value); setSelectedLocationId(''); }} placeholder="例: 翠香園町ダート" style={{ ...inputStyle, fontSize: 15, height: 44 }} />
             </div>
-            {/* 客先（変更可能） */}
+            {/* 客先（運行全体で共通の項目のため、この画面からは変更不可） */}
             <div>
-              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>客先</div>
-              <div
-                onClick={() => setShowCustomerPicker(true)}
-                style={{ ...inputStyle, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: '#fff', border: `0.5px solid ${cfg.color}55` }}
-              >
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>客先（運行全体で共通）</div>
+              <div style={{ ...inputStyle, height: 44, display: 'flex', alignItems: 'center', background: '#f3f4f6', border: '0.5px solid #e5e7eb' }}>
                 <span style={{ fontSize: 14, color: currentCustomerName ? '#374151' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  🏢 {currentCustomerName || '（タップして変更）'}
+                  🏢 {currentCustomerName || '未設定'}
                 </span>
-                <span style={{ fontSize: 10, color: cfg.color, flexShrink: 0, marginLeft: 6 }}>変更 ▾</span>
+              </div>
+              <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 3 }}>
+                客先は運行全体で共有される項目のため、個別の積込ごとには変更できません。運行中の画面の「客先切替」から変更してください。
               </div>
             </div>
             {/* 品目（区分ごとにグループ表示・複数選択チップ）※運行中の積込画面と同じ表示 */}
@@ -822,8 +821,12 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
                     setLocationName(l.name);
                     setSelectedLocationId(l.id);
                     if (l.latitude != null && l.longitude != null) {
-                      setPinLat(l.latitude);
-                      setPinLng(l.longitude);
+                      const latNum = Number(l.latitude);
+                      const lngNum = Number(l.longitude);
+                      if (!Number.isNaN(latNum) && !Number.isNaN(lngNum)) {
+                        setPinLat(latNum);
+                        setPinLng(lngNum);
+                      }
                     }
                     setShowLocationPicker(false);
                   }}
