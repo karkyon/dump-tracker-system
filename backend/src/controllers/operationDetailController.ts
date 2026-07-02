@@ -774,7 +774,7 @@ export class OperationDetailController {
     } catch { /* 次へ */ }
 
     // operation_details
-    const allowedFields = ['sequenceNumber', 'activityType', 'locationId', 'itemId',
+    const allowedFields = ['sequenceNumber', 'activityType', 'locationId', 'itemId', 'customerId',
       'plannedTime', 'actualStartTime', 'actualEndTime', 'quantityTons', 'notes',
       'latitude', 'longitude', 'altitude', 'gpsAccuracyMeters', 'gpsRecordedAt'];
     const data: any = {};
