@@ -835,7 +835,7 @@ export class OperationDetailController {
     // actualStartTime/actualEndTime \u306f\u6587\u5b57\u5217\u2192Date\u306b\u5909\u63db
     // ================================================================
     const allowedFields = [
-      'sequenceNumber', 'activityType', 'locationId', 'itemId',
+      'sequenceNumber', 'activityType', 'locationId', 'itemId', 'customerId',
       'plannedTime', 'actualStartTime', 'actualEndTime',
       'quantityTons', 'notes', 'imageUrl',  // REQ-020
       'fuelCostYen', 'odometerKm',          // \u7d66\u6cb9\u91d1\u984d\u30fb\u7d66\u6cb9\u6642\u8d70\u884c\u8ddd\u96e2\uff08\u30e2\u30d0\u30a4\u30eb\u7de8\u96c6\u30b7\u30fc\u30c8\u5bfe\u5fdc\uff09
@@ -937,6 +937,49 @@ export class OperationDetailController {
         }
       }
       logger.info('\u2705 [updateOperationDetail] operationDetailItems\u518d\u4fdd\u5b58\u5b8c\u4e86', { id, count: rawData.selectedItemIds.length });
+    }
+
+    // 積込～荷降しは1サイクルにつき1つの客先という要件のため、
+    // customerId が変更された場合はペアとなる積込/荷降にも同じ客先を反映する
+    if (data.customerId !== undefined && (currentActivityType === 'LOADING' || currentActivityType === 'UNLOADING')) {
+      try {
+        const opIdForPair = _existingDetail?.operationId;
+        if (opIdForPair) {
+          const siblings = await _db.operationDetail.findMany({
+            where: { operationId: opIdForPair },
+            orderBy: { sequenceNumber: 'asc' },
+            select: { id: true, activityType: true, sequenceNumber: true }
+          });
+          const myIndex = siblings.findIndex((s: any) => s.id === id);
+          let pairedId: string | null = null;
+          if (myIndex !== -1) {
+            if (currentActivityType === 'LOADING') {
+              for (let k = myIndex + 1; k < siblings.length; k++) {
+                const s = siblings[k];
+                if (!s) continue;
+                if (s.activityType === 'LOADING') break;
+                if (s.activityType === 'UNLOADING') { pairedId = s.id; break; }
+              }
+            } else {
+              for (let k = myIndex - 1; k >= 0; k--) {
+                const s = siblings[k];
+                if (!s) continue;
+                if (s.activityType === 'UNLOADING') break;
+                if (s.activityType === 'LOADING') { pairedId = s.id; break; }
+              }
+            }
+          }
+          if (pairedId) {
+            await _db.operationDetail.update({
+              where: { id: pairedId },
+              data: { customerId: data.customerId }
+            });
+            logger.info('積込〜荷降ペアへの客先反映完了', { id, pairedId, customerId: data.customerId });
+          }
+        }
+      } catch (e) {
+        logger.warn('積込〜荷降ペアへの客先反映に失敗（本体の更新は成功済み）', { id, error: e instanceof Error ? e.message : String(e) });
+      }
     }
 
     return sendSuccess(res, operationDetail);
