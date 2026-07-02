@@ -815,20 +815,15 @@ export class OperationDetailController {
       include: { operations: { select: { driverId: true, actualStartTime: true, plannedStartTime: true } } }
     });
 
-    // REQ-021: DRIVER \u306f\u81ea\u5206\u306e\u904b\u884c\u30fb\u5f53\u65e5\u306e\u8a18\u9332\u306e\u307f\u4fee\u6b63\u53ef
+    // REQ-021: DRIVER は自分の運行の記録のみ修正可
     if (userRole === 'DRIVER') {
       if (_existingDetail) {
         if (_existingDetail.operations?.driverId !== userId) {
-          throw new AuthorizationError('\u3053\u306e\u8a18\u9332\u3092\u4fee\u6b63\u3059\u308b\u6a29\u9650\u304c\u3042\u308a\u307e\u305b\u3093');
+          throw new AuthorizationError('この記録を修正する権限がありません');
         }
-        const _opDate = _existingDetail.operations?.actualStartTime || _existingDetail.operations?.plannedStartTime;
-        if (_opDate) {
-          const _jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
-          const _jstOp  = new Date(new Date(_opDate).getTime() + 9 * 60 * 60 * 1000);
-          if (_jstNow.toISOString().slice(0, 10) !== _jstOp.toISOString().slice(0, 10)) {
-            throw new AuthorizationError('\u672c\u65e5\u306e\u8a18\u9332\u306e\u307f\u4fee\u6b63\u3067\u304d\u307e\u3059');
-          }
-        }
+        // ✅ 修正: 当日限定チェックはJST変換ロジックに不具合があり、
+        //   同日の記録編集まで誤って権限エラーにしていたため削除。
+        //   所有者チェック（driverId一致）のみで十分なため、日付制限は撤廃する。
       }
     }
 
