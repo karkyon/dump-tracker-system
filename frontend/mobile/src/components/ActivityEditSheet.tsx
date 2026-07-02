@@ -780,7 +780,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
           {isBreak(activity.activityType) && (
             <div>
               <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>備考 <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 400 }}>任意</span></div>
-              <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="例: 疲労休憩" style={inputStyle} />
+              <input type="text" value={notes} onChange={e => setNotes(e.target.value)} style={inputStyle} />
             </div>
           )}
 

@@ -616,6 +616,30 @@ export class OperationDetailController {
 
     logger.info('運行詳細作成', { userId, data });
 
+    // ✅ 新機能: イベントとイベントの間に挿入する場合（運行履歴編集画面の「+」マーカーからの追加）
+    // insertAfterSequenceNumber で指定された値より大きい sequenceNumber を持つ既存レコードを
+    // すべて+1して後ろへずらし、空いた位置(insertAfterSequenceNumber+1)に新規レコードを挿入する。
+    if (data.insertAfterSequenceNumber !== undefined && data.operationId) {
+      const insertAfter = Number(data.insertAfterSequenceNumber);
+      const db = DatabaseService.getInstance();
+      const toShift = await db.operationDetail.findMany({
+        where: { operationId: data.operationId, sequenceNumber: { gt: insertAfter } },
+        orderBy: { sequenceNumber: 'desc' },
+        select: { id: true, sequenceNumber: true }
+      });
+      // ✅ 大きい番号から順にずらすことで一意制約(operationId, sequenceNumber)に抵触しない
+      for (const rec of toShift) {
+        await db.operationDetail.update({
+          where: { id: rec.id },
+          data: { sequenceNumber: rec.sequenceNumber + 1 }
+        });
+      }
+      data.sequenceNumber = insertAfter + 1;
+      logger.info('✅ [createOperationDetail] 位置指定挿入: 既存レコードをシフト', {
+        insertAfter, shiftedCount: toShift.length, newSequenceNumber: data.sequenceNumber
+      });
+    }
+
     // 🆕 sequenceNumber未指定の場合は運行内最大値+1で自動採番
     if (data.sequenceNumber === undefined && data.operationId) {
       const existingForSeq = await this.operationDetailService.findMany({
@@ -626,6 +650,17 @@ export class OperationDetailController {
       const seqArr = Array.isArray(existingForSeq) ? existingForSeq : [];
       const maxSeq = seqArr[0]?.sequenceNumber ?? 0;
       data.sequenceNumber = maxSeq + 1;
+    }
+
+    // ✅ 手入力の場所名（登録リスト未選択時）は既存の場所マスタから名前一致で解決する
+    // （updateOperationDetailの挙動と統一。一致しない場合はlocationIdなしで作成される）
+    if (data.locationName && !data.locationId) {
+      try {
+        const locs = await this.locationService.findMany({ where: { name: data.locationName } });
+        const arr = Array.isArray(locs) ? locs : (locs as any)?.data || [];
+        if (arr[0]?.id) data.locationId = arr[0].id;
+      } catch { /* 継続 */ }
+      delete data.locationName;
     }
 
     // 🆕 日時文字列をDateに変換
