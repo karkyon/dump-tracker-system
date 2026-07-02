@@ -1144,6 +1144,29 @@ class TripService {
 
       logger.info('作業追加完了', { tripId, detailId: detail.id, sequenceNumber: nextSequenceNumber });
 
+      // ✅ 複数品目: selectedItemIds が送られた場合は operation_detail_items に保存
+      // （従来 addActivity 経由（recordLoadingArrival = P2/P3パターン）ではここが完全に欠落しており、
+      //   選択した品目のうち1件しかDBに保存されないバグの根本原因だった）
+      const addActivitySelectedItemIds = (activityData as any).selectedItemIds as string[] | undefined;
+      if (Array.isArray(addActivitySelectedItemIds) && addActivitySelectedItemIds.length > 0) {
+        const db = DatabaseService.getInstance();
+        await db.operationDetailItem.deleteMany({ where: { operationDetailId: detail.id } });
+        for (let i = 0; i < addActivitySelectedItemIds.length; i++) {
+          const sid = addActivitySelectedItemIds[i];
+          if (sid) {
+            await db.operationDetailItem.create({
+              data: {
+                operationDetailId: detail.id,
+                itemId: sid,
+                quantityTons: activityData.quantity !== undefined ? activityData.quantity : 0,
+                sequenceOrder: i
+              }
+            });
+          }
+        }
+        logger.info('✅ [addActivity] operationDetailItems保存完了', { detailId: detail.id, count: addActivitySelectedItemIds.length });
+      }
+
       return {
         success: true,
         data: detail,

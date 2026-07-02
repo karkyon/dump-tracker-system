@@ -124,6 +124,8 @@ export interface CreateTripDetailRequest {
   latitude?: number;
   longitude?: number;
   accuracy?: number;
+  selectedItemIds?: string[];
+  customItemName?: string;
 }
 
 // =====================================

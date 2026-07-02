@@ -706,6 +706,10 @@ export class TripController {
         notes: activityData.notes || '',
         // ✅ 手入力品目名（tripService.addActivity で notes に変換）
         ...(activityData.customItemName ? { customItemName: activityData.customItemName } : {}),
+        // ✅ 複数品目: selectedItemIds をコントローラーから Service へパススルー（従来ここで欠落していた）
+        ...(Array.isArray((activityData as any).selectedItemIds) && (activityData as any).selectedItemIds.length > 0
+          ? { selectedItemIds: (activityData as any).selectedItemIds }
+          : {}),
         // 🆕 GPS データを operation_details に保存
         latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude ? Number(activityData.longitude) : undefined,

@@ -340,39 +340,30 @@ const OperationHistoryDetail: React.FC = () => {
           const sorted = [...detail.activities].sort(
             (a, b) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0)
           );
-          type ActGroup =
-            | { type: 'LOADING_GROUP';   groupNum: number; arrived: ActivityRecord; completed: ActivityRecord | null }
-            | { type: 'UNLOADING_GROUP'; groupNum: number; arrived: ActivityRecord; completed: ActivityRecord | null }
+type ActGroup =
+            | { type: 'LOADING_GROUP';   groupNum: number; act: ActivityRecord }
+            | { type: 'UNLOADING_GROUP'; groupNum: number; act: ActivityRecord }
             | { type: 'BREAK';           start: ActivityRecord; end: ActivityRecord | null }
             | { type: 'SINGLE';          act: ActivityRecord };
           const groups: ActGroup[] = [];
           const used = new Set<string>();
           let lgNum = 0, ugNum = 0;
           for (let i = 0; i < sorted.length; i++) {
-            const a = sorted[i]!; // noUncheckedIndexedAccess対応
+            const a = sorted[i]!;
             if (used.has(a.id)) continue;
             const at = a.activityType;
-            if (['LOADING','LOADING_START'].includes(at)) {
+            if (at === 'LOADING') {
               lgNum++;
-              const _comp = sorted.slice(i+1).find(b => !used.has(b.id) && ['LOADING_COMPLETE','LOADING_COMPLETED'].includes(b.activityType));
-              const comp: ActivityRecord | null = _comp ?? null;
-              if (comp) used.add(comp.id);
-              groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, arrived: a, completed: comp });
-            } else if (['UNLOADING','UNLOADING_START'].includes(at)) {
+              groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a });
+            } else if (at === 'UNLOADING') {
               ugNum++;
-              const _comp2 = sorted.slice(i+1).find(b => !used.has(b.id) && ['UNLOADING_COMPLETE','UNLOADING_COMPLETED'].includes(b.activityType));
-              const comp2: ActivityRecord | null = _comp2 ?? null;
-              if (comp2) used.add(comp2.id);
-              groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, arrived: a, completed: comp2 });
-            } else if (['LOADING_COMPLETE','LOADING_COMPLETED','UNLOADING_COMPLETE','UNLOADING_COMPLETED'].includes(at)) {
-              groups.push({ type: 'SINGLE', act: a });
+              groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, act: a });
             } else if (['BREAK_START','BREAK'].includes(at)) {
               const _endAct = sorted.slice(i+1).find(b => !used.has(b.id) && b.activityType === 'BREAK_END');
               const endAct: ActivityRecord | null = _endAct ?? null;
               if (endAct) used.add(endAct.id);
               groups.push({ type: 'BREAK', start: a, end: endAct });
             } else if (at === 'BREAK_END') {
-              // 孤立 BREAK_END スキップ
             } else {
               groups.push({ type: 'SINGLE', act: a });
             }
@@ -394,7 +385,10 @@ const OperationHistoryDetail: React.FC = () => {
                     const hBg = isL ? TC.LOADING_BG : TC.UNLOADING_BG;
                     const hFg = isL ? TC.LOADING_FG : TC.UNLOADING_FG;
                     const lbl = isL ? '積込' : '荷降';
-                    const loc = g.arrived.locationName || g.completed?.locationName || '';
+                    const act = g.act;
+                    const loc = act.locationName || '';
+                    const hasCompleted = !!act.endTime;
+                    const itemsLbl = (act.itemNames && act.itemNames.length > 0) ? act.itemNames.join('、') : act.itemName;
                     return (
                       <div key={gi} style={{ border: `2px solid ${bdr}`, borderRadius: 10, overflow: 'hidden' }}>
                         <div style={{ background: hBg, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -402,24 +396,24 @@ const OperationHistoryDetail: React.FC = () => {
                             🚛 {lbl}{g.groupNum > 1 ? `（${g.groupNum}回目）` : ''}
                           </span>
                           {loc && <span style={{ fontSize: 11, color: '#6b7280' }}>─ {loc}</span>}
-                          {(g.arrived.customerName || g.completed?.customerName) && (
+                          {act.customerName && (
                             <span style={{ fontSize: 11, fontWeight: 600, color: hFg }}>
-                              🏢 {g.arrived.customerName || g.completed?.customerName}
+                              🏢 {act.customerName}
                             </span>
                           )}
-                          <span style={{ marginLeft: 'auto', fontSize: 11, color: hFg, fontWeight: 600 }}>{fmtTs(g.arrived, g.completed)}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 11, color: hFg, fontWeight: 600 }}>{fmtTs(act, null)}</span>
                         </div>
-                        <div style={{ padding: '5px 12px', borderBottom: g.completed ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between' }}>
+                        <div style={{ padding: '5px 12px', borderBottom: hasCompleted ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: 12, color: '#374151' }}>● 到着</span>
-                          <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(g.arrived.startTime)}</span>
+                          <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(act.startTime)}</span>
                         </div>
-                        {g.completed && (
+                        {hasCompleted && (
                           <div style={{ padding: '5px 12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <span style={{ fontSize: 12, color: '#374151' }}>● {lbl}完了</span>
-                              <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(g.completed.startTime || g.completed.endTime)}</span>
+                              <span style={{ fontSize: 11, color: '#6b7280' }}>{formatTime(act.endTime)}</span>
                             </div>
-                            {(g.completed.itemNames && g.completed.itemNames.length > 0 ? g.completed.itemNames.join('、') : g.completed.itemName) && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {g.completed.itemNames && g.completed.itemNames.length > 0 ? g.completed.itemNames.join('、') : g.completed.itemName} × {g.completed.quantity}{g.completed.unit}</div>}
+                            {itemsLbl && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>品目: {itemsLbl} × {act.quantity}{act.unit}</div>}
                           </div>
                         )}
                       </div>
