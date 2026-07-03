@@ -186,6 +186,9 @@ export class OperationDetailController {
         include: {
           locations: true,
           items: true,
+          // ✅ 修正②: 積込/荷降1件ごとの客先（operation_details.customerId）を
+          // タイムライン表示で使うために取得する
+          customers: { select: { id: true, name: true } },
                     operationDetailItems: {  // ✅ 複数品目を取得
             include: { items: true },
             orderBy: { sequenceOrder: 'asc' }
@@ -374,8 +377,10 @@ export class OperationDetailController {
             quantityTons: 0,
             items: null,
             notes: detail.notes || null,
-            customerId: operation?.customerId ?? null,
-            customerName: (operation as any)?.customer?.name ?? null,
+            // ✅ 修正②: この積込1件ごとの客先(detail.customerId)を優先し、
+            // 未設定の場合のみ運行全体の客先にフォールバックする
+            customerId: detail.customerId ?? operation?.customerId ?? null,
+            customerName: (detail as any).customers?.name ?? (operation as any)?.customer?.name ?? null,
           });
 
           // 🆕 積込: 積込完了イベント
@@ -395,9 +400,9 @@ export class OperationDetailController {
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
               imageUrl: detail.imageUrl || null,  // REQ-020: 積載物写真URL
-              // ✅ FB-画像2: 客先情報を COMPLETED にも付与
-              customerId: operation?.customerId ?? null,
-              customerName: (operation as any)?.customer?.name ?? null,
+              // ✅ 修正②: この積込1件ごとの客先(detail.customerId)を優先
+              customerId: detail.customerId ?? operation?.customerId ?? null,
+              customerName: (detail as any).customers?.name ?? (operation as any)?.customer?.name ?? null,
               detailItems: (detail.operationDetailItems || []).map((di: any) => ({
                 id: di.id,
                 itemId: di.itemId,
@@ -425,8 +430,9 @@ export class OperationDetailController {
             quantityTons: 0,
             items: null,
             notes: detail.notes || null,
-            customerId: operation?.customerId ?? null,
-            customerName: (operation as any)?.customer?.name ?? null,
+            // ✅ 修正②: この荷降1件ごとの客先(detail.customerId)を優先
+            customerId: detail.customerId ?? operation?.customerId ?? null,
+            customerName: (detail as any).customers?.name ?? (operation as any)?.customer?.name ?? null,
           });
 
           // 🆕 積降: 積降完了イベント（actualEndTime = 積降完了時刻）
@@ -442,9 +448,9 @@ export class OperationDetailController {
               gpsLocation: null,
               quantityTons: Number(detail.quantityTons) || 0,
               items: itemsData,
-              // ✅ FB-画像2: 客先情報を COMPLETED にも付与
-              customerId: operation?.customerId ?? null,
-              customerName: (operation as any)?.customer?.name ?? null,
+              // ✅ 修正②: この荷降1件ごとの客先(detail.customerId)を優先
+              customerId: detail.customerId ?? operation?.customerId ?? null,
+              customerName: (detail as any).customers?.name ?? (operation as any)?.customer?.name ?? null,
               notes: detail.notes || '積降完了'
             });
           }
@@ -793,7 +799,11 @@ export class OperationDetailController {
       if (rawData.longitude !== undefined) data.longitude = rawData.longitude;
       if (rawData.notes !== undefined) data.notes = rawData.notes;
       if (rawData.customerId !== undefined) data.customerId = rawData.customerId;
-      if (rawData.locationName && !rawData.locationId) {
+      // ✅ 修正③: 登録リストから選択した場合はlocationIdが直接送られてくる。
+      // 以前はこのケースが一切処理されず、場所を変更する手段が実質なかった。
+      if (rawData.locationId !== undefined) {
+        data.locationId = rawData.locationId;
+      } else if (rawData.locationName) {
         try {
           const locs = await this.locationService.findMany({ where: { name: rawData.locationName } });
           const arr = Array.isArray(locs) ? locs : (locs as any)?.data || [];

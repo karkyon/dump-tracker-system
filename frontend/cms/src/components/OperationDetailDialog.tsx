@@ -486,6 +486,12 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
   const [pinLat, setPinLat] = React.useState<number | undefined>(undefined);
   const [pinLng, setPinLng] = React.useState<number | undefined>(undefined);
+  // ✅ 修正③: mobile ActivityEditSheetと同じ「登録リストから選択」場所ピッカー
+  const [selectedLocationId, setSelectedLocationId] = React.useState('');
+  const [showLocPicker, setShowLocPicker] = React.useState(false);
+  const [locPickerQuery, setLocPickerQuery] = React.useState('');
+  const [locPickerResults, setLocPickerResults] = React.useState<{ id: string; name: string; address: string }[]>([]);
+  const [locPickerSearching, setLocPickerSearching] = React.useState(false);
   const [currentCustomerId,   setCurrentCustomerId]   = React.useState('');
   const [currentCustomerName, setCurrentCustomerName] = React.useState('');
   const [showCustomerPicker,  setShowCustomerPicker]  = React.useState(false);
@@ -530,6 +536,9 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     }
     setPinLat(event.locationLat != null ? event.locationLat : undefined);
     setPinLng(event.locationLng != null ? event.locationLng : undefined);
+    // ✅ 修正③: 既存の場所IDを引き継ぐ（未選択のまま保存してもlocationIdが消えないように）
+    setSelectedLocationId(event.locationId ?? '');
+    setShowLocPicker(false); setLocPickerQuery(''); setLocPickerResults([]);
     setCurrentCustomerId(event.customerId ?? '');
     setCurrentCustomerName(event.customerName ?? '');
     setShowCustomerPicker(false);
@@ -550,6 +559,24 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setShowCustomerPicker(false);
   };
 
+  // ✅ 修正③: 登録済み場所の検索（mobileの「登録リストから選択」と同じ /locations API）
+  React.useEffect(() => {
+    if (!showLocPicker) return;
+    if (!locPickerQuery || locPickerQuery.trim().length < 1) { setLocPickerResults([]); return; }
+    const t = setTimeout(async () => {
+      setLocPickerSearching(true);
+      try {
+        const typeFilter = isLoadGroupEvt(event?.eventType ?? '') ? ['PICKUP', 'BOTH'] : ['DELIVERY', 'BOTH'];
+        const res = await apiClient.get('/locations', { params: { search: locPickerQuery, limit: 10, locationType: typeFilter } });
+        const d: any = res;
+        const arr = d?.data?.data ?? d?.data ?? [];
+        setLocPickerResults(Array.isArray(arr) ? arr : []);
+      } catch { setLocPickerResults([]); }
+      finally { setLocPickerSearching(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [locPickerQuery, showLocPicker, event]);
+
   const handleSave = async () => {
     setSaveError(null);
     if (!startHHMM) { setSaveError('記録時刻を入力してください'); return; }
@@ -564,7 +591,12 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         if (endHHMM) {
           body.actualEndTime = mergeHM(event.completionTimestamp ?? event.timestamp, endHHMM);
         }
-        if (locationName) body.locationName = locationName;
+        if (selectedLocationId) {
+          // ✅ 修正③: 登録リストから選択した場合はlocationIdを直接送る（曖昧一致に依存しない）
+          body.locationId = selectedLocationId;
+        } else if (locationName) {
+          body.locationName = locationName;
+        }
         if (pinLat !== undefined && pinLng !== undefined) {
           body.latitude = pinLat;
           body.longitude = pinLng;
@@ -815,8 +847,14 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
           {/* ── 積込(到着): 場所名・客先・GPS地図のみ ── */}
           {(event.eventType === 'LOADING_ARRIVED' || isLoadGroupEvt(event.eventType)) && (<>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">積込場所名</label>
-              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-gray-500">積込場所名</label>
+                <button type="button" onClick={() => setShowLocPicker(true)}
+                  className="text-xs px-2 py-0.5 rounded border border-blue-400 text-blue-600 hover:bg-blue-50 transition-colors">
+                  登録リストから選択
+                </button>
+              </div>
+              <input type="text" value={locationName} onChange={e => { setLocationName(e.target.value); setSelectedLocationId(''); }}
                 placeholder="例: 翠香園町ダート"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
             </div>
@@ -914,8 +952,14 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
           {/* ── 積降(到着): 場所名・GPS地図 ── */}
           {(event.eventType === 'UNLOADING_ARRIVED' || isUnlGroupEvt(event.eventType)) && (<>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">積降場所名</label>
-              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-gray-500">積降場所名</label>
+                <button type="button" onClick={() => setShowLocPicker(true)}
+                  className="text-xs px-2 py-0.5 rounded border border-blue-400 text-blue-600 hover:bg-blue-50 transition-colors">
+                  登録リストから選択
+                </button>
+              </div>
+              <input type="text" value={locationName} onChange={e => { setLocationName(e.target.value); setSelectedLocationId(''); }}
                 placeholder="例: ABC建材センター"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
             </div>
@@ -1045,6 +1089,45 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                       <span>🏢</span>
                       <span className="flex-1 text-sm text-gray-800">{c.name}</span>
                       {c.id === currentCustomerId && <span className="text-blue-600 text-xs font-medium">✓ 現在</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ✅ 修正③: 場所ピッカー（mobileの「登録リストから選択」と同じ仕様） */}
+          {showLocPicker && (
+            <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black bg-opacity-50"
+              onClick={e => { if (e.target === e.currentTarget) setShowLocPicker(false); }}>
+              <div className="bg-white rounded-t-2xl w-full max-w-md max-h-[70vh] flex flex-col">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <span className="font-semibold text-sm">場所を選択</span>
+                  <button onClick={() => setShowLocPicker(false)} className="text-gray-500 text-sm">✕ 閉じる</button>
+                </div>
+                <div className="px-4 py-3 border-b">
+                  <input type="text" value={locPickerQuery} onChange={e => setLocPickerQuery(e.target.value)}
+                    placeholder="場所名で検索" autoFocus
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div className="overflow-y-auto flex-1 p-3 space-y-2">
+                  {locPickerSearching ? (
+                    <p className="text-center text-gray-400 text-sm py-4">検索中...</p>
+                  ) : locPickerResults.length === 0 ? (
+                    <p className="text-center text-gray-400 text-sm py-4">
+                      {locPickerQuery ? '該当する場所が見つかりません' : '場所名を入力して検索してください'}
+                    </p>
+                  ) : locPickerResults.map(l => (
+                    <button key={l.id} type="button"
+                      onClick={() => {
+                        setSelectedLocationId(l.id);
+                        setLocationName(l.name);
+                        setShowLocPicker(false);
+                      }}
+                      className="w-full text-left px-4 py-3 rounded-lg border transition-colors flex flex-col gap-0.5"
+                      style={{ background: l.id === selectedLocationId ? '#eff6ff' : '#f9fafb', borderColor: l.id === selectedLocationId ? '#3b82f6' : '#e5e7eb' }}>
+                      <span className="text-sm text-gray-800 font-medium">📍 {l.name}</span>
+                      {l.address && <span className="text-xs text-gray-400">{l.address}</span>}
                     </button>
                   ))}
                 </div>
@@ -1223,16 +1306,21 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
   };
 
   const mergeHM = (hhmm: string): string => {
-    const now = new Date();
-    if (!hhmm) return now.toISOString();
+    // ✅ 修正①: 以前は常に new Date()（＝今日の日付）を基準にしており、
+    // 過去の運行に「+」マーカーでイベントを追加すると、選んだ時刻に関わらず
+    // 「今日」の日時として保存されてしまい、必ず一覧の一番下（未来側）に
+    // ソートされる原因になっていた。挿入位置の直前イベントの実時刻
+    // （defaultStartTime＝その運行が実際に行われた日付）を基準にする。
+    const base = defaultStartTime ? new Date(defaultStartTime) : new Date();
+    if (!hhmm) return base.toISOString();
     const parts = hhmm.split(':');
     const h = parseInt(parts[0] ?? '0', 10);
     const m = parseInt(parts[1] ?? '0', 10);
     const jstOff = 9 * 60 * 60 * 1000;
-    const jstNow = new Date(now.getTime() + jstOff);
-    const y = jstNow.getUTCFullYear();
-    const mo = jstNow.getUTCMonth();
-    const day = jstNow.getUTCDate();
+    const jstBase = new Date(base.getTime() + jstOff);
+    const y = jstBase.getUTCFullYear();
+    const mo = jstBase.getUTCMonth();
+    const day = jstBase.getUTCDate();
     const utcMs = Date.UTC(y, mo, day, h, m, 0, 0) - jstOff;
     return new Date(utcMs).toISOString();
   };
