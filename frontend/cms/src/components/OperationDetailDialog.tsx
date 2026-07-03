@@ -185,6 +185,15 @@ interface OperationDebugTimelineEvent {
   // ✅ 休憩統合編集用（mobileのpairId方式と同じ）: ペアとなる休憩終了レコードの情報
   pairedEndId?: string | null;
   pairedEndTimestamp?: string | null;
+  // ✅ 複数品目・手入力品目名・点検メモ・給油関連（カード表示用）
+  detailItems?: Array<{ id: string; itemId: string; itemName: string; quantityTons: number; sequenceOrder: number }> | null;
+  customItemName?: string | null;
+  overallNotes?: string | null;
+  totalDistanceKm?: number | null;
+  fuelConsumedLiters?: number | null;
+  fuelCostYen?: number | null;
+  customerId?: string | null;
+  customerName?: string | null;
 }
 
 /**
@@ -395,6 +404,12 @@ interface CmsEditEvent {
   customerId?: string | null;
   customerName?: string | null;
   preinspMemo?: string | null;
+  // ✅ 運行後点検編集用: 点検メモ・走行距離・燃料消費量の再編集時の初期値
+  overallNotes?: string | null;
+  totalDistanceKm?: number | null;
+  fuelConsumedLiters?: number | null;
+  // ✅ 手入力品目名（マスタにない品目）
+  customItemName?: string | null;
 }
 
 interface CmsActivityEditModalProps {
@@ -492,6 +507,10 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   const [locPickerQuery, setLocPickerQuery] = React.useState('');
   const [locPickerResults, setLocPickerResults] = React.useState<{ id: string; name: string; address: string }[]>([]);
   const [locPickerSearching, setLocPickerSearching] = React.useState(false);
+  // ✅ 修正③【根本原因】: ピッカーを開いた時点で登録済み場所を全件取得しキャッシュする
+  // （mobile ActivityEditSheetと同じ方式）。以前は検索文字列入力を待つ実装になっており、
+  // 何も入力しないとリストが常に空のままだった。
+  const [locPickerAllResults, setLocPickerAllResults] = React.useState<{ id: string; name: string; address: string }[]>([]);
   const [currentCustomerId,   setCurrentCustomerId]   = React.useState('');
   const [currentCustomerName, setCurrentCustomerName] = React.useState('');
   const [showCustomerPicker,  setShowCustomerPicker]  = React.useState(false);
@@ -538,11 +557,15 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setPinLng(event.locationLng != null ? event.locationLng : undefined);
     // ✅ 修正③: 既存の場所IDを引き継ぐ（未選択のまま保存してもlocationIdが消えないように）
     setSelectedLocationId(event.locationId ?? '');
-    setShowLocPicker(false); setLocPickerQuery(''); setLocPickerResults([]);
+    setShowLocPicker(false); setLocPickerQuery(''); setLocPickerResults([]); setLocPickerAllResults([]);
     setCurrentCustomerId(event.customerId ?? '');
     setCurrentCustomerName(event.customerName ?? '');
     setShowCustomerPicker(false);
-    setOdometer(''); setFuelLevel(''); setInspMemo(''); setPreinspMemo(event.preinspMemo ?? '');
+    // ✅ 修正①【根本原因】: 以前はここで setOdometer('')/setFuelLevel('')/setInspMemo('') を
+    // 無条件に再実行しており、直前の POST_INSPECTION 分岐で正しく設定した点検メモ・走行距離・
+    // 燃料レベルの初期値を毎回空文字で上書きしてしまっていた（＝入力済み内容が呼び出せないバグの直接原因）。
+    // 該当行を削除し、preinspMemo の設定のみ残す。
+    setPreinspMemo(event.preinspMemo ?? '');
     setConfirmDel(false);
     setSaveError(null);
   }, [event]);
@@ -559,23 +582,28 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setShowCustomerPicker(false);
   };
 
-  // ✅ 修正③: 登録済み場所の検索（mobileの「登録リストから選択」と同じ /locations API）
+  // ✅ 修正③【根本原因】: ピッカーを開いた時点で登録済み場所を全件取得する
+  // （mobileの「登録リストから選択」と同じ仕様：検索文字列の入力を待たずに一覧表示する）
   React.useEffect(() => {
     if (!showLocPicker) return;
-    if (!locPickerQuery || locPickerQuery.trim().length < 1) { setLocPickerResults([]); return; }
-    const t = setTimeout(async () => {
-      setLocPickerSearching(true);
+    setLocPickerSearching(true);
+    (async () => {
       try {
         const typeFilter = isLoadGroupEvt(event?.eventType ?? '') ? ['PICKUP', 'BOTH'] : ['DELIVERY', 'BOTH'];
-        const res = await apiClient.get('/locations', { params: { search: locPickerQuery, limit: 10, locationType: typeFilter } });
+        const res = await apiClient.get('/locations', { params: { limit: 100, locationType: typeFilter } });
         const d: any = res;
         const arr = d?.data?.data ?? d?.data ?? [];
-        setLocPickerResults(Array.isArray(arr) ? arr : []);
-      } catch { setLocPickerResults([]); }
+        setLocPickerAllResults(Array.isArray(arr) ? arr : []);
+      } catch { setLocPickerAllResults([]); }
       finally { setLocPickerSearching(false); }
-    }, 350);
-    return () => clearTimeout(t);
-  }, [locPickerQuery, showLocPicker, event]);
+    })();
+  }, [showLocPicker, event]);
+
+  // ✅ 修正③: 検索テキストによるクライアント側の絞り込み（未入力なら全件表示）
+  React.useEffect(() => {
+    const q = locPickerQuery.trim().toLowerCase();
+    setLocPickerResults(q ? locPickerAllResults.filter(l => l.name.toLowerCase().includes(q)) : locPickerAllResults);
+  }, [locPickerQuery, locPickerAllResults]);
 
   const handleSave = async () => {
     setSaveError(null);
@@ -1114,9 +1142,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                   {locPickerSearching ? (
                     <p className="text-center text-gray-400 text-sm py-4">検索中...</p>
                   ) : locPickerResults.length === 0 ? (
-                    <p className="text-center text-gray-400 text-sm py-4">
-                      {locPickerQuery ? '該当する場所が見つかりません' : '場所名を入力して検索してください'}
-                    </p>
+                    <p className="text-center text-gray-400 text-sm py-4">該当する場所が見つかりません</p>
                   ) : locPickerResults.map(l => (
                     <button key={l.id} type="button"
                       onClick={() => {
@@ -3333,7 +3359,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 )}
                                 {editBtn && <span className="ml-auto">{editBtn}</span>}
                               </div>
-                              {subEvent.location && (
+                              {/* ✅ 修正③④: 場所名・住所は到着行のみ表示（完了行は到着情報と重複するため非表示） */}
+                              {isArrived && subEvent.location && (
                                 <div className="flex items-start gap-1 mt-1 text-xs text-gray-600">
                                   <MapPin className="w-3 h-3 text-gray-400 mt-0.5 flex-shrink-0" />
                                   <span className="break-all">{subEvent.location.name} {subEvent.location.address}</span>
@@ -3347,14 +3374,23 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   </span>
                                 </div>
                               )}
-                              {/* 品目 - 完了イベントのみ表示（到着行は場所情報のみ） */}
-                              {!isArrived && subEvent.items && (
-                                <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-600">
+                              {/* ✅ 修正③: 品目 - 完了イベントのみ表示。選択されたすべての品目（手入力含む）を表示 */}
+                              {!isArrived && ((subEvent as any).detailItems?.length > 0 || subEvent.items || (subEvent as any).customItemName) && (
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs text-gray-600">
                                   <Package className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                  <span>
-                                    品目: {subEvent.items.name}
-                                    {subEvent.items.unit ? ` (${subEvent.items.unit})` : ''}
-                                  </span>
+                                  {(subEvent as any).detailItems?.length > 0 ? (
+                                    (subEvent as any).detailItems.map((di: any) => (
+                                      <span key={di.id}>品目: {di.itemName}{di.quantityTons ? ` ${di.quantityTons}t` : ''}</span>
+                                    ))
+                                  ) : subEvent.items ? (
+                                    <span>
+                                      品目: {subEvent.items.name}
+                                      {subEvent.items.unit ? ` (${subEvent.items.unit})` : ''}
+                                    </span>
+                                  ) : null}
+                                  {(subEvent as any).customItemName && (
+                                    <span>品目（手入力）: {(subEvent as any).customItemName}</span>
+                                  )}
                                 </div>
                               )}
                               {/* ⚖️ 重量 - 完了イベントのみ表示 */}
@@ -3577,6 +3613,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         customerId: (event as any).customerId ?? null,
                                         customerName: (event as any).customerName ?? null,
                                         preinspMemo: event.eventType === 'PRE_INSPECTION' ? ((event as any).overallNotes ?? '') : null,
+                                        // ✅ 修正①: 運行後点検の点検メモ・走行距離・燃料レベルを編集モーダルへ引き継ぐ
+                                        overallNotes: event.eventType === 'POST_INSPECTION' ? ((event as any).overallNotes ?? '') : null,
+                                        totalDistanceKm: (event as any).totalDistanceKm ?? null,
+                                        fuelConsumedLiters: (event as any).fuelConsumedLiters ?? null,
+                                        // ✅ 修正③: 手入力品目名を編集モーダルへ引き継ぐ
+                                        customItemName: (event as any).customItemName ?? null,
                                       })}
                                       className="ml-auto flex items-center gap-1 px-2 py-1 border border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
                                       title="このイベントを編集"
@@ -3598,14 +3640,27 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
  
                                   {/* ✅ 修正④: GPS座標の生数値はユーザー向けタイムラインには不要（mobileも非表示） */}
  
-                                  {/* 品目・数量 */}
-                                  {event.items && (
-                                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                                      <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                      <span>
-                                        品目: {event.items.name}
-                                        {event.quantityTons ? ` ${event.quantityTons}t` : ''}
-                                      </span>
+                                  {/* ✅ 修正③: 品目・数量 - 選択されたすべての品目（手入力含む）を表示 */}
+                                  {((event as any).detailItems?.length > 0 || event.items || (event as any).customItemName) && (
+                                    <div className="flex items-start gap-2 text-sm text-gray-600 mb-2">
+                                      <Package className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                                      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                        {(event as any).detailItems?.length > 0 ? (
+                                          (event as any).detailItems.map((di: any) => (
+                                            <span key={di.id}>
+                                              品目: {di.itemName}{di.quantityTons ? ` ${di.quantityTons}t` : ''}
+                                            </span>
+                                          ))
+                                        ) : event.items ? (
+                                          <span>
+                                            品目: {event.items.name}
+                                            {event.quantityTons ? ` ${event.quantityTons}t` : ''}
+                                          </span>
+                                        ) : null}
+                                        {(event as any).customItemName && (
+                                          <span>品目（手入力）: {(event as any).customItemName}</span>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
  
@@ -3637,8 +3692,28 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     </div>
                                   )}
  
-                                  {/* 備考 */}
-                                  {event.notes && (
+                                  {/* ✅ 修正①: 運行前点検・運行後点検メモの表示（overallNotesを使用） */}
+                                  {['PRE_INSPECTION', 'POST_INSPECTION'].includes(event.eventType) && (event as any).overallNotes && (
+                                    <div className="text-sm text-gray-600 mt-2">
+                                      <span className="font-medium">点検メモ:</span> {(event as any).overallNotes}
+                                    </div>
+                                  )}
+                                  {/* ✅ 修正①: 運行後点検の走行距離・燃料レベル表示 */}
+                                  {event.eventType === 'POST_INSPECTION' && ((event as any).totalDistanceKm || (event as any).fuelConsumedLiters) && (
+                                    <div className="flex items-center gap-4 text-sm text-gray-600 mt-2">
+                                      {(event as any).totalDistanceKm ? <span>走行距離: {(event as any).totalDistanceKm} km</span> : null}
+                                      {(event as any).fuelConsumedLiters ? <span>燃料レベル: {(event as any).fuelConsumedLiters} L</span> : null}
+                                    </div>
+                                  )}
+                                  {/* ✅ 修正⑤: 給油量・金額表示 */}
+                                  {['FUELING', 'REFUELING'].includes(event.eventType) && (Number(event.quantityTons) > 0 || (event as any).fuelCostYen) && (
+                                    <div className="flex items-center gap-4 text-sm text-gray-600 mt-2">
+                                      {Number(event.quantityTons) > 0 ? <span>給油量: {Number(event.quantityTons).toFixed(1)} L</span> : null}
+                                      {(event as any).fuelCostYen ? <span>金額: ¥{Number((event as any).fuelCostYen).toLocaleString()}</span> : null}
+                                    </div>
+                                  )}
+                                  {/* 備考（点検イベント以外） */}
+                                  {!['PRE_INSPECTION', 'POST_INSPECTION', 'TRIP_START', 'TRIP_END'].includes(event.eventType) && event.notes && (
                                     <div className="text-sm text-gray-600 mt-2">
                                       <span className="font-medium">備考:</span> {event.notes}
                                     </div>

@@ -85,6 +85,8 @@ interface TimelineEvent {
     passedItems: number;
     failedItems: number;
   } | null;
+  // ✅ 手入力品目名（マスタにない品目、notesの[手入力品目:xxx]タグから抽出）
+  customItemName?: string | null;
 }
 
 /**
@@ -289,7 +291,9 @@ export class OperationDetailController {
           eventType: 'TRIP_START',
           timestamp: operation.actualStartTime,
           gpsLocation: null,
-          notes: '運行開始'
+          // ✅ 修正①②: 「運行開始」の定型文言は廃止。運行開始/終了には
+          // ユーザーが入力する備考欄が存在しないため notes は null とする。
+          notes: null
         });
       }
 
@@ -322,7 +326,9 @@ export class OperationDetailController {
               passedItems,
               failedItems
             },
-            notes: `運行前点検 (${inspection.status})`
+            // ✅ 修正①: 「運行前点検 (PENDING)」等の定型文言を廃止。
+            // 実際の点検メモは overallNotes フィールドで別途保持・表示する。
+            notes: null
           });
         });
 
@@ -333,6 +339,20 @@ export class OperationDetailController {
       // 🆕 UNLOADING → UNLOADING_ARRIVED + UNLOADING_COMPLETED に展開
       //    モバイルの unloading/start（actualStartTime=到着時刻）と
       //    unloading/complete（actualEndTime=積降完了時刻）を個別イベントとして返却
+      // ✅ 修正③: notesに埋め込まれた「[タグ名: 値]」形式のタグ値を抽出するヘルパー
+      // （mobileController.ts の parseNoteTag と同じロジック。給油所名・手入力品目名で使用）
+      const parseTimelineNoteTag = (notes: string | null | undefined, tag: string): { value: string | undefined; rest: string } => {
+        if (!notes) return { value: undefined, rest: '' };
+        const openTag = '[' + tag + ':';
+        const startIdx = notes.indexOf(openTag);
+        if (startIdx === -1) return { value: undefined, rest: notes };
+        const endIdx = notes.indexOf(']', startIdx);
+        if (endIdx === -1) return { value: undefined, rest: notes };
+        const value = notes.slice(startIdx + openTag.length, endIdx).trim();
+        const rest = (notes.slice(0, startIdx) + notes.slice(endIdx + 1)).trim();
+        return { value, rest };
+      };
+
       operationDetails.forEach((detail: any) => {
         // 共通: 場所情報
         const locationData = detail.locations ? {
@@ -390,6 +410,9 @@ export class OperationDetailController {
           const loadingHasContent = Number(detail.quantityTons) > 0 || detail.itemId;
           const loadingCompletedTime = detail.actualEndTime || (loadingHasContent ? (detail.actualStartTime || detail.plannedTime) : null);
           if (loadingCompletedTime) {
+            // ✅ 修正③: notesに埋め込まれた「[手入力品目: xxx]」タグを分離し、
+            // customItemNameとして返す（CMSタイムラインに表示するため）
+            const { value: loadCustomItemName, rest: loadNotesRest } = parseTimelineNoteTag(detail.notes, '手入力品目');
             timeline.push({
               id: `${detail.id}-completed`,
               sequenceNumber: ++sequenceCounter,
@@ -410,7 +433,8 @@ export class OperationDetailController {
                 quantityTons: Number(di.quantityTons),
                 sequenceOrder: di.sequenceOrder,
               })),
-              notes: detail.notes || null
+              customItemName: loadCustomItemName || null,
+              notes: loadNotesRest || null
             });
           }
           } // ✅ FIX: 空LOADING非表示 if(!_isEmptyLoading) の閉じ
@@ -439,6 +463,8 @@ export class OperationDetailController {
           //    モバイルの POST /trips/:id/unloading/complete に対応
           //    actualEndTime が設定されている場合のみ生成
           if (detail.actualEndTime) {
+            // ✅ 修正③: 荷降でもLOADINGと同様に手入力品目名タグと複数品目リストを返す
+            const { value: unlCustomItemName, rest: unlNotesRest } = parseTimelineNoteTag(detail.notes, '手入力品目');
             timeline.push({
               id: `${detail.id}-completed`,
               sequenceNumber: ++sequenceCounter,
@@ -451,7 +477,15 @@ export class OperationDetailController {
               // ✅ 修正②: この荷降1件ごとの客先(detail.customerId)を優先
               customerId: detail.customerId ?? operation?.customerId ?? null,
               customerName: (detail as any).customers?.name ?? (operation as any)?.customer?.name ?? null,
-              notes: detail.notes || '積降完了'
+              detailItems: (detail.operationDetailItems || []).map((di: any) => ({
+                id: di.id,
+                itemId: di.itemId,
+                itemName: di.items?.name ?? '',
+                quantityTons: Number(di.quantityTons),
+                sequenceOrder: di.sequenceOrder,
+              })),
+              customItemName: unlCustomItemName || null,
+              notes: (unlNotesRest && unlNotesRest !== '積降完了') ? unlNotesRest : null
             });
           }
 
@@ -524,7 +558,9 @@ export class OperationDetailController {
               passedItems,
               failedItems
             },
-            notes: `運行後点検 (${inspection.status})`
+            // ✅ 修正①: 「運行後点検 (PENDING)」等の定型文言を廃止。
+            // 実際の点検メモは overallNotes、走行距離・燃料は totalDistanceKm/fuelConsumedLiters で別途保持する。
+            notes: null
           });
         });
 
@@ -537,7 +573,8 @@ export class OperationDetailController {
           eventType: 'TRIP_END',
           timestamp: operation.actualEndTime,
           gpsLocation: null,
-          notes: '運行終了'
+          // ✅ 修正②: 「運行終了」の定型文言を廃止
+          notes: null
         });
       }
 
