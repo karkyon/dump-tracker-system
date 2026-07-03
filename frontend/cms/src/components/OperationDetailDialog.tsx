@@ -367,6 +367,8 @@ interface CmsEditEvent {
   realDetailId: string;
   eventType: string;
   timestamp: string | null;
+  // ✅ 積込・荷降統合編集用: 完了時刻（到着時刻は timestamp）
+  completionTimestamp?: string | null;
   // ✅ 複数品目リスト（LOADING/UNLOADING_COMPLETED用）
   detailItems?: Array<{
     id: string;
@@ -411,6 +413,9 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
 };
 
 const isLoadEvt  = (t: string) => ['LOADING','LOADING_ARRIVED','LOADING_COMPLETED'].includes(t);
+// ✅ 積込・荷降統合編集（mobile ActivityEditSheetと同じ単一レコード編集）用の判定
+const isLoadGroupEvt = (t: string) => t === 'LOADING';
+const isUnlGroupEvt  = (t: string) => t === 'UNLOADING';
 // isUnlEvt: 個別分岐済み
 // const isUnlEvt = (t: string) => ['UNLOADING','UNLOADING_ARRIVED','UNLOADING_COMPLETED'].includes(t);
 const isFuelEvt  = (t: string) => ['FUELING','REFUELING'].includes(t);
@@ -453,7 +458,8 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   event, items, customers, onClose, onSaved, onDeleted
 }) => {
   const [startHHMM, setStartHHMM] = React.useState('');
-  // endHHMM削除済み（到着編集の完了時刻フィールドなし）
+  // ✅ 積込・荷降統合編集: 完了時刻
+  const [endHHMM, setEndHHMM] = React.useState('');
   const [locationName, setLocationName] = React.useState('');
   const [notes,     setNotes]     = React.useState('');
   const [quantity,  setQuantity]  = React.useState('');
@@ -477,6 +483,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   React.useEffect(() => {
     if (!event) return;
     setStartHHMM(toHM(event.timestamp));
+    setEndHHMM(toHM(event.completionTimestamp ?? null));
     setLocationName(event.locationName ?? '');
     setNotes(event.notes ?? '');
     setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
@@ -530,6 +537,39 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     if (!startHHMM) { setSaveError('記録時刻を入力してください'); return; }
     setSaving(true);
     try {
+      // ✅ 積込・荷降統合編集: mobileのActivityEditSheetと同じ、実レコード1件への直接更新
+      // （従来の到着/完了に分割編集する統合エンドポイントは使わない）
+      if (isLoadGroupEvt(event.eventType) || isUnlGroupEvt(event.eventType)) {
+        const body: Record<string, any> = {
+          actualStartTime: mergeHM(event.timestamp, startHHMM),
+        };
+        if (endHHMM) {
+          body.actualEndTime = mergeHM(event.completionTimestamp ?? event.timestamp, endHHMM);
+        }
+        if (locationName) body.locationName = locationName;
+        if (pinLat !== undefined && pinLng !== undefined) {
+          body.latitude = pinLat;
+          body.longitude = pinLng;
+        }
+        if (notes) body.notes = notes;
+        if (isLoadGroupEvt(event.eventType)) {
+          if (selectedItemIds.length > 0) {
+            body.itemId = selectedItemIds[0];
+            body.selectedItemIds = selectedItemIds;
+          }
+          if (quantity) body.quantityTons = parseFloat(quantity);
+          if (currentCustomerId) body.customerId = currentCustomerId;
+        }
+        const res = await apiClient.put(`/operation-details/${event.realDetailId}`, body);
+        if ((res as any).success || (res as any).data || (res as any).id) {
+          onSaved();
+          onClose();
+        } else {
+          setSaveError('保存に失敗しました');
+        }
+        setSaving(false);
+        return;
+      }
       // ✅ 統合エンドポイントで全イベント種別を処理
       const body: Record<string, any> = {
         actualStartTime: mergeHM(event.timestamp, startHHMM),
@@ -647,6 +687,21 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
             const et = event.eventType;
             const isCompleted = et === 'LOADING_COMPLETED' || et === 'UNLOADING_COMPLETED';
             const isArrived   = et === 'LOADING_ARRIVED'   || et === 'UNLOADING_ARRIVED';
+            // ✅ 積込・荷降統合編集: 到着時刻・完了時刻を1画面で両方編集（mobileと同じ仕様）
+            if (isLoadGroupEvt(et) || isUnlGroupEvt(et)) return (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">到着時刻<span className="text-red-500 ml-1">*</span></label>
+                  <input type="time" value={startHHMM} onChange={e => setStartHHMM(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">完了時刻<span className="text-gray-400 font-normal ml-1">（任意）</span></label>
+                  <input type="time" value={endHHMM} onChange={e => setEndHHMM(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+              </div>
+            );
             if (isBreakStart(et)) return (
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">開始時刻<span className="text-red-500 ml-1">*</span></label>
@@ -693,7 +748,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
           })()}
 
           {/* ── 積込(到着): 場所名・客先・GPS地図のみ ── */}
-          {event.eventType === 'LOADING_ARRIVED' && (<>
+          {(event.eventType === 'LOADING_ARRIVED' || isLoadGroupEvt(event.eventType)) && (<>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">積込場所名</label>
               <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
@@ -715,7 +770,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
           </>)}
 
           {/* ── 積込(完了): 品目（カテゴリグリッド）・重量のみ ── */}
-          {event.eventType === 'LOADING_COMPLETED' && (<>
+          {(event.eventType === 'LOADING_COMPLETED' || isLoadGroupEvt(event.eventType)) && (<>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">
                 品目 <span className="font-normal text-gray-400">（複数選択可）</span>
@@ -792,7 +847,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
           </>)}
 
           {/* ── 積降(到着): 場所名・GPS地図 ── */}
-          {event.eventType === 'UNLOADING_ARRIVED' && (<>
+          {(event.eventType === 'UNLOADING_ARRIVED' || isUnlGroupEvt(event.eventType)) && (<>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">積降場所名</label>
               <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
@@ -968,22 +1023,32 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
 
 interface CmsActivityAddModalProps {
   operationId: string;
-  items: { id: string; name: string }[];
+  items: { id: string; name: string; itemType?: string; displayOrder?: number }[];
+  customers?: { id: string; name: string }[];
   vehicleId?: string;
   mapsLoaded?: boolean;
+  // ✅ mobileと同じ「＋」マーカーによる挿入位置指定・デフォルト値
+  insertAfterSequenceNumber?: number;
+  defaultStartTime?: string | null;
+  defaultCustomerId?: string;
+  defaultCustomerName?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
+// ✅ 休憩は開始・終了をまとめて1回の操作で追加する（mobileと同じ仕様）
 const ADD_EVENT_TYPES: { value: string; label: string }[] = [
   { value: 'LOADING', label: '積込' },
   { value: 'UNLOADING', label: '荷降' },
   { value: 'FUELING', label: '給油' },
-  { value: 'BREAK_START', label: '休憩開始' },
-  { value: 'BREAK_END', label: '休憩終了' },
+  { value: 'BREAK', label: '休憩' },
 ];
 
-const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, items, vehicleId, mapsLoaded, onClose, onSaved }) => {
+const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
+  operationId, items, customers, vehicleId, mapsLoaded,
+  insertAfterSequenceNumber, defaultStartTime, defaultCustomerId, defaultCustomerName,
+  onClose, onSaved
+}) => {
   const [eventType, setEventType] = React.useState('LOADING');
   const [locQuery, setLocQuery] = React.useState('');
   const [locResults, setLocResults] = React.useState<{ id: string; name: string; address: string }[]>([]);
@@ -1008,8 +1073,31 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
   const isLoadOrUnload = eventType === 'LOADING' || eventType === 'UNLOADING';
+
+  // ✅ mobileと同じ: 開始・終了時刻は直前イベントの終了時刻をデフォルトに、
+  // 荷降は直近の積込イベントと同じ客先をデフォルトにする
+  React.useEffect(() => {
+    const toHMLocal = (iso: string | null | undefined): string => {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+        return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`;
+      } catch { return ''; }
+    };
+    const hm = toHMLocal(defaultStartTime ?? null);
+    if (hm) { setStartHHMM(hm); setEndHHMM(hm); }
+    if (eventType === 'UNLOADING' && defaultCustomerId) {
+      setCurrentCustomerId(defaultCustomerId);
+      setCurrentCustomerName(defaultCustomerName || '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const isFuelType = eventType === 'FUELING';
-  const isBreakType = eventType === 'BREAK_START' || eventType === 'BREAK_END';
+  const isBreakType = eventType === 'BREAK';
+  const [currentCustomerId, setCurrentCustomerId] = React.useState('');
+  const [currentCustomerName, setCurrentCustomerName] = React.useState('');
+  const [showCustomerPicker, setShowCustomerPicker] = React.useState(false);
 
   React.useEffect(() => {
     if (!locQuery || locQuery.trim().length < 1) { setLocResults([]); return; }
@@ -1102,6 +1190,46 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
       if (customItemName.trim()) {
         finalNotes = `品目: ${customItemName.trim()}` + (finalNotes ? ` / ${finalNotes}` : '');
       }
+
+      // ✅ 休憩は開始(BREAK_START)・終了(BREAK_END)を連続シーケンスで2レコード作成（mobileと同じ仕様）
+      if (isBreakType) {
+        const startPayload: Record<string, any> = {
+          operationId,
+          activityType: 'BREAK_START',
+          actualStartTime: mergeHM(startHHMM),
+          quantityTons: 0,
+          notes: finalNotes || undefined,
+        };
+        if (insertAfterSequenceNumber !== undefined) startPayload.insertAfterSequenceNumber = insertAfterSequenceNumber;
+        const startRes: any = await apiClient.post('/operation-details', startPayload);
+        const createdStart = startRes?.data?.data ?? startRes?.data ?? startRes;
+        if (!(startRes?.success || createdStart?.id)) {
+          setSaveError('休憩開始の追加に失敗しました');
+          setSaving(false);
+          return;
+        }
+        if (endHHMM && createdStart?.sequenceNumber !== undefined) {
+          const endPayload: Record<string, any> = {
+            operationId,
+            activityType: 'BREAK_END',
+            actualStartTime: mergeHM(endHHMM),
+            actualEndTime: mergeHM(endHHMM),
+            quantityTons: 0,
+            insertAfterSequenceNumber: createdStart.sequenceNumber,
+          };
+          const endRes: any = await apiClient.post('/operation-details', endPayload);
+          const endD = endRes?.data?.data ?? endRes?.data ?? endRes;
+          if (!(endRes?.success || endD?.id)) {
+            setSaveError('休憩終了の追加に失敗しました（休憩開始は追加済みです）');
+            setSaving(false);
+            return;
+          }
+        }
+        onSaved();
+        setSaving(false);
+        return;
+      }
+
       const payload: Record<string, any> = {
         operationId,
         activityType: eventType,
@@ -1109,6 +1237,7 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
         quantityTons: 0,
         notes: finalNotes || undefined,
       };
+      if (insertAfterSequenceNumber !== undefined) payload.insertAfterSequenceNumber = insertAfterSequenceNumber;
       if (isLoadOrUnload) {
         payload.locationId = selectedLocationId;
         if (endHHMM) payload.actualEndTime = mergeHM(endHHMM);
@@ -1117,6 +1246,8 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
           payload.selectedItemIds = selectedItemIds;
         }
         if (quantity) payload.quantityTons = parseFloat(quantity);
+        // ✅ 客先: 積込・荷降どちらも保存する（積込〜荷降は1セットで同じ客先という仕様）
+        if (currentCustomerId) payload.customerId = currentCustomerId;
       }
       if (isFuelType) {
         if (fuelAmt) payload.quantityTons = parseFloat(fuelAmt);
@@ -1234,51 +1365,93 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
             </div>
           )}
 
+          {eventType === 'LOADING' && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">客先</p>
+              <button type="button" onClick={() => setShowCustomerPicker(true)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between hover:border-blue-400 transition-colors">
+                <span className={currentCustomerName ? 'text-gray-800' : 'text-gray-400'}>
+                  🏢 {currentCustomerName || '（タップして選択）'}
+                </span>
+                <span className="text-xs text-blue-600 ml-2">選択 ▾</span>
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-gray-500 mb-1">{isBreakType ? '時刻' : '到着時刻'}<span className="text-red-500 ml-1">*</span></p>
+              <p className="text-xs text-gray-500 mb-1">{isBreakType ? '開始時刻' : '到着時刻'}<span className="text-red-500 ml-1">*</span></p>
               <input type="time" value={startHHMM} onChange={e => setStartHHMM(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
-            {isLoadOrUnload && (
+            {(isLoadOrUnload || isBreakType) && (
               <div>
-                <p className="text-xs text-gray-500 mb-1">完了時刻（任意）</p>
+                <p className="text-xs text-gray-500 mb-1">{isBreakType ? '終了時刻（任意）' : '完了時刻（任意）'}</p>
                 <input type="time" value={endHHMM} onChange={e => setEndHHMM(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             )}
           </div>
 
-          {isLoadOrUnload && (
+          {eventType === 'LOADING' && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">品目・数量</p>
-              <div className="flex gap-2 flex-wrap mb-2">
-                {items.map(it => (
-                  <button key={it.id} type="button" onClick={() => toggleItem(it.id)}
-                    className="px-3 py-1.5 rounded-lg text-sm border"
-                    style={{
-                      background: selectedItemIds.includes(it.id) ? '#eff6ff' : '#fff',
-                      borderColor: selectedItemIds.includes(it.id) ? '#3b82f6' : '#e5e7eb',
-                      color: selectedItemIds.includes(it.id) ? '#1d4ed8' : '#374151',
-                    }}>
-                    {it.name}
-                  </button>
-                ))}
-                <button type="button" onClick={() => setShowCustomItem(v => !v)}
-                  className="px-3 py-1.5 rounded-lg text-sm border"
-                  style={{
-                    background: showCustomItem ? '#eff6ff' : '#fff',
-                    borderColor: showCustomItem ? '#3b82f6' : '#e5e7eb',
-                    color: showCustomItem ? '#1d4ed8' : '#374151',
-                  }}>
-                  + その他（手入力）
-                </button>
-              </div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">
+                品目 <span className="font-normal text-gray-400">（複数選択可）</span>
+              </p>
+              {(() => {
+                const TYPE_LABEL: Record<string, string> = {
+                  RECYCLED_MATERIAL: '再生材', VIRGIN_MATERIAL: 'バージン材', WASTE: '廃棄物',
+                };
+                const ORDER: (string | undefined)[] = ['RECYCLED_MATERIAL', 'VIRGIN_MATERIAL', 'WASTE', undefined];
+                const grouped = ORDER.map(k => ({
+                  key: k,
+                  label: k ? (TYPE_LABEL[k] ?? k) : 'その他',
+                  items: items
+                    .filter((it: any) => it.itemType === k || (k === undefined && !it.itemType))
+                    .sort((a: any, b: any) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999)),
+                })).filter(g => g.items.length > 0);
+                return (
+                  <div className="space-y-3">
+                    {grouped.map(group => (
+                      <div key={group.label}>
+                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wide pb-1 mb-2 border-b border-gray-100">
+                          {group.label}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {group.items.map((it: any) => {
+                            const sel = selectedItemIds.includes(it.id);
+                            return (
+                              <button key={it.id} type="button" onClick={() => toggleItem(it.id)}
+                                className="py-2.5 px-2 text-sm font-medium rounded-lg border-2 text-center transition-all leading-tight"
+                                style={{
+                                  background: sel ? 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)' : '#fff',
+                                  color: sel ? '#fff' : '#374151',
+                                  borderColor: sel ? '#667eea' : '#d1d5db',
+                                  fontWeight: sel ? 'bold' : 'normal',
+                                }}
+                              >{sel ? `✓ ${it.name}` : it.name}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              <button type="button" onClick={() => setShowCustomItem(v => !v)}
+                className="mt-2 px-3 py-1.5 rounded-lg text-sm border"
+                style={{
+                  background: showCustomItem ? '#eff6ff' : '#fff',
+                  borderColor: showCustomItem ? '#3b82f6' : '#e5e7eb',
+                  color: showCustomItem ? '#1d4ed8' : '#374151',
+                }}>
+                + その他（手入力）
+              </button>
               {showCustomItem && (
                 <input type="text" value={customItemName} onChange={e => setCustomItemName(e.target.value)}
-                  placeholder="品目名を入力" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2" />
+                  placeholder="品目名を入力" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-2 mb-2" />
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mt-2">
                 <p className="text-xs text-gray-500">数量</p>
                 <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
                   className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
@@ -1308,6 +1481,33 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({ operationId, 
               placeholder="備考を入力（任意）"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
           </div>
+
+          {/* 客先ピッカー */}
+          {showCustomerPicker && (
+            <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black bg-opacity-50"
+              onClick={e => { if (e.target === e.currentTarget) setShowCustomerPicker(false); }}>
+              <div className="bg-white rounded-t-2xl w-full max-w-md max-h-[60vh] flex flex-col">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <span className="font-semibold text-sm">客先を選択</span>
+                  <button onClick={() => setShowCustomerPicker(false)} className="text-gray-500 text-sm">✕ 閉じる</button>
+                </div>
+                <div className="overflow-y-auto flex-1 p-3 space-y-2">
+                  {!customers || customers.length === 0 ? (
+                    <p className="text-center text-gray-400 text-sm py-4">客先を読み込み中...</p>
+                  ) : customers.map(c => (
+                    <button key={c.id} type="button"
+                      onClick={() => { setCurrentCustomerId(c.id); setCurrentCustomerName(c.name); setShowCustomerPicker(false); }}
+                      className="w-full text-left px-4 py-3 rounded-lg border transition-colors flex items-center gap-3"
+                      style={{ background: c.id === currentCustomerId ? '#eff6ff' : '#f9fafb', borderColor: c.id === currentCustomerId ? '#3b82f6' : '#e5e7eb' }}>
+                      <span>🏢</span>
+                      <span className="flex-1 text-sm text-gray-800">{c.name}</span>
+                      {c.id === currentCustomerId && <span className="text-blue-600 text-xs font-medium">✓ 現在</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 px-5 py-4 border-t border-gray-200 flex-shrink-0">
@@ -1391,7 +1591,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   const [editItems, setEditItems] = useState<{ id: string; name: string }[]>([]);
   const [editCustomers, setEditCustomers] = useState<{ id: string; name: string }[]>([]);
   // 🆕 イベント追加モーダル（記録漏れの後追い登録用）
-  const [addEventOpen, setAddEventOpen] = useState(false);
+  // ✅ イベント追加: mobileと同じ「＋」マーカーによる挿入位置指定機能
+  const [insertMode, setInsertMode] = useState(false);
+  const [pickerContext, setPickerContext] = useState<{ afterSeq: number; prevEndTime: string | null; lastLoadingCustomerId?: string; lastLoadingCustomerName?: string } | null>(null);
 
   // ✅ Google Maps用State
   const mapRef = useRef<HTMLDivElement>(null);
@@ -2685,10 +2887,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                       <span className="text-sm text-gray-500">({operationDebugTimelineEvents.length}件)</span>
                       <button
                         type="button"
-                        onClick={() => setAddEventOpen(true)}
-                        className="ml-2 flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+                        onClick={() => { setInsertMode(v => !v); setPickerContext(null); }}
+                        className={`ml-2 flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg border ${insertMode ? 'text-white bg-blue-600 border-blue-600' : 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100'}`}
                       >
-                        + イベント追加
+                        {insertMode ? '追加をやめる' : '＋ イベント追加'}
                       </button>
                     </div>
                     <button
@@ -3050,10 +3252,48 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           </div>
                         );
  
+                        // ✅ 挿入位置より前の「直前イベントの終了時刻」と「直近の積込イベントの客先」を取得
+                        const getInsertDefaults = (afterSeq: number) => {
+                          const evsSorted = [...evs].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+                          let prevEndTime: string | null = null;
+                          let lastLoadingCustomerId: string | undefined;
+                          let lastLoadingCustomerName: string | undefined;
+                          for (const a of evsSorted) {
+                            if (a.sequenceNumber > afterSeq) break;
+                            if (a.timestamp) prevEndTime = a.timestamp;
+                            if (a.eventType === 'LOADING' || a.eventType === 'LOADING_ARRIVED' || a.eventType === 'LOADING_COMPLETED') {
+                              const cid = (a as any).customerId;
+                              const cname = (a as any).customerName;
+                              if (cid) { lastLoadingCustomerId = cid; lastLoadingCustomerName = cname; }
+                            }
+                          }
+                          return { afterSeq, prevEndTime, lastLoadingCustomerId, lastLoadingCustomerName };
+                        };
+                        const renderInsertMarker = (afterSeq: number, mkey: string) => (
+                          <div key={mkey} onClick={() => setPickerContext(getInsertDefaults(afterSeq))}
+                            className="flex justify-center py-1 cursor-pointer">
+                            <div style={{
+                              width: 26, height: 26, borderRadius: '50%', background: '#fff',
+                              border: '2px dashed #60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: '#2563eb', fontSize: 15, fontWeight: 700, boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            }}>
+                              ＋
+                            </div>
+                          </div>
+                        );
+                        const maxSeqOfGroup = (group: RenderGroup): number => {
+                          if (group.type === 'SINGLE') return group.event.sequenceNumber;
+                          return Math.max(group.arrivedEvent.sequenceNumber, group.completedEvent?.sequenceNumber ?? 0);
+                        };
+
                         // ─────────────────────────────────────────────
                         // グループ描画
                         // ─────────────────────────────────────────────
-                        return groups.map((group, gIdx) => {
+                        return (
+                          <>
+                            {insertMode && renderInsertMarker(0, 'ins-top')}
+                            {groups.map((group, gIdx) => {
+                              const groupNode = (() => {
                           if (group.type === 'LOADING_GROUP' || group.type === 'UNLOADING_GROUP') {
                             const isLoading     = group.type === 'LOADING_GROUP';
                             const groupLabel    = isLoading ? '積込' : '荷降';
@@ -3063,6 +3303,26 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             const headerTextCls = isLoading ? 'text-blue-800'   : 'text-green-800';
                             const arrivedDot    = isLoading ? 'bg-blue-400'     : 'bg-orange-400';
                             const completedDot  = 'bg-green-400';
+                            // ✅ 積込・荷降統合編集: 到着・完了どちらの「編集」を押しても
+                            // 同じ画面（両方の時刻・場所・客先・品目をまとめて編集）を開く
+                            const openGroupEdit = () => setEditEvent({
+                              id: group.arrivedEvent.id,
+                              realDetailId: group.arrivedEvent.id.replace(/-arrived$|-completed$/, ''),
+                              eventType: isLoading ? 'LOADING' : 'UNLOADING',
+                              timestamp: group.arrivedEvent.timestamp,
+                              completionTimestamp: group.completedEvent?.timestamp ?? null,
+                              notes: group.completedEvent?.notes ?? group.arrivedEvent.notes,
+                              quantityTons: group.completedEvent?.quantityTons,
+                              locationName: group.arrivedEvent.location?.name ?? '',
+                              locationId: group.arrivedEvent.location?.id ?? '',
+                              locationLat: group.arrivedEvent.gpsLocation?.latitude ?? group.arrivedEvent.location?.latitude ?? null,
+                              locationLng: group.arrivedEvent.gpsLocation?.longitude ?? group.arrivedEvent.location?.longitude ?? null,
+                              detailItems: (group.completedEvent as any)?.detailItems ?? null,
+                              itemId: group.completedEvent?.items?.id ?? null,
+                              itemName: group.completedEvent?.items?.name ?? null,
+                              customerId: (group.arrivedEvent as any).customerId ?? (group.completedEvent as any)?.customerId ?? null,
+                              customerName: (group.arrivedEvent as any).customerName ?? (group.completedEvent as any)?.customerName ?? null,
+                            });
  
                             return (
                               <div key={`group-${gIdx}`} className={`border-2 ${borderCls} rounded-lg overflow-hidden`}>
@@ -3089,23 +3349,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 <div className="bg-white">
                                   {renderSubRow(group.arrivedEvent, '到着', arrivedDot, true, true,
                                     <button type="button"
-                                      onClick={() => setEditEvent({
-                                        id: group.arrivedEvent.id,
-                                        realDetailId: group.arrivedEvent.id.replace(/-arrived$|-completed$/, ''),
-                                        eventType: group.arrivedEvent.eventType,
-                                        timestamp: group.arrivedEvent.timestamp,
-                                        notes: group.arrivedEvent.notes,
-                                        quantityTons: group.arrivedEvent.quantityTons,
-                                        locationName: group.arrivedEvent.location?.name ?? '',
-                                        locationId: group.arrivedEvent.location?.id ?? '',
-                                        // ✅ Fix3: GPS記録座標を優先、なければ場所マスター座標
-                                        locationLat: group.arrivedEvent.gpsLocation?.latitude ?? group.arrivedEvent.location?.latitude ?? null,
-                                        locationLng: group.arrivedEvent.gpsLocation?.longitude ?? group.arrivedEvent.location?.longitude ?? null,
-                                        itemId: group.arrivedEvent.items?.id ?? null,
-                                        itemName: group.arrivedEvent.items?.name ?? null,
-                                        customerId: (group.arrivedEvent as any).customerId ?? null,
-                                        customerName: (group.arrivedEvent as any).customerName ?? null,
-                                      })}
+                                      onClick={openGroupEdit}
                                       className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
                                     ><Pencil className="w-3 h-3" /> 編集</button>
                                   )}
@@ -3116,24 +3360,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     false,
                                     false,
                                     <button type="button"
-                                      onClick={() => setEditEvent({
-                                        id: group.completedEvent!.id,
-                                        realDetailId: group.completedEvent!.id.replace(/-arrived$|-completed$/, ''),
-                                        eventType: group.completedEvent!.eventType,
-                                        timestamp: group.completedEvent!.timestamp,
-                                        notes: group.completedEvent!.notes,
-                                        quantityTons: group.completedEvent!.quantityTons,
-                                        locationName: group.completedEvent!.location?.name ?? '',
-                                        locationId: group.completedEvent!.location?.id ?? '',
-                                        // ✅ Fix3: GPS記録座標を優先
-                                        locationLat: group.completedEvent!.gpsLocation?.latitude ?? group.completedEvent!.location?.latitude ?? null,
-                                        locationLng: group.completedEvent!.gpsLocation?.longitude ?? group.completedEvent!.location?.longitude ?? null,
-                                        detailItems: (group.completedEvent as any).detailItems ?? null,
-                                        itemId: group.completedEvent!.items?.id ?? null,
-                                        itemName: group.completedEvent!.items?.name ?? null,
-                                        customerId: (group.completedEvent as any).customerId ?? null,
-                                        customerName: (group.completedEvent as any).customerName ?? null,
-                                      })}
+                                      onClick={openGroupEdit}
                                       className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
                                     ><Pencil className="w-3 h-3" /> 編集</button>
                                   )}
@@ -3298,7 +3525,16 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               </div>
                             </div>
                           );
-                        });
+                              })();
+                              return (
+                                <React.Fragment key={`grpwrap-${gIdx}`}>
+                                  {groupNode}
+                                  {insertMode && renderInsertMarker(maxSeqOfGroup(group), `ins-${gIdx}`)}
+                                </React.Fragment>
+                              );
+                            })}
+                          </>
+                        );
                       })()}
                     </div>
                   )}
@@ -3573,15 +3809,21 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     )}
 
     {/* 🆕 イベント追加モーダル */}
-    {addEventOpen && (
+    {pickerContext && (
       <CmsActivityAddModal
         operationId={operationId}
         items={editItems}
+        customers={editCustomers}
         vehicleId={operation?.vehicleId}
         mapsLoaded={mapsLoaded}
-        onClose={() => setAddEventOpen(false)}
+        insertAfterSequenceNumber={pickerContext.afterSeq}
+        defaultStartTime={pickerContext.prevEndTime}
+        defaultCustomerId={pickerContext.lastLoadingCustomerId}
+        defaultCustomerName={pickerContext.lastLoadingCustomerName}
+        onClose={() => setPickerContext(null)}
         onSaved={() => {
-          setAddEventOpen(false);
+          setPickerContext(null);
+          setInsertMode(false);
           fetchIntegratedTimeline(operationId);
         }}
       />
