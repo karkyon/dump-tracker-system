@@ -768,7 +768,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
           {/* 時刻 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
             <TimeDial label={isBreak(activity.activityType) ? '休憩開始時刻' : '到着時刻'} value={startHHMM} onChange={setStartHHMM} accentColor={cfg.color} />
-            {isBreak(activity.activityType) && !activity.pairId ? (
+            {isBreak(activity.activityType) && !activity.pairId && !isNew ? (
               <div>
                 <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>休憩終了時刻</div>
                 <div style={{ background: '#f3f4f6', border: '0.5px solid #d1d5db', borderRadius: 7, padding: '7px 10px', fontSize: 12, color: '#9ca3af' }}>

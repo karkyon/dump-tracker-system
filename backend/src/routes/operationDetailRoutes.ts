@@ -315,7 +315,7 @@ router.put('/timeline-event/:eventId', requireRole(['MANAGER', 'ADMIN'] as any),
  *       403:
  *         description: 権限エラー
  */
-router.delete('/:id', requireAdmin, validateId, operationDetailController.deleteOperationDetail);
+router.delete('/:id', requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as any), validateId, operationDetailController.deleteOperationDetail);
 
 // REQ-020: 積載物写真アップロード
 router.post(
