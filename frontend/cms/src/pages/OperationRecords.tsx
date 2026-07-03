@@ -94,7 +94,7 @@ const loadGoogleMapsScript = (callback: () => void) => {
 
   const script = document.createElement('script');
   script.id = 'google-maps-script';
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker&loading=async`;
   script.async = true;
   script.defer = true;
   script.onload = callback;

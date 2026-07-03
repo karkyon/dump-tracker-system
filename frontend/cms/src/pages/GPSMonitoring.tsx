@@ -272,7 +272,7 @@ const loadGoogleMapsScript = (callback: () => void): void => {
   }
   const script = document.createElement('script');
   script.id = 'google-maps-script';
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async&language=ja&region=JP`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker&loading=async&language=ja&region=JP`;
   script.async = true;
   script.defer = true;
   script.onerror = () => console.error('[GPSMonitoring] Google Maps API読み込み失敗');

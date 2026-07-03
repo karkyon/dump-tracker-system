@@ -423,6 +423,17 @@ const isLoadGroupEvt = (t: string) => t === 'LOADING';
 const isUnlGroupEvt  = (t: string) => t === 'UNLOADING';
 // ✅ 休憩統合編集（mobile ActivityEditSheetのpairId方式と同じ）用の判定
 const isBreakGroupEvt = (t: string) => t === 'BREAK';
+// ✅ 過去に自動生成されていた「休憩開始」「休憩終了」という定型文をnotesから除去する。
+//    mobile側 ActivityEditSheet.tsx の stripBreakAutoNotes と同じロジック（廃止前の旧データ対策）。
+const stripBreakAutoNotes = (raw: string): string => {
+  if (!raw) return '';
+  let s = raw.trim();
+  if (s.startsWith('休憩開始') || s.startsWith('休憩終了')) {
+    const dashIdx = s.indexOf(' - ');
+    s = dashIdx !== -1 ? s.slice(dashIdx + 3).trim() : '';
+  }
+  return s;
+};
 // isUnlEvt: 個別分岐済み
 // const isUnlEvt = (t: string) => ['UNLOADING','UNLOADING_ARRIVED','UNLOADING_COMPLETED'].includes(t);
 const isFuelEvt  = (t: string) => ['FUELING','REFUELING'].includes(t);
@@ -492,7 +503,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setStartHHMM(toHM(event.timestamp));
     setEndHHMM(toHM(event.completionTimestamp ?? null));
     setLocationName(event.locationName ?? '');
-    setNotes(event.notes ?? '');
+    setNotes(isBreakEvt(event.eventType) ? stripBreakAutoNotes(event.notes ?? '') : (event.notes ?? ''));
     setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
     if (event.eventType === 'POST_INSPECTION') {
       // ✅ 正しいフィールドから初期値を取得
