@@ -455,17 +455,34 @@ export class OperationDetailController {
           //         TRANSPORTING, WAITING, MAINTENANCE,
           //         REFUELING, OTHER）は既存動作を維持
           // ─────────────────────────────────────────
+          // ✅ 修正①: 給油は記録時にスタンド名を notes へ「[給油所: xxx] 本文」の形で
+          // タグ埋め込み保存している（tripService.addFuelRecord）。CMSの備考欄に
+          // このタグがそのまま表示されてしまう不具合を防ぐため、ここで分離する。
+          // スタンド名は location.name として渡し、notesはユーザー入力の本文のみにする。
+          let otherLocationData = locationData;
+          let otherNotes: string | null = detail.notes ?? null;
+          if ((detail.activityType === 'FUELING' || detail.activityType === 'REFUELING') && detail.notes) {
+            const fuelTagMatch = detail.notes.match(/^\[給油所:\s*([^\]]*)\]\s*([\s\S]*)$/);
+            if (fuelTagMatch) {
+              const stationName = (fuelTagMatch[1] ?? '').trim();
+              const restNotes = (fuelTagMatch[2] ?? '').trim();
+              if (stationName) {
+                otherLocationData = { id: '', name: stationName, address: '', latitude: 0, longitude: 0 };
+              }
+              otherNotes = restNotes || null;
+            }
+          }
           timeline.push({
             id: detail.id,
             sequenceNumber: ++sequenceCounter,
             eventType: detail.activityType as any,
             timestamp: detail.actualStartTime || detail.plannedTime,
-            location: locationData,
+            location: otherLocationData,
             gpsLocation: gpsLocationData,
             quantityTons: Number(detail.quantityTons) || 0,
             items: itemsData,
             fuelCostYen: detail.fuelCostYen ? Number(detail.fuelCostYen) : null,  // ✅ 給油金額
-            notes: detail.notes
+            notes: otherNotes
           });
         }
       });

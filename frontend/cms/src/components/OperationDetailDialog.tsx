@@ -182,6 +182,9 @@ interface OperationDebugTimelineEvent {
     passedItems: number;
     failedItems: number;
   } | null;
+  // ✅ 休憩統合編集用（mobileのpairId方式と同じ）: ペアとなる休憩終了レコードの情報
+  pairedEndId?: string | null;
+  pairedEndTimestamp?: string | null;
 }
 
 /**
@@ -300,7 +303,7 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
         const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
         const s = document.createElement('script');
         s.id = 'google-maps-script';
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=__cmsMapsReady`;
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&loading=async&callback=__cmsMapsReady`;
         s.async = true;
         (window as any).__cmsMapsReady = () => {
           if (mapRef.current && !mapInst.current) {
@@ -369,6 +372,8 @@ interface CmsEditEvent {
   timestamp: string | null;
   // ✅ 積込・荷降統合編集用: 完了時刻（到着時刻は timestamp）
   completionTimestamp?: string | null;
+  // ✅ 休憩統合編集用: ペアとなる休憩終了レコードのID
+  pairedEndId?: string | null;
   // ✅ 複数品目リスト（LOADING/UNLOADING_COMPLETED用）
   detailItems?: Array<{
     id: string;
@@ -416,6 +421,8 @@ const isLoadEvt  = (t: string) => ['LOADING','LOADING_ARRIVED','LOADING_COMPLETE
 // ✅ 積込・荷降統合編集（mobile ActivityEditSheetと同じ単一レコード編集）用の判定
 const isLoadGroupEvt = (t: string) => t === 'LOADING';
 const isUnlGroupEvt  = (t: string) => t === 'UNLOADING';
+// ✅ 休憩統合編集（mobile ActivityEditSheetのpairId方式と同じ）用の判定
+const isBreakGroupEvt = (t: string) => t === 'BREAK';
 // isUnlEvt: 個別分岐済み
 // const isUnlEvt = (t: string) => ['UNLOADING','UNLOADING_ARRIVED','UNLOADING_COMPLETED'].includes(t);
 const isFuelEvt  = (t: string) => ['FUELING','REFUELING'].includes(t);
@@ -570,6 +577,33 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         setSaving(false);
         return;
       }
+      // ✅ 休憩統合編集: mobileのActivityEditSheetと同じく、開始・終了2レコードを個別に更新する
+      if (isBreakGroupEvt(event.eventType)) {
+        const startBody: Record<string, any> = {
+          actualStartTime: mergeHM(event.timestamp, startHHMM),
+        };
+        if (notes) startBody.notes = notes;
+        const startRes = await apiClient.put(`/operation-details/timeline-event/${event.id}`, startBody);
+        if (!((startRes as any).success || (startRes as any).data || (startRes as any).id || (startRes as any).eventId)) {
+          setSaveError('休憩開始の保存に失敗しました');
+          setSaving(false);
+          return;
+        }
+        if (event.pairedEndId && endHHMM) {
+          const endIso = mergeHM(event.completionTimestamp ?? event.timestamp, endHHMM);
+          const endBody: Record<string, any> = { actualStartTime: endIso, actualEndTime: endIso };
+          const endRes = await apiClient.put(`/operation-details/timeline-event/${event.pairedEndId}`, endBody);
+          if (!((endRes as any).success || (endRes as any).data || (endRes as any).id || (endRes as any).eventId)) {
+            setSaveError('休憩終了の保存に失敗しました');
+            setSaving(false);
+            return;
+          }
+        }
+        onSaved();
+        onClose();
+        setSaving(false);
+        return;
+      }
       // ✅ 統合エンドポイントで全イベント種別を処理
       const body: Record<string, any> = {
         actualStartTime: mergeHM(event.timestamp, startHHMM),
@@ -642,7 +676,12 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setDeleting(true);
     try {
       await apiClient.delete(`/operation-details/${event.realDetailId}`);
+      // ✅ 休憩は開始・終了2レコード1組のため、ペアの終了レコードも同時に削除する
+      if (isBreakGroupEvt(event.eventType) && event.pairedEndId) {
+        await apiClient.delete(`/operation-details/${event.pairedEndId}`);
+      }
       onDeleted(event.id);
+      if (event.pairedEndId) onDeleted(event.pairedEndId);
       onClose();
     } catch (e: any) {
       setSaveError(e?.response?.data?.message || '削除に失敗しました');
@@ -697,6 +736,21 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">完了時刻<span className="text-gray-400 font-normal ml-1">（任意）</span></label>
+                  <input type="time" value={endHHMM} onChange={e => setEndHHMM(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+              </div>
+            );
+            // ✅ 休憩統合編集: 開始・終了を1画面で両方編集（mobileと同じ仕様）
+            if (isBreakGroupEvt(et)) return (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">休憩開始時刻<span className="text-red-500 ml-1">*</span></label>
+                  <input type="time" value={startHHMM} onChange={e => setStartHHMM(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">休憩終了時刻<span className="text-gray-400 font-normal ml-1">（任意）</span></label>
                   <input type="time" value={endHHMM} onChange={e => setEndHHMM(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                 </div>
@@ -882,15 +936,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
             </div>
           </>)}
 
-          {/* 休憩専用 */}
-          {isBreakEvt(event.eventType) && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">場所名 <span className="font-normal text-gray-400">（任意）</span></label>
-              <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)}
-                placeholder="例: コンビニ駐車場"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
-            </div>
-          )}
+          {/* ✅ 休憩には場所名は不要のため表示しない（mobileと同じ仕様） */}
 
           {/* 運行前点検専用: 点検メモ */}
           {event.eventType === 'PRE_INSPECTION' && (
@@ -1650,7 +1696,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       console.log('📥 [Maps Loading Debug] Creating new Google Maps script tag...');
       const script = document.createElement('script');
       script.id = 'google-maps-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker&loading=async`;
       script.async = true;
       script.defer = true;
       script.onload = () => {
@@ -3124,15 +3170,18 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             // 孤立COMPLETEDは単独表示
                             groups.push({ type: 'SINGLE', event: ev });
                           } else if (ev.eventType === 'BREAK_START') {
-                            // ✅ BREAK_START + BREAK_END を1くくりに
+                            // ✅ 修正②: BREAK_START + BREAK_END を1くくりにする際、
+                            // 以前は表示用の合成文字列（「休憩開始 → 10:52 終了」）でnotesを
+                            // 上書きしており、それがそのまま編集画面の備考欄に漏れていた。
+                            // 生のnotesはそのまま保持し、終了時刻情報は pairedEndId/pairedEndTimestamp
+                            // という別フィールドに持たせる（mobileのpairId方式と同じ考え方）。
                             const pairedEnd = breakPairMap.get(ev.id) ?? null;
                             groups.push({ type: 'SINGLE', event: {
                               ...ev,
-                              // BREAK_START イベントに終了時刻情報を付加して1行表示
-                              eventType: 'BREAK_START' as const,
-                              notes: pairedEnd
-                                ? `休憩開始 → ${new Date(pairedEnd.timestamp ?? '').toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })} 終了`
-                                : (ev.notes ?? null),
+                              eventType: pairedEnd ? ('BREAK' as const) : ('BREAK_START' as const),
+                              notes: ev.notes ?? null,
+                              pairedEndId: pairedEnd?.id ?? null,
+                              pairedEndTimestamp: pairedEnd?.timestamp ?? null,
                             }});
                           } else if (ev.eventType === 'BREAK_END') {
                             // 対応BREAK_STARTとペア済みなら usedEvIds で除外済み → ここには孤立のみ来る
@@ -3150,6 +3199,11 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             timeZone: 'Asia/Tokyo',
                             month: '2-digit', day: '2-digit',
                             hour: '2-digit', minute: '2-digit', second: '2-digit'
+                          }) : '-';
+                        // ✅ 修正④: mobileと同じ HH:MM 表記（秒なし）のフォーマッタ
+                        const fmtHM = (ts: string | null) =>
+                          ts ? new Date(ts).toLocaleTimeString('ja-JP', {
+                            timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit'
                           }) : '-';
  
                         // ─────────────────────────────────────────────
@@ -3391,7 +3445,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     </span>
                                     {event.timestamp && (
                                       <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                                        記録時刻: {fmtTs(event.timestamp)}
+                                        {isBreakGroupEvt(event.eventType) ? '開始時刻' : '記録時刻'}: {fmtHM(event.timestamp)}
+                                      </span>
+                                    )}
+                                    {/* ✅ 休憩統合編集: 終了時刻バッジ（mobileの「休憩終了」表示と統一） */}
+                                    {(event as any).pairedEndTimestamp && (
+                                      <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
+                                        終了時刻: {fmtHM((event as any).pairedEndTimestamp)}
                                       </span>
                                     )}
                                     {/* ✅ 編集ボタン */}
@@ -3402,6 +3462,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         realDetailId: event.id.replace(/-arrived$|-completed$/, ''),
                                         eventType: event.eventType,
                                         timestamp: event.timestamp,
+                                        // ✅ 休憩統合編集: ペアの終了時刻・終了レコードIDを引き継ぐ
+                                        completionTimestamp: (event as any).pairedEndTimestamp ?? null,
+                                        pairedEndId: (event as any).pairedEndId ?? null,
                                         notes: event.notes,
                                         quantityTons: event.quantityTons,
                                         fuelCostYen: (event as any).fuelCostYen ?? null,
@@ -3434,15 +3497,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     </div>
                                   )}
  
-                                  {/* GPS座標 */}
-                                  {event.gpsLocation && (
-                                    <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
-                                      <Navigation className="w-3 h-3 flex-shrink-0" />
-                                      <span>
-                                        GPS座標: {event.gpsLocation.latitude.toFixed(6)}, {event.gpsLocation.longitude.toFixed(6)}
-                                      </span>
-                                    </div>
-                                  )}
+                                  {/* ✅ 修正④: GPS座標の生数値はユーザー向けタイムラインには不要（mobileも非表示） */}
  
                                   {/* 品目・数量 */}
                                   {event.items && (
