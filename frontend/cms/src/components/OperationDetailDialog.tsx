@@ -566,6 +566,10 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
       setOdometer((event as any).totalDistanceKm ? String((event as any).totalDistanceKm) : '');
       // operations.fuel_consumed_liters → 燃料
       setFuelLevel((event as any).fuelConsumedLiters ? String((event as any).fuelConsumedLiters) : '');
+    } else if (event.eventType === 'TRIP_END') {
+      // ✅ 修正④: 運行終了イベントでも走行距離を編集できるように初期値を設定
+      setOdometer((event as any).totalDistanceKm ? String((event as any).totalDistanceKm) : '');
+      setFuelLevel(''); setInspMemo('');
     } else { setOdometer(''); setFuelLevel(''); setInspMemo(''); }
     // ✅ 給油: 専用カラムから初期値取得（notes regex解析廃止）
     if (['FUELING','REFUELING'].includes(event.eventType ?? '')) {
@@ -736,6 +740,10 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
         if (fuelCost) body.fuelCostYen = parseFloat(fuelCost);  // ✅ 専用カラム
         // notes は自由記述のみ
       }
+      // ✅ 修正④: 運行終了は走行距離をoperations.totalDistanceKmに保存
+      if (event.eventType === 'TRIP_END') {
+        if (odometer) body.totalDistanceKm = odometer;
+      }
       // 運行前点検: overall_notes に保存
       if (event.eventType === 'PRE_INSPECTION') {
         if (preinspMemo) body.overallNotes = preinspMemo;
@@ -898,6 +906,16 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
               </div>
             );
           })()}
+
+          {/* ✅ 修正④: 運行終了イベントで走行距離を編集可能にする */}
+          {event.eventType === 'TRIP_END' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">走行距離（km）<span className="font-normal text-gray-400">（任意）</span></label>
+              <input type="number" inputMode="decimal" value={odometer} onChange={e => setOdometer(e.target.value)}
+                placeholder="例: 3855"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+          )}
 
           {/* ── 積込(到着): 場所名・客先・GPS地図のみ ── */}
           {(event.eventType === 'LOADING_ARRIVED' || isLoadGroupEvt(event.eventType)) && (<>
@@ -1292,22 +1310,30 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
   const [currentCustomerName, setCurrentCustomerName] = React.useState('');
   const [showCustomerPicker, setShowCustomerPicker] = React.useState(false);
 
+  // ✅ 修正②③【根本原因】: 種別（積込/荷降）を選んだ時点で登録済み場所を
+  // 全件取得する（「登録リストから選択」と同じ体験）。以前は検索文字列を
+  // 1文字以上入力しないと候補が一切出ない実装になっていた。
+  const [locAllResults, setLocAllResults] = React.useState<{ id: string; name: string; address: string }[]>([]);
   React.useEffect(() => {
-    if (!locQuery || locQuery.trim().length < 1) { setLocResults([]); return; }
-    const t = setTimeout(async () => {
-      setLocSearching(true);
+    if (!isLoadOrUnload) { setLocAllResults([]); return; }
+    setLocSearching(true);
+    (async () => {
       try {
-        // 🆕 種別に応じて場所をフィルタ（積込→PICKUP/BOTH、荷降→DELIVERY/BOTH）
         const typeFilter = eventType === 'LOADING' ? ['PICKUP', 'BOTH'] : ['DELIVERY', 'BOTH'];
-        const res = await apiClient.get('/locations', { params: { search: locQuery, limit: 10, locationType: typeFilter } });
+        const res = await apiClient.get('/locations', { params: { limit: 100, locationType: typeFilter } });
         const d: any = res;
         const arr = d?.data?.data ?? d?.data ?? [];
-        setLocResults(Array.isArray(arr) ? arr : []);
-      } catch { setLocResults([]); }
+        setLocAllResults(Array.isArray(arr) ? arr : []);
+      } catch { setLocAllResults([]); }
       finally { setLocSearching(false); }
-    }, 350);
-    return () => clearTimeout(t);
-  }, [locQuery, eventType]);
+    })();
+  }, [eventType, isLoadOrUnload]);
+
+  // ✅ 検索テキストによるクライアント側の絞り込み（未入力なら全件表示）
+  React.useEffect(() => {
+    const q = locQuery.trim().toLowerCase();
+    setLocResults(q ? locAllResults.filter(l => l.name.toLowerCase().includes(q)) : locAllResults);
+  }, [locQuery, locAllResults]);
 
   // 🆕 車両の積載量(capacityTons)を数量の初期値にする
   React.useEffect(() => {
@@ -1863,7 +1889,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       console.log('📥 [Maps Loading Debug] Script tag appended to document.head');
     };
 
-    if (isOpen && activeTab === 'gps') {
+    // ✅ 修正②③【根本原因】: 以前は activeTab === 'gps' の場合のみ読み込んでいたため、
+    // GPSタブを開かずにイベント追加/編集モーダル（場所ピン調整・新規地点登録マップ）を
+    // 使おうとすると mapsLoaded が永遠に false のままになり、
+    // 「地図を読み込み中...」から進めなくなっていた。ダイアログが開いている間は
+    // タブに関係なく読み込む。
+    if (isOpen) {
       console.log('✅ [Maps Loading Debug] Conditions met - calling loadGoogleMaps()');
       loadGoogleMaps();
     } else {
@@ -3401,23 +3432,18 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   </span>
                                 </div>
                               )}
-                              {/* ✅ 修正③: 品目 - 完了イベントのみ表示。選択されたすべての品目（手入力含む）を表示 */}
+                              {/* ✅ 修正①③: 品目 - 完了イベントのみ表示。「品目: A、B、C」の1行形式にまとめる */}
                               {!isArrived && ((subEvent as any).detailItems?.length > 0 || subEvent.items || (subEvent as any).customItemName) && (
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs text-gray-600">
+                                <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-600">
                                   <Package className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                  {(subEvent as any).detailItems?.length > 0 ? (
-                                    (subEvent as any).detailItems.map((di: any) => (
-                                      <span key={di.id}>品目: {di.itemName}{di.quantityTons ? ` ${di.quantityTons}t` : ''}</span>
-                                    ))
-                                  ) : subEvent.items ? (
-                                    <span>
-                                      品目: {subEvent.items.name}
-                                      {subEvent.items.unit ? ` (${subEvent.items.unit})` : ''}
-                                    </span>
-                                  ) : null}
-                                  {(subEvent as any).customItemName && (
-                                    <span>品目（手入力）: {(subEvent as any).customItemName}</span>
-                                  )}
+                                  <span>
+                                    品目: {[
+                                      ...((subEvent as any).detailItems?.length > 0
+                                        ? (subEvent as any).detailItems.map((di: any) => `${di.itemName}${di.quantityTons ? ` ${di.quantityTons}t` : ''}`)
+                                        : (subEvent.items ? [`${subEvent.items.name}${subEvent.items.unit ? ` (${subEvent.items.unit})` : ''}`] : [])),
+                                      ...((subEvent as any).customItemName ? [`${(subEvent as any).customItemName}（手入力）`] : []),
+                                    ].join('、')}
+                                  </span>
                                 </div>
                               )}
                               {/* ⚖️ 重量 - 完了イベントのみ表示 */}
@@ -3667,27 +3693,18 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
  
                                   {/* ✅ 修正④: GPS座標の生数値はユーザー向けタイムラインには不要（mobileも非表示） */}
  
-                                  {/* ✅ 修正③: 品目・数量 - 選択されたすべての品目（手入力含む）を表示 */}
+                                  {/* ✅ 修正①③: 品目・数量 - すべての品目（手入力含む）を「品目: A、B、C」の1行にまとめて表示 */}
                                   {((event as any).detailItems?.length > 0 || event.items || (event as any).customItemName) && (
                                     <div className="flex items-start gap-2 text-sm text-gray-600 mb-2">
                                       <Package className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                                      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                                        {(event as any).detailItems?.length > 0 ? (
-                                          (event as any).detailItems.map((di: any) => (
-                                            <span key={di.id}>
-                                              品目: {di.itemName}{di.quantityTons ? ` ${di.quantityTons}t` : ''}
-                                            </span>
-                                          ))
-                                        ) : event.items ? (
-                                          <span>
-                                            品目: {event.items.name}
-                                            {event.quantityTons ? ` ${event.quantityTons}t` : ''}
-                                          </span>
-                                        ) : null}
-                                        {(event as any).customItemName && (
-                                          <span>品目（手入力）: {(event as any).customItemName}</span>
-                                        )}
-                                      </div>
+                                      <span>
+                                        品目: {[
+                                          ...((event as any).detailItems?.length > 0
+                                            ? (event as any).detailItems.map((di: any) => `${di.itemName}${di.quantityTons ? ` ${di.quantityTons}t` : ''}`)
+                                            : (event.items ? [`${event.items.name}${event.quantityTons ? ` ${event.quantityTons}t` : ''}`] : [])),
+                                          ...((event as any).customItemName ? [`${(event as any).customItemName}（手入力）`] : []),
+                                        ].join('、')}
+                                      </span>
                                     </div>
                                   )}
  

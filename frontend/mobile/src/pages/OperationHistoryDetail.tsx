@@ -132,6 +132,10 @@ const OperationHistoryDetail: React.FC = () => {
   const [creatingActivity, setCreatingActivity] = useState<{ draft: EditSheetActivityRecord; afterSeq: number } | null>(null);
   const [detailCustomers, setDetailCustomers] = useState<{ id: string; name: string }[]>([]);
   const [detailItems, setDetailItems] = useState<{ id: string; name: string; itemType?: string; displayOrder?: number }[]>([]);
+  // ✅ 修正④: 走行距離のインライン編集用
+  const [editingDistance, setEditingDistance] = useState(false);
+  const [distanceInput, setDistanceInput] = useState('');
+  const [savingDistance, setSavingDistance] = useState(false);
 
   // =====================================
   // 詳細データ取得
@@ -172,6 +176,27 @@ const OperationHistoryDetail: React.FC = () => {
       navigate(-1);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ✅ 修正④: 走行距離の保存
+  const handleSaveDistance = async () => {
+    if (!id || !distanceInput.trim()) return;
+    setSavingDistance(true);
+    try {
+      const res = await (apiService as any).updateOperationDistance(id, parseFloat(distanceInput));
+      if (res?.success) {
+        toast.success('走行距離を更新しました');
+        setEditingDistance(false);
+        fetchDetail();
+      } else {
+        toast.error(res?.message || '走行距離の更新に失敗しました');
+      }
+    } catch (error) {
+      console.error('走行距離更新エラー:', error);
+      toast.error('走行距離の更新に失敗しました');
+    } finally {
+      setSavingDistance(false);
     }
   };
 
@@ -333,8 +358,31 @@ const OperationHistoryDetail: React.FC = () => {
             </div>
             <div className="bg-green-50 rounded-lg p-3 text-center">
               <TrendingUp className="w-5 h-5 text-green-600 mx-auto mb-1" />
-              <div className="text-xs text-gray-500">走行距離</div>
-              <div className="font-bold text-green-700">{detail.totalDistance.toFixed(1)}km</div>
+              <div className="text-xs text-gray-500 flex items-center justify-center gap-1">
+                走行距離
+                {!editingDistance && (
+                  <button
+                    onClick={() => { setDistanceInput(detail.totalDistance ? String(detail.totalDistance) : ''); setEditingDistance(true); }}
+                    className="text-[10px] text-blue-600 underline"
+                  >編集</button>
+                )}
+              </div>
+              {editingDistance ? (
+                <div className="flex items-center gap-1 justify-center mt-1">
+                  <input
+                    type="number" inputMode="decimal" value={distanceInput}
+                    onChange={e => setDistanceInput(e.target.value)}
+                    className="w-16 border border-gray-300 rounded px-1 py-0.5 text-sm text-center"
+                  />
+                  <button
+                    onClick={handleSaveDistance} disabled={savingDistance}
+                    className="text-xs text-white bg-green-600 rounded px-2 py-0.5 disabled:opacity-50"
+                  >保存</button>
+                  <button onClick={() => setEditingDistance(false)} className="text-xs text-gray-500 px-1">✕</button>
+                </div>
+              ) : (
+                <div className="font-bold text-green-700">{detail.totalDistance.toFixed(1)}km</div>
+              )}
             </div>
             <div className="bg-orange-50 rounded-lg p-3 text-center">
               <Package className="w-5 h-5 text-orange-600 mx-auto mb-1" />

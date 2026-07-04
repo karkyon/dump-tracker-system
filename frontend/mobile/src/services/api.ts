@@ -1671,6 +1671,23 @@ class APIServiceClass {
     }
   }
 
+  /**
+   * ✅ 修正④: 走行距離修正（履歴確認画面用）
+   * PATCH /api/v1/mobile/operations/:id/distance
+   */
+  async updateOperationDistance(operationId: string, totalDistanceKm: number): Promise<APIResponse<any>> {
+    try {
+      const response = await this.axiosInstance.patch<APIResponse<any>>(
+        `/mobile/operations/${operationId}/distance`,
+        { totalDistanceKm }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('走行距離修正エラー:', error);
+      return { success: false, data: null, message: '走行距離の修正に失敗しました' };
+    }
+  }
+
 }
 
 // =============================================================================

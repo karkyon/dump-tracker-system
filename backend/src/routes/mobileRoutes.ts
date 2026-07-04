@@ -925,6 +925,17 @@ router.patch('/operations/:id/customer',
   mobileController.changeCustomer
 );
 
+/**
+ * ✅ 修正④: 走行距離修正（mobile履歴確認画面用）
+ * PATCH /api/v1/mobile/operations/:id/distance
+ */
+router.patch('/operations/:id/distance',
+  logRequest('PATCH /mobile/operations/:id/distance'),
+  authenticateToken(),
+  requireRole(['DRIVER', 'MANAGER', 'ADMIN'] as UserRole[]),
+  mobileController.updateDistance
+);
+
 router.post('/operations/nearby-locations',
   logRequest('POST /mobile/operations/nearby-locations'),
   authenticateToken(),

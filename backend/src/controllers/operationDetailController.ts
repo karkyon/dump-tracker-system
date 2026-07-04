@@ -573,6 +573,8 @@ export class OperationDetailController {
           eventType: 'TRIP_END',
           timestamp: operation.actualEndTime,
           gpsLocation: null,
+          // ✅ 修正④: 運行終了イベントの編集で走行距離を扱えるようにtotalDistanceKmを含める
+          totalDistanceKm: (operation as any).totalDistanceKm ? Number((operation as any).totalDistanceKm) : null,
           // ✅ 修正②: 「運行終了」の定型文言を廃止
           notes: null
         });
@@ -823,6 +825,8 @@ export class OperationDetailController {
       const data: any = {};
       if (rawData.actualStartTime) data.actualEndTime = toDate(rawData.actualStartTime);
       if (rawData.notes) data.notes = rawData.notes;
+      // ✅ 修正④: 運行終了イベント編集画面から走行距離を修正できるようにする
+      if (rawData.totalDistanceKm !== undefined) data.totalDistanceKm = parseFloat(String(rawData.totalDistanceKm));
       const updated = await db.operation.update({ where: { id: opId }, data });
       return sendSuccess(res, { eventId, ...updated });
     }

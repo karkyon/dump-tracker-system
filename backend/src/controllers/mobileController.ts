@@ -1165,6 +1165,73 @@ export class MobileController {
     }
   });
 
+  /**
+   * ✅ 修正④: 走行距離修正（mobile履歴確認画面用）
+   * PATCH /api/v1/mobile/operations/:id/distance
+   * ドライバーは自分の運行のみ、MANAGER/ADMINは全運行を修正可能
+   */
+  public updateDistance = asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        sendError(res, '認証が必要です', 401, 'AUTHENTICATION_REQUIRED');
+        return;
+      }
+
+      const operationId = req.params.id;
+      const { totalDistanceKm } = req.body;
+
+      if (!operationId) {
+        sendError(res, '運行IDが必要です', 400, 'MISSING_OPERATION_ID');
+        return;
+      }
+      if (totalDistanceKm === undefined || totalDistanceKm === null || isNaN(Number(totalDistanceKm))) {
+        sendError(res, '走行距離が必要です', 400, 'MISSING_DISTANCE');
+        return;
+      }
+
+      const db = DatabaseService.getInstance();
+
+      const operation = await db.operation.findUnique({
+        where: { id: operationId },
+        select: { id: true, driverId: true }
+      });
+
+      if (!operation) {
+        sendError(res, '運行が見つかりません', 404, 'OPERATION_NOT_FOUND');
+        return;
+      }
+
+      // ドライバー本人チェック（MANAGER/ADMINはスキップ）
+      const isManager = req.user.role === 'MANAGER' || req.user.role === 'ADMIN';
+      if (!isManager && operation.driverId !== req.user.userId) {
+        sendError(res, 'この運行の走行距離を修正する権限がありません', 403, 'FORBIDDEN');
+        return;
+      }
+
+      const updated = await db.operation.update({
+        where: { id: operationId },
+        data: { totalDistanceKm: Number(totalDistanceKm) }
+      });
+
+      logger.info('走行距離修正完了', {
+        operationId,
+        totalDistanceKm: Number(totalDistanceKm),
+        userId: req.user.userId
+      });
+
+      sendSuccess(res, {
+        operationId,
+        totalDistanceKm: updated.totalDistanceKm ? Number(updated.totalDistanceKm) : 0
+      }, '走行距離を更新しました');
+
+    } catch (error) {
+      logger.error('走行距離修正エラー', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      sendError(res, '走行距離の修正に失敗しました', 500, 'UPDATE_DISTANCE_ERROR');
+    }
+  });
+
   // =====================================
   // 車両管理
   // =====================================
