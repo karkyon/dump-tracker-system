@@ -3193,8 +3193,15 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         const unloadingCount = _evs.filter(e => e.eventType === 'UNLOADING_ARRIVED').length;
                         // 積込完了イベントから重量・品目を集計
                         const completedLoadings = _evs.filter(e => e.eventType === 'LOADING_COMPLETED');
+                        // ✅ 修正②【根本原因】: 複数品目選択時は detailItems 配列に全品目が入るが、
+                        // 従来はここが単一の items フィールドしか見ておらず、2つ目以降の品目が
+                        // 運搬品目タグ・品目別台数・客先別集計のすべてから欠落していた。
+                        const itemNamesOf = (e: any): string[] =>
+                          (e.detailItems && e.detailItems.length > 0)
+                            ? e.detailItems.map((di: any) => di.itemName).filter((n: any) => !!n)
+                            : (e.items ? [e.items.name] : []);
                         const uniqueItems = [...new Set(
-                          completedLoadings.filter(e => e.items).map(e => e.items!.name)
+                          completedLoadings.flatMap(e => itemNamesOf(e))
                         )];
                         const totalWeight = completedLoadings.reduce((sum, e) => sum + (e.quantityTons || 0), 0);
                         // 走行距離は operation state から取得
@@ -3245,9 +3252,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             {(() => {
                               const itemCountMap: Record<string, number> = {};
                               completedLoadings.forEach(e => {
-                                if (e.items?.name) {
-                                  itemCountMap[e.items.name] = (itemCountMap[e.items.name] || 0) + 1;
-                                }
+                                itemNamesOf(e).forEach(name => {
+                                  itemCountMap[name] = (itemCountMap[name] || 0) + 1;
+                                });
                               });
                               const entries = Object.entries(itemCountMap);
                               if (entries.length === 0) return null;
@@ -3271,7 +3278,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               const unloadingEvents = _evs.filter(e => e.eventType === 'UNLOADING_ARRIVED');
                               completedLoadings.forEach(le => {
                                 const customer = (le as any).customerName ?? '—';
-                                const item     = le.items?.name ?? '—';
+                                // ✅ 修正②【根本原因】: 選択された品目すべてを「、」区切りで表示する
+                                const leItemNames = itemNamesOf(le);
+                                const item     = leItemNames.length > 0 ? leItemNames.join('、') : '—';
                                 const loadLoc  = le.location?.name ?? '—';
                                 const leIdx    = _evs.indexOf(le);
                                 const nextUnl  = unloadingEvents.find(ue => _evs.indexOf(ue) > leIdx);

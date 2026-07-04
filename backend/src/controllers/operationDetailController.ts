@@ -749,17 +749,19 @@ export class OperationDetailController {
         });
         const myIndex = siblings.findIndex((s: any) => s.id === operationDetail.id);
         if (myIndex !== -1) {
-          if (operationDetail.activityType === 'UNLOADING' && !(operationDetail as any).customerId) {
-            // 直前の積込（間に別の荷降が無い範囲）を探し、客先が設定されていれば継承する
+          if (operationDetail.activityType === 'UNLOADING') {
+            // ✅ 修正【根本原因】: 「積込〜荷降は1セットで同じ客先」は例外のない業務ルールのため、
+            // フロントから送られてきたcustomerId（古い/誤ったデフォルト値の可能性がある）の
+            // 有無に関わらず、常に直前の積込（間に別の荷降が無い範囲）の客先で強制的に上書きする。
             for (let k = myIndex - 1; k >= 0; k--) {
               const s = siblings[k];
               if (!s) continue;
               if (s.activityType === 'UNLOADING') break;
               if (s.activityType === 'LOADING') {
-                if (s.customerId) {
+                if (s.customerId && s.customerId !== (operationDetail as any).customerId) {
                   await dbForPair.operationDetail.update({ where: { id: operationDetail.id }, data: { customerId: s.customerId } });
                   (operationDetail as any).customerId = s.customerId;
-                  logger.info('✅ [createOperationDetail] 荷降に直前の積込の客先を継承', { unloadingId: operationDetail.id, loadingId: s.id, customerId: s.customerId });
+                  logger.info('✅ [createOperationDetail] 荷降の客先を直前の積込に強制的に合わせた', { unloadingId: operationDetail.id, loadingId: s.id, customerId: s.customerId });
                 }
                 break;
               }
