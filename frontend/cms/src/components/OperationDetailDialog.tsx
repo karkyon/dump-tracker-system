@@ -259,26 +259,52 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
   const centerLat = lat ?? 34.6937;
   const centerLng = lng ?? 135.5023;
 
+  const markerIsAdvancedRef = useRef(false);
+
   const initMap = React.useCallback((container: HTMLDivElement, existingMarker?: any) => {
     if (!(window as any).google?.maps) return null;
     const g = (window as any).google.maps;
+    // ✅ 修正【根本原因】: mapIdは常に設定する（環境変数 → サンプルIDフォールバック）。
+    // 他の正常動作しているマップ（GPS軌跡表示）と同じ方式に統一する。
+    // mapId未設定のままAdvancedMarkerElementを生成すると、Google Maps側が
+    // 「このページではGoogleマップが正しく読み込まれませんでした」エラーを表示する。
+    const resolvedMapId = (import.meta as any).env?.VITE_GOOGLE_MAP_ID || '90f87356969d889c';
     const map = new g.Map(container, {
       center: { lat: centerLat, lng: centerLng },
       zoom: 17, disableDefaultUI: true, zoomControl: true,
-      // ✅ Fix③-B: DEMO_MAP_IDはAdvancedMarkerElementでエラーになるため実Map IDを使用
-      ...((import.meta as any).env?.VITE_GOOGLE_MAP_ID ? { mapId: (import.meta as any).env.VITE_GOOGLE_MAP_ID } : {}),
+      mapId: resolvedMapId,
     });
-    const pos = existingMarker ? existingMarker.getPosition() : { lat: centerLat, lng: centerLng };
-    // BUG-011: AdvancedMarkerElement 移行
-    const pinCmsEl = document.createElement('div');
-    pinCmsEl.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#1d4ed8;border:3px solid #fff;cursor:move;box-shadow:0 2px 6px rgba(0,0,0,.4);';
-    const marker = new (g as any).marker.AdvancedMarkerElement({
-      position: pos, map, title: 'ドラッグで位置調整',
-      content: pinCmsEl, gmpDraggable: true,
-    });
-    const move = (e: any) => { const p = e.latLng ?? marker.position; if (p) onPinMoved(typeof p.lat==='function'?p.lat():p.lat, typeof p.lng==='function'?p.lng():p.lng); };
+    // ✅ 修正【根本原因】: AdvancedMarkerElementが利用できない場合はレガシーMarkerへ
+    // フォールバックする（GPS軌跡表示マップと同じ防御的パターン）。
+    const isAdvanced = !!(g as any).marker?.AdvancedMarkerElement;
+    markerIsAdvancedRef.current = isAdvanced;
+    const pos = existingMarker
+      ? (isAdvanced ? existingMarker.position : existingMarker.getPosition())
+      : { lat: centerLat, lng: centerLng };
+    let marker: any;
+    if (isAdvanced) {
+      // BUG-011: AdvancedMarkerElement 移行
+      const pinCmsEl = document.createElement('div');
+      pinCmsEl.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#1d4ed8;border:3px solid #fff;cursor:move;box-shadow:0 2px 6px rgba(0,0,0,.4);';
+      marker = new (g as any).marker.AdvancedMarkerElement({
+        position: pos, map, title: 'ドラッグで位置調整',
+        content: pinCmsEl, gmpDraggable: true,
+      });
+    } else {
+      // フォールバック: 旧 google.maps.Marker（mapId不要）
+      marker = new g.Marker({
+        position: pos, map, title: 'ドラッグで位置調整', draggable: true,
+      });
+    }
+    const move = (e: any) => {
+      const p = e.latLng ?? (isAdvanced ? marker.position : marker.getPosition());
+      if (p) onPinMoved(typeof p.lat==='function'?p.lat():p.lat, typeof p.lng==='function'?p.lng():p.lng);
+    };
     marker.addListener('dragend', move);
-    map.addListener('click', (e: any) => { marker.position = e.latLng; onPinMoved(e.latLng.lat(), e.latLng.lng()); });
+    map.addListener('click', (e: any) => {
+      if (isAdvanced) { marker.position = e.latLng; } else { marker.setPosition(e.latLng); }
+      onPinMoved(e.latLng.lat(), e.latLng.lng());
+    });
     return { map, marker };
   }, [centerLat, centerLng, onPinMoved]);
 
@@ -286,8 +312,9 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
     if (mapInst.current && markerInst.current && lat != null && lng != null) {
       const pos = { lat, lng };
       mapInst.current.panTo(pos);
-      // BUG-011: AdvancedMarkerElement は position プロパティで更新
-      markerInst.current.position = pos;
+      // ✅ 修正: AdvancedMarkerElementはpositionプロパティ、旧Markerはsetposition()で更新
+      if (markerIsAdvancedRef.current) { markerInst.current.position = pos; }
+      else { markerInst.current.setPosition(pos); }
       onPinMoved(lat, lng);
     } else if (!mapInst.current && lat != null && lng != null && (window as any).google?.maps) {
       // ✅ FIX-GPSPIN-CMS: mapInstが未初期化かつlat/lngが後から確定した場合に再初期化
