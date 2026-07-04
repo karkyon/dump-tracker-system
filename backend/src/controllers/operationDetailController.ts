@@ -203,6 +203,33 @@ export class OperationDetailController {
         ]
       });
 
+      // ✅ 修正【自己修復・根本対応】: 「積込〜荷降は1セットで同じ客先」を
+      // タイムライン取得の"その都度"必ず検査し、既存データ（過去に作成されたもの、
+      // 何らかの理由でずれてしまったもの含む）であっても自動で修正する。
+      // 積込〜荷降が何回目のペアであっても、sequenceNumber順に見て
+      // 直前の積込の客先を正として、荷降側が異なっていればDBごと更新する。
+      {
+        const sortedForPairing = [...operationDetails].sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber);
+        let currentLoading: any = null;
+        for (const d of sortedForPairing) {
+          if (d.activityType === 'LOADING') {
+            currentLoading = d;
+          } else if (d.activityType === 'UNLOADING') {
+            if (currentLoading && currentLoading.customerId && d.customerId !== currentLoading.customerId) {
+              await db.operationDetail.update({
+                where: { id: d.id },
+                data: { customerId: currentLoading.customerId }
+              });
+              (d as any).customerId = currentLoading.customerId;
+              (d as any).customers = currentLoading.customers ?? null;
+              logger.info('✅ [getAllOperationDetails] 自己修復: 荷降の客先を直前の積込に合わせて修正', {
+                unloadingId: d.id, loadingId: currentLoading.id, customerId: currentLoading.customerId
+              });
+            }
+          }
+        }
+      }
+
       // =====================================
       // 4. GPSログを取得（走行軌跡用）
       // ✅ take上限撤廃 → 全件取得 + 可変間引き
