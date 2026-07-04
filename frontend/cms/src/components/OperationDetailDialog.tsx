@@ -339,7 +339,7 @@ const CmsGpsPinMap: React.FC<CmsGpsPinMapProps> = ({ lat, lng, onPinMoved }) => 
         const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
         const s = document.createElement('script');
         s.id = 'google-maps-script';
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&loading=async&callback=__cmsMapsReady`;
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker,places&loading=async&callback=__cmsMapsReady`;
         s.async = true;
         (window as any).__cmsMapsReady = () => {
           if (mapRef.current && !mapInst.current) {
@@ -1267,6 +1267,8 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
   const [selectedLocationId, setSelectedLocationId] = React.useState('');
   const [selectedLocationName, setSelectedLocationName] = React.useState('');
   const [showNewLocationForm, setShowNewLocationForm] = React.useState(false);
+  // ✅ 修正①: 編集モーダルと同じ「登録リストから選択」ボタン押下時のみ一覧を表示する
+  const [showLocPickerModal, setShowLocPickerModal] = React.useState(false);
   const [newLocName, setNewLocName] = React.useState('');
   const [newLocAddress, setNewLocAddress] = React.useState('');
   const [newLocLat, setNewLocLat] = React.useState('');
@@ -1336,16 +1338,30 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
   }, [locQuery, locAllResults]);
 
   // 🆕 車両の積載量(capacityTons)を数量の初期値にする
+  // ✅ 診断ログ追加: vehicleIdが渡っているか／APIレスポンスに capacityTons が
+  // 含まれているかを次回切り分けできるようにする（推測での書き換えはしない）
   React.useEffect(() => {
-    if (!vehicleId) return;
+    console.log('[イベント追加] 車両積載量デフォルト値取得', { vehicleId });
+    if (!vehicleId) {
+      console.warn('[イベント追加] vehicleIdが渡されていないため積載量のデフォルト値取得をスキップします');
+      return;
+    }
     (async () => {
       try {
         const res = await apiClient.get(`/vehicles/${vehicleId}`);
         const d: any = res;
+        console.log('[イベント追加] /vehicles/:id レスポンス', d);
         const v = d?.data?.data ?? d?.data ?? d;
         const cap = v?.capacityTons ?? v?.capacity;
-        if (cap) setQuantity(prev => prev || String(cap));
-      } catch { /* 取得失敗は無視（手入力で対応） */ }
+        console.log('[イベント追加] 抽出した積載量(capacityTons)', cap);
+        if (cap) {
+          setQuantity(prev => prev || String(cap));
+        } else {
+          console.warn('[イベント追加] この車両にはcapacityTons（積載量）が設定されていません。車両管理画面で設定してください。', v);
+        }
+      } catch (e) {
+        console.error('[イベント追加] 車両情報の取得に失敗しました', e);
+      }
     })();
   }, [vehicleId]);
 
@@ -1526,7 +1542,16 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
 
           {isLoadOrUnload && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">場所</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-gray-500">場所</p>
+                {/* ✅ 修正①: 編集モーダルと同じ「登録リストから選択」ボタン方式に統一 */}
+                {!selectedLocationId && (
+                  <button type="button" onClick={() => { setLocQuery(''); setShowLocPickerModal(true); }}
+                    className="text-xs px-2 py-0.5 rounded border border-blue-400 text-blue-600 hover:bg-blue-50 transition-colors">
+                    登録リストから選択
+                  </button>
+                )}
+              </div>
               {selectedLocationId ? (
                 <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                   <span className="text-sm text-blue-800">{selectedLocationName}</span>
@@ -1535,22 +1560,6 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
                 </div>
               ) : (
                 <>
-                  <input type="text" value={locQuery} onChange={e => setLocQuery(e.target.value)}
-                    placeholder="現場名・客先名で検索"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2" />
-                  {locSearching && <p className="text-xs text-gray-400">検索中...</p>}
-                  {locResults.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg overflow-hidden mb-2">
-                      {locResults.map(l => (
-                        <button key={l.id} type="button"
-                          onClick={() => { setSelectedLocationId(l.id); setSelectedLocationName(l.name); }}
-                          className="w-full text-left px-3 py-2 text-sm border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
-                          <p className="font-medium text-gray-800">{l.name}</p>
-                          <p className="text-xs text-gray-500">{l.address}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                   {!showNewLocationForm ? (
                     <button type="button" onClick={() => setShowNewLocationForm(true)}
                       className="w-full text-sm text-blue-600 border border-blue-300 rounded-lg py-2 hover:bg-blue-50">
@@ -1585,6 +1594,38 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
                     </div>
                   )}
                 </>
+              )}
+
+              {/* ✅ 修正①: 場所ピッカー（編集モーダルの「登録リストから選択」と同じオーバーレイ方式） */}
+              {showLocPickerModal && (
+                <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black bg-opacity-50"
+                  onClick={e => { if (e.target === e.currentTarget) setShowLocPickerModal(false); }}>
+                  <div className="bg-white rounded-t-2xl w-full max-w-md max-h-[70vh] flex flex-col">
+                    <div className="flex items-center justify-between px-4 py-3 border-b">
+                      <span className="font-semibold text-sm">場所を選択</span>
+                      <button onClick={() => setShowLocPickerModal(false)} className="text-gray-500 text-sm">✕ 閉じる</button>
+                    </div>
+                    <div className="px-4 py-3 border-b">
+                      <input type="text" value={locQuery} onChange={e => setLocQuery(e.target.value)}
+                        placeholder="場所名で検索" autoFocus
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-3 space-y-2">
+                      {locSearching ? (
+                        <p className="text-center text-gray-400 text-sm py-4">検索中...</p>
+                      ) : locResults.length === 0 ? (
+                        <p className="text-center text-gray-400 text-sm py-4">該当する場所が見つかりません</p>
+                      ) : locResults.map(l => (
+                        <button key={l.id} type="button"
+                          onClick={() => { setSelectedLocationId(l.id); setSelectedLocationName(l.name); setShowLocPickerModal(false); }}
+                          className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors flex flex-col gap-0.5">
+                          <span className="text-sm text-gray-800 font-medium">📍 {l.name}</span>
+                          {l.address && <span className="text-xs text-gray-400">{l.address}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -1874,7 +1915,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       console.log('📥 [Maps Loading Debug] Creating new Google Maps script tag...');
       const script = document.createElement('script');
       script.id = 'google-maps-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker&loading=async`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker,places&loading=async`;
       script.async = true;
       script.defer = true;
       script.onload = () => {

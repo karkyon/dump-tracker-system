@@ -150,6 +150,13 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
     const input = document.getElementById('map-search-input') as HTMLInputElement;
     if (!input) return;
 
+    // ✅ 修正③【重大・多重防御】: google.maps.places が読み込まれていない状態で
+    // SearchBoxを生成しようとするとアプリ全体がクラッシュしていた（React Error Boundary発火）。
+    // スクリプトURL側の修正に加え、ここでも存在確認してから生成する。
+    if (!(google.maps as any).places?.SearchBox) {
+      console.warn('[LocationMapPicker] google.maps.places が未読み込みのため検索ボックスをスキップします');
+      return;
+    }
     // BUG-012: SearchBox は非推奨だが6月リリース時点では動作継続。
     // 型キャストで廃止警告を抑制。
     const searchBox = new (google.maps.places as any).SearchBox(input, {
