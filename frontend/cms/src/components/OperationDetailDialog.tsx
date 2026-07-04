@@ -2601,8 +2601,14 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         });
         
         setOperationDebugTimelineEvents(eventsData);
-        if (operationData && !operation) {
-          setOperation(operationData);
+        // ✅ 修正【根本原因確定】: 以前は `!operation` というクロージャ経由の古い変数を
+        // 参照しており、fetchOperationDetail()が先にvehicleId等を含む完全な運行情報を
+        // setOperation済みであっても、この判定は常に古い(null)ままのoperationを見てしまい、
+        // タイムラインAPIのoperationフィールド（vehicleId/driverIdを含まない簡略版）で
+        // 無条件に上書きしてしまっていた。setState の関数形式を使い、Reactが管理する
+        // 常に最新のstateを見て判定することで、既存の完全な運行情報を上書きしないようにする。
+        if (operationData) {
+          setOperation(prev => prev ? prev : operationData);
         }
 
         // ✅ routeGpsLogs を抽出してstateにセット

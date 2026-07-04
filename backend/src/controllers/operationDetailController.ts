@@ -735,6 +735,56 @@ export class OperationDetailController {
 
     const operationDetail = await this.operationDetailService.create(data);
 
+    // ✅ 修正: 「積込〜荷降は1セットで同じ客先」の仕様をイベント作成時にも強制する。
+    // フロント側の直近積込客先の推測（画面上のタイムライン再取得タイミング次第）に
+    // 頼るだけでは古いデータを参照してしまう可能性があるため、作成直後にDBの実データを
+    // 基準として確実にペアへ反映・継承する（updateOperationDetailのカスケード処理と同じ考え方）。
+    if (operationDetail && (operationDetail.activityType === 'LOADING' || operationDetail.activityType === 'UNLOADING') && operationDetail.operationId) {
+      try {
+        const dbForPair = DatabaseService.getInstance();
+        const siblings = await dbForPair.operationDetail.findMany({
+          where: { operationId: operationDetail.operationId },
+          orderBy: { sequenceNumber: 'asc' },
+          select: { id: true, activityType: true, sequenceNumber: true, customerId: true }
+        });
+        const myIndex = siblings.findIndex((s: any) => s.id === operationDetail.id);
+        if (myIndex !== -1) {
+          if (operationDetail.activityType === 'UNLOADING' && !(operationDetail as any).customerId) {
+            // 直前の積込（間に別の荷降が無い範囲）を探し、客先が設定されていれば継承する
+            for (let k = myIndex - 1; k >= 0; k--) {
+              const s = siblings[k];
+              if (!s) continue;
+              if (s.activityType === 'UNLOADING') break;
+              if (s.activityType === 'LOADING') {
+                if (s.customerId) {
+                  await dbForPair.operationDetail.update({ where: { id: operationDetail.id }, data: { customerId: s.customerId } });
+                  (operationDetail as any).customerId = s.customerId;
+                  logger.info('✅ [createOperationDetail] 荷降に直前の積込の客先を継承', { unloadingId: operationDetail.id, loadingId: s.id, customerId: s.customerId });
+                }
+                break;
+              }
+            }
+          } else if (operationDetail.activityType === 'LOADING' && (operationDetail as any).customerId) {
+            // 直後の荷降（間に別の積込が無い範囲）に客先が未設定なら継承させる
+            for (let k = myIndex + 1; k < siblings.length; k++) {
+              const s = siblings[k];
+              if (!s) continue;
+              if (s.activityType === 'LOADING') break;
+              if (s.activityType === 'UNLOADING') {
+                if (!s.customerId) {
+                  await dbForPair.operationDetail.update({ where: { id: s.id }, data: { customerId: (operationDetail as any).customerId } });
+                  logger.info('✅ [createOperationDetail] 直後の荷降へ積込の客先を継承', { loadingId: operationDetail.id, unloadingId: s.id, customerId: (operationDetail as any).customerId });
+                }
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('積込〜荷降ペアへの客先自動継承に失敗（本体の作成は成功済み）', { id: operationDetail.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     // 🆕 複数品目（積込/積降の selectedItemIds）を operation_detail_items に保存
     if (Array.isArray(data.selectedItemIds) && data.selectedItemIds.length > 0) {
       const db = DatabaseService.getInstance();
