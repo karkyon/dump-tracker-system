@@ -120,6 +120,57 @@ const OperationMain: React.FC = () => {
         if (!sessionStorage.getItem('inspection_completed')) {
           // inspection_completed はoperationStore.inspectionCompletedで管理（sessionStorage廃止）
         }
+        // ✅ 修正【根本原因】: ショートカット復元時も、ローカルの
+        // startMileage / loadingPattern / unloadingPattern がサーバー側の
+        // 正しい値とズレていないか必ず確認・補正する。
+        try {
+          const syncRes = await apiService.getCurrentOperation();
+          const syncData: any = syncRes?.data;
+          if (syncRes?.success && syncData && syncData.tripId === storedOperationId) {
+            const updates: { startMileage?: number; loadingPattern?: number; unloadingPattern?: number } = {};
+            if (syncData.startOdometer !== undefined && syncData.startOdometer !== null) {
+              const serverStartOdo = Number(syncData.startOdometer);
+              if (serverStartOdo !== operationStore.startMileage) {
+                updates.startMileage = serverStartOdo;
+              }
+            }
+            if (syncData.vehicleInfo?.loadingPattern !== undefined && syncData.vehicleInfo.loadingPattern !== null) {
+              const serverLp = Number(syncData.vehicleInfo.loadingPattern);
+              if (serverLp !== operationStore.loadingPattern) {
+                updates.loadingPattern = serverLp;
+              }
+            }
+            if (syncData.vehicleInfo?.unloadingPattern !== undefined && syncData.vehicleInfo.unloadingPattern !== null) {
+              const serverUp = Number(syncData.vehicleInfo.unloadingPattern);
+              if (serverUp !== operationStore.unloadingPattern) {
+                updates.unloadingPattern = serverUp;
+              }
+            }
+            if (Object.keys(updates).length > 0) {
+              console.warn('⚠️ [OperationMain] startMileage/オペレーションパターンのズレを検知し補正', {
+                local: {
+                  startMileage: operationStore.startMileage,
+                  loadingPattern: operationStore.loadingPattern,
+                  unloadingPattern: operationStore.unloadingPattern,
+                },
+                server: syncData,
+                updates,
+                operationId: storedOperationId
+              });
+              operationStore.setVehicleInfo({
+                vehicleId: operationStore.vehicleId || '',
+                vehicleNumber: operationStore.vehicleNumber || '',
+                vehicleType: operationStore.vehicleType || '',
+                startMileage: updates.startMileage ?? (operationStore.startMileage ?? 0),
+                capacity: operationStore.vehicleCapacity ?? undefined,
+                loadingPattern: updates.loadingPattern ?? operationStore.loadingPattern,
+                unloadingPattern: updates.unloadingPattern ?? operationStore.unloadingPattern,
+              });
+            }
+          }
+        } catch (syncErr) {
+          console.warn('⚠️ [OperationMain] startMileage/パターン同期チェック失敗（継続。既存ローカル値のまま復元）', syncErr);
+        }
         setOperation(prev => ({
           ...prev,
           id: storedOperationId,

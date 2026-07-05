@@ -542,10 +542,19 @@ export class MobileController {
         startTime: startTime || new Date(),
         duration: duration || 0,
         totalDistance: currentTrip.totalDistanceKm ? Number(currentTrip.totalDistanceKm) : 0,
+        // ✅ 修正【根本原因】: 運行再開時にフロントがローカルの古いstartMileageを
+        // サーバーの正しい値で補正できるよう、この運行開始時点の走行距離を返す
+        startOdometer: (currentTrip as any).startOdometer !== null && (currentTrip as any).startOdometer !== undefined
+          ? Number((currentTrip as any).startOdometer)
+          : undefined,
         vehicleInfo: currentTrip.vehicle ? {
           id: currentTrip.vehicle.id,
           plateNumber: currentTrip.vehicle.plateNumber,
-          model: currentTrip.vehicle.model
+          model: currentTrip.vehicle.model,
+          // ✅ 修正【根本原因】: 車両マスタの最新オペレーションパターンを
+          // 運行再開のたびに返し、モバイル側キャッシュとのズレを補正可能にする
+          loadingPattern: (currentTrip.vehicle as any).loadingPattern ?? 2,
+          unloadingPattern: (currentTrip.vehicle as any).unloadingPattern ?? 2,
         } : undefined,
         driverInfo: currentTrip.driver ? {
           id: currentTrip.driver.id,
