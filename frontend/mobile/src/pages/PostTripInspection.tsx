@@ -53,8 +53,14 @@ const PostTripInspection: React.FC = () => {
     // ✅ Fix-S11-8: フロント累積走行距離をendOperation送信に含める
     totalDistanceKm: storedTotalDistanceKm,
     // ✅ BUG-044: 開始時走行距離（逆転チェック用）
-    startMileage
+    // ✅ 修正【根本原因】: ローカルキャッシュ値は別名で受け取り、
+    // サーバーから取得した正しい値で上書きできるようにする
+    startMileage: startMileageFromStore
   } = useOperationStore();
+  // ✅ 修正【根本原因】: operationStoreのstartMileageは運行ごとにスコープされて
+  // おらず、別の運行を挟むと上書きされる。表示・バリデーションともに
+  // このローカル状態（初期値はstoreの値、マウント後にサーバー値で上書き）を使う。
+  const [startMileage, setStartMileage] = useState<number | null>(startMileageFromStore);
   
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -103,6 +109,36 @@ const PostTripInspection: React.FC = () => {
       }
     };
     validateVehicleId();
+
+    // ✅ 修正【根本原因】: 画面表示のたびに必ずサーバーへ現在の運行の
+    // 正しいstartOdometerを問い合わせ、ローカルキャッシュより優先する。
+    // アプリ再起動を経由しない画面遷移（OperationRecordから直接「運行終了」を
+    // 押すケースなど）でも必ず効くよう、経路に依存しないここで同期する。
+    (async () => {
+      try {
+        const syncRes = await apiService.getCurrentOperation();
+        const syncData: any = syncRes?.data;
+        if (
+          syncRes?.success &&
+          syncData &&
+          syncData.tripId === operationId &&
+          syncData.startOdometer !== undefined &&
+          syncData.startOdometer !== null
+        ) {
+          const serverStartOdo = Number(syncData.startOdometer);
+          if (serverStartOdo !== startMileageFromStore) {
+            console.warn('⚠️ [D8] startMileageのズレを検知しサーバー値で補正', {
+              local: startMileageFromStore,
+              server: serverStartOdo,
+              operationId
+            });
+          }
+          setStartMileage(serverStartOdo);
+        }
+      } catch (syncErr) {
+        console.warn('⚠️ [D8] startOdometer同期チェック失敗（ローカル値のまま続行）', syncErr);
+      }
+    })();
   }, [isAuthenticated, operationId, vehicleId, navigate]);
 
 
