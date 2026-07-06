@@ -64,7 +64,7 @@ interface VehicleLocation {
   //   - in_op_offline : 運行中だがオフライン
   // 「運行外」:
   //   - offline       : 運行していない
-  status: 'loading' | 'unloading' | 'break' | 'refueling' | 'in_operation' | 'in_op_offline' | 'offline';
+  status: 'loading' | 'unloading' | 'in_transit_to_loading' | 'in_transit_to_unloading' | 'break' | 'refueling' | 'in_operation' | 'in_op_offline' | 'offline';
   lastUpdate: string | null;
   speed: number;
   currentAddress: string;
@@ -119,7 +119,10 @@ const mapVehicleStatus = (
     if (lastActivityType) {
       const t = lastActivityType.toUpperCase();
       // 移動中（LOADING/UNLOADING完了後の次イベント待ち）
-      if (t === 'IN_TRANSIT') return 'in_operation';
+      // ✅ FIX: 積込場所へ移動中/荷降場所へ移動中を区別して表示する
+      if (t === 'IN_TRANSIT_TO_UNLOADING') return 'in_transit_to_unloading';
+      if (t === 'IN_TRANSIT_TO_LOADING') return 'in_transit_to_loading';
+      if (t === 'IN_TRANSIT') return 'in_operation';  // 後方互換（旧値が来た場合）
       // 荷降中（LOADING より先に判定: UNLOADINGはLOADINGを含まないため順序重要）
       if (t === 'UNLOADING' || t === 'UNLOADING_START' || t === 'UNLOADING_ARRIVED') return 'unloading';
       // 積込中
@@ -187,6 +190,20 @@ const getStatusConfig = (status: string): StatusConfig => {
       className: 'bg-purple-100 text-purple-800',
       icon: '📤',
       color: '#7e22ce',
+      isInOperation: true,
+    },
+    in_transit_to_loading: {
+      label: '積込場所へ移動中',
+      className: 'bg-sky-100 text-sky-800',
+      icon: '🚚',
+      color: '#0369a1',
+      isInOperation: true,
+    },
+    in_transit_to_unloading: {
+      label: '荷降場所へ移動中',
+      className: 'bg-indigo-100 text-indigo-800',
+      icon: '🚚',
+      color: '#4338ca',
       isInOperation: true,
     },
     break: {
@@ -365,7 +382,8 @@ const POLL_INTERVAL_MS = 30_000;
 const DEFAULT_CENTER = { lat: 34.6617, lng: 133.9349 };
 
 const ALL_STATUS_KEYS: VehicleLocation['status'][] = [
-  'loading', 'unloading', 'break', 'refueling', 'in_operation', 'in_op_offline', 'offline'
+  'loading', 'unloading', 'in_transit_to_loading', 'in_transit_to_unloading',
+  'break', 'refueling', 'in_operation', 'in_op_offline', 'offline'
 ];
 
 // =====================================
@@ -619,9 +637,11 @@ const GPSMonitoring: React.FC = () => {
     in_op_offline: 1,
     loading: 2,
     unloading: 3,
-    break: 4,
-    refueling: 5,
-    offline: 6,
+    in_transit_to_loading: 4,
+    in_transit_to_unloading: 5,
+    break: 6,
+    refueling: 7,
+    offline: 8,
   };
 
   const filteredVehicles = vehicles

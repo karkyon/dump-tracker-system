@@ -108,9 +108,14 @@ export class GpsService {
             lastActivityType: (() => {
               const d = activeOperation.operationDetails?.[0];
               if (!d) return null;
-              // LOADING/UNLOADING で actualEndTime あり → 完了済み → 運行中(汎用)として次の状態待ち
-              if ((d.activityType === 'LOADING' || d.activityType === 'UNLOADING') && d.actualEndTime) {
-                return 'IN_TRANSIT';  // 移動中（次のイベント待ち）
+              // ✅ FIX: 積込完了後は「荷降場所へ移動中」、荷降完了後は「次の積込場所へ移動中」を
+              //         区別して返す（従来はどちらも'IN_TRANSIT'に丸められ、CMSのGPSモニタリング
+              //         画面でどちらへ向かっているか判別できなかった）
+              if (d.activityType === 'LOADING' && d.actualEndTime) {
+                return 'IN_TRANSIT_TO_UNLOADING';  // 積込完了 → 荷降場所へ移動中
+              }
+              if (d.activityType === 'UNLOADING' && d.actualEndTime) {
+                return 'IN_TRANSIT_TO_LOADING';    // 荷降完了 → 次の積込場所へ移動中
               }
               return d.activityType;
             })()
