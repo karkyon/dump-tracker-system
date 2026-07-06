@@ -504,29 +504,50 @@ const OperationHistoryDetail: React.FC = () => {
           const sorted = [...detail.activities].sort(
             (a, b) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0)
           );
+type BreakEntry = { start: ActivityRecord; end: ActivityRecord | null };
 type ActGroup =
-            | { type: 'LOADING_GROUP';   groupNum: number; act: ActivityRecord }
-            | { type: 'UNLOADING_GROUP'; groupNum: number; act: ActivityRecord }
+            | { type: 'LOADING_GROUP';   groupNum: number; act: ActivityRecord; breaks: BreakEntry[] }
+            | { type: 'UNLOADING_GROUP'; groupNum: number; act: ActivityRecord; breaks: BreakEntry[] }
             | { type: 'BREAK';           start: ActivityRecord; end: ActivityRecord | null }
             | { type: 'SINGLE';          act: ActivityRecord };
           const groups: ActGroup[] = [];
           const used = new Set<string>();
           let lgNum = 0, ugNum = 0;
+          // ✅ 積込/荷降レコードへの参照（休憩をどのグループにネストするか判定するため）
+          const loadUnloadRefs: { act: ActivityRecord; breaks: BreakEntry[] }[] = [];
           for (let i = 0; i < sorted.length; i++) {
             const a = sorted[i]!;
             if (used.has(a.id)) continue;
             const at = a.activityType;
             if (at === 'LOADING') {
               lgNum++;
-              groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a });
+              const breaksArr: BreakEntry[] = [];
+              groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a, breaks: breaksArr });
+              loadUnloadRefs.push({ act: a, breaks: breaksArr });
             } else if (at === 'UNLOADING') {
               ugNum++;
-              groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, act: a });
+              const breaksArr: BreakEntry[] = [];
+              groups.push({ type: 'UNLOADING_GROUP', groupNum: ugNum, act: a, breaks: breaksArr });
+              loadUnloadRefs.push({ act: a, breaks: breaksArr });
             } else if (['BREAK_START','BREAK'].includes(at)) {
               const _endAct = sorted.slice(i+1).find(b => !used.has(b.id) && b.activityType === 'BREAK_END');
               const endAct: ActivityRecord | null = _endAct ?? null;
               if (endAct) used.add(endAct.id);
-              groups.push({ type: 'BREAK', start: a, end: endAct });
+              // ✅ 休憩開始時点で「進行中（未完了）だった」積込/荷降があれば、そのグループへネストする
+              const breakStartMs = a.startTime ? new Date(a.startTime).getTime() : null;
+              const host = breakStartMs != null
+                ? loadUnloadRefs.find(({ act: hAct }) => {
+                    const hStart = hAct.startTime ? new Date(hAct.startTime).getTime() : null;
+                    const hEnd = hAct.endTime ? new Date(hAct.endTime).getTime() : null;
+                    if (hStart == null || hStart > breakStartMs) return false;
+                    return hEnd == null || hEnd >= breakStartMs;
+                  })
+                : undefined;
+              if (host) {
+                host.breaks.push({ start: a, end: endAct });
+              } else {
+                groups.push({ type: 'BREAK', start: a, end: endAct });
+              }
             } else if (at === 'BREAK_END') {
             } else {
               groups.push({ type: 'SINGLE', act: a });
@@ -610,7 +631,7 @@ type ActGroup =
                         <button
                           type="button"
                           onClick={() => setEditingActivity(act)}
-                          style={{ width: '100%', padding: '5px 12px', borderBottom: hasCompleted ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                          style={{ width: '100%', padding: '5px 12px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', background: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                         >
                           <span style={{ fontSize: 12, color: '#374151' }}>● 到着</span>
                           <span style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -618,6 +639,22 @@ type ActGroup =
                             <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
                           </span>
                         </button>
+                        {/* ✅ 積込/荷降作業中に取得した休憩をグループ内にネスト表示 */}
+                        {g.breaks.map((b, bi) => (
+                          <button
+                            key={`brk-${bi}`}
+                            type="button"
+                            onClick={() => setEditingActivity({ ...b.start, endTime: b.end ? b.end.startTime : b.start.endTime, pairId: b.end ? b.end.id : undefined } as any)}
+                            style={{ width: '100%', padding: '5px 12px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 6, background: TC.BREAK_BG, border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: TC.BREAK_BORDER, flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, fontWeight: 700, color: TC.BREAK_FG }}>▶休憩</span>
+                            <span style={{ marginLeft: 'auto', fontSize: 11, color: TC.BREAK_FG, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {formatTime(b.start.startTime)}{(b.end ? b.end.startTime : b.start.endTime) ? ` ～ ${formatTime(b.end ? b.end.startTime : b.start.endTime)}` : ''}
+                              <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                            </span>
+                          </button>
+                        ))}
                         {hasCompleted && (
                           <button
                             type="button"

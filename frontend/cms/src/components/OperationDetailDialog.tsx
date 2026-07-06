@@ -3334,9 +3334,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         //   UNLOADING_ARRIVED + UNLOADING_COMPLETED → 積降セクション
                         //   それ以外 → 単独イベント（既存表示）
                         // ─────────────────────────────────────────────
+                        type BreakEntry = { start: OperationDebugTimelineEvent; end: OperationDebugTimelineEvent | null };
                         type RenderGroup =
-                          | { type: 'LOADING_GROUP';   groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null }
-                          | { type: 'UNLOADING_GROUP'; groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null }
+                          | { type: 'LOADING_GROUP';   groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null; breaks: BreakEntry[] }
+                          | { type: 'UNLOADING_GROUP'; groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null; breaks: BreakEntry[] }
                           | { type: 'SINGLE'; event: OperationDebugTimelineEvent };
  
                         const groups: RenderGroup[] = [];
@@ -3389,6 +3390,27 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             bEndIdx++;
                           }
                         }
+
+                        // ✅ 積込/荷降の「進行中ウィンドウ」を事前に洗い出す
+                        //    （休憩がどの積込/荷降の最中に取得されたかを、evsの並び順に依存せず
+                        //      時刻(timestamp)で判定するため。イテレーション順とは独立に動作する）
+                        interface HostWindow { arrivedId: string; startMs: number; endMs: number | null; breaks: BreakEntry[] }
+                        const hostWindows: HostWindow[] = [];
+                        for (const ev of evs) {
+                          if (ev.eventType === 'LOADING_ARRIVED' || ev.eventType === 'UNLOADING_ARRIVED') {
+                            const detailId = getDetailId(ev.id);
+                            const completed = ev.eventType === 'LOADING_ARRIVED'
+                              ? loadingCompletedMap.get(detailId)
+                              : unloadingCompletedMap.get(detailId);
+                            const startMs = ev.timestamp ? new Date(ev.timestamp).getTime() : NaN;
+                            if (!Number.isNaN(startMs)) {
+                              const endMs = completed?.timestamp ? new Date(completed.timestamp).getTime() : null;
+                              hostWindows.push({ arrivedId: ev.id, startMs, endMs, breaks: [] });
+                            }
+                          }
+                        }
+                        const findHostWindow = (tsMs: number) =>
+                          hostWindows.find(w => w.startMs <= tsMs && (w.endMs == null || w.endMs >= tsMs));
  
                         for (const ev of evs) {
                           if (usedEvIds.has(ev.id)) continue;
@@ -3397,13 +3419,15 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             const detailId = getDetailId(ev.id);
                             const completed = loadingCompletedMap.get(detailId) ?? null;
                             if (completed) usedEvIds.add(completed.id);
-                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: completed });
+                            const hw = hostWindows.find(w => w.arrivedId === ev.id);
+                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: completed, breaks: hw ? hw.breaks : [] });
                           } else if (ev.eventType === 'UNLOADING_ARRIVED') {
                             unloadingGroupNum++;
                             const detailId = getDetailId(ev.id);
                             const completed = unloadingCompletedMap.get(detailId) ?? null;
                             if (completed) usedEvIds.add(completed.id);
-                            groups.push({ type: 'UNLOADING_GROUP', groupNum: unloadingGroupNum, arrivedEvent: ev, completedEvent: completed });
+                            const hw = hostWindows.find(w => w.arrivedId === ev.id);
+                            groups.push({ type: 'UNLOADING_GROUP', groupNum: unloadingGroupNum, arrivedEvent: ev, completedEvent: completed, breaks: hw ? hw.breaks : [] });
                           } else if (ev.eventType === 'LOADING_COMPLETED' || ev.eventType === 'UNLOADING_COMPLETED') {
                             // 既に対応ARRIVEDと組んでいれば usedEvIds に入っているのでスキップ済み
                             // 孤立COMPLETEDは単独表示
@@ -3415,13 +3439,21 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             // 生のnotesはそのまま保持し、終了時刻情報は pairedEndId/pairedEndTimestamp
                             // という別フィールドに持たせる（mobileのpairId方式と同じ考え方）。
                             const pairedEnd = breakPairMap.get(ev.id) ?? null;
-                            groups.push({ type: 'SINGLE', event: {
+                            const mergedBreak: OperationDebugTimelineEvent = {
                               ...ev,
                               eventType: pairedEnd ? ('BREAK' as const) : ('BREAK_START' as const),
                               notes: ev.notes ?? null,
                               pairedEndId: pairedEnd?.id ?? null,
                               pairedEndTimestamp: pairedEnd?.timestamp ?? null,
-                            }});
+                            };
+                            // ✅ 積込/荷降作業中に取得した休憩は、その積込/荷降グループへネストする
+                            const breakStartMs = ev.timestamp ? new Date(ev.timestamp).getTime() : NaN;
+                            const host = !Number.isNaN(breakStartMs) ? findHostWindow(breakStartMs) : undefined;
+                            if (host) {
+                              host.breaks.push({ start: mergedBreak, end: pairedEnd });
+                            } else {
+                              groups.push({ type: 'SINGLE', event: mergedBreak });
+                            }
                           } else if (ev.eventType === 'BREAK_END') {
                             // 対応BREAK_STARTとペア済みなら usedEvIds で除外済み → ここには孤立のみ来る
                             groups.push({ type: 'SINGLE', event: ev });
@@ -3459,7 +3491,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           dotColor: string,
                           isFirst: boolean,
                           isArrived: boolean = false,
-                          editBtn?: React.ReactNode
+                          editBtn?: React.ReactNode,
+                          timeBadgeLabel: string = '記録時刻',
+                          extraBadge?: React.ReactNode
                         ) => (
                           <div className={`px-4 py-3 flex items-start gap-3 ${isFirst ? '' : 'border-t border-gray-100'}`}>
                             <div className={`w-2.5 h-2.5 rounded-full ${dotColor} mt-1.5 flex-shrink-0`} />
@@ -3468,9 +3502,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                 <span className="text-sm font-semibold text-gray-800">▶ {labelText}</span>
                                 {subEvent.timestamp && (
                                   <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded whitespace-nowrap">
-                                    記録時刻: {fmtTs(subEvent.timestamp)}
+                                    {timeBadgeLabel}: {fmtTs(subEvent.timestamp)}
                                   </span>
                                 )}
+                                {extraBadge}
                                 {editBtn && <span className="ml-auto">{editBtn}</span>}
                               </div>
                               {/* ✅ 修正③④: 場所名・住所は到着行のみ表示（完了行は到着情報と重複するため非表示） */}
@@ -3651,6 +3686,36 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                       className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
                                     ><Pencil className="w-3 h-3" /> 編集</button>
                                   )}
+                                  {/* ✅ 積込/荷降作業中に取得した休憩をグループ内にネスト表示 */}
+                                  {group.breaks.map((brk, bi) => (
+                                    <React.Fragment key={brk.start.id || `brk-${bi}`}>
+                                      {renderSubRow(
+                                        brk.start,
+                                        '休憩',
+                                        'bg-purple-500',
+                                        false,
+                                        false,
+                                        <button type="button"
+                                          onClick={() => setEditEvent({
+                                            id: brk.start.id,
+                                            realDetailId: brk.start.id.replace(/-arrived$|-completed$/, ''),
+                                            eventType: brk.start.pairedEndId ? 'BREAK' : 'BREAK_START',
+                                            timestamp: brk.start.timestamp,
+                                            completionTimestamp: brk.start.pairedEndTimestamp ?? null,
+                                            pairedEndId: brk.start.pairedEndId ?? null,
+                                            notes: brk.start.notes,
+                                          })}
+                                          className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                                        ><Pencil className="w-3 h-3" /> 編集</button>,
+                                        '開始時刻',
+                                        brk.start.pairedEndTimestamp ? (
+                                          <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded whitespace-nowrap">
+                                            終了時刻: {fmtHM(brk.start.pairedEndTimestamp)}
+                                          </span>
+                                        ) : undefined
+                                      )}
+                                    </React.Fragment>
+                                  ))}
                                   {group.completedEvent && renderSubRow(
                                     group.completedEvent,
                                     isLoading ? '積込完了' : '荷降完了',
