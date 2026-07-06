@@ -29,6 +29,8 @@ export interface OperationState {
   operationId: string | null;
   operationStartTime: string | null;  // 🆕 運行開始時刻（ISO文字列, 永続化対象）
                                        //    ブラウザを閉じても経過時間を正確に復元するために使用
+  currentBreakStartTime: string | null;  // 🔧 [経過時間再修正] 休憩開始時刻（ISO文字列, 永続化対象）
+  totalBreakSeconds: number;             // 🔧 [経過時間再修正] 完了した休憩の合計秒数（永続化対象）
   totalDistanceKm?: number | null;  // ✅ Fix-S11-8: GPS累積走行距離
   vehicleId: string | null;
   vehicleNumber: string | null;
@@ -81,6 +83,8 @@ export interface OperationState {
   
   startOperation: (operationId: string, startTime?: string) => void;  // 🆕 startTime引数追加
   setOperationStartTime: (startTime: string) => void;  // 🆕 運行開始時刻の後付け設定（復元フォールバック用）
+  startBreakTimer: () => void;  // 🔧 [経過時間再修正] 休憩開始時刻を永続化
+  endBreakTimer: () => void;    // 🔧 [経過時間再修正] 休憩終了時に合計秒数へ加算
   
   // 🆕 フェーズ管理アクション
   setPhase: (phase: OperationPhase) => void;
@@ -106,6 +110,8 @@ export const useOperationStore = create<OperationState>()(
       // 初期状態
       operationId: null,
       operationStartTime: null,  // 🆕
+      currentBreakStartTime: null,  // 🔧 [経過時間再修正]
+      totalBreakSeconds: 0,         // 🔧 [経過時間再修正]
       vehicleId: null,
       vehicleNumber: null,
       vehicleType: null,
@@ -222,6 +228,32 @@ export const useOperationStore = create<OperationState>()(
         set({ operationStartTime: startTime });
       },
 
+      // 🔧 [経過時間再修正] 休憩開始時刻を永続化
+      //    ブラウザを閉じても休憩中は経過時間が正しく休憩開始時点で停止したままになるよう、
+      //    useRefではなくoperationStore（localStorage永続化）で管理する
+      startBreakTimer: () => {
+        const now = new Date().toISOString();
+        console.log('[Operation Store] ☕ START BREAK TIMER:', now);
+        set({ currentBreakStartTime: now });
+      },
+
+      // 🔧 [経過時間再修正] 休憩終了時、休憩秒数を合計へ加算しcurrentBreakStartTimeをクリア
+      endBreakTimer: () => {
+        const state = get();
+        if (state.currentBreakStartTime) {
+          const breakSec = Math.floor(
+            (Date.now() - new Date(state.currentBreakStartTime).getTime()) / 1000
+          );
+          console.log('[Operation Store] ⏱️ END BREAK TIMER - 今回の休憩秒数:', breakSec);
+          set({
+            totalBreakSeconds: (state.totalBreakSeconds || 0) + Math.max(0, breakSec),
+            currentBreakStartTime: null
+          });
+        } else {
+          console.warn('[Operation Store] ⚠️ END BREAK TIMER: currentBreakStartTimeが未設定です');
+        }
+      },
+
       // フェーズ設定
       setPhase: (phase) => {
         console.log('[Operation Store] 🔄 SET PHASE CALLED:', phase);
@@ -314,6 +346,8 @@ export const useOperationStore = create<OperationState>()(
         set({
           operationId: null,
           operationStartTime: null,  // 🆕
+          currentBreakStartTime: null,  // 🔧 [経過時間再修正]
+          totalBreakSeconds: 0,         // 🔧 [経過時間再修正]
           vehicleId: null,
           vehicleNumber: null,
           vehicleType: null,
@@ -352,6 +386,8 @@ export const useOperationStore = create<OperationState>()(
         return {
           operationId: state.operationId,
           operationStartTime: state.operationStartTime,  // 🆕 経過時間の正確な復元に必須
+          currentBreakStartTime: state.currentBreakStartTime,  // 🔧 [経過時間再修正] 休憩中の停止復元に必須
+          totalBreakSeconds: state.totalBreakSeconds,          // 🔧 [経過時間再修正] 休憩除外時間の復元に必須
           vehicleId: state.vehicleId,
           vehicleNumber: state.vehicleNumber,
           vehicleType: state.vehicleType,

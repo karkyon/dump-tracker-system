@@ -116,10 +116,12 @@ const OperationRecord: React.FC = () => {
   const [isCustomerChanging, setIsCustomerChanging] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [elapsedTime, setElapsedTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
-  // ✅ FB-J1o6dgv8: 経過時間を「積込開始から」「休憩中は停止」に変更
-  const firstLoadingStartRef = React.useRef<Date | null>(null);
-  const breakStartRef        = React.useRef<Date | null>(null);
-  const breakTotalSecondsRef = React.useRef<number>(0);
+  // 🔧 [経過時間再修正] 旧実装(FB-J1o6dgv8)はuseRefのみで管理しており、
+  //    ブラウザを閉じる/画面非アクティブ化での再マウントで値が失われ
+  //    「常に00:00:00固定」になるバグがあったため撤廃。
+  //    現在は operation.startTime（運行開始時刻、operationStoreで永続化）を起点とし、
+  //    休憩時間の除外も operationStore.currentBreakStartTime / totalBreakSeconds
+  //    （永続化）で管理する。
 
   // ✅ 既存の詳細情報表示状態
   // 旧 showDetails state は削除済み（showDetailPanel に統合）
@@ -456,22 +458,25 @@ const OperationRecord: React.FC = () => {
     }
   }, [currentPosition, operation.phase]);
 
-  // ✅ FB-J1o6dgv8: 経過時間 = 積込開始から / 休憩中は停止
+  // 🔧 [経過時間再修正] 経過時間 = 運行開始(operation.startTime)からの経過時間、休憩時間を除外
+  //    休憩開始/終了は operationStore（永続化）の絶対時刻で管理しているため、
+  //    ブラウザを閉じて再度開いても、休憩中なら休憩開始時点で正しく停止したままになり、
+  //    休憩終了後は正しい累計を差し引いた経過時間から再開する。
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      const baseRef = firstLoadingStartRef.current;
-      if (!baseRef) {
-        // 積込未開始は 00:00:00 固定
+      const start = operation.startTime;
+      if (!start) {
+        // 運行開始時刻が未確定（復元処理待ち）は 00:00:00
         setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
         return;
       }
-      // BREAK 中: 現在の休憩経過もポーズ計算から除外
-      const currentBreakSec = (operation.phase === 'BREAK' && breakStartRef.current)
-        ? Math.floor((Date.now() - breakStartRef.current.getTime()) / 1000)
+      // 休憩中: 休憩開始からの経過も除外時間に加算し、経過時間を休憩開始時点で停止させる
+      const currentBreakSec = operationStore.currentBreakStartTime
+        ? Math.floor((Date.now() - new Date(operationStore.currentBreakStartTime).getTime()) / 1000)
         : 0;
-      const totalExcludeSec = breakTotalSecondsRef.current + currentBreakSec;
-      const elapsed = Math.max(0, Math.floor((Date.now() - baseRef.getTime()) / 1000) - totalExcludeSec);
+      const totalExcludeSec = (operationStore.totalBreakSeconds || 0) + Math.max(0, currentBreakSec);
+      const elapsed = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000) - totalExcludeSec);
       const hours   = Math.floor(elapsed / 3600);
       const minutes = Math.floor((elapsed % 3600) / 60);
       const seconds = elapsed % 60;
@@ -479,7 +484,7 @@ const OperationRecord: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [operation.startTime, operation.phase]);
+  }, [operation.startTime, operationStore.currentBreakStartTime, operationStore.totalBreakSeconds]);
 
   // ✅ マップ更新処理（既存）
   useEffect(() => {
@@ -1208,11 +1213,8 @@ const OperationRecord: React.FC = () => {
       );
       setOperation(prev => ({ ...prev, phase: 'LOADING_IN_PROGRESS' }));
       operationStore.setPhase('LOADING_IN_PROGRESS');
-      // ✅ FB-J1o6dgv8: 最初の積込開始時刻を記録（経過時間のゼロ点）
-      if (!firstLoadingStartRef.current) {
-        firstLoadingStartRef.current = new Date();
-        breakTotalSecondsRef.current = 0;
-      }
+      // 🔧 [経過時間再修正] 経過時間の起点は運行開始時刻(operation.startTime)に統一したため、
+      //    積込開始時刻をゼロ点として記録する処理は不要になり撤去
       toast.success('積込を開始しました（積込完了ボタンで完了してください）');
       apiService.logOperationEvent({
         eventType: 'LOADING_ARRIVED', operationId: currentOperationId,
@@ -1422,8 +1424,9 @@ const OperationRecord: React.FC = () => {
       
       // operationStoreに現在phaseを保存してからBREAKに切り替え（永続化）
       operationStore.savePreviousPhase(operation.phase);
-      // ✅ FB-J1o6dgv8: 休憩開始時刻を記録（経過時間停止用）
-      breakStartRef.current = new Date();
+      // 🔧 [経過時間再修正] 休憩開始時刻を operationStore に永続化（経過時間停止用）
+      //    ブラウザを閉じても休憩中は経過時間が正しく停止したままになる
+      operationStore.startBreakTimer();
       operationStore.setPhase('BREAK');
       operationStore.incrementBreakCount();  // 🔧 永続化に反映 (2026-02-01)
       setOperation(prev => ({ 
@@ -1487,12 +1490,9 @@ const OperationRecord: React.FC = () => {
       const restoredPhase = operationStore.previousPhase || 'TO_UNLOADING';
       console.log('⏱️ 休憩終了: フェーズ復元', restoredPhase);
 
-      // ✅ FB-J1o6dgv8: 休憩経過秒を累計に加算（経過時間の再開用）
-      if (breakStartRef.current) {
-        const breakSec = Math.floor((Date.now() - breakStartRef.current.getTime()) / 1000);
-        breakTotalSecondsRef.current += breakSec;
-        breakStartRef.current = null;
-      }
+      // 🔧 [経過時間再修正] 休憩経過秒を operationStore の合計に加算（経過時間の再開用）
+      //    ブラウザを閉じて休憩中に再度開いた場合でも正しく累計される
+      operationStore.endBreakTimer();
 
       // operationStoreのphaseも更新（永続化）
       operationStore.setPhase(restoredPhase);
