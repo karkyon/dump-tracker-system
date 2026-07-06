@@ -1624,7 +1624,10 @@ class ReportService {
             locations: { select: { id: true, name: true } },
             items: { select: { id: true, name: true } },
             // 積込・荷降ごとに独立して設定された客先情報（客先切替対応）
-            customer: { select: { id: true, name: true } },
+            // ✅ FIX: schema.camel.prisma上のOperationDetailモデルの実際のリレーション名は
+            //         複数形 'customers' が正しい（単数形'customer'は存在せず、誤ったフィールド名
+            //         でPrisma実行時エラーとなり日報生成が失敗していた）
+            customers: { select: { id: true, name: true } },
           },
           orderBy: { sequenceNumber: 'asc' },
         },
@@ -1681,9 +1684,10 @@ class ReportService {
       const opCustomerName: string = op.customer?.name ?? '';
       // ✅ FIX: 積込・荷降ごとに独立した客先（customerId）が設定されている場合は
       //         そちらを優先し、未設定の場合のみ運行(Operation)全体の客先名にフォールバックする
+      //         （リレーション名は複数形 'customers' が正しい）
       return (op.operationDetails ?? []).map((d: any) => ({
         ...d,
-        _opCustomerName: d.customer?.name ?? opCustomerName,
+        _opCustomerName: d.customers?.name ?? opCustomerName,
       }));
     });
     const cycles = buildTripCycles(allDetailsList);

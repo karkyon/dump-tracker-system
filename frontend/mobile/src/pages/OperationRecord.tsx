@@ -245,7 +245,13 @@ const OperationRecord: React.FC = () => {
 
     // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
     // 積込場所到着 v2.1中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
-    if (phase === 'AT_LOADING' || phase === 'LOADING_IN_PROGRESS') {
+    // ✅ FIX (フィードバック E50jRs7j): LOADING_IN_PROGRESS（P1パターン=吸引車等、
+    //    明示的な「積込開始」→「積込完了」ボタン運用）はこの自動遷移の対象から除外する。
+    //    休憩を挟んでGPSが積込場所から離れたと判定されただけで、積込完了APIを呼ばないまま
+    //    TO_UNLOADINGへ強制遷移すると、積込のoperation_detailがactualEndTime未設定のまま
+    //    不完全なレコードとして残ってしまうため。P1パターンは必ず明示的な「積込完了」
+    //    ボタン押下でのみ完了させる。
+    if (phase === 'AT_LOADING') {
       const loadingLat = operationStore.loadingLocationLat;
       const loadingLng = operationStore.loadingLocationLng;
       if (loadingLat == null || loadingLng == null) return;
