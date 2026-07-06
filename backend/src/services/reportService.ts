@@ -314,16 +314,16 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     return sa - sb;
   });
 
-  // LOADING_TYPES / UNLOADING_TYPES
-  // ★ ARRIVED = 開始イベント、COMPLETED = 完了イベント として区別する
-  const LOADING_START_TYPES    = ['LOADING','LOADING_START','LOADING_ARRIVED'];
-  const LOADING_COMPLETE_TYPES = ['LOADING_COMPLETE','LOADING_COMPLETED'];
-  const UNLOADING_START_TYPES  = ['UNLOADING','UNLOADING_START','UNLOADING_ARRIVED'];
-  const UNLOADING_COMPLETE_TYPES = ['UNLOADING_COMPLETE','UNLOADING_COMPLETED'];
-
-  // ---------- Pass1: サイクル列挙 ----------
-  // LOADING_ARRIVED(開始) → LOADING_COMPLETED(完了) を1サイクルにマージ
-  // UNLOADING_ARRIVED(開始) → UNLOADING_COMPLETED(完了) を1サイクルにマージ
+  // ✅ FIX: 実際のDB(ActivityType enum)には LOADING / UNLOADING の2値のみが存在し、
+  //         「開始イベント」「完了イベント」を別レコードとして分ける LOADING_START /
+  //         LOADING_COMPLETE 等の値は一度も作成されない（tripService.startLoading が
+  //         actualStartTime を持つ1レコードを作成し、completeLoading が同一レコードの
+  //         actualEndTime を更新するだけの単一行モデルのため）。
+  //         そのため旧ロジック（開始/完了を別レコードとして待ち合わせるステートマシン）
+  //         では loadingEnd・unloadingStart/End が常に空欄になり、積込所要時間・移動時間
+  //         ・荷降所要時間が正しく算出されない不具合があった。
+  //         → 各LOADING/UNLOADINGレコード自身の actualStartTime(開始)・actualEndTime(完了)
+  //           をそのままそのレコードの開始・終了時刻として扱うロジックに修正する。
   interface RawCycle {
     contractorName: string;
     loadingLocation: string;
@@ -338,8 +338,6 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
 
   const rawCycles: RawCycle[] = [];
   let cur: Partial<RawCycle> | null = null;
-  let loadingOpen = false;   // LOADING_ARRIVED後・LOADING_COMPLETED前
-  let unloadingOpen = false; // UNLOADING_ARRIVED後・UNLOADING_COMPLETED前
 
   for (const d of allDetails) {
     const at: string = (d.activity_type ?? d.activityType ?? '').toUpperCase();
@@ -354,92 +352,54 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     const endT: string   = formatTime(d.actual_end_time   ?? d.actualEndTime);
     const customerName: string = (d as any)._opCustomerName ?? '';
 
-    if (LOADING_START_TYPES.some(t => at === t)) {
-      // ✅ FIX: 空LOADING除外（到着のみ・品目なし・qty=0・notes='積込開始'）
+    if (at.startsWith('LOADING')) {
+      // ✅ 空LOADING除外（到着のみ・品目なし・qty=0・完了前・notes='積込開始'の放置データ）
       const _isEmptyLoading = !endT && !itemName && qty === 0 && notesStr === '積込開始';
-      if (!_isEmptyLoading) {
-        // 積込開始: 前の未完了サイクルがあれば閉じる
-        if (cur && loadingOpen) rawCycles.push(cur as RawCycle);
-        cur = {
-          contractorName: customerName,
-          loadingLocation: locName || (cur != null ? cur.loadingLocation : '') || '',
-          unloadingLocation: '',
-          itemName: itemName || (cur != null ? cur.itemName : '') || '',
-          quantityTons: qty > 0 ? qty : 0,
-          loadingStart: startT,
-          loadingEnd: '',          // COMPLETEDで補完
-          unloadingStart: '',
-          unloadingEnd: '',
-        };
-        loadingOpen = true;
-        unloadingOpen = false;
+      if (_isEmptyLoading) continue;
+
+      // 積込レコード（1行でactualStartTime〜actualEndTimeを保持）
+      // 直前の積込が荷降と紐付かないまま残っている場合（連続積込）は、
+      // 積込のみの行として確定させてから新しいサイクルを開始する
+      if (cur && !cur.unloadingLocation) {
+        rawCycles.push(cur as RawCycle);
       }
-    } else if (LOADING_COMPLETE_TYPES.some(t => at === t)) {
-      // 積込完了: 同一サイクルに loadingEnd・品目・トン数を補完
-      if (cur && loadingOpen) {
-        // 品目名: COMPLETEDの方が正確（quantityTons・itemId あり）
-        if (itemName) cur.itemName = itemName;
-        if (qty > 0) cur.quantityTons = qty;
-        if (locName && !cur.loadingLocation) cur.loadingLocation = locName;
-        if (!cur.contractorName && customerName) cur.contractorName = customerName;
-        // loadingEnd: actualStartTime of COMPLETED = 完了時刻
-        cur.loadingEnd = startT || endT;
-      } else if (!cur) {
-        // ARRIVEDなしでCOMPLETEDのみ来た場合（旧データ互換）
-        cur = {
-          contractorName: customerName,
-          loadingLocation: locName,
-          unloadingLocation: '',
-          itemName,
-          quantityTons: qty > 0 ? qty : 0,
-          loadingStart: startT,
-          loadingEnd: endT,
-          unloadingStart: '',
-          unloadingEnd: '',
-        };
-        loadingOpen = true;
-      }
-    } else if (UNLOADING_START_TYPES.some(t => at === t)) {
-      // 荷降開始
-      if (cur) {
-        // 積込サイクル継続中に荷降到着 → 荷降情報をセット
+      cur = {
+        contractorName: customerName,
+        loadingLocation: locName,
+        unloadingLocation: '',
+        itemName,
+        quantityTons: qty > 0 ? qty : 0,
+        loadingStart: startT,
+        loadingEnd: endT,
+        unloadingStart: '',
+        unloadingEnd: '',
+      };
+    } else if (at.startsWith('UNLOADING')) {
+      // 荷降レコード（1行でactualStartTime〜actualEndTimeを保持）
+      if (cur && !cur.unloadingLocation) {
+        // 直前の積込サイクルに荷降情報を紐付けて確定
         cur.unloadingLocation = locName;
         cur.unloadingStart    = startT;
-        cur.unloadingEnd      = '';   // COMPLETEDで補完
+        cur.unloadingEnd      = endT;
         if (qty > 0 && (cur.quantityTons ?? 0) === 0) cur.quantityTons = qty;
-        if (customerName && !cur.contractorName) cur.contractorName = customerName;
-        loadingOpen = false;
-        unloadingOpen = true;
+        if (!cur.contractorName && customerName) cur.contractorName = customerName;
+        rawCycles.push(cur as RawCycle);
+        cur = null;
       } else {
-        // 積込なしで荷降到着（単独荷降）
-        cur = {
+        // 積込なしの単独荷降、または連続荷降（前サイクルは既に確定済み）
+        if (cur) rawCycles.push(cur as RawCycle); // 念のため、宙に浮いたサイクルを先に確定
+        rawCycles.push({
           contractorName: customerName,
           loadingLocation: '',
           unloadingLocation: locName,
-          itemName, quantityTons: qty,
-          loadingStart: '', loadingEnd: '',
-          unloadingStart: startT, unloadingEnd: '',
-        };
-        loadingOpen = false;
-        unloadingOpen = true;
-      }
-    } else if (UNLOADING_COMPLETE_TYPES.some(t => at === t)) {
-      // 荷降完了: 同一サイクルに unloadingEnd を補完してpush
-      if (cur && unloadingOpen) {
-        cur.unloadingEnd = startT || endT;
-        if (!cur.unloadingLocation && locName) cur.unloadingLocation = locName;
-        rawCycles.push(cur as RawCycle);
+          itemName,
+          quantityTons: qty,
+          loadingStart: '',
+          loadingEnd: '',
+          unloadingStart: startT,
+          unloadingEnd: endT,
+        });
         cur = null;
-        unloadingOpen = false;
-      } else if (cur && !unloadingOpen) {
-        // ARRIVEDなしでCOMPLETEDのみ（旧データ互換）
-        cur.unloadingLocation = locName || cur.unloadingLocation || '';
-        cur.unloadingStart    = startT;
-        cur.unloadingEnd      = endT;
-        rawCycles.push(cur as RawCycle);
-        cur = null;
-      } else {
-        // curなし（孤立COMPLETED）は無視
       }
     }
   }
@@ -1663,6 +1623,8 @@ class ReportService {
           include: {
             locations: { select: { id: true, name: true } },
             items: { select: { id: true, name: true } },
+            // 積込・荷降ごとに独立して設定された客先情報（客先切替対応）
+            customer: { select: { id: true, name: true } },
           },
           orderBy: { sequenceNumber: 'asc' },
         },
@@ -1717,7 +1679,12 @@ class ReportService {
     }
     const allDetailsList: any[][] = operations.map((op: any) => {
       const opCustomerName: string = op.customer?.name ?? '';
-      return (op.operationDetails ?? []).map((d: any) => ({ ...d, _opCustomerName: opCustomerName }));
+      // ✅ FIX: 積込・荷降ごとに独立した客先（customerId）が設定されている場合は
+      //         そちらを優先し、未設定の場合のみ運行(Operation)全体の客先名にフォールバックする
+      return (op.operationDetails ?? []).map((d: any) => ({
+        ...d,
+        _opCustomerName: d.customer?.name ?? opCustomerName,
+      }));
     });
     const cycles = buildTripCycles(allDetailsList);
     // BUG-053修正: デバッグログ（operations/cycles が空の場合の原因特定用）

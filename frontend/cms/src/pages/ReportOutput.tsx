@@ -375,8 +375,10 @@ const ReportOutput: React.FC = () => {
   useTLog('REPORT_OUTPUT', '帳票出力');
   
   // 日報フォーム状態
+  // JST(Asia/Tokyo)基準の「今日」の日付文字列(YYYY-MM-DD)を取得
+  // ※ toISOString() はUTC基準のため、JST日付とズレるケースがあったため修正
   const [dailyDate, setDailyDate] = useState(
-    new Date().toISOString().split('T')[0]
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
   );
   // ② 出力形式はPDF固定（state不要）
   const dailyFormat: ReportFormat = 'PDF';
@@ -450,7 +452,11 @@ const ReportOutput: React.FC = () => {
         : [];
 
       // 対象日に運行のある車両ID一覧を取得
+      // ✅ FIX: 「API呼び出しに成功したか」と「対象日に運行のある車両が0件だったか」を
+      //         明確に区別する。従来は size===0 を「エンドポイント未実装」の代用判定に
+      //         使っていたため、正当に運行のない日でも全車両が選択可能になっていた。
       let activeVehicleIds: Set<string> = new Set();
+      let vehicleOpsFetchOk = false;
       try {
         const opsRes = await fetch(
           `${API_BASE}/reports/daily-operation/available-vehicles?date=${targetDate}`,
@@ -460,20 +466,20 @@ const ReportOutput: React.FC = () => {
           const opsJson = await opsRes.json();
           const ids: string[] = opsJson.data?.vehicleIds ?? [];
           activeVehicleIds = new Set(ids);
+          vehicleOpsFetchOk = true;
         }
       } catch {
-        // エンドポイント未実装時は全車両アクティブ扱い
-        allVehicles.forEach(v => activeVehicleIds.add(v.id));
+        // エンドポイント未実装・通信エラー時のみ全車両アクティブ扱い（フォールバック）
       }
 
       const list: VehicleWithOps[] = allVehicles.map(v => ({
         ...v,
-        hasOps: activeVehicleIds.size === 0 || activeVehicleIds.has(v.id),
+        hasOps: vehicleOpsFetchOk ? activeVehicleIds.has(v.id) : true,
       }));
       setVehicles(list);
 
       // 現在選択中の車両が非アクティブになったらリセット
-      if (selectedVehicleId && !activeVehicleIds.has(selectedVehicleId) && activeVehicleIds.size > 0) {
+      if (vehicleOpsFetchOk && selectedVehicleId && !activeVehicleIds.has(selectedVehicleId)) {
         setSelectedVehicleId('');
       }
     } catch (err) {
