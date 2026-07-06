@@ -141,6 +141,7 @@ export interface DailyDriverReportData {
   trips: TripCycleRow[];          // 運行記録（最大6行）
   fuelLiters: string;             // 給油量 (L)
   fuelOdometerKm: string;         // 給油時キロ (km)
+  totalBreakTime: string;         // 🆕 休憩時間合計（例: "1時間20分" / "45分"）
   oilLiters: string;              // オイル (L)
   hasGrease: boolean;             // グリス
   hasPuncture: boolean;           // パンク
@@ -768,10 +769,21 @@ function drawFuelSection(
   const tireValW = 28;
   cell(doc, cx, y, tireValW, rowH, data.hasTireWear ? 'レ' : '', fVal); cx += tireValW;
 
-  // ── 給油エリアの残りスペース（スペーサー）──
+  // ── 給油エリアの残りスペース: 休憩時間合計を表示 ──
   const usedFuelW = cx - x;
-  if (usedFuelW < fuelAreaW) {
-    cell(doc, cx, y, fuelAreaW - usedFuelW, rowH, '');
+  const remainingFuelW = fuelAreaW - usedFuelW;
+  if (remainingFuelW > 0) {
+    const breakLblW = Math.min(58, Math.floor(remainingFuelW * 0.55));
+    const breakValW = remainingFuelW - breakLblW;
+    if (breakLblW > 10 && breakValW > 5) {
+      cell(doc, cx, y, breakLblW, rowH, '休憩時間合計', { ...fLabel, fontSize: 6.5 });
+      cx += breakLblW;
+      cell(doc, cx, y, breakValW, rowH, data.totalBreakTime || '', fVal);
+      cx += breakValW;
+    } else {
+      cell(doc, cx, y, remainingFuelW, rowH, '');
+      cx += remainingFuelW;
+    }
     cx = x + fuelAreaW;
   }
 

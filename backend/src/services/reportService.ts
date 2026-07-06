@@ -1731,6 +1731,39 @@ class ReportService {
     const fuelLiters    = fuelRecords.map(r => r.liters).filter(Boolean).join('|') || '';
     const fuelOdometerKm = fuelRecords.map(r => r.odometerKm).filter(Boolean).join('|') || '';
 
+    // 🆕 休憩時間合計: BREAK_START(actualStartTime)〜BREAK_END(actualStartTime)のペアを
+    //    sequenceNumber順に対応付けて合計する（BREAKは単一行モデルではなく2レコードモデルのため）
+    let totalBreakMinutes = 0;
+    for (const op of operations) {
+      const sortedDetails = [...(op.operationDetails ?? [])].sort((a: any, b: any) =>
+        (a.sequenceNumber ?? a.sequence_number ?? 0) - (b.sequenceNumber ?? b.sequence_number ?? 0)
+      );
+      let breakStartAt: Date | null = null;
+      for (const d of sortedDetails) {
+        const at = ((d as any).activityType ?? (d as any).activity_type ?? '').toString().toUpperCase();
+        if (at === 'BREAK_START' || at === 'BREAK') {
+          const st = (d as any).actualStartTime ?? (d as any).actual_start_time;
+          breakStartAt = st ? new Date(st) : null;
+        } else if (at === 'BREAK_END') {
+          if (breakStartAt) {
+            const endRaw = (d as any).actualStartTime ?? (d as any).actual_start_time
+                        ?? (d as any).actualEndTime   ?? (d as any).actual_end_time;
+            const endAt = endRaw ? new Date(endRaw) : null;
+            if (endAt) {
+              const diffMin = Math.round((endAt.getTime() - breakStartAt.getTime()) / 60000);
+              if (diffMin > 0) totalBreakMinutes += diffMin;
+            }
+            breakStartAt = null;
+          }
+        }
+      }
+    }
+    const totalBreakTime = totalBreakMinutes > 0
+      ? (totalBreakMinutes >= 60
+          ? `${Math.floor(totalBreakMinutes / 60)}時間${String(totalBreakMinutes % 60).padStart(2, '0')}分`
+          : `${totalBreakMinutes}分`)
+      : '';
+
     // 全inspection_records を統合
     const allInspRecords: any[] = [];
     for (const op of operations) {
@@ -1791,6 +1824,7 @@ class ReportService {
       })),
       fuelLiters,
       fuelOdometerKm,
+      totalBreakTime,  // 🆕 休憩時間合計
       oilLiters: '',
       hasGrease: false,
       hasPuncture: false,

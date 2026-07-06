@@ -64,7 +64,11 @@ interface VehicleLocation {
   //   - in_op_offline : 運行中だがオフライン
   // 「運行外」:
   //   - offline       : 運行していない
-  status: 'loading' | 'unloading' | 'in_transit_to_loading' | 'in_transit_to_unloading' | 'break' | 'refueling' | 'in_operation' | 'in_op_offline' | 'offline';
+  // ✅ 積込場所へ移動中/荷降場所へ移動中は集計上は'in_operation'に含め、
+  //    区別が必要な場面（車両一覧カード）では transitDirection を別途参照する
+  status: 'loading' | 'unloading' | 'break' | 'refueling' | 'in_operation' | 'in_op_offline' | 'offline';
+  // 🆕 'in_operation'のうち、移動方向の内訳（一覧カードのラベル表示専用。集計・フィルタには使わない）
+  transitDirection: 'to_loading' | 'to_unloading' | null;
   lastUpdate: string | null;
   speed: number;
   currentAddress: string;
@@ -119,9 +123,10 @@ const mapVehicleStatus = (
     if (lastActivityType) {
       const t = lastActivityType.toUpperCase();
       // 移動中（LOADING/UNLOADING完了後の次イベント待ち）
-      // ✅ FIX: 積込場所へ移動中/荷降場所へ移動中を区別して表示する
-      if (t === 'IN_TRANSIT_TO_UNLOADING') return 'in_transit_to_unloading';
-      if (t === 'IN_TRANSIT_TO_LOADING') return 'in_transit_to_loading';
+      // ✅ 集計・フィルタ上は区別せず、まとめて「運行中」とする
+      //    （方向の内訳は getTransitDirection() で別途 transitDirection に反映）
+      if (t === 'IN_TRANSIT_TO_UNLOADING') return 'in_operation';
+      if (t === 'IN_TRANSIT_TO_LOADING') return 'in_operation';
       if (t === 'IN_TRANSIT') return 'in_operation';  // 後方互換（旧値が来た場合）
       // 荷降中（LOADING より先に判定: UNLOADINGはLOADINGを含まないため順序重要）
       if (t === 'UNLOADING' || t === 'UNLOADING_START' || t === 'UNLOADING_ARRIVED') return 'unloading';
@@ -144,6 +149,18 @@ const mapVehicleStatus = (
 };
 
 /**
+ * 🆕 「運行中」のうち、積込場所へ移動中か荷降場所へ移動中かの内訳を判定
+ * （車両一覧カードのラベル表示専用。ステータス集計・フィルタには使わない）
+ */
+const getTransitDirection = (lastActivityType: string | null): VehicleLocation['transitDirection'] => {
+  if (!lastActivityType) return null;
+  const t = lastActivityType.toUpperCase();
+  if (t === 'IN_TRANSIT_TO_UNLOADING') return 'to_unloading';
+  if (t === 'IN_TRANSIT_TO_LOADING') return 'to_loading';
+  return null;
+};
+
+/**
  * APIレスポンスをフロントエンド表示用に変換
  */
 const mapApiToVehicleLocation = (api: ApiVehiclePosition): VehicleLocation => {
@@ -154,6 +171,7 @@ const mapApiToVehicleLocation = (api: ApiVehiclePosition): VehicleLocation => {
   const hasPosition = api.position !== null;
   const lastActivityType = api.activeOperation?.lastActivityType ?? null;
   const status = mapVehicleStatus(api.status, hasActiveOperation, hasPosition, lastActivityType);
+  const transitDirection = getTransitDirection(lastActivityType);
   const driverName = api.activeOperation?.driver?.name ?? '未割当';
   const currentAddress = api.position
     ? `${api.position.latitude.toFixed(5)}, ${api.position.longitude.toFixed(5)}`
@@ -165,6 +183,7 @@ const mapApiToVehicleLocation = (api: ApiVehiclePosition): VehicleLocation => {
     latitude: api.position?.latitude ?? null,
     longitude: api.position?.longitude ?? null,
     status,
+    transitDirection,
     lastUpdate: api.position?.recordedAt ?? null,
     speed,
     currentAddress,
@@ -190,20 +209,6 @@ const getStatusConfig = (status: string): StatusConfig => {
       className: 'bg-purple-100 text-purple-800',
       icon: '📤',
       color: '#7e22ce',
-      isInOperation: true,
-    },
-    in_transit_to_loading: {
-      label: '積込場所へ移動中',
-      className: 'bg-sky-100 text-sky-800',
-      icon: '🚚',
-      color: '#0369a1',
-      isInOperation: true,
-    },
-    in_transit_to_unloading: {
-      label: '荷降場所へ移動中',
-      className: 'bg-indigo-100 text-indigo-800',
-      icon: '🚚',
-      color: '#4338ca',
       isInOperation: true,
     },
     break: {
@@ -382,8 +387,7 @@ const POLL_INTERVAL_MS = 30_000;
 const DEFAULT_CENTER = { lat: 34.6617, lng: 133.9349 };
 
 const ALL_STATUS_KEYS: VehicleLocation['status'][] = [
-  'loading', 'unloading', 'in_transit_to_loading', 'in_transit_to_unloading',
-  'break', 'refueling', 'in_operation', 'in_op_offline', 'offline'
+  'loading', 'unloading', 'break', 'refueling', 'in_operation', 'in_op_offline', 'offline'
 ];
 
 // =====================================
@@ -637,11 +641,9 @@ const GPSMonitoring: React.FC = () => {
     in_op_offline: 1,
     loading: 2,
     unloading: 3,
-    in_transit_to_loading: 4,
-    in_transit_to_unloading: 5,
-    break: 6,
-    refueling: 7,
-    offline: 8,
+    break: 4,
+    refueling: 5,
+    offline: 6,
   };
 
   const filteredVehicles = vehicles
@@ -834,6 +836,11 @@ const GPSMonitoring: React.FC = () => {
               ) : (
                 filteredVehicles.map((vehicle, idx) => {
                   const cfg      = getStatusConfig(vehicle.status);
+                  // ✅ 運行中のうち、積込場所/荷降場所への移動中はカードのラベルのみ差し替える
+                  //    （バッジの色・アイコンは「運行中」のまま。集計・フィルタには影響しない）
+                  const cardLabel = vehicle.status === 'in_operation' && vehicle.transitDirection
+                    ? (vehicle.transitDirection === 'to_loading' ? '積込場所へ移動中' : '荷降場所へ移動中')
+                    : cfg.label;
                   const listNo   = idx + 1;
                   const isSelected = vehicle.id === selectedVehicleId;
                   return (
@@ -866,7 +873,7 @@ const GPSMonitoring: React.FC = () => {
                       </div>
                       {/* ステータスラベル */}
                       <div className={`text-xs font-medium mb-1 inline-block px-2 py-0.5 rounded-full ${cfg.className}`}>
-                        {cfg.label}
+                        {cardLabel}
                       </div>
                       {/* ドライバー名 */}
                       <div className="text-sm text-gray-600 mb-1">👤 {vehicle.driverName}</div>
