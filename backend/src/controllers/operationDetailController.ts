@@ -467,6 +467,18 @@ export class OperationDetailController {
           } // ✅ FIX: 空LOADING非表示 if(!_isEmptyLoading) の閉じ
 
         } else if (detail.activityType === 'UNLOADING') {
+          // ✅ BUG修正: LOADING側に既にある「場所・品目・重量が全く無い空レコードは
+          // タイムラインに出さない」フィルタ(_isEmptyLoading)と対称になるよう、
+          // UNLOADINGにも同等のフィルタを追加。
+          // completeUnloading() の重複呼び出し対策(tripService.ts側で修正済み)より
+          // 前に作成されてしまった、場所情報の無い「幽霊UNLOADINGレコード」が
+          // 既にDBに残っている場合でも、この表示側フィルタにより
+          // 積込回数と荷降回数の集計・タイムライン表示から除外される。
+          const _isEmptyUnloading = !detail.locations
+            && !detail.itemId
+            && (Number(detail.quantityTons) === 0 || detail.quantityTons == null)
+            && !(detail.operationDetailItems?.length > 0);
+          if (!_isEmptyUnloading) {
           // ─────────────────────────────────────────
           // 🆕 積降: 到着イベント（actualStartTime = 積降場所到着時刻）
           //    モバイルの POST /trips/:id/unloading/start に対応
@@ -515,6 +527,7 @@ export class OperationDetailController {
               notes: (unlNotesRest && unlNotesRest !== '積降完了') ? unlNotesRest : null
             });
           }
+          } // ✅ BUG修正: 空UNLOADING非表示 if(!_isEmptyUnloading) の閉じ
 
         } else {
           // ─────────────────────────────────────────

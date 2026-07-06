@@ -1565,9 +1565,44 @@ class TripService {
         take: 1
       });
 
-      // 積降開始ボタン廃止対応: レコードがなければ新規作成して即完了
+      // ✅ BUG修正: completeUnloading の二重呼び出しによる幽霊レコード生成を防止
+      // 未完了(actualEndTime=null)のUNLOADINGが見つからない場合、従来は無条件で
+      // 場所情報の無い新規レコードを作成して即完了させていたが、これだと
+      // 同一の荷降イベントに対してこのAPIが二重に呼ばれた際（手動完了ボタンと
+      // 自動離脱検知の競合等）、2回目の呼び出しが「幽霊UNLOADING」を余分に
+      // 作成してしまい、積込回数と荷降回数が一致しなくなる不具合の原因となっていた。
+      // 直近60秒以内に完了済みのUNLOADINGが存在する場合は「重複呼び出し」とみなし、
+      // 新規作成せずその既存レコードを返す（冪等化）。
+      const DUPLICATE_UNLOADING_WINDOW_MS = 60000;
       let unloadingDetail: any;
       if (!existingDetails || existingDetails.length === 0) {
+        const recentlyCompletedUnloadings = await this.operationDetailService.findMany({
+          where: {
+            operationId: tripId,
+            activityType: 'UNLOADING',
+            actualEndTime: { not: null }
+          },
+          orderBy: { actualEndTime: 'desc' },
+          take: 1
+        });
+        const lastCompletedUnloading = recentlyCompletedUnloadings?.[0];
+        if (lastCompletedUnloading && lastCompletedUnloading.actualEndTime) {
+          const elapsedMs = Date.now() - new Date(lastCompletedUnloading.actualEndTime).getTime();
+          if (elapsedMs >= 0 && elapsedMs < DUPLICATE_UNLOADING_WINDOW_MS) {
+            logger.warn('📦⚠️ [completeUnloading] 直近完了済みUNLOADINGを検出 — 重複呼び出しとして新規作成をスキップ', {
+              tripId,
+              existingDetailId: lastCompletedUnloading.id,
+              elapsedMs
+            });
+            return {
+              success: true,
+              data: lastCompletedUnloading,
+              message: '積降は既に完了しています（重複呼び出しを検出したためスキップ）'
+            };
+          }
+        }
+
+        // 積降開始ボタン廃止対応: レコードがなければ新規作成して即完了
         const allDetails = await this.operationDetailService.findMany({
           where: { operationId: tripId },
           orderBy: { sequenceNumber: 'desc' },

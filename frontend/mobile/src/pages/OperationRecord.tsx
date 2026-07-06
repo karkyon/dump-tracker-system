@@ -377,86 +377,13 @@ const OperationRecord: React.FC = () => {
     }
   }, [currentPosition, operation.phase]);
 
-  // 🆕 距離検知: 積込/荷降場所から離れたら自動フェーズ移行
-  useEffect(() => {
-    if (!currentPosition) return;
-
-    const phase = operation.phase;
-    const alertDistanceKm = 0.2; // デフォルト200m = 0.2km（将来: system_settingsから取得）
-
-    // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
-    // 積込場所到着中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
-    if (phase === 'AT_LOADING' || phase === 'LOADING_IN_PROGRESS') {
-      const loadingLat = operationStore.loadingLocationLat;
-      const loadingLng = operationStore.loadingLocationLng;
-      if (loadingLat == null || loadingLng == null) return;
-
-      const dist = calculateDistance(
-        currentPosition.coords.latitude,
-        currentPosition.coords.longitude,
-        loadingLat,
-        loadingLng
-      );
-
-      if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
-        departureAlertFiredRef.current = true;
-        toast('📦 積込場所から離れました。荷降場所へ移動中に切り替えます', {
-          icon: '🚛',
-          duration: 4000,
-          style: { background: '#FF9800', color: '#fff', fontWeight: 'bold' }
-        });
-        setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
-        operationStore.setPhase('TO_UNLOADING');
-        console.log('🚛 自動フェーズ移行: AT_LOADING → TO_UNLOADING (距離:', (dist * 1000).toFixed(0), 'm)');
-      }
-      if (dist < alertDistanceKm) {
-        departureAlertFiredRef.current = false; // 戻ってきたらリセット
-      }
-    }
-
-    // 荷降場所到着中（AT_UNLOADING）に荷降場所から離れたら自動的に TO_LOADING へ
-    if (phase === 'AT_UNLOADING') {
-      const selectedUnloading = (window as any).selectedUnloadingLocation;
-      if (!selectedUnloading?.latitude || !selectedUnloading?.longitude) return;
-
-      const dist = calculateDistance(
-        currentPosition.coords.latitude,
-        currentPosition.coords.longitude,
-        selectedUnloading.latitude,
-        selectedUnloading.longitude
-      );
-
-      if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
-        departureAlertFiredRef.current = true;
-        toast('✅ 荷降場所から離れました。次の積込場所へ移動中に切り替えます', {
-          icon: '🔄',
-          duration: 4000,
-          style: { background: '#4CAF50', color: '#fff', fontWeight: 'bold' }
-        });
-
-        // 荷降完了APIを自動呼び出し
-        const currentOperationId = operationStore.operationId;
-        if (currentOperationId) {
-          apiService.completeUnloadingAtLocation(currentOperationId, {
-            endTime: new Date(),
-            latitude: currentPosition.coords.latitude,
-            longitude: currentPosition.coords.longitude,
-            accuracy: currentPosition.coords.accuracy,
-            notes: '自動荷降完了（離脱検知）'
-          }).catch(err => console.error('自動荷降完了エラー:', err));
-        }
-
-        setOperation(prev => ({ ...prev, phase: 'TO_LOADING' }));
-        operationStore.setPhase('TO_LOADING');
-        (window as any).selectedUnloadingLocation = null;
-        departureAlertFiredRef.current = false;
-        console.log('🔄 自動フェーズ移行: AT_UNLOADING → TO_LOADING (距離:', (dist * 1000).toFixed(0), 'm)');
-      }
-      if (dist < alertDistanceKm) {
-        departureAlertFiredRef.current = false;
-      }
-    }
-  }, [currentPosition, operation.phase]);
+  // ✅ BUG修正: 上記と完全に重複した「離脱検知→自動フェーズ移行」useEffectが
+  // 依存配列 [currentPosition, operation.phase] が同一のまま2つ存在していた
+  // （片方はLOADING_IN_PROGRESSを誤って対象に含む修正前の古いコードが
+  // 削除されずに残っていたもの）。手動の「荷降完了」ボタン押下によるAPI呼び出しと
+  // このブロックの自動離脱検知が競合すると、同一の荷降イベントに対して
+  // completeUnloadingAtLocation が二重発火し、積込回数と荷降回数が
+  // 一致しなくなる不具合の誘因となっていたため、重複ブロックを削除した。
 
   // 🔧 [経過時間再修正] 経過時間 = 運行開始(operation.startTime)からの経過時間、休憩時間を除外
   //    休憩開始/終了は operationStore（永続化）の絶対時刻で管理しているため、
