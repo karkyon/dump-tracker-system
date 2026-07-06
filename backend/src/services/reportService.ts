@@ -1627,12 +1627,32 @@ class ReportService {
     const endOfDay   = new Date(Date.UTC(_rptY, _rptM, _rptD, 23, 59, 59, 999) - _rptJstOff);
 
     // ===== DB クエリ =====
-    // BUG-053修正: actualEndTime OR 条件追加（日またぎ運行・startTime null 運行を捕捉）
+    // ✅ BUG修正: 旧ロジック(BUG-053)は actualStartTime / plannedStartTime /
+    // actualEndTime を完全に独立したOR条件にしていたため、「実績開始時刻は
+    // 明確に別の日である運行」でも、終了時刻や予定時刻がこの日の範囲に
+    // 偶然重なっただけで日報に混入してしまっていた（1運行しかない日の
+    // 日報に、無関係な別運行の明細が混ざり明細数がほぼ倍になる不具合の原因）。
+    // 「この運行がどの日に属するか」の判定基準に優先順位を持たせる:
+    //   1. actualStartTime（実績開始時刻）があればそれで判定
+    //   2. 無ければ plannedStartTime（予定開始時刻）で判定
+    //   3. どちらも無い場合のみ actualEndTime（実績終了時刻）で判定
+    //      （BUG-053が本来意図していた「開始時刻未記録の日またぎ運行」の救済は維持）
     const whereClause: any = {
       OR: [
         { actualStartTime: { gte: startOfDay, lte: endOfDay } },
-        { plannedStartTime: { gte: startOfDay, lte: endOfDay } },
-        { actualEndTime:   { gte: startOfDay, lte: endOfDay } },
+        {
+          AND: [
+            { actualStartTime: null },
+            { plannedStartTime: { gte: startOfDay, lte: endOfDay } },
+          ],
+        },
+        {
+          AND: [
+            { actualStartTime: null },
+            { plannedStartTime: null },
+            { actualEndTime: { gte: startOfDay, lte: endOfDay } },
+          ],
+        },
       ],
     };
     if (params?.driverId) whereClause.driverId = params.driverId;
