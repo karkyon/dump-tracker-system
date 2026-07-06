@@ -3370,6 +3370,22 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             unloadingCompletedMap.set(getDetailId(ev.id), ev);
                           }
                         }
+
+                        // ✅ BUG修正: 「積込完了(単独)→到着→積込完了(グループ内)」二重表示対策
+                        // ARRIVED/COMPLETEDの対応関係は、配列 evs の走査順序（=バックエンドの
+                        // タイムスタンプソート結果）に依存せず、ここで事前に全て解決しておく。
+                        // 同一時刻・僅かな逆転などでCOMPLETEDがARRIVEDより先に配列へ現れても、
+                        // 対応するARRIVEDが存在するCOMPLETEDは最初から usedEvIds に含めることで、
+                        // 後続のメインループが孤立イベントとして単独カード化してしまうのを防ぐ。
+                        for (const ev of evs) {
+                          if (ev.eventType === 'LOADING_ARRIVED') {
+                            const c = loadingCompletedMap.get(getDetailId(ev.id));
+                            if (c) usedEvIds.add(c.id);
+                          } else if (ev.eventType === 'UNLOADING_ARRIVED') {
+                            const c = unloadingCompletedMap.get(getDetailId(ev.id));
+                            if (c) usedEvIds.add(c.id);
+                          }
+                        }
  
                         // BREAK_START の次のBREAK_ENDをsequence順で探す
                         const breakStartIds = evs

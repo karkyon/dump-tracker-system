@@ -608,10 +608,18 @@ export class OperationDetailController {
       }
 
       // タイムスタンプでソート
+      // ✅ BUG修正: 同一タイムスタンプ（例: P2パターンで到着=完了が同時刻になるケース）の場合、
+      // ソート結果の順序が不定だと「完了イベントが到着イベントより先に並ぶ」ことがあり、
+      // CMS側のタイムライン表示で積込/荷降が「完了→到着→完了」という矛盾した見た目になる。
+      // 同点時は push した順序（sequenceNumber、到着を先にpushしているため到着が必ず先）を
+      // 第2キーとして使い、決定的に到着系イベントが完了系イベントより先に来るようにする。
       timeline.sort((a, b) => {
         const timeA = a.timestamp?.getTime() || 0;
         const timeB = b.timestamp?.getTime() || 0;
-        return timeA - timeB;
+        if (timeA !== timeB) {
+          return timeA - timeB;
+        }
+        return a.sequenceNumber - b.sequenceNumber;
       });
 
       // シーケンス番号を再割り当て
