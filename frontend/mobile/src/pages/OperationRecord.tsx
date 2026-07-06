@@ -459,6 +459,108 @@ const OperationRecord: React.FC = () => {
   // =====================================
 
   /**
+   * 🆕 GPS誤差対策: 通常のバックグラウンド追跡の更新間隔より短いスパン(250ms)で
+   * navigator.geolocation.getCurrentPosition を sampleCount 回連続実行し、
+   * 得られた座標の中から最も accuracy（誤差半径）が小さい＝最も正確と
+   * 思われる1点を採用する。
+   * 1点だけの測位がたまたま大きな誤差を持っていた場合の影響を減らすための対策。
+   */
+  const getBestGpsCoordsFromBurst = (
+    sampleCount: number = 5,
+    intervalMs: number = 250
+  ): Promise<{ latitude: number; longitude: number; accuracy: number } | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
+      }
+      const samples: { latitude: number; longitude: number; accuracy: number }[] = [];
+      let received = 0;
+      let settled = false;
+
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        if (samples.length === 0) {
+          resolve(null);
+          return;
+        }
+        // accuracy（誤差半径）が最小＝最も正確な1点を採用
+        const best = samples.reduce((a, b) => (a.accuracy <= b.accuracy ? a : b));
+        console.log(`📡 [GPS連続測位] ${samples.length}/${sampleCount}点取得。最良精度を採用:`, best);
+        resolve(best);
+      };
+
+      for (let i = 0; i < sampleCount; i++) {
+        setTimeout(() => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              samples.push({
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+              });
+              received++;
+              if (received >= sampleCount) settle();
+            },
+            (err) => {
+              console.warn(`⚠️ [GPS連続測位] ${i + 1}回目取得失敗:`, err.message);
+              received++;
+              if (received >= sampleCount) settle();
+            },
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 4000 }
+          );
+        }, i * intervalMs);
+      }
+
+      // セーフティタイムアウト: 一部の測位が極端に遅延しても一定時間で確定させる
+      setTimeout(settle, sampleCount * intervalMs + 5000);
+    });
+  };
+
+  /**
+   * 🆕 積込/荷降場所の近隣地点検索（5連続測位による高精度座標 + TOP3表示）
+   *
+   * 1. 5連続測位から最も精度の良い座標を取得
+   *    （取得できなければ currentPosition にフォールバック）
+   * 2. 300m以内の候補地をAPI検索（積込/荷降のフェーズフィルタは維持）
+   * 3. 現在地に近い順（distance昇順）にソートしTOP3のみ返す
+   */
+  const searchNearbyLocationsTop3 = async (
+    phase: 'TO_LOADING' | 'TO_UNLOADING'
+  ): Promise<NearbyLocationResult[]> => {
+    const best = await getBestGpsCoordsFromBurst(5, 250);
+    const lat = best?.latitude ?? currentPosition?.coords.latitude;
+    const lng = best?.longitude ?? currentPosition?.coords.longitude;
+    if (lat == null || lng == null) {
+      return [];
+    }
+    console.log('🔍 近隣地点検索（5連続測位の最良座標を使用）:', {
+      latitude: lat,
+      longitude: lng,
+      accuracy: best?.accuracy,
+      phase,
+    });
+    try {
+      const nearbyResult = await apiService.getNearbyLocations({
+        operationId: operationStore.operationId || '',
+        latitude: lat,
+        longitude: lng,
+        radiusMeters: 300,  // 🔧 5連続測位で座標精度を高めたため300mに絞り込み
+        phase,
+      });
+      const locations = nearbyResult.data?.locations || [];
+      // 現在地に近い順（distance昇順）にソートしTOP3のみ返す
+      return [...locations]
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 3);
+    } catch (searchErr) {
+      console.error('❌ 近隣地点検索エラー:', searchErr);
+      return [];
+    }
+  };
+
+  /**
    * 🆕 積込場所到着ボタンクリック（手動検索）
    */
   const handleLoadingArrival = async () => {
@@ -470,27 +572,10 @@ const OperationRecord: React.FC = () => {
     try {
       setIsSubmitting(true);
 
-      console.log('🔍 積込場所検索開始:', {
-        latitude: currentPosition.coords.latitude,
-        longitude: currentPosition.coords.longitude,
-        phase: 'TO_LOADING'
-      });
+      // 🆕 5連続測位による高精度座標でTOP3候補を検索
+      const locations = await searchNearbyLocationsTop3('TO_LOADING');
 
-      // 🆕 近隣地点を手動検索
-      const nearbyResult = await apiService.getNearbyLocations({
-        operationId: operationStore.operationId || '',
-        latitude: currentPosition.coords.latitude,
-        longitude: currentPosition.coords.longitude,
-        radiusMeters: 500,  // 🔧 修正: 200→500m（GPS誤差・登録座標ずれを考慮）
-        phase: 'TO_LOADING'
-      });
-
-      console.log('📡 近隣地点検索レスポンス:', nearbyResult);
-
-      // 🔧 修正: レスポンス構造に合わせてデータ取得
-      const locations = nearbyResult.data?.locations || [];
-      
-      console.log('📍 検索結果:', {
+      console.log('📍 検索結果（TOP3・距離昇順）:', {
         count: locations.length,
         locations: locations
       });
@@ -532,27 +617,10 @@ const OperationRecord: React.FC = () => {
     try {
       setIsSubmitting(true);
 
-      console.log('🔍 荷降場所検索開始:', {
-        latitude: currentPosition.coords.latitude,
-        longitude: currentPosition.coords.longitude,
-        phase: 'TO_UNLOADING'
-      });
+      // 🆕 5連続測位による高精度座標でTOP3候補を検索
+      const locations = await searchNearbyLocationsTop3('TO_UNLOADING');
 
-      // 🆕 近隣地点を手動検索
-      const nearbyResult = await apiService.getNearbyLocations({
-        operationId: operationStore.operationId || '',
-        latitude: currentPosition.coords.latitude,
-        longitude: currentPosition.coords.longitude,
-        radiusMeters: 500,  // 🔧 修正: 200→500m（GPS誤差・登録座標ずれを考慮）
-        phase: 'TO_UNLOADING'
-      });
-
-      console.log('📡 近隣地点検索レスポンス:', nearbyResult);
-
-      // 🔧 修正: レスポンス構造に合わせてデータ取得
-      const locations = nearbyResult.data?.locations || [];
-      
-      console.log('📍 検索結果:', {
+      console.log('📍 検索結果（TOP3・距離昇順）:', {
         count: locations.length,
         locations: locations
       });
@@ -785,6 +853,41 @@ const OperationRecord: React.FC = () => {
 
     try {
       console.log('🆕 新規地点登録開始:', newLocationData);
+
+      // 🆕 重複登録防止チェック: 「同一名 かつ 近接座標(300m以内)」の既存地点がないか確認
+      //    （GPS検索で見つからず新規登録フローに来た場合でも、実際にはマスタに
+      //      同名の地点が存在するケースがあるため、登録前にドライバーへ警告する）
+      try {
+        const dupCheckPhase = registrationLocationType === 'LOADING' ? 'TO_LOADING' : 'TO_UNLOADING';
+        const dupCheckResult = await apiService.getNearbyLocations({
+          operationId: currentOperationId,
+          latitude: currentPosition.coords.latitude,
+          longitude: currentPosition.coords.longitude,
+          radiusMeters: 300,
+          phase: dupCheckPhase,
+        });
+        const dupCandidates = dupCheckResult.data?.locations || [];
+        const newNameNormalized = (newLocationData.name || '').trim().toLowerCase();
+        const possibleDup = dupCandidates.find(
+          (c) => c.location.name.trim().toLowerCase() === newNameNormalized
+        );
+        if (possibleDup) {
+          const distanceM = Math.round(possibleDup.distance * 1000);
+          const proceed = window.confirm(
+            `「${possibleDup.location.name}」という同名の地点が約${distanceM}m以内に既に登録されています。\n` +
+            `重複登録の可能性があります。このまま新規地点として登録しますか？`
+          );
+          if (!proceed) {
+            console.log('🚫 新規地点登録キャンセル（重複の可能性ありとドライバーが判断）');
+            throw new Error('DUPLICATE_CANCELLED');
+          }
+        }
+      } catch (dupErr) {
+        if (dupErr instanceof Error && dupErr.message === 'DUPLICATE_CANCELLED') {
+          throw dupErr; // そのまま呼び出し元(Dialog)のcatchへ伝播
+        }
+        console.warn('⚠️ 重複チェック検索に失敗（登録処理は続行）:', dupErr);
+      }
 
       // APIサービスを使用して新規地点を登録
       const response = await apiService.createQuickLocation(newLocationData);

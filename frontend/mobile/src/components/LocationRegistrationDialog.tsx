@@ -130,7 +130,12 @@ export const LocationRegistrationDialog: React.FC<LocationRegistrationDialogProp
       toast.success('新しい地点を登録しました');
     } catch (error) {
       console.error('地点登録エラー:', error);
-      toast.error('地点の登録に失敗しました');
+      // ✅ 重複登録の可能性ありとドライバーが「キャンセル」を選んだ場合は
+      //    汎用の「登録に失敗しました」エラーは出さず、静かに入力状態へ戻す
+      const isDuplicateCancelled = error instanceof Error && error.message === 'DUPLICATE_CANCELLED';
+      if (!isDuplicateCancelled) {
+        toast.error('地点の登録に失敗しました');
+      }
       setIsSubmitting(false);
     }
   };
