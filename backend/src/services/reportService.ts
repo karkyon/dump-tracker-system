@@ -342,10 +342,30 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
   for (const d of allDetails) {
     const at: string = (d.activity_type ?? d.activityType ?? '').toUpperCase();
     const locName: string = d.locations?.name ?? d.location?.name ?? '';
-    const dbItem: string = d.items?.name ?? d.item?.name ?? '';
+    // ✅ FIX: 複数品目対応。operationDetailItems（中間テーブル）に複数品目が
+    //         記録されている場合はそれら全ての品目名を「、」区切りで結合する。
+    //         記録がない場合（旧データ・単一品目のみ）は従来通り単一items名を使用する。
+    const detailItemsArr: any[] = Array.isArray((d as any).operationDetailItems)
+      ? [...(d as any).operationDetailItems].sort(
+          (x: any, y: any) => (x.sequenceOrder ?? 0) - (y.sequenceOrder ?? 0)
+        )
+      : [];
+    const detailItemNames: string[] = detailItemsArr
+      .map((di: any) => di.items?.name)
+      .filter((n: any): n is string => !!n);
+    const dbItem: string = detailItemNames.length > 0
+      ? detailItemNames.join('、')
+      : (d.items?.name ?? d.item?.name ?? '');
     const notesStr: string = d.notes ?? '';
     const customMatch = notesStr.match(/\[手入力品目:\s*(.+?)\]/);
-    const itemName: string = customMatch?.[1]?.trim() ?? dbItem;
+    const customItemName: string | undefined = customMatch?.[1]?.trim();
+    // ✅ FIX: 手入力品目名がある場合、従来はDB品目名を丸ごと上書きしていたため
+    //         両方が同時に表示されなかった。「手書きも含めてすべて品目表示」の
+    //         要求に対応し、DB品目名リストに手入力品目名を追加で連結する。
+    const itemNameParts: string[] = [];
+    if (dbItem) itemNameParts.push(dbItem);
+    if (customItemName && !itemNameParts.includes(customItemName)) itemNameParts.push(customItemName);
+    const itemName: string = itemNameParts.join('、');
     const qty: number = d.quantity_tons != null ? Number(d.quantity_tons)
                       : d.quantityTons  != null ? Number(d.quantityTons) : 0;
     const startT: string = formatTime(d.actual_start_time ?? d.actualStartTime);
@@ -1628,6 +1648,16 @@ class ReportService {
             //         複数形 'customers' が正しい（単数形'customer'は存在せず、誤ったフィールド名
             //         でPrisma実行時エラーとなり日報生成が失敗していた）
             customers: { select: { id: true, name: true } },
+            // ✅ FIX: 複数品目対応。1回の積込/荷降で複数品目を記録した場合、
+            //         operation_details.items（単一リレーション）ではなく
+            //         operation_detail_items テーブルに複数行として保存されるため、
+            //         これを含めないと1品目分しか日報に表示されない不具合があった。
+            operationDetailItems: {
+              include: {
+                items: { select: { id: true, name: true } },
+              },
+              orderBy: { sequenceOrder: 'asc' },
+            },
           },
           orderBy: { sequenceNumber: 'asc' },
         },
