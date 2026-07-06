@@ -303,12 +303,32 @@ function calcTimeDuration(startStr: string, endStr: string): string {
  * LOADING/UNLOADING をペアリングして1サイクル = 1行とする
  */
 function buildGroupedTrips(operationDetailsList: any[][]): any[] {
-  // 全detailsを統合してシーケンス順ソート
+  // 全detailsを統合して並び替え
   const allDetails: any[] = [];
   for (const details of operationDetailsList) {
     allDetails.push(...details);
   }
+  // ✅ BUG修正: 1日に複数運行(Operation)がある場合、sequenceNumberは
+  // 各運行の中だけで1から振り直される値であり、運行をまたいだ絶対的な
+  // 時系列を表さない。これだけでソートすると、別の運行同士のレコードが
+  // 実際の発生時刻を無視して混ざり合い、積込・荷降のペアリングが
+  // 完全に破綻する（積込だけの浮いた行、あり得ない移動時間などの原因）。
+  // 運行をまたいでも意味を持つ絶対時刻(actualStartTime→actualEndTime→
+  // createdAtの順にフォールバック)を最優先のソートキーとし、
+  // 同一時刻の場合のみ従来のsequenceNumberを第2キーとして使う。
+  const toTimestamp = (d: any): number => {
+    const raw = d.actual_start_time ?? d.actualStartTime
+      ?? d.actual_end_time ?? d.actualEndTime
+      ?? d.created_at ?? d.createdAt
+      ?? null;
+    if (!raw) return 0;
+    const t = new Date(raw).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
   allDetails.sort((a, b) => {
+    const ta = toTimestamp(a);
+    const tb = toTimestamp(b);
+    if (ta !== tb) return ta - tb;
     const sa = a.sequence_number ?? a.sequenceNumber ?? 0;
     const sb = b.sequence_number ?? b.sequenceNumber ?? 0;
     return sa - sb;
