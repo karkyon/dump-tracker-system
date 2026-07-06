@@ -27,6 +27,8 @@ export type OperationPhase =
 export interface OperationState {
   // 運行情報
   operationId: string | null;
+  operationStartTime: string | null;  // 🆕 運行開始時刻（ISO文字列, 永続化対象）
+                                       //    ブラウザを閉じても経過時間を正確に復元するために使用
   totalDistanceKm?: number | null;  // ✅ Fix-S11-8: GPS累積走行距離
   vehicleId: string | null;
   vehicleNumber: string | null;
@@ -77,7 +79,8 @@ export interface OperationState {
   
   setInspectionCompleted: (recordId: string) => void;
   
-  startOperation: (operationId: string) => void;
+  startOperation: (operationId: string, startTime?: string) => void;  // 🆕 startTime引数追加
+  setOperationStartTime: (startTime: string) => void;  // 🆕 運行開始時刻の後付け設定（復元フォールバック用）
   
   // 🆕 フェーズ管理アクション
   setPhase: (phase: OperationPhase) => void;
@@ -102,6 +105,7 @@ export const useOperationStore = create<OperationState>()(
     (set, get) => ({
       // 初期状態
       operationId: null,
+      operationStartTime: null,  // 🆕
       vehicleId: null,
       vehicleNumber: null,
       vehicleType: null,
@@ -182,12 +186,17 @@ export const useOperationStore = create<OperationState>()(
         });
       },
 
-      startOperation: (operationId) => {
-        console.log('[Operation Store] 🚀 START OPERATION CALLED:', operationId);
+      startOperation: (operationId, startTime) => {
+        console.log('[Operation Store] 🚀 START OPERATION CALLED:', operationId, 'startTime:', startTime);
         console.log('[Operation Store] 📋 Before update - current state:', get());
+        
+        // 🆕 運行開始時刻を保存（サーバーが返した実際の actualStartTime を優先。
+        //    未指定の場合のみクライアント時刻でフォールバック）
+        const resolvedStartTime = startTime || new Date().toISOString();
         
         set({
           operationId,
+          operationStartTime: resolvedStartTime,  // 🆕
           status: 'IN_PROGRESS',
           phase: 'TO_LOADING' // 🔧 運行開始時は積込場所へ移動中から始まる
         });
@@ -203,6 +212,14 @@ export const useOperationStore = create<OperationState>()(
           const stored = localStorage.getItem('operation-storage');
           console.log('[Operation Store] 💾 localStorage after startOperation:', stored);
         }, 100);
+      },
+
+      // 🆕 運行開始時刻の後付け設定（復元フォールバック用）
+      //    operationStoreにoperationStartTimeが保存されていない古いセッションを
+      //    バックエンドAPIから取得した実際の開始時刻で補完する場合に使用
+      setOperationStartTime: (startTime) => {
+        console.log('[Operation Store] 🕐 SET OPERATION START TIME (fallback復元):', startTime);
+        set({ operationStartTime: startTime });
       },
 
       // フェーズ設定
@@ -296,6 +313,7 @@ export const useOperationStore = create<OperationState>()(
         console.log('[Operation Store] 🔄 Reset operation');
         set({
           operationId: null,
+          operationStartTime: null,  // 🆕
           vehicleId: null,
           vehicleNumber: null,
           vehicleType: null,
@@ -333,6 +351,7 @@ export const useOperationStore = create<OperationState>()(
         
         return {
           operationId: state.operationId,
+          operationStartTime: state.operationStartTime,  // 🆕 経過時間の正確な復元に必須
           vehicleId: state.vehicleId,
           vehicleNumber: state.vehicleNumber,
           vehicleType: state.vehicleType,

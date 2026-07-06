@@ -81,11 +81,19 @@ const OperationRecord: React.FC = () => {
   const [registrationLocationType, setRegistrationLocationType] = useState<'LOADING' | 'UNLOADING' | null>(null);
   
   // ✅ 既存の運行状態（完全保持） 
+  // 🔧 経過時間バグ修正: startTime は new Date()（マウント時刻）ではなく、
+  //    operationStoreに永続化された運行開始時刻(operationStartTime)から復元する。
+  //    これにより、ブラウザを閉じたり画面を待機させて再度Activeになっても、
+  //    運行終了まで常に「本来の運行開始時刻」からの経過時間が表示され続ける。
+  //    operationStoreに未保存（旧セッション等）の場合は null とし、
+  //    後続のuseEffectでバックエンドAPIから実際の開始時刻を取得して復元する。
   const [operation, setOperation] = useState<OperationState>({
     id: null, // 🔧 修正: operationStoreから取得するためnullに変更
     status: 'running',
     phase: operationStore.phase || 'TO_LOADING',
-    startTime: new Date(),
+    startTime: operationStore.operationStartTime
+      ? new Date(operationStore.operationStartTime)
+      : null,
     loadingLocation: operationStore.loadingLocation || '',
     unloadingLocation: operationStore.unloadingLocation || '',
     cargoInfo: '',
@@ -200,6 +208,50 @@ const OperationRecord: React.FC = () => {
     
     return () => clearTimeout(timer);
   }, [operationStore.operationId, navigate]);
+
+  // 🆕 経過時間バグ修正: 運行開始時刻の復元・同期
+  // operationStore.operationStartTime が更新されたら operation.startTime に反映。
+  // ブラウザを閉じて再度開いた直後など、operationStoreに operationStartTime が
+  // 保存されていない場合（旧セッション互換）は、バックエンドAPIから実際の
+  // 運行開始時刻(actualStartTime)を取得して復元する。
+  useEffect(() => {
+    if (operationStore.operationStartTime) {
+      setOperation(prev => {
+        const restored = new Date(operationStore.operationStartTime as string);
+        if (prev.startTime && prev.startTime.getTime() === restored.getTime()) {
+          return prev; // 既に同期済みなら何もしない
+        }
+        console.log('🕐 [経過時間バグ修正] operationStoreから運行開始時刻を復元:', restored.toISOString());
+        return { ...prev, startTime: restored };
+      });
+      return;
+    }
+
+    // operationStoreに未保存の場合はバックエンドから取得して復元
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        console.log('🕐 [経過時間バグ修正] operationStartTime未保存 - バックエンドから復元:', currentOperationId);
+        const res = await apiService.getOperationDetail(currentOperationId);
+        if (cancelled) return;
+        const fetchedStartTime = (res as any)?.data?.startTime as string | undefined;
+        if (fetchedStartTime) {
+          operationStore.setOperationStartTime(fetchedStartTime);
+          setOperation(prev => ({ ...prev, startTime: new Date(fetchedStartTime) }));
+          console.log('✅ [経過時間バグ修正] 運行開始時刻をバックエンドから復元完了:', fetchedStartTime);
+        } else {
+          console.warn('⚠️ [経過時間バグ修正] バックエンドからも運行開始時刻を取得できませんでした');
+        }
+      } catch (err) {
+        console.error('❌ [経過時間バグ修正] 運行開始時刻の復元に失敗:', err);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [operationStore.operationStartTime, operationStore.operationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // operationStoreのフェーズ変更を監視して同期

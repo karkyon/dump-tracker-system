@@ -282,7 +282,10 @@ const PreDepartureInspection: React.FC = () => {
 
       // 3. Store更新
       setInspectionCompleted(inspectionRecordId);
-      startOperation(operationId);
+      // 🆕 経過時間バグ修正: サーバーが返す実際の運行開始時刻(actualStartTime)を渡す
+      //    渡さないとクライアント時刻でフォールバックされ、若干のズレが生じるため
+      const _serverStartTime = (operationResponse.data as any)?.startTime as string | undefined;
+      startOperation(operationId, _serverStartTime);
 
       toast.success('運行を開始しました');
       
