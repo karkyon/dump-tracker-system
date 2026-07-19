@@ -4,7 +4,7 @@
 // ✅ 追加: 終了走行距離入力フィールド（必須）
 // ✅ 追加: 終了燃料レベル入力フィールド（オプション）
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -75,6 +75,12 @@ const PostTripInspection: React.FC = () => {
   const [endOdometer, setEndOdometer] = useState<number | null>(null);
   const [endFuelLevel, setEndFuelLevel] = useState<number | null>(null);
 
+  // ✅ BUG修正: 運行終了成功後にresetOperation()でoperationId/vehicleIdが
+  //   nullになると、下のuseEffect（依存配列に operationId/vehicleId を含む）が
+  //   再実行され、「運行情報が見つかりません」エラーが誤表示されてしまう。
+  //   意図的な終了処理によるリセットかどうかをこのrefで判定する。
+  const hasEndedOperationRef = useRef(false);
+
   // 画面初期化
   useEffect(() => {
     console.log('[D8] 画面初期化開始');
@@ -85,6 +91,10 @@ const PostTripInspection: React.FC = () => {
     }
 
     if (!operationId || !vehicleId) {
+      if (hasEndedOperationRef.current) {
+        // 運行終了処理によるstoreリセットが原因の再実行のため、誤表示を防ぐ
+        return;
+      }
       toast.error('運行情報が見つかりません');
       navigate('/home', { replace: true });
       return;
@@ -393,6 +403,7 @@ const PostTripInspection: React.FC = () => {
 
       // Store リセット
       console.log('[D8] 🧹 operationStore リセット');
+      hasEndedOperationRef.current = true;
       resetOperation();
 
       toast.success('運行を終了しました');
