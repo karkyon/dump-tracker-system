@@ -599,6 +599,10 @@ const LoadingInput: React.FC = () => {
 
   const isStartButtonEnabled = hasItemSelected && finalConfirmed && !isSubmitting;
 
+  // ⑤ 運行パターンにより表示文言を出し分け: P3=「運行開始」 / P1,P2=「積込開始」
+  const _startBtnLoadingPattern = Number((operationStore as any).loadingPattern ?? 2);
+  const startButtonLabel = _startBtnLoadingPattern === 3 ? '運行開始' : '積込開始';
+
   const displayItemLabels =
     formData.selectedItemNames.length > 0
       ? formData.selectedItemNames.join('、')
@@ -1036,7 +1040,7 @@ const LoadingInput: React.FC = () => {
                 lineHeight: '1.6',
               }}
             >
-               注意: 「運行開始」ボタンを押すと、GPS位置と共に積込記録が登録され、積降場所への移動フェーズに移行します。
+               注意: 「{startButtonLabel}」ボタンを押すと、GPS位置と共に積込記録が登録され、積降場所への移動フェーズに移行します。
             </p>
           </div>
           {/* マニフェストリンクは廃棄物グループ直下に移動 */}
@@ -1273,7 +1277,7 @@ const LoadingInput: React.FC = () => {
             ) : (
               <>
                 <PlayCircle style={{ width: '20px', height: '20px' }} />
-                運行開始
+                {startButtonLabel}
               </>
             )}
           </button>

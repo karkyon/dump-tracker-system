@@ -463,6 +463,45 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
   };
   const minutesStr = (m: number): string => m < 0 ? '' : `${m}分`;
 
+  // ---------- 休憩時間区間の収集（移動時間から除外するため）----------
+  // 積込終了〜荷降開始の間に休憩(BREAK_START〜BREAK_END)が発生していた場合、
+  // その分を移動時間から差し引く（休憩時間は移動時間に含めない）。
+  interface BreakInterval { startMin: number; endMin: number; }
+  const breakIntervals: BreakInterval[] = [];
+  {
+    let breakStartMin: number | null = null;
+    for (const d of allDetails) {
+      const bAt: string = (d.activity_type ?? d.activityType ?? '').toUpperCase();
+      if (bAt === 'BREAK_START' || bAt === 'BREAK') {
+        const st = formatTime(d.actual_start_time ?? d.actualStartTime);
+        breakStartMin = st ? toMinutes(st) : null;
+      } else if (bAt === 'BREAK_END') {
+        if (breakStartMin != null) {
+          const endRaw = d.actual_start_time ?? d.actualStartTime ?? d.actual_end_time ?? d.actualEndTime;
+          const endT = formatTime(endRaw);
+          const endMin = endT ? toMinutes(endT) : -1;
+          if (endMin >= 0 && endMin >= breakStartMin) {
+            breakIntervals.push({ startMin: breakStartMin, endMin });
+          }
+          breakStartMin = null;
+        }
+      }
+    }
+  }
+  const subtractBreakOverlap = (startHHMM: string, endHHMM: string, rawMin: number): number => {
+    if (rawMin < 0) return rawMin;
+    const s = toMinutes(startHHMM);
+    const e = toMinutes(endHHMM);
+    if (s < 0 || e < 0) return rawMin;
+    let overlap = 0;
+    for (const b of breakIntervals) {
+      const os = Math.max(s, b.startMin);
+      const oe = Math.min(e, b.endMin);
+      if (oe > os) overlap += (oe - os);
+    }
+    return Math.max(0, rawMin - overlap);
+  };
+
   // ---------- Pass2: グループ化 ----------
   // グループキー: 客先名|積込場所|荷降場所|品目名
   const groupMap = new Map<string, any>();
@@ -472,8 +511,9 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     const c = rawCycles[i]!;
     const key = `${c.contractorName}|${c.loadingLocation}|${c.unloadingLocation}|${c.itemName}`;
 
-    // 移動時間 = 積込終了 → 荷降開始
-    const moveMin = diffMinutes(c.loadingEnd, c.unloadingStart);
+    // 移動時間 = 積込終了 → 荷降開始（区間内に休憩があれば休憩時間を差し引く）
+    const moveMinRaw = diffMinutes(c.loadingEnd, c.unloadingStart);
+    const moveMin = subtractBreakOverlap(c.loadingEnd, c.unloadingStart, moveMinRaw);
     // 積込時間(分)
     const loadMin = diffMinutes(c.loadingStart, c.loadingEnd);
     // 荷降時間(分)

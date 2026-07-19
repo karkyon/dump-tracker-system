@@ -262,7 +262,7 @@ const OperationHistoryDetail: React.FC = () => {
   if (!detail) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 pb-32">
       {/* ヘッダー */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-4">
         <div className="flex items-center gap-3 mb-2">
@@ -797,7 +797,7 @@ type ActGroup =
               {[
                 { type: 'LOADING', label: '📦 積込', color: '#1565C0', bg: '#E3F2FD' },
                 { type: 'UNLOADING', label: '🚚 荷降', color: '#2E7D32', bg: '#E8F5E9' },
-                { type: 'BREAK_START', label: '☕ 休憩', color: '#6A1B9A', bg: '#F3E5F5' },
+                { type: 'BREAK_START', label: '☕ 休憩・待機', color: '#6A1B9A', bg: '#F3E5F5' },
                 { type: 'FUELING', label: '⛽ 給油', color: '#E65100', bg: '#FFF3E0' },
               ].map(t => (
                 <div

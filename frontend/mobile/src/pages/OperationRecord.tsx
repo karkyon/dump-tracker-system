@@ -1910,7 +1910,7 @@ const OperationRecord: React.FC = () => {
               ))}
             </div>
             {/* リスト（運行履歴詳細画面と同じグループ表示スタイル） */}
-            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#fff', WebkitOverflowScrolling: 'touch', padding: '8px 10px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#fff', WebkitOverflowScrolling: 'touch', padding: '8px 10px calc(96px + env(safe-area-inset-bottom, 0px))' }}>
               <div style={{ fontSize: 9, fontWeight: 500, color: '#6b7280', padding: '2px 2px 6px', letterSpacing: '.05em', textTransform: 'uppercase' }}>運行内容 — タップで編集</div>
               {detailLoading ? (
                 <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>読み込み中...</div>
@@ -2228,7 +2228,7 @@ const OperationRecord: React.FC = () => {
               cursor: operation.phase === 'BREAK' ? 'not-allowed' : 'pointer'
             }}
           >
-            ☕ 休憩
+            ☕ 休憩・待機
           </button>
           
           <button
@@ -2405,7 +2405,7 @@ const OperationRecord: React.FC = () => {
               {[
                 { type: 'LOADING', label: '📦 積込', color: '#1565C0', bg: '#E3F2FD' },
                 { type: 'UNLOADING', label: '🚚 荷降', color: '#2E7D32', bg: '#E8F5E9' },
-                { type: 'BREAK_START', label: '☕ 休憩', color: '#6A1B9A', bg: '#F3E5F5' },
+                { type: 'BREAK_START', label: '☕ 休憩・待機', color: '#6A1B9A', bg: '#F3E5F5' },
                 { type: 'FUELING', label: '⛽ 給油', color: '#E65100', bg: '#FFF3E0' },
               ].map(t => (
                 <div
