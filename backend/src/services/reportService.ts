@@ -507,6 +507,10 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
   const groupMap = new Map<string, any>();
   const groupOrder: string[] = [];
 
+  // 要件No.10: 空車区間検出用。直前サイクルの荷降完了時刻をrawCycles全体で時系列追跡
+  //    （荷降完了→次の積込開始までの区間を「空車」としてPDF側に伝える）
+  let prevUnloadEndForEmptyRun: string = '';
+
   for (let i = 0; i < rawCycles.length; i++) {
     const c = rawCycles[i]!;
     const key = `${c.contractorName}|${c.loadingLocation}|${c.unloadingLocation}|${c.itemName}`;
@@ -519,6 +523,18 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     // 荷降時間(分)
     const unlMin  = diffMinutes(c.unloadingStart, c.unloadingEnd);
 
+    // 要件No.10: 空車区間 = 直前サイクルの荷降完了 → 今回サイクルの積込開始
+    //    （休憩が重なっていればその分を差し引く。0分以下・12時間超・不明瞭な値は表示しない）
+    let emptyRunLabel = '';
+    if (i > 0 && prevUnloadEndForEmptyRun && c.loadingStart) {
+      const emptyRunRaw = diffMinutes(prevUnloadEndForEmptyRun, c.loadingStart);
+      const emptyRunMin = subtractBreakOverlap(prevUnloadEndForEmptyRun, c.loadingStart, emptyRunRaw);
+      if (emptyRunMin > 0 && emptyRunMin < 12 * 60) {
+        emptyRunLabel = `空車移動: ${prevUnloadEndForEmptyRun}〜${c.loadingStart}（${emptyRunMin}分）`;
+      }
+    }
+    if (c.unloadingEnd) prevUnloadEndForEmptyRun = c.unloadingEnd;
+
     const timeRow = {
       loadingStart:    c.loadingStart,
       loadingEnd:      c.loadingEnd,
@@ -526,6 +542,7 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
       moveMinutes:     minutesStr(moveMin),
       unloadingStart:  c.unloadingStart,
       unloadingEnd:    c.unloadingEnd,
+      emptyRunLabel,   // 要件No.10: 空車区間ラベル（空文字なら非表示）
       unloadingMinutes: minutesStr(unlMin),
     };
 

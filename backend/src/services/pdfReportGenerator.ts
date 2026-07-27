@@ -36,6 +36,7 @@ const HEADER_H = 26;
 const COL_HEADER_H = 24;     // D対応: 2行ヘッダーのため高さ増加 (旧:16)
 const OP_ROW_H = 20;         // ★ 時刻行（1行構造）
 const GRP_ROW_H = 20;         // ★ グループヘッダー行
+const EMPTY_RUN_ROW_H = 12;  // 要件No.10: 空車区間ラベル行の高さ
 const OP_ROWS_DEFAULT = 6; // ★ 動的化: drawDailyDriverReport で全件ループ
 const FUEL_H = 50;           // E/F対応: 1行化 + 正方形署名欄の高さ（旧:52）
 const INSP_HEADER_H = 16;
@@ -79,6 +80,7 @@ export interface TripTimeRow {
   unloadingStart: string;
   unloadingEnd: string;
   unloadingMinutes: string;
+  emptyRunLabel?: string;  // 要件No.10: 空車区間ラベル（この行の積込開始より前の空車移動を示す。空文字/undefinedなら非表示）
 }
 
 /** 1グループ（同一客先+積込場所+荷降場所+品目）の記録 */
@@ -466,8 +468,11 @@ function countReportPages(data: DailyDriverReportData): number {
   let pages = 1;
   let y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
   for (const trip of data.trips) {
-    const rowCount = (trip.rows && trip.rows.length > 0) ? trip.rows.length : 1;
-    const blockH = OP_ROW_H * rowCount;  // グループ行廃止: 1行統合
+    const rows = (trip.rows && trip.rows.length > 0) ? trip.rows : undefined;
+    const rowCount = rows ? rows.length : 1;
+    // 要件No.10: 空車区間ラベルを持つ行の分だけ高さを加算
+    const emptyRunCount = rows ? rows.filter(r => !!r.emptyRunLabel).length : 0;
+    const blockH = OP_ROW_H * rowCount + EMPTY_RUN_ROW_H * emptyRunCount;  // グループ行廃止: 1行統合
     if (y + blockH > PAGE_H - 12) {
       pages++;
       y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
@@ -571,10 +576,20 @@ function drawOperationRowsAll(
         }];
 
     // 全行数 = rows.length（グループ行は廃止、1行目に統合）
-    const totalH = OP_ROW_H * rows.length;
+    // 要件No.10: 空車区間ラベルを持つ行の分だけ高さを加算
+    const emptyRunCountInTrip = rows.filter(r => !!r.emptyRunLabel).length;
+    const totalH = OP_ROW_H * rows.length + EMPTY_RUN_ROW_H * emptyRunCountInTrip;
     if (needBreak(totalH)) doPageBreak();
 
     rows.forEach((row, rowIdx) => {
+      // 要件No.10: 空車区間ラベル行（この時刻行の積込開始より前に空車移動があった場合）
+      if (row.emptyRunLabel) {
+        if (needBreak(EMPTY_RUN_ROW_H)) doPageBreak();
+        cell(doc, x, y, CONTENT_W, EMPTY_RUN_ROW_H, `🚚 ${row.emptyRunLabel}`, {
+          font: fontN, fontSize: 6.5, align: 'left', pad: 4, bg: '#F5F5F5', textColor: '#555555',
+        });
+        y += EMPTY_RUN_ROW_H;
+      }
       if (rowIdx > 0 && needBreak(OP_ROW_H)) doPageBreak();
       let cx = x;
       const ry = y;
