@@ -1970,8 +1970,15 @@ const OperationRecord: React.FC = () => {
                 let lgNum = 0, ugNum = 0;
                 // ✅ 積込/荷降レコードへの参照（休憩をどのグループにネストするか判定するため）
                 const loadUnloadRefs: { act: any; breaks: BreakEntry[] }[] = [];
-                // ✅ 追加: 積込レコードへの参照（荷役作業をどの積込グループへネストするか判定するため）
-                const loadingRefs: { act: any; cargoWork: BreakEntry[] }[] = [];
+                // ✅ 修正: 荷役開始は積込到着より前に記録される運用のため、
+                //    進行中ウィンドウのマッチではなく「その後最初に来る積込」に紐付ける
+                const loadingActsSorted = sorted.filter((x: any) => x.activityType === 'LOADING');
+                const cargoWorkToLoadingMap = new Map<string, string>();
+                for (const cw of sorted.filter((x: any) => x.activityType === 'CARGO_WORK_START')) {
+                  const nextLoading = loadingActsSorted.find((le: any) => (le.sequenceNumber ?? 0) > (cw.sequenceNumber ?? 0));
+                  if (nextLoading) cargoWorkToLoadingMap.set(cw.id, nextLoading.id);
+                }
+                const cargoWorkByLoadingId = new Map<string, BreakEntry[]>();
                 for (let i = 0; i < sorted.length; i++) {
                   const a = sorted[i];
                   if (used.has(a.id)) continue;
@@ -1979,10 +1986,8 @@ const OperationRecord: React.FC = () => {
                   if (at === 'LOADING') {
                     lgNum++;
                     const breaksArr: BreakEntry[] = [];
-                    const cargoWorkArr: BreakEntry[] = [];
-                    groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a, breaks: breaksArr, cargoWork: cargoWorkArr });
+                    groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a, breaks: breaksArr, cargoWork: cargoWorkByLoadingId.get(a.id) ?? [] });
                     loadUnloadRefs.push({ act: a, breaks: breaksArr });
-                    loadingRefs.push({ act: a, cargoWork: cargoWorkArr });
                   } else if (at === 'UNLOADING') {
                     ugNum++;
                     const breaksArr: BreakEntry[] = [];
@@ -2009,20 +2014,15 @@ const OperationRecord: React.FC = () => {
                   } else if (at === 'BREAK_END') {
                     // 孤立 BREAK_END はスキップ
                   } else if (at === 'CARGO_WORK_START') {
-                    // ✅ 追加: 荷役開始/終了は積込イベントの一部として、進行中の積込グループへネストする
+                    // ✅ 修正: 荷役開始は積込到着より前に記録される運用のため、
+                    //    「次に来る積込」に紐付けてネストする
                     const cwEndAct = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && b.activityType === 'CARGO_WORK_END') ?? null;
                     if (cwEndAct) used.add(cwEndAct.id);
-                    const cwStartMs = a.startTime ? new Date(a.startTime).getTime() : null;
-                    const cwHost = cwStartMs != null
-                      ? loadingRefs.find(({ act: hAct }) => {
-                          const hStart = hAct.startTime ? new Date(hAct.startTime).getTime() : null;
-                          const hEnd = hAct.endTime ? new Date(hAct.endTime).getTime() : null;
-                          if (hStart == null || hStart > cwStartMs) return false;
-                          return hEnd == null || hEnd >= cwStartMs;
-                        })
-                      : undefined;
-                    if (cwHost) {
-                      cwHost.cargoWork.push({ start: a, end: cwEndAct });
+                    const targetLoadingId = cargoWorkToLoadingMap.get(a.id);
+                    if (targetLoadingId) {
+                      const arr = cargoWorkByLoadingId.get(targetLoadingId) ?? [];
+                      arr.push({ start: a, end: cwEndAct });
+                      cargoWorkByLoadingId.set(targetLoadingId, arr);
                     } else {
                       groups.push({ type: 'SINGLE', act: a });
                     }

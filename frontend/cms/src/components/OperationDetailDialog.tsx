@@ -1659,6 +1659,20 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           }
                         }
 
+                        // ✅ 修正: 荷役開始は「積込到着」より前に押される運用のため、
+                        //    進行中ウィンドウでのマッチではなく「その後最初に来る積込」に紐付ける
+                        const loadingArrivedSorted = evs
+                          .filter(ev => ev.eventType === 'LOADING_ARRIVED')
+                          .sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+                        const cargoWorkToLoadingMap = new Map<string, string>();
+                        for (const cwStartId of cargoWorkStartIds) {
+                          const cwStartEv = evs.find(ev => ev.id === cwStartId);
+                          if (!cwStartEv) continue;
+                          const nextLoading = loadingArrivedSorted.find(le => le.sequenceNumber > cwStartEv.sequenceNumber);
+                          if (nextLoading) cargoWorkToLoadingMap.set(cwStartId, nextLoading.id);
+                        }
+                        const cargoWorkByLoadingId = new Map<string, BreakEntry[]>();
+
                         // ✅ 積込/荷降の「進行中ウィンドウ」を事前に洗い出す
                         //    （休憩がどの積込/荷降の最中に取得されたかを、evsの並び順に依存せず
                         //      時刻(timestamp)で判定するため。イテレーション順とは独立に動作する）
@@ -1688,7 +1702,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             const completed = loadingCompletedMap.get(detailId) ?? null;
                             if (completed) usedEvIds.add(completed.id);
                             const hw = hostWindows.find(w => w.arrivedId === ev.id);
-                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: completed, breaks: hw ? hw.breaks : [], cargoWork: hw ? hw.cargoWork : [] });
+                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: completed, breaks: hw ? hw.breaks : [], cargoWork: cargoWorkByLoadingId.get(ev.id) ?? [] });
                           } else if (ev.eventType === 'UNLOADING_ARRIVED') {
                             unloadingGroupNum++;
                             const detailId = getDetailId(ev.id);
@@ -1726,8 +1740,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             // 対応BREAK_STARTとペア済みなら usedEvIds で除外済み → ここには孤立のみ来る
                             groups.push({ type: 'SINGLE', event: ev });
                           } else if (ev.eventType === 'CARGO_WORK_START') {
-                            // ✅ 追加: 荷役開始/終了は積込イベントの一部として、進行中の
-                            //    積込グループへネストする（休憩と同じ方式）
+                            // ✅ 修正: 荷役開始は積込到着より前に押される運用のため、
+                            //    「次に来る積込」に紐付けてネストする
                             const pairedCwEnd = cargoWorkPairMap.get(ev.id) ?? null;
                             const mergedCargoWork: OperationDebugTimelineEvent = {
                               ...ev,
@@ -1735,10 +1749,11 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                               pairedEndId: pairedCwEnd?.id ?? null,
                               pairedEndTimestamp: pairedCwEnd?.timestamp ?? null,
                             };
-                            const cwStartMs = ev.timestamp ? new Date(ev.timestamp).getTime() : NaN;
-                            const cwHost = !Number.isNaN(cwStartMs) ? findHostWindow(cwStartMs) : undefined;
-                            if (cwHost) {
-                              cwHost.cargoWork.push({ start: mergedCargoWork, end: pairedCwEnd });
+                            const targetLoadingId = cargoWorkToLoadingMap.get(ev.id);
+                            if (targetLoadingId) {
+                              const arr = cargoWorkByLoadingId.get(targetLoadingId) ?? [];
+                              arr.push({ start: mergedCargoWork, end: pairedCwEnd });
+                              cargoWorkByLoadingId.set(targetLoadingId, arr);
                             } else {
                               groups.push({ type: 'SINGLE', event: mergedCargoWork });
                             }
