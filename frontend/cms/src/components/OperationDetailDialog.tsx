@@ -224,9 +224,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           UNLOADING_COMPLETE:  { short: '降', full: '荷降完了',   color: '#2E7D32' },
           UNLOADING_ARRIVED:   { short: '降', full: '荷降到着',   color: '#4CAF50' },
           UNLOADING_COMPLETED: { short: '降', full: '荷降完了',   color: '#2E7D32' },
-          BREAK_START:         { short: '休', full: '休憩開始',   color: '#9C27B0' },
-          BREAK_END:           { short: '休', full: '休憩終了',   color: '#6A1B9A' },
-          BREAK:               { short: '休', full: '休憩',       color: '#9C27B0' },
+          BREAK_START:         { short: '休', full: '休憩・待機開始',   color: '#9C27B0' },
+          BREAK_END:           { short: '休', full: '休憩・待機終了',   color: '#6A1B9A' },
+          BREAK:               { short: '休', full: '休憩・待機',       color: '#9C27B0' },
           FUELING:             { short: '油', full: '給油',       color: '#FF9800' },
           REFUELING:           { short: '油', full: '給油',       color: '#FF9800' },
           FUEL:                { short: '油', full: '給油',       color: '#FF9800' },
@@ -1028,9 +1028,9 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       UNLOADING: { label: '荷降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
-      BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
-      BREAK_START: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
-      BREAK_END: { label: '休憩終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK: { label: '休憩・待機', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK_START: { label: '休憩・待機', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK_END: { label: '休憩・待機終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
       TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
       WAITING: { label: '待機', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
@@ -1064,12 +1064,16 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       UNLOADING: { label: '荷降', icon: <Truck className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       FUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
       REFUELING: { label: '給油', icon: <Fuel className="w-5 h-5" />, className: 'bg-orange-100 text-orange-800' },
-      BREAK: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
-      BREAK_START: { label: '休憩', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
-      BREAK_END: { label: '休憩終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK: { label: '休憩・待機', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK_START: { label: '休憩・待機', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
+      BREAK_END: { label: '休憩・待機終了', icon: <Coffee className="w-5 h-5" />, className: 'bg-purple-100 text-purple-800' },
       MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
       TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
       WAITING: { label: '待機', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      WAITING_START: { label: '待機開始', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      WAITING_END: { label: '待機終了', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      CARGO_WORK_START: { label: '荷役開始', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
+      CARGO_WORK_END: { label: '荷役終了', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
       LOADING_ARRIVED:    { label: '積込場所 到着', icon: <MapPin />, className: 'bg-blue-100 text-blue-800' },
       LOADING_COMPLETED:  { label: '積込完了',     icon: <CheckCircle />, className: 'bg-indigo-100 text-indigo-800' },
       UNLOADING_ARRIVED:  { label: '荷降場所 到着', icon: <MapPin />, className: 'bg-orange-100 text-orange-800' },
@@ -1564,7 +1568,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         // ─────────────────────────────────────────────
                         type BreakEntry = { start: OperationDebugTimelineEvent; end: OperationDebugTimelineEvent | null };
                         type RenderGroup =
-                          | { type: 'LOADING_GROUP';   groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null; breaks: BreakEntry[] }
+                          | { type: 'LOADING_GROUP';   groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null; breaks: BreakEntry[]; cargoWork: BreakEntry[] }
                           | { type: 'UNLOADING_GROUP'; groupNum: number; arrivedEvent: OperationDebugTimelineEvent; completedEvent: OperationDebugTimelineEvent | null; breaks: BreakEntry[] }
                           | { type: 'SINGLE'; event: OperationDebugTimelineEvent };
  
@@ -1635,10 +1639,30 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                           }
                         }
 
+                        // ✅ 追加: CARGO_WORK_START + CARGO_WORK_END ペアも同様にマップ化
+                        const cargoWorkStartIds = evs
+                          .filter(ev => ev.eventType === 'CARGO_WORK_START')
+                          .map(ev => ev.id);
+                        const cargoWorkEndList = evs
+                          .filter(ev => ev.eventType === 'CARGO_WORK_END')
+                          .sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+                        const cargoWorkPairMap = new Map<string, OperationDebugTimelineEvent>();
+                        let cwEndIdx = 0;
+                        for (const cwStartId of cargoWorkStartIds) {
+                          if (cwEndIdx < cargoWorkEndList.length) {
+                            const cwEnd = cargoWorkEndList[cwEndIdx];
+                            if (cwEnd) {
+                              cargoWorkPairMap.set(cwStartId, cwEnd);
+                              usedEvIds.add(cwEnd.id);
+                            }
+                            cwEndIdx++;
+                          }
+                        }
+
                         // ✅ 積込/荷降の「進行中ウィンドウ」を事前に洗い出す
                         //    （休憩がどの積込/荷降の最中に取得されたかを、evsの並び順に依存せず
                         //      時刻(timestamp)で判定するため。イテレーション順とは独立に動作する）
-                        interface HostWindow { arrivedId: string; startMs: number; endMs: number | null; breaks: BreakEntry[] }
+                        interface HostWindow { arrivedId: string; startMs: number; endMs: number | null; breaks: BreakEntry[]; cargoWork: BreakEntry[] }
                         const hostWindows: HostWindow[] = [];
                         for (const ev of evs) {
                           if (ev.eventType === 'LOADING_ARRIVED' || ev.eventType === 'UNLOADING_ARRIVED') {
@@ -1649,7 +1673,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             const startMs = ev.timestamp ? new Date(ev.timestamp).getTime() : NaN;
                             if (!Number.isNaN(startMs)) {
                               const endMs = completed?.timestamp ? new Date(completed.timestamp).getTime() : null;
-                              hostWindows.push({ arrivedId: ev.id, startMs, endMs, breaks: [] });
+                              hostWindows.push({ arrivedId: ev.id, startMs, endMs, breaks: [], cargoWork: [] });
                             }
                           }
                         }
@@ -1664,7 +1688,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             const completed = loadingCompletedMap.get(detailId) ?? null;
                             if (completed) usedEvIds.add(completed.id);
                             const hw = hostWindows.find(w => w.arrivedId === ev.id);
-                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: completed, breaks: hw ? hw.breaks : [] });
+                            groups.push({ type: 'LOADING_GROUP', groupNum: loadingGroupNum, arrivedEvent: ev, completedEvent: completed, breaks: hw ? hw.breaks : [], cargoWork: hw ? hw.cargoWork : [] });
                           } else if (ev.eventType === 'UNLOADING_ARRIVED') {
                             unloadingGroupNum++;
                             const detailId = getDetailId(ev.id);
@@ -1700,6 +1724,26 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             }
                           } else if (ev.eventType === 'BREAK_END') {
                             // 対応BREAK_STARTとペア済みなら usedEvIds で除外済み → ここには孤立のみ来る
+                            groups.push({ type: 'SINGLE', event: ev });
+                          } else if (ev.eventType === 'CARGO_WORK_START') {
+                            // ✅ 追加: 荷役開始/終了は積込イベントの一部として、進行中の
+                            //    積込グループへネストする（休憩と同じ方式）
+                            const pairedCwEnd = cargoWorkPairMap.get(ev.id) ?? null;
+                            const mergedCargoWork: OperationDebugTimelineEvent = {
+                              ...ev,
+                              notes: ev.notes ?? null,
+                              pairedEndId: pairedCwEnd?.id ?? null,
+                              pairedEndTimestamp: pairedCwEnd?.timestamp ?? null,
+                            };
+                            const cwStartMs = ev.timestamp ? new Date(ev.timestamp).getTime() : NaN;
+                            const cwHost = !Number.isNaN(cwStartMs) ? findHostWindow(cwStartMs) : undefined;
+                            if (cwHost) {
+                              cwHost.cargoWork.push({ start: mergedCargoWork, end: pairedCwEnd });
+                            } else {
+                              groups.push({ type: 'SINGLE', event: mergedCargoWork });
+                            }
+                          } else if (ev.eventType === 'CARGO_WORK_END') {
+                            // 対応CARGO_WORK_STARTとペア済みなら usedEvIds で除外済み → ここには孤立のみ来る
                             groups.push({ type: 'SINGLE', event: ev });
                           } else {
                             groups.push({ type: 'SINGLE', event: ev });
@@ -1935,7 +1979,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     <React.Fragment key={brk.start.id || `brk-${bi}`}>
                                       {renderSubRow(
                                         brk.start,
-                                        '休憩',
+                                        '休憩・待機',
                                         'bg-purple-500',
                                         false,
                                         false,
@@ -1955,6 +1999,36 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                         brk.start.pairedEndTimestamp ? (
                                           <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded whitespace-nowrap">
                                             終了時刻: {fmtHM(brk.start.pairedEndTimestamp)}
+                                          </span>
+                                        ) : undefined
+                                      )}
+                                    </React.Fragment>
+                                  ))}
+                                  {/* ✅ 追加: 積込中に記録した荷役作業をグループ内にネスト表示 */}
+                                  {group.type === 'LOADING_GROUP' && group.cargoWork.map((cw, ci) => (
+                                    <React.Fragment key={cw.start.id || `cw-${ci}`}>
+                                      {renderSubRow(
+                                        cw.start,
+                                        '荷役',
+                                        'bg-indigo-500',
+                                        false,
+                                        false,
+                                        <button type="button"
+                                          onClick={() => setEditEvent({
+                                            id: cw.start.id,
+                                            realDetailId: cw.start.id.replace(/-arrived$|-completed$/, ''),
+                                            eventType: cw.start.pairedEndId ? 'CARGO_WORK_END' : 'CARGO_WORK_START',
+                                            timestamp: cw.start.timestamp,
+                                            completionTimestamp: cw.start.pairedEndTimestamp ?? null,
+                                            pairedEndId: cw.start.pairedEndId ?? null,
+                                            notes: cw.start.notes,
+                                          })}
+                                          className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                                        ><Pencil className="w-3 h-3" /> 編集</button>,
+                                        '開始時刻',
+                                        cw.start.pairedEndTimestamp ? (
+                                          <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded whitespace-nowrap">
+                                            終了時刻: {fmtHM(cw.start.pairedEndTimestamp)}
                                           </span>
                                         ) : undefined
                                       )}

@@ -138,7 +138,9 @@ export interface OperationDebugTimelineEvent {
              'MAINTENANCE' | 'REFUELING' | 'FUELING' | 
              'BREAK' | 'BREAK_START' | 'BREAK_END' | 'OTHER' |
              'LOADING_ARRIVED' | 'LOADING_COMPLETED' |
-             'UNLOADING_ARRIVED' | 'UNLOADING_COMPLETED';
+             'UNLOADING_ARRIVED' | 'UNLOADING_COMPLETED' |
+             'CARGO_WORK_START' | 'CARGO_WORK_END' |
+             'WAITING_START' | 'WAITING_END';
   timestamp: string | null;
   location?: {
     id: string;
@@ -267,7 +269,7 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   LOADING: '積込', LOADING_ARRIVED: '積込(到着)', LOADING_COMPLETED: '積込(完了)',
   UNLOADING: '荷降', UNLOADING_ARRIVED: '積降(到着)', UNLOADING_COMPLETED: '積降(完了)',
   FUELING: '給油', REFUELING: '給油',
-  BREAK_START: '休憩開始', BREAK_END: '休憩終了', BREAK: '休憩',
+  BREAK_START: '休憩・待機開始', BREAK_END: '休憩・待機終了', BREAK: '休憩・待機',
   TRIP_START: '運行開始', TRIP_END: '運行終了',
   PRE_INSPECTION: '運行前点検', POST_INSPECTION: '運行後点検',
   TRANSPORTING: '運搬中', WAITING: '待機',

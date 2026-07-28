@@ -1960,7 +1960,7 @@ const OperationRecord: React.FC = () => {
                 //   BREAK のみ BREAK_START/BREAK_END の2レコードモデル。
                 type BreakEntry = { start: any; end: any | null };
                 type ActGroup =
-                  | { type: 'LOADING_GROUP';   groupNum: number; act: any; breaks: BreakEntry[] }
+                  | { type: 'LOADING_GROUP';   groupNum: number; act: any; breaks: BreakEntry[]; cargoWork: BreakEntry[] }
                   | { type: 'UNLOADING_GROUP'; groupNum: number; act: any; breaks: BreakEntry[] }
                   | { type: 'BREAK';           start: any; end: any | null }
                   | { type: 'SINGLE';          act: any };
@@ -1970,6 +1970,8 @@ const OperationRecord: React.FC = () => {
                 let lgNum = 0, ugNum = 0;
                 // ✅ 積込/荷降レコードへの参照（休憩をどのグループにネストするか判定するため）
                 const loadUnloadRefs: { act: any; breaks: BreakEntry[] }[] = [];
+                // ✅ 追加: 積込レコードへの参照（荷役作業をどの積込グループへネストするか判定するため）
+                const loadingRefs: { act: any; cargoWork: BreakEntry[] }[] = [];
                 for (let i = 0; i < sorted.length; i++) {
                   const a = sorted[i];
                   if (used.has(a.id)) continue;
@@ -1977,8 +1979,10 @@ const OperationRecord: React.FC = () => {
                   if (at === 'LOADING') {
                     lgNum++;
                     const breaksArr: BreakEntry[] = [];
-                    groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a, breaks: breaksArr });
+                    const cargoWorkArr: BreakEntry[] = [];
+                    groups.push({ type: 'LOADING_GROUP', groupNum: lgNum, act: a, breaks: breaksArr, cargoWork: cargoWorkArr });
                     loadUnloadRefs.push({ act: a, breaks: breaksArr });
+                    loadingRefs.push({ act: a, cargoWork: cargoWorkArr });
                   } else if (at === 'UNLOADING') {
                     ugNum++;
                     const breaksArr: BreakEntry[] = [];
@@ -2004,6 +2008,26 @@ const OperationRecord: React.FC = () => {
                     }
                   } else if (at === 'BREAK_END') {
                     // 孤立 BREAK_END はスキップ
+                  } else if (at === 'CARGO_WORK_START') {
+                    // ✅ 追加: 荷役開始/終了は積込イベントの一部として、進行中の積込グループへネストする
+                    const cwEndAct = sorted.slice(i + 1).find((b: any) => !used.has(b.id) && b.activityType === 'CARGO_WORK_END') ?? null;
+                    if (cwEndAct) used.add(cwEndAct.id);
+                    const cwStartMs = a.startTime ? new Date(a.startTime).getTime() : null;
+                    const cwHost = cwStartMs != null
+                      ? loadingRefs.find(({ act: hAct }) => {
+                          const hStart = hAct.startTime ? new Date(hAct.startTime).getTime() : null;
+                          const hEnd = hAct.endTime ? new Date(hAct.endTime).getTime() : null;
+                          if (hStart == null || hStart > cwStartMs) return false;
+                          return hEnd == null || hEnd >= cwStartMs;
+                        })
+                      : undefined;
+                    if (cwHost) {
+                      cwHost.cargoWork.push({ start: a, end: cwEndAct });
+                    } else {
+                      groups.push({ type: 'SINGLE', act: a });
+                    }
+                  } else if (at === 'CARGO_WORK_END') {
+                    // 対応CARGO_WORK_STARTとペア済みならusedに入っているのでスキップ済み
                   } else {
                     groups.push({ type: 'SINGLE', act: a });
                   }
@@ -2092,9 +2116,24 @@ const OperationRecord: React.FC = () => {
                                 style={{ width: '100%', padding: '5px 12px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 6, background: TC.BREAK_BG, border: 'none', cursor: 'pointer', textAlign: 'left' }}
                               >
                                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: TC.BREAK_BORDER, flexShrink: 0 }} />
-                                <span style={{ fontSize: 12, fontWeight: 700, color: TC.BREAK_FG }}>▶休憩</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: TC.BREAK_FG }}>▶休憩・待機</span>
                                 <span style={{ marginLeft: 'auto', fontSize: 11, color: TC.BREAK_FG, display: 'flex', alignItems: 'center', gap: 4 }}>
                                   {fmtRange(b.start.startTime, b.end ? b.end.startTime : b.start.endTime)}
+                                  <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
+                                </span>
+                              </button>
+                            ))}
+                            {/* ✅ 追加: 積込中に記録した荷役作業をグループ内にネスト表示 */}
+                            {g.type === 'LOADING_GROUP' && g.cargoWork.map((cw, ci) => (
+                              <button
+                                key={`cw-${ci}`}
+                                onClick={() => setEditingActivity({ ...cw.start, endTime: cw.end ? cw.end.startTime : cw.start.endTime, pairId: cw.end ? cw.end.id : undefined } as any)}
+                                style={{ width: '100%', padding: '5px 12px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 6, background: '#EEF2FF', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                              >
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4F46E5', flexShrink: 0 }} />
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#3730A3' }}>▶荷役</span>
+                                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#3730A3', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  {fmtRange(cw.start.startTime, cw.end ? cw.end.startTime : cw.start.endTime)}
                                   <span style={{ fontSize: 11, color: '#d1d5db' }}>✏️</span>
                                 </span>
                               </button>
@@ -2130,7 +2169,7 @@ const OperationRecord: React.FC = () => {
                             style={{ border: `2px solid ${TC.BREAK_BORDER}`, borderRadius: 10, overflow: 'hidden', width: '100%', background: '#fff', cursor: 'pointer', textAlign: 'left', padding: 0 }}
                           >
                             <div style={{ background: TC.BREAK_BG, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: TC.BREAK_FG }}>☕ 休憩</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: TC.BREAK_FG }}>☕ 休憩・待機</span>
                               <span style={{ marginLeft: 'auto', fontSize: 11, color: TC.BREAK_FG, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {fmtRange(g.start.startTime, g.end ? g.end.startTime : g.start.endTime)}
                                 <span style={{ fontSize: 11, color: TC.BREAK_FG, opacity: 0.6 }}>✏️</span>
