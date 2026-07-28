@@ -1265,7 +1265,9 @@ export class MobileController {
 
       const filter: VehicleFilter = {
         status: req.query.status ? [req.query.status as string] as any[] : undefined,
-        manufacturer: req.query.search as string
+        manufacturer: req.query.search as string,
+        page: paginationQuery.page,   // ✅ 修正: pageをfilterに渡す
+        limit: paginationQuery.limit  // ✅ 修正: limitをfilterに渡す
       };
 
       const result = await this.vehicleService.getVehicleList(filter, {
