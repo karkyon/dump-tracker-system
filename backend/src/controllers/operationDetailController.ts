@@ -915,6 +915,8 @@ export class OperationDetailController {
       if (rawData.actualStartTime) data.actualStartTime = toDate(rawData.actualStartTime);
       if (rawData.notes) data.notes = rawData.notes;
       if (rawData.customerId) data.customerId = rawData.customerId;
+      // 要件No.2: 交代運転者氏名
+      if (rawData.relayDriverName !== undefined) data.relayDriverName = rawData.relayDriverName;
       const updated = await db.operation.update({ where: { id: opId }, data });
       return sendSuccess(res, { eventId, ...updated });
     }

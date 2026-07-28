@@ -1979,7 +1979,8 @@ class ReportService {
       leftInspItems: leftItems,
       middleInspItems: middleItems,
       rightInspItems: rightItems,
-      remarks: '',
+      // 要件No.2: 交代運転者氏名があれば備考欄の先頭に自動で追記する
+      remarks: (firstOp as any)?.relayDriverName ? `交代運転者: ${(firstOp as any).relayDriverName}` : '',
     };
 
     // ===== PDF 生成 =====

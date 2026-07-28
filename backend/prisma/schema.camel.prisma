@@ -317,6 +317,7 @@ model Operation {
   totalDistanceKm                 Decimal?           @map("total_distance_km") @db.Decimal(8, 2)
   fuelConsumedLiters              Decimal?           @map("fuel_consumed_liters") @db.Decimal(8, 2)
   notes                           String?
+  relayDriverName                 String?            @map("relay_driver_name") @db.VarChar(100)  // 要件No.2: 交代運転者氏名
   createdBy                       String?            @map("created_by") @db.Uuid
   createdAt                       DateTime?          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                       DateTime?          @default(now()) @map("updated_at") @db.Timestamptz(6)
