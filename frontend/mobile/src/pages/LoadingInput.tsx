@@ -144,6 +144,11 @@ const LoadingInput: React.FC = () => {
   // ---- 最終確認チェックボックス（D5a統合: "上記の内容で間違いありません"） ----
   const [finalConfirmed, setFinalConfirmed] = useState(false);
 
+  // ---- 荷役作業（要件No.17・18、2026-07-15吉原様案） ----
+  const [cargoWorkStarted, setCargoWorkStarted] = useState(false);
+  const [cargoWorkEnded, setCargoWorkEnded] = useState(false);
+  const [cargoWorkSubmitting, setCargoWorkSubmitting] = useState(false);
+
   // ---- 送信中フラグ ----
   const [isSubmitting, setIsSubmitting] = useState(false);
   // BUG-017: useRefで送信中フラグを管理（React state更新の非同期性による多重タップ防止）
@@ -348,6 +353,59 @@ const LoadingInput: React.FC = () => {
       );
     };
     img.src = objectUrl;
+  };
+
+  /**
+   * 荷役開始ボタン（要件No.17・18、2026-07-15吉原様案）
+   * 押した時点で時間計測開始。荷役が無い場合はこのボタンを押さず、
+   * これまで通り確認チェックボックス→運行開始で進める。
+   */
+  const handleCargoWorkStart = async () => {
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) {
+      toast.error('運行IDが見つかりません');
+      return;
+    }
+    setCargoWorkSubmitting(true);
+    try {
+      await apiService.createOperationDetailEvent({
+        operationId: currentOperationId,
+        activityType: 'CARGO_WORK_START',
+        actualStartTime: new Date(),
+        quantityTons: 0,
+      });
+      setCargoWorkStarted(true);
+      toast.success('荷役作業を開始しました');
+    } catch (error) {
+      console.error('❌ 荷役開始記録エラー:', error);
+      toast.error('荷役開始の記録に失敗しました');
+    } finally {
+      setCargoWorkSubmitting(false);
+    }
+  };
+
+  /**
+   * 荷役終了記録（要件No.17・18）
+   * 確認チェックボックスON時、荷役中であれば自動的に呼び出す。
+   * 「そこで終了時間記録=積込完了時間、GPS位置記録=積込場所」という
+   * 吉原様の指定どおり、以降の既存フロー（運行開始ボタン等）は一切変更しない。
+   */
+  const handleCargoWorkEnd = async () => {
+    const currentOperationId = operationStore.operationId;
+    if (!currentOperationId) return;
+    try {
+      await apiService.createOperationDetailEvent({
+        operationId: currentOperationId,
+        activityType: 'CARGO_WORK_END',
+        actualStartTime: new Date(),
+        actualEndTime: new Date(),
+        quantityTons: 0,
+      });
+      setCargoWorkEnded(true);
+    } catch (error) {
+      console.error('❌ 荷役終了記録エラー:', error);
+      toast.error('荷役終了の記録に失敗しました（そのまま進めます）');
+    }
   };
 
   const handleStartOperation = async () => {
@@ -950,6 +1008,48 @@ const LoadingInput: React.FC = () => {
           </div>
         </div>
 
+        {/* ----- 荷役作業（要件No.17・18、2026-07-15吉原様案）----- */}
+        <div
+          style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '16px',
+            marginBottom: '16px',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          }}
+        >
+          <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#6b7280' }}>
+            荷役（積込の実作業）がある場合は押してください。無い場合はこのまま次へ進めます。
+          </p>
+          {!cargoWorkStarted ? (
+            <button
+              onClick={handleCargoWorkStart}
+              disabled={cargoWorkSubmitting}
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: 'white',
+                background: cargoWorkSubmitting ? '#93c5fd' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: cargoWorkSubmitting ? 'not-allowed' : 'pointer',
+              }}
+            >
+              荷役開始
+            </button>
+          ) : cargoWorkEnded ? (
+            <div style={{ fontSize: '14px', color: '#059669', fontWeight: 'bold' }}>
+              荷役作業を記録しました
+            </div>
+          ) : (
+            <div style={{ fontSize: '14px', color: '#2563eb', fontWeight: 'bold' }}>
+              荷役作業中です（「上記の内容で間違いありません」にチェックすると終了時刻を記録します）
+            </div>
+          )}
+        </div>
+
         {/* ----- 最終確認チェックボックス（D5a統合）----- */}
         <div
           style={{
@@ -972,7 +1072,13 @@ const LoadingInput: React.FC = () => {
             <input
               type="checkbox"
               checked={finalConfirmed}
-              onChange={e => setFinalConfirmed(e.target.checked)}
+              onChange={e => {
+                const checked = e.target.checked;
+                setFinalConfirmed(checked);
+                if (checked && cargoWorkStarted && !cargoWorkEnded) {
+                  handleCargoWorkEnd();
+                }
+              }}
               style={{
                 width: '22px',
                 height: '22px',

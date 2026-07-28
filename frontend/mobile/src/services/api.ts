@@ -830,6 +830,26 @@ class APIServiceClass {
     }
   }
 
+  /**
+   * 荷役作業イベント記録（要件No.17・18、2026-07-15吉原様案）
+   * POST /api/v1/operation-details への汎用登録
+   * CARGO_WORK_START / CARGO_WORK_END の記録に使用
+   */
+  async createOperationDetailEvent(data: Record<string, any>): Promise<APIResponse<any>> {
+    try {
+      console.log('🧰 汎用イベント記録API呼び出し:', data);
+      const response = await this.axiosInstance.post<APIResponse<any>>(
+        `/operation-details`,
+        data
+      );
+      console.log('✅ 汎用イベント記録成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ 汎用イベント記録エラー:', error);
+      throw error;
+    }
+  }
+
   // =============================================================================
   // 🆕🆕🆕 休憩管理API（2025年12月28日追加）
   // =============================================================================
