@@ -259,6 +259,7 @@ model OperationDetail {
   quantityTons      Decimal   @map("quantity_tons") @db.Decimal(8, 2)
   fuelCostYen       Decimal?  @map("fuel_cost_yen") @db.Decimal(10, 2)  // 🆕 給油金額（operation_detailsで個別管理）
   odometerKm        Decimal?  @map("odometer_km") @db.Decimal(8, 2)           // 🆕 給油時走行距離
+  cargoWorkTypeCode Int?      @map("cargo_work_type_code")  // 要件No.17: 荷役作業番号（1〜11、CARGO_WORK_STARTレコードに設定）
   notes             String?
   // 🆕 複数品目リレーション
   operationDetailItems OperationDetailItem[]
@@ -734,11 +735,15 @@ enum ActivityType {
   UNLOADING         // 積降
   TRANSPORTING      // 運搬中
   WAITING           // 待機
+  WAITING_START     // 要件No.15: 待機開始
+  WAITING_END       // 要件No.15: 待機終了
   MAINTENANCE       // メンテナンス
   REFUELING         // 給油
   BREAK             // 休憩
   BREAK_START       // 休憩開始
   BREAK_END         // 休憩終了
+  CARGO_WORK_START  // 要件No.17・18: 荷役作業開始（積込側のみ・2026-07-15吉原様案）
+  CARGO_WORK_END    // 要件No.17・18: 荷役作業終了
   NOTE              // メモ・記録
   OTHER             // その他
   TRIP_START        // 運行開始

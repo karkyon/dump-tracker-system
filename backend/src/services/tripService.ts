@@ -1135,8 +1135,12 @@ class TripService {
         // 🆕 GPS位置情報マッピング
         latitude: activityData.latitude,
         longitude: activityData.longitude,
-        gpsAccuracyMeters: activityData.accuracy
-      };
+        gpsAccuracyMeters: activityData.accuracy,
+        // 要件No.17: 荷役作業番号（CARGO_WORK_START時のみ送信される想定）
+        ...((activityData as any).cargoWorkTypeCode !== undefined
+          ? { cargoWorkTypeCode: Number((activityData as any).cargoWorkTypeCode) }
+          : {}),
+      } as any;
 
       logger.info('🆕 GPS データマッピング確認', {
         input: { latitude: activityData.latitude, longitude: activityData.longitude, accuracy: activityData.accuracy },
