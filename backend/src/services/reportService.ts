@@ -354,6 +354,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     loadingEnd: string;
     unloadingStart: string;
     unloadingEnd: string;
+    plannedLoadingTime: string;    // 要件No.11: 積込の到着指定時刻
+    plannedUnloadingTime: string;  // 要件No.11: 荷降の到着指定時刻
   }
 
   const rawCycles: RawCycle[] = [];
@@ -413,6 +415,9 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         loadingEnd: endT,
         unloadingStart: '',
         unloadingEnd: '',
+        // 要件No.11: 積込の到着指定時刻（operation_details.planned_time）
+        plannedLoadingTime: formatTime((d as any).planned_time ?? (d as any).plannedTime),
+        plannedUnloadingTime: '',
       };
     } else if (at.startsWith('UNLOADING')) {
       // 荷降レコード（1行でactualStartTime〜actualEndTimeを保持）
@@ -421,6 +426,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         cur.unloadingLocation = locName;
         cur.unloadingStart    = startT;
         cur.unloadingEnd      = endT;
+        // 要件No.11: 荷降の到着指定時刻（operation_details.planned_time）
+        cur.plannedUnloadingTime = formatTime((d as any).planned_time ?? (d as any).plannedTime);
         if (qty > 0 && (cur.quantityTons ?? 0) === 0) cur.quantityTons = qty;
         if (!cur.contractorName && customerName) cur.contractorName = customerName;
         rawCycles.push(cur as RawCycle);
@@ -438,6 +445,9 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
           loadingEnd: '',
           unloadingStart: startT,
           unloadingEnd: endT,
+          // 要件No.11: 積込を経由しない単独荷降の到着指定時刻
+          plannedLoadingTime: '',
+          plannedUnloadingTime: formatTime((d as any).planned_time ?? (d as any).plannedTime),
         });
         cur = null;
       }
@@ -535,6 +545,15 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     }
     if (c.unloadingEnd) prevUnloadEndForEmptyRun = c.unloadingEnd;
 
+    // 要件No.11: 到着指定日時（計画時刻）ラベル。積込・荷降いずれかにplannedTimeがあれば表示
+    let plannedTimeLabel = '';
+    {
+      const plannedParts: string[] = [];
+      if (c.plannedLoadingTime) plannedParts.push(`積込 ${c.plannedLoadingTime}`);
+      if (c.plannedUnloadingTime) plannedParts.push(`荷降 ${c.plannedUnloadingTime}`);
+      if (plannedParts.length > 0) plannedTimeLabel = `到着指定: ${plannedParts.join('／')}`;
+    }
+
     const timeRow = {
       loadingStart:    c.loadingStart,
       loadingEnd:      c.loadingEnd,
@@ -542,7 +561,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
       moveMinutes:     minutesStr(moveMin),
       unloadingStart:  c.unloadingStart,
       unloadingEnd:    c.unloadingEnd,
-      emptyRunLabel,   // 要件No.10: 空車区間ラベル（空文字なら非表示）
+      emptyRunLabel,     // 要件No.10: 空車区間ラベル（空文字なら非表示）
+      plannedTimeLabel,  // 要件No.11: 到着指定日時ラベル（空文字なら非表示）
       unloadingMinutes: minutesStr(unlMin),
     };
 

@@ -37,6 +37,7 @@ const COL_HEADER_H = 24;     // D対応: 2行ヘッダーのため高さ増加 (
 const OP_ROW_H = 20;         // ★ 時刻行（1行構造）
 const GRP_ROW_H = 20;         // ★ グループヘッダー行
 const EMPTY_RUN_ROW_H = 12;  // 要件No.10: 空車区間ラベル行の高さ
+const PLANNED_ROW_H = 12;    // 要件No.11: 到着指定日時ラベル行の高さ
 const OP_ROWS_DEFAULT = 6; // ★ 動的化: drawDailyDriverReport で全件ループ
 const FUEL_H = 50;           // E/F対応: 1行化 + 正方形署名欄の高さ（旧:52）
 const INSP_HEADER_H = 16;
@@ -81,6 +82,7 @@ export interface TripTimeRow {
   unloadingEnd: string;
   unloadingMinutes: string;
   emptyRunLabel?: string;  // 要件No.10: 空車区間ラベル（この行の積込開始より前の空車移動を示す。空文字/undefinedなら非表示）
+  plannedTimeLabel?: string;  // 要件No.11: 到着指定日時（計画時刻）ラベル（空文字/undefinedなら非表示）
 }
 
 /** 1グループ（同一客先+積込場所+荷降場所+品目）の記録 */
@@ -472,7 +474,9 @@ function countReportPages(data: DailyDriverReportData): number {
     const rowCount = rows ? rows.length : 1;
     // 要件No.10: 空車区間ラベルを持つ行の分だけ高さを加算
     const emptyRunCount = rows ? rows.filter(r => !!r.emptyRunLabel).length : 0;
-    const blockH = OP_ROW_H * rowCount + EMPTY_RUN_ROW_H * emptyRunCount;  // グループ行廃止: 1行統合
+    // 要件No.11: 到着指定日時ラベルを持つ行の分だけ高さを加算
+    const plannedCount = rows ? rows.filter(r => !!r.plannedTimeLabel).length : 0;
+    const blockH = OP_ROW_H * rowCount + EMPTY_RUN_ROW_H * emptyRunCount + PLANNED_ROW_H * plannedCount;  // グループ行廃止: 1行統合
     if (y + blockH > PAGE_H - 12) {
       pages++;
       y = MARGIN_T + TITLE_H + HEADER_H + COL_HEADER_H;
@@ -578,10 +582,20 @@ function drawOperationRowsAll(
     // 全行数 = rows.length（グループ行は廃止、1行目に統合）
     // 要件No.10: 空車区間ラベルを持つ行の分だけ高さを加算
     const emptyRunCountInTrip = rows.filter(r => !!r.emptyRunLabel).length;
-    const totalH = OP_ROW_H * rows.length + EMPTY_RUN_ROW_H * emptyRunCountInTrip;
+    // 要件No.11: 到着指定日時ラベルを持つ行の分だけ高さを加算
+    const plannedCountInTrip = rows.filter(r => !!r.plannedTimeLabel).length;
+    const totalH = OP_ROW_H * rows.length + EMPTY_RUN_ROW_H * emptyRunCountInTrip + PLANNED_ROW_H * plannedCountInTrip;
     if (needBreak(totalH)) doPageBreak();
 
     rows.forEach((row, rowIdx) => {
+      // 要件No.11: 到着指定日時ラベル行（積込・荷降のいずれかにplannedTimeがある場合）
+      if (row.plannedTimeLabel) {
+        if (needBreak(PLANNED_ROW_H)) doPageBreak();
+        cell(doc, x, y, CONTENT_W, PLANNED_ROW_H, `📅 ${row.plannedTimeLabel}`, {
+          font: fontN, fontSize: 6.5, align: 'left', pad: 4, bg: '#EFF6FF', textColor: '#1D4ED8',
+        });
+        y += PLANNED_ROW_H;
+      }
       // 要件No.10: 空車区間ラベル行（この時刻行の積込開始より前に空車移動があった場合）
       if (row.emptyRunLabel) {
         if (needBreak(EMPTY_RUN_ROW_H)) doPageBreak();
