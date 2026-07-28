@@ -244,3 +244,8 @@ ecosystem.config.js
 
 # 一時修正スクリプト
 fix_*.py
+
+# IP変更作業などで生成される一時ファイル・バックアップ（絶対にコミットしない）
+*.env.bak_*
+apply_*.py
+fix_*.py
