@@ -1263,7 +1263,11 @@ export class MobileController {
         limit: Number(req.query.limit) || 100  // ✅ 修正: デフォルト100件（モバイル車両選択用）
       };
 
-      const filter: VehicleFilter = {
+      // ✅ 修正: VehicleFilter型注釈を外す（vehicleService.ts側はPaginationQuery込みの
+      // 拡張版VehicleFilterをローカル定義しており、素のVehicleFilter型にはpage/limitが
+      // 無いため過剰プロパティチェックでエラーになる。変数として渡す分には構造的型付けで
+      // 問題ないため、ここでは型推論に任せる）
+      const filter = {
         status: req.query.status ? [req.query.status as string] as any[] : undefined,
         manufacturer: req.query.search as string,
         page: paginationQuery.page,   // ✅ 修正: pageをfilterに渡す
