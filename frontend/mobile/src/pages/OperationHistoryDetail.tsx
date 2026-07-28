@@ -108,6 +108,11 @@ const ACTIVITY_LABELS: Record<string, { label: string; color: string; icon: stri
   BREAK_END: { label: '休憩終了', color: 'text-purple-700 bg-purple-50', icon: '☕' },
   FUEL: { label: '給油', color: 'text-orange-700 bg-orange-50', icon: '⛽' },
   FUELING: { label: '給油', color: 'text-orange-700 bg-orange-50', icon: '⛽' },
+  WAITING: { label: '待機', color: 'text-gray-700 bg-gray-50', icon: '⏳' },
+  WAITING_START: { label: '待機開始', color: 'text-gray-700 bg-gray-50', icon: '⏳' },
+  WAITING_END: { label: '待機終了', color: 'text-gray-600 bg-gray-50', icon: '⏳' },
+  CARGO_WORK_START: { label: '荷役開始', color: 'text-indigo-800 bg-indigo-50', icon: '🧰' },
+  CARGO_WORK_END: { label: '荷役終了', color: 'text-indigo-700 bg-indigo-50', icon: '🧰' },
 };
 
 // =====================================

@@ -338,6 +338,10 @@ const ACTIVITY_CONFIG: Record<string, {
   BREAK:              { label: '休憩 編集', color: '#6A1B9A', colorLight: '#9C27B0', badge: '休憩',      bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' },
   BREAK_START:        { label: '休憩 編集', color: '#6A1B9A', colorLight: '#9C27B0', badge: '休憩開始',  bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' },
   BREAK_END:          { label: '休憩 編集', color: '#6A1B9A', colorLight: '#9C27B0', badge: '休憩終了',  bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' },
+  WAITING_START:      { label: '待機 編集', color: '#4B5563', colorLight: '#9CA3AF', badge: '待機開始',  bannerBg: '#F3F4F6', bannerText: '#374151', bannerBorder: '#9CA3AF' },
+  WAITING_END:        { label: '待機 編集', color: '#4B5563', colorLight: '#9CA3AF', badge: '待機終了',  bannerBg: '#F3F4F6', bannerText: '#374151', bannerBorder: '#9CA3AF' },
+  CARGO_WORK_START:   { label: '荷役 編集', color: '#1565C0', colorLight: '#2196F3', badge: '荷役開始',  bannerBg: '#E3F2FD', bannerText: '#1565C0', bannerBorder: '#2196F3' },
+  CARGO_WORK_END:     { label: '荷役 編集', color: '#1565C0', colorLight: '#2196F3', badge: '荷役終了',  bannerBg: '#E3F2FD', bannerText: '#1565C0', bannerBorder: '#2196F3' },
 };
 
 const getCfg = (t: string) => ACTIVITY_CONFIG[t] || { label: '編集', color: '#5048b8', colorLight: '#7c6de0', badge: t, bannerBg: '#F3E5F5', bannerText: '#6A1B9A', bannerBorder: '#9C27B0' };

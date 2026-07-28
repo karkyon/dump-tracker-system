@@ -232,6 +232,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
           FUEL:                { short: '油', full: '給油',       color: '#FF9800' },
           TRANSPORTING:        { short: '運', full: '輸送中',     color: '#2196F3' },
           WAITING:             { short: '待', full: '待機中',     color: '#9C27B0' },
+          WAITING_START:       { short: '待', full: '待機開始',   color: '#9C27B0' },
+          WAITING_END:         { short: '待', full: '待機終了',   color: '#6A1B9A' },
+          CARGO_WORK_START:    { short: '役', full: '荷役開始',   color: '#1565C0' },
+          CARGO_WORK_END:      { short: '役', full: '荷役終了',   color: '#0D47A1' },
           GPS_LOG:             { short: '●', full: 'GPS記録',    color: '#3B82F6' },
         };
         return labels[eventType] ?? { short: '●', full: eventType, color: '#94A3B8' };
@@ -1030,6 +1034,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       MAINTENANCE: { label: 'メンテナンス', icon: <AlertCircle className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
       TRANSPORTING: { label: '運搬中', icon: <Navigation className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-800' },
       WAITING: { label: '待機', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      WAITING_START: { label: '待機開始', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      WAITING_END: { label: '待機終了', icon: <Clock className="w-5 h-5" />, className: 'bg-gray-100 text-gray-800' },
+      CARGO_WORK_START: { label: '荷役開始', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
+      CARGO_WORK_END: { label: '荷役終了', icon: <Truck className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-800' },
       TRIP_START: { label: '運行開始', icon: <Play className="w-5 h-5" />, className: 'bg-green-100 text-green-800' },
       TRIP_END: { label: '運行終了', icon: <Square className="w-5 h-5" />, className: 'bg-red-100 text-red-800' },
       PRE_INSPECTION: { label: '運行前点検', icon: <ClipboardCheck className="w-5 h-5" />, className: 'bg-blue-100 text-blue-800' },

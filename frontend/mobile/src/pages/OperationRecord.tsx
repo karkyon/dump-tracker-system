@@ -1731,7 +1731,7 @@ const OperationRecord: React.FC = () => {
                 width: '100%'
               }}
             >
-              ⏱️ 休憩終了
+              ⏱️ 休憩・待機終了
             </button>
           </div>
         );
@@ -2144,9 +2144,13 @@ const OperationRecord: React.FC = () => {
                       const isF = ['FUELING', 'FUEL'].includes(act.activityType);
                       const LABELS: Record<string, string> = {
                         FUELING: '給油', FUEL: '給油',
+                        WAITING: '待機', WAITING_START: '待機開始', WAITING_END: '待機終了',
+                        CARGO_WORK_START: '荷役開始', CARGO_WORK_END: '荷役終了',
                       };
                       const ICONS: Record<string, string> = {
                         FUELING: '⛽', FUEL: '⛽',
+                        WAITING: '⏳', WAITING_START: '⏳', WAITING_END: '⏳',
+                        CARGO_WORK_START: '🧰', CARGO_WORK_END: '🧰',
                       };
                       const label = LABELS[act.activityType] || act.activityType;
                       const icon = ICONS[act.activityType] || '•';
@@ -2218,14 +2222,15 @@ const OperationRecord: React.FC = () => {
             onClick={handleBreakStart}
             disabled={isSubmitting || operation.phase === 'BREAK'}
             style={{
-              padding: '20px 12px',
-              fontSize: '16px',
+              padding: '20px 4px',
+              fontSize: '13px',
               fontWeight: 'bold',
               color: 'white',
               background: operation.phase === 'BREAK' ? '#ccc' : '#9C27B0',
               border: 'none',
               borderRadius: '10px',
-              cursor: operation.phase === 'BREAK' ? 'not-allowed' : 'pointer'
+              cursor: operation.phase === 'BREAK' ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap'
             }}
           >
             ☕ 休憩・待機

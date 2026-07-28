@@ -271,6 +271,8 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   TRIP_START: '運行開始', TRIP_END: '運行終了',
   PRE_INSPECTION: '運行前点検', POST_INSPECTION: '運行後点検',
   TRANSPORTING: '運搬中', WAITING: '待機',
+  WAITING_START: '待機開始', WAITING_END: '待機終了',
+  CARGO_WORK_START: '荷役開始', CARGO_WORK_END: '荷役終了',
 };
 
 export const isLoadEvt  = (t: string) => ['LOADING','LOADING_ARRIVED','LOADING_COMPLETED'].includes(t);
