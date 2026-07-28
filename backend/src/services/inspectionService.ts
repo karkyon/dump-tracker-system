@@ -1055,19 +1055,33 @@ export class InspectionService {
             savedCount: data.results.length
           });
 
-          // 不合格項目数を集計してdefectsFoundを更新
+          // 不合格項目数を集計
           const failedCount = data.results.filter((r: InspectionItemResultInput) => r.isPassed === false).length;
-          if (failedCount > 0) {
-            await this.prisma.inspectionRecord.update({
-              where: { id: createdRecord.id },
-              data: { defectsFound: failedCount }
-            });
 
-            logger.info('📊 defectsFound更新完了', {
-              recordId: createdRecord.id,
+          // ✅ inspection_records.status不具合修正（2026-07-28調査・対応）:
+          // モバイル側（PreDepartureInspection.tsx / PostTripInspection.tsx）は
+          // 点検結果を全件含めて createInspectionRecord() を1回呼ぶだけの設計であり、
+          // completeInspection() 相当の完了APIを別途呼び出すフローが存在しない。
+          // そのため旧実装ではstatus/completedAtが更新されず、
+          // 項目結果は保存されているのにstatus=PENDING固定・completedAt=nullの
+          // まま残り続けていた。
+          // → 結果保存が完了した時点を「点検完了」とみなし、まとめて更新する。
+          const completedRecord = await this.prisma.inspectionRecord.update({
+            where: { id: createdRecord.id },
+            data: {
+              status: InspectionStatus.COMPLETED,
+              completedAt: new Date(),
+              overallResult: failedCount === 0,
               defectsFound: failedCount
-            });
-          }
+            }
+          });
+          Object.assign(createdRecord, completedRecord);
+
+          logger.info('✅ [InspectionService] 点検記録を完了状態に更新', {
+            recordId: createdRecord.id,
+            status: 'COMPLETED',
+            defectsFound: failedCount
+          });
 
         } catch (resultError) {
           logger.error('❌ 点検項目結果の保存エラー', {
