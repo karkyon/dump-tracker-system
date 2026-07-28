@@ -117,7 +117,7 @@ export const MAP_CONFIG = {
 
 export const API_CONFIG = {
   // ベースURL
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://10.1.119.244:8000/api/v1',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.12:8000/api/v1',
   
   // ✅ 修正: タイムアウト（ミリ秒） 30秒→60秒
   // 理由: バックエンドの処理が重い場合に対応

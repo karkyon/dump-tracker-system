@@ -93,7 +93,7 @@ dump-tracker/
 
 | 環境 | Mobile | CMS | Backend |
 |------|--------|-----|---------|
-| 開発 (omega-dev) | `https://10.1.119.244:3002` | `https://10.1.119.244:3001` | `https://10.1.119.244:8443` |
+| 開発 (omega-dev) | `https://192.168.1.12:3002` | `https://192.168.1.12:3001` | `https://192.168.1.12:8443` |
 | Staging | `https://dumptracker-s.ddns.net` | `https://dumptracker-s.ddns.net:3003` | nginx プロキシ経由 |
 | Production | `https://dumptracker.ddns.net` | `https://dumptracker.ddns.net:3003` | nginx プロキシ経由 |
 
@@ -107,7 +107,7 @@ dump-tracker/
 
 | 環境 | `connect-src` に含まれる主なオリジン |
 |------|--------------------------------------|
-| 開発 | `https://10.1.119.244:8443`, `https://localhost:3001`, `https://localhost:3002` |
+| 開発 | `https://192.168.1.12:8443`, `https://localhost:3001`, `https://localhost:3002` |
 | Staging | `https://dumptracker-s.ddns.net` |
 | Production | `https://dumptracker.ddns.net` ← 以前は未追加でログイン不可だった |
 | 共通 | `https://maps.googleapis.com`, `https://tlog-apex.ddns.net`, `wss:` |
@@ -131,7 +131,7 @@ CSP `<meta>` タグなし。バックエンドの helmet が `connectSrc: ['http
 ### アクセス
 
 ```
-https://10.1.119.244:3001/dev/data-cleanup
+https://192.168.1.12:3001/dev/data-cleanup
 ```
 
 ### 機能

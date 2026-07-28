@@ -10,7 +10,7 @@ const handleCertificateError = () => {
   console.log('🔧 解決方法:');
   console.log('1. ブラウザで https://dumptracker-s.ddns.net に直接アクセス');
   console.log('2. 「詳細設定」をクリック');
-  console.log('3. 「10.1.119.244に進む（安全ではありません）」をクリック');
+  console.log('3. 「192.168.1.12に進む（安全ではありません）」をクリック');
   console.log('4. 証明書を信頼させる');
 };
 

@@ -20,12 +20,12 @@ export default defineConfig({
     } : undefined,
     proxy: {
       '/api/v1': {
-        target: 'https://10.1.119.244:8443',
+        target: 'https://192.168.1.12:8443',
         changeOrigin: true,
         secure: false,
       },
       '/uploads': {
-        target: 'https://10.1.119.244:8443',
+        target: 'https://192.168.1.12:8443',
         changeOrigin: true,
         secure: false,
       },

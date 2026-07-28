@@ -21,7 +21,7 @@ window.addEventListener('error', (event) => {
   if (event.error?.message?.includes('certificate')) {
     console.log('🔐 証明書エラーが検出されました');
     console.log('💡 解決方法:');
-    console.log('1. ブラウザでバックエンドURL (https://10.1.119.244:8443) にアクセス');
+    console.log('1. ブラウザでバックエンドURL (https://192.168.1.12:8443) にアクセス');
     console.log('2. 「詳細設定」→「安全でないサイトに進む」をクリック');
     console.log('3. ページをリロード');
   }

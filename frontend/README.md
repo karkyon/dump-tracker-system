@@ -112,7 +112,7 @@ npm install
 
 ```bash
 # バックエンドAPIのベースURL
-VITE_API_BASE_URL=http://10.1.119.244:8000/api/v1
+VITE_API_BASE_URL=http://192.168.1.12:8000/api/v1
 
 # Google Maps API キー (実際のキーに置き換え)
 VITE_GOOGLE_MAPS_API_KEY=YOUR_ACTUAL_API_KEY

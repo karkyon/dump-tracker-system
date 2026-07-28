@@ -111,7 +111,7 @@ const VehicleInfo: React.FC = () => {
       console.log('📡 API Base URL:', import.meta.env.VITE_API_BASE_URL);
       
       // ✅ 修正: axiosを直接使用してAPIを呼び出す
-      const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://10.1.119.244:8443/api/v1';
+      const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://192.168.1.12:8443/api/v1';
       const token = apiService.getToken();
       
       const axiosInstance = axios.create({

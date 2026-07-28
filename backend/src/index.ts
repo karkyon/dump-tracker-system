@@ -103,7 +103,7 @@ class ServerManager {
         });
         logger.warn('⚠️ 証明書を生成してください:');
         logger.warn('   cd backend && mkdir -p .cert');
-        logger.warn('   mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost-cert.pem localhost 127.0.0.1 10.1.119.244 ::1');
+        logger.warn('   mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost-cert.pem localhost 127.0.0.1 192.168.1.12 ::1');
         logger.warn('⚠️ HTTPモードで起動します');
         (this as any).useHttps = false;
         return;
@@ -324,7 +324,7 @@ class ServerManager {
       console.log('⚠️  HTTP起動 - GPS機能は localhost のみで動作可能');
       console.log('💡 HTTPS化するには:');
       console.log('   cd backend && mkdir -p .cert');
-      console.log('   mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost-cert.pem localhost 127.0.0.1 10.1.119.244 ::1');
+      console.log('   mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost-cert.pem localhost 127.0.0.1 192.168.1.12 ::1');
     }
 
     console.log('='.repeat(70) + '\n');
@@ -451,7 +451,7 @@ export default ServerManager;
  * 【使用方法】
  * 1. 証明書生成:
  *    cd backend && mkdir -p .cert
- *    mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost-cert.pem localhost 127.0.0.1 10.1.119.244 ::1
+ *    mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost-cert.pem localhost 127.0.0.1 192.168.1.12 ::1
  *
  * 2. 環境変数設定(.env):
  *    PORT=8000
@@ -463,6 +463,6 @@ export default ServerManager;
  *    npm run dev
  *
  * 【アクセスURL】
- * - HTTPS(推奨): https://10.1.119.244:8443/api/v1
- * - HTTP(自動リダイレクト): http://10.1.119.244:8000/api/v1
+ * - HTTPS(推奨): https://192.168.1.12:8443/api/v1
+ * - HTTP(自動リダイレクト): http://192.168.1.12:8000/api/v1
  */

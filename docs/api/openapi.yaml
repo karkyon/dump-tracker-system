@@ -22,7 +22,7 @@ info:
 servers:
   - url: http://localhost:8000/api/v1
     description: 開発環境
-  - url: http://10.1.119.244:8000/api/v1
+  - url: http://192.168.1.12:8000/api/v1
     description: ステージング環境
 
 security:
