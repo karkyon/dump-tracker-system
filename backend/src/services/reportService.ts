@@ -514,8 +514,14 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
 
   // ---------- Pass2: グループ化 ----------
   // グループキー: 客先名|積込場所|荷降場所|品目名
-  const groupMap = new Map<string, any>();
-  const groupOrder: string[] = [];
+  // ✅ 修正(2026-07-28): 同一キーでも時系列で連続していない場合は
+  //    別グループとして分割する。間に別キーの運行が挟まっている状態で
+  //    Mapによるグローバルなキー統合を行うと、そのキーの行が全て
+  //    1ブロックにまとめられて描画順が時系列を無視してしまい、
+  //    挟まっていた運行との間にあるはずの空車移動ラベルの表示位置が
+  //    ズレて事実上表示されなくなる不具合があった。
+  const groups: any[] = [];
+  let lastGroupKey: string | null = null;
 
   // 要件No.10: 空車区間検出用。直前サイクルの荷降完了時刻をrawCycles全体で時系列追跡
   //    （荷降完了→次の積込開始までの区間を「空車」としてPDF側に伝える）
@@ -566,13 +572,16 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
       unloadingMinutes: minutesStr(unlMin),
     };
 
-    if (groupMap.has(key)) {
-      const g = groupMap.get(key)!;
+    // ✅ 修正: 「直前に追加されたグループと同じキーか」でのみ統合する。
+    //    同じキーが時系列上で非連続に再出現した場合は新しいグループとして
+    //    分割することで、groups配列がrawCyclesと同じ時系列順を保つ。
+    if (lastGroupKey === key && groups.length > 0) {
+      const g = groups[groups.length - 1];
       g.vehicleCount++;
       g.totalTons += c.quantityTons;
       g.rows.push(timeRow);
     } else {
-      groupMap.set(key, {
+      groups.push({
         contractorName:    c.contractorName,
         loadingLocation:   c.loadingLocation,
         unloadingLocation: c.unloadingLocation,
@@ -590,12 +599,13 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         unloadingEndTime:    c.unloadingEnd,
         unloadingDuration:   minutesStr(unlMin),
       });
-      groupOrder.push(key);
     }
+    lastGroupKey = key;
   }
 
-  const result = groupOrder.map(k => {
-    const g = groupMap.get(k)!;
+  // ✅ 修正: groups は Pass2 ループ内で既に時系列順にpushされているため、
+  //    そのままの配列順が正しい描画順（= 空車移動ラベルの表示位置も正しくなる）
+  const result = groups.map(g => {
     g.quantityTons = g.totalTons;  // 後方互換: quantityTons = 合計
     return g;
   });
