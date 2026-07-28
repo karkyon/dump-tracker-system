@@ -9,6 +9,9 @@ const keyFile = path.join(certDir, 'localhost-key.pem')
 const certFile = path.join(certDir, 'localhost-cert.pem')
 const hasHttps = fs.existsSync(keyFile) && fs.existsSync(certFile)
 
+// 開発用プロキシ先。IPアドレスのハードコードを避け、環境変数 or localhost にフォールバック
+const devBackendTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://localhost:8443'
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -20,12 +23,12 @@ export default defineConfig({
     } : undefined,
     proxy: {
       '/api/v1': {
-        target: 'https://192.168.1.12:8443',
+        target: devBackendTarget,
         changeOrigin: true,
         secure: false,
       },
       '/uploads': {
-        target: 'https://192.168.1.12:8443',
+        target: devBackendTarget,
         changeOrigin: true,
         secure: false,
       },

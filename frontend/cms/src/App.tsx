@@ -50,7 +50,7 @@ class ErrorBoundary extends React.Component<
     if (error.message.includes('certificate') || error.message.includes('ERR_CERT_AUTHORITY_INVALID')) {
       console.log('🔐 HTTPS証明書エラーが検出されました');
       console.log('🔧 解決手順:');
-      console.log('1. https://dumptracker-s.ddns.net に直接アクセス');
+      console.log(`1. ${window.location.origin} に直接アクセス`);
       console.log('2. 証明書の警告を許可');
       console.log('3. ページを再読み込み');
     }
@@ -73,7 +73,7 @@ class ErrorBoundary extends React.Component<
               </p>
               <div className="space-y-2">
                 <button
-                  onClick={() => window.location.href = 'https://dumptracker-s.ddns.net'}
+                  onClick={() => window.location.href = window.location.origin}
                   className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
                 >
                   バックエンドで証明書を信頼
@@ -129,7 +129,7 @@ const NetworkError: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
         </p>
         <div className="space-y-2">
           <a
-            href="https://dumptracker-s.ddns.net"
+            href={window.location.origin}
             target="_blank"
             rel="noopener noreferrer"
             className="block w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"

@@ -7,6 +7,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'fs';
 import path from 'path';
 
+// 開発用プロキシ先。IPアドレスのハードコードを避け、環境変数 or localhost にフォールバック
+const devBackendTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://localhost:8443';
+
 export default defineConfig({
   plugins: [
     react(),
@@ -84,7 +87,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'https://192.168.1.12:8443',
+        target: devBackendTarget,
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '/api/v1'),

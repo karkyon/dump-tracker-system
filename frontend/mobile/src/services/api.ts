@@ -245,7 +245,7 @@ class APIServiceClass {
 
   constructor() {
     // ✅ HTTPSに修正（デフォルト値も含む）
-    const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://192.168.1.12:8443/api/v1';
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
     
     console.log('🔧 API Service初期化:', {
       baseURL,

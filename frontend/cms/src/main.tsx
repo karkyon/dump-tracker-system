@@ -6,11 +6,12 @@ import './index.css';
 
 // HTTPS証明書エラーハンドリング
 const handleCertificateError = () => {
+  // IP/ドメインのハードコードを廃止し、現在アクセス中のオリジンを動的に案内
   console.warn('⚠️ HTTPS証明書の警告が表示される場合があります');
   console.log('🔧 解決方法:');
-  console.log('1. ブラウザで https://dumptracker-s.ddns.net に直接アクセス');
+  console.log(`1. ブラウザで ${window.location.origin} に直接アクセス`);
   console.log('2. 「詳細設定」をクリック');
-  console.log('3. 「192.168.1.12に進む（安全ではありません）」をクリック');
+  console.log(`3. 「${window.location.hostname}に進む（安全ではありません）」をクリック`);
   console.log('4. 証明書を信頼させる');
 };
 

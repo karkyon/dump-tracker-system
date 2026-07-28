@@ -19,9 +19,14 @@ window.addEventListener('error', (event) => {
   
   // 証明書エラーの処理
   if (event.error?.message?.includes('certificate')) {
+    // IPアドレスのハードコードを廃止し、実際の接続先から動的に算出
+    const apiOrigin = (() => {
+      try { return new URL(import.meta.env.VITE_API_BASE_URL, window.location.origin).origin; }
+      catch { return window.location.origin; }
+    })();
     console.log('🔐 証明書エラーが検出されました');
     console.log('💡 解決方法:');
-    console.log('1. ブラウザでバックエンドURL (https://192.168.1.12:8443) にアクセス');
+    console.log(`1. ブラウザでバックエンドURL (${apiOrigin}) にアクセス`);
     console.log('2. 「詳細設定」→「安全でないサイトに進む」をクリック');
     console.log('3. ページをリロード');
   }

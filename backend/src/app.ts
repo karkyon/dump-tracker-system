@@ -82,7 +82,7 @@ export class ExpressApp {
 
     // 🎯 環境変数から正確に設定を読み取る
     this.PORT = parseInt(process.env.PORT || '8000', 10);
-    this.HOST = process.env.HOST || '192.168.1.12';
+    this.HOST = process.env.HOST || 'localhost';
     this.useHttps = process.env.USE_HTTPS === 'true';
     this.PROTOCOL = this.useHttps ? 'https' : 'http';
 
