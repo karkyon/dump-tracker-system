@@ -526,6 +526,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
   // 要件No.10: 空車区間検出用。直前サイクルの荷降完了時刻をrawCycles全体で時系列追跡
   //    （荷降完了→次の積込開始までの区間を「空車」としてPDF側に伝える）
   let prevUnloadEndForEmptyRun: string = '';
+  // ✅ 追加: 空車移動時間合計（休憩時間合計と同様にPDFの給油欄へ表示するため）
+  let totalEmptyRunMinutesAcc = 0;
 
   for (let i = 0; i < rawCycles.length; i++) {
     const c = rawCycles[i]!;
@@ -547,6 +549,7 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
       const emptyRunMin = subtractBreakOverlap(prevUnloadEndForEmptyRun, c.loadingStart, emptyRunRaw);
       if (emptyRunMin > 0 && emptyRunMin < 12 * 60) {
         emptyRunLabel = `空車移動: ${prevUnloadEndForEmptyRun}〜${c.loadingStart}（${emptyRunMin}分）`;
+        totalEmptyRunMinutesAcc += emptyRunMin;
       }
     }
     if (c.unloadingEnd) prevUnloadEndForEmptyRun = c.unloadingEnd;
@@ -570,6 +573,10 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
       emptyRunLabel,     // 要件No.10: 空車区間ラベル（空文字なら非表示）
       plannedTimeLabel,  // 要件No.11: 到着指定日時ラベル（空文字なら非表示）
       unloadingMinutes: minutesStr(unlMin),
+      // ✅ 追加: 台数・トン数・積付状況はグループ化で省略せず行ごとに表示するため、
+      //    このサイクル単体の値を保持する（1サイクル=1回の積込・荷降=1台扱い）
+      vehicleCount: 1,
+      quantityTons: c.quantityTons,
     };
 
     // ✅ 修正: 「直前に追加されたグループと同じキーか」でのみ統合する。
@@ -609,6 +616,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     g.quantityTons = g.totalTons;  // 後方互換: quantityTons = 合計
     return g;
   });
+  // ✅ 追加: 空車移動時間合計を呼び出し元(ReportService)に伝えるため配列に付与
+  (result as any).totalEmptyRunMinutes = totalEmptyRunMinutesAcc;
 
   return result;
 }
@@ -1848,6 +1857,13 @@ class ReportService {
       }));
     });
     const cycles = buildTripCycles(allDetailsList);
+    // ✅ 追加: 空車移動時間合計（休憩時間合計と同じ書式でPDFの給油欄に表示するため）
+    const totalEmptyRunMinutes = (cycles as any).totalEmptyRunMinutes ?? 0;
+    const totalEmptyRunTime = totalEmptyRunMinutes > 0
+      ? (totalEmptyRunMinutes >= 60
+          ? `${Math.floor(totalEmptyRunMinutes / 60)}時間${String(totalEmptyRunMinutes % 60).padStart(2, '0')}分`
+          : `${totalEmptyRunMinutes}分`)
+      : '';
     // BUG-053修正: デバッグログ（operations/cycles が空の場合の原因特定用）
     logger.info('[ReportService] generateDailyOperationPDF debug', {
       operationsCount: operations.length,
@@ -2047,6 +2063,7 @@ class ReportService {
       fuelLiters,
       fuelOdometerKm,
       totalBreakTime,  // 🆕 休憩時間合計
+      totalEmptyRunTime,  // ✅ 追加: 空車移動時間合計
       oilLiters: '',
       hasGrease: false,
       hasPuncture: false,

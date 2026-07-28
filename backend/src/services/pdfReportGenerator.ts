@@ -83,6 +83,8 @@ export interface TripTimeRow {
   unloadingMinutes: string;
   emptyRunLabel?: string;  // 要件No.10: 空車区間ラベル（この行の積込開始より前の空車移動を示す。空文字/undefinedなら非表示）
   plannedTimeLabel?: string;  // 要件No.11: 到着指定日時（計画時刻）ラベル（空文字/undefinedなら非表示）
+  vehicleCount?: number;   // ✅ 追加: この行(1サイクル)単体の台数。グループ化で省略せず行ごとに表示するため
+  quantityTons?: number;   // ✅ 追加: この行(1サイクル)単体のトン数
 }
 
 /** 1グループ（同一客先+積込場所+荷降場所+品目）の記録 */
@@ -146,6 +148,7 @@ export interface DailyDriverReportData {
   fuelLiters: string;             // 給油量 (L)
   fuelOdometerKm: string;         // 給油時キロ (km)
   totalBreakTime: string;         // 🆕 休憩時間合計（例: "1時間20分" / "45分"）
+  totalEmptyRunTime: string;      // ✅ 追加: 空車移動時間合計（休憩時間合計と同じ書式）
   oilLiters: string;              // オイル (L)
   hasGrease: boolean;             // グリス
   hasPuncture: boolean;           // パンク
@@ -609,24 +612,31 @@ function drawOperationRowsAll(
       const ry = y;
       const rh = OP_ROW_H;
 
-      // 1行目: 客先名・場所・品名・台数・トン数・積付を表示
-      // 2行目以降: 左側は空欄
+      // 客先名・積込場所・荷降場所・品名は1行目のみ表示（同一グループのため省略）
+      // ✅ 修正: 台数・トン数・積付状況はグループ化で省略せず行ごとに表示する
       if (rowIdx === 0) {
         cell(doc, cx, ry, COL_CONTRACTOR, rh, trip.contractorName,   { ...fLeft }); cx += COL_CONTRACTOR;
         cell(doc, cx, ry, COL_LOADING,    rh, trip.loadingLocation,   { ...fLeft }); cx += COL_LOADING;
         cell(doc, cx, ry, COL_UNLOADING,  rh, trip.unloadingLocation, { ...fLeft }); cx += COL_UNLOADING;
         cell(doc, cx, ry, COL_ITEM,       rh, trip.itemName,          { ...fLeft, wrap: true }); cx += COL_ITEM;
-        cell(doc, cx, ry, COL_COUNT,      rh, trip.vehicleCount > 0 ? String(trip.vehicleCount) : '', fOpt); cx += COL_COUNT;
-        cell(doc, cx, ry, COL_TONS,       rh, trip.quantityTons > 0  ? String(trip.quantityTons)  : '', fOpt); cx += COL_TONS;
-        cell(doc, cx, ry, COL_CONDITION,  rh, '○', fOpt); cx += COL_CONDITION;
       } else {
         cell(doc, cx, ry, COL_CONTRACTOR, rh, ''); cx += COL_CONTRACTOR;
         cell(doc, cx, ry, COL_LOADING,    rh, ''); cx += COL_LOADING;
         cell(doc, cx, ry, COL_UNLOADING,  rh, ''); cx += COL_UNLOADING;
         cell(doc, cx, ry, COL_ITEM,       rh, ''); cx += COL_ITEM;
-        cell(doc, cx, ry, COL_COUNT,      rh, ''); cx += COL_COUNT;
-        cell(doc, cx, ry, COL_TONS,       rh, ''); cx += COL_TONS;
-        cell(doc, cx, ry, COL_CONDITION,  rh, ''); cx += COL_CONDITION;
+      }
+      {
+        // ✅ 修正: 台数・トン数は行ごとの実データを表示する
+        //    （rows側にデータが無い旧データ経路のみ、1行目に限りtrip集計値へフォールバック）
+        const rowVehicleCount = (row.vehicleCount != null && row.vehicleCount > 0)
+          ? row.vehicleCount
+          : (rowIdx === 0 ? trip.vehicleCount : 0);
+        const rowTons = (row.quantityTons != null && row.quantityTons > 0)
+          ? row.quantityTons
+          : (rowIdx === 0 ? trip.quantityTons : 0);
+        cell(doc, cx, ry, COL_COUNT,      rh, rowVehicleCount > 0 ? String(rowVehicleCount) : '', fOpt); cx += COL_COUNT;
+        cell(doc, cx, ry, COL_TONS,       rh, rowTons > 0 ? String(rowTons) : '', fOpt); cx += COL_TONS;
+        cell(doc, cx, ry, COL_CONDITION,  rh, '○', fOpt); cx += COL_CONDITION;
       }
 
       // 時刻データ（全行共通）
@@ -798,21 +808,39 @@ function drawFuelSection(
   const tireValW = 28;
   cell(doc, cx, y, tireValW, rowH, data.hasTireWear ? 'レ' : '', fVal); cx += tireValW;
 
-  // ── 給油エリアの残りスペース: 休憩時間合計を表示 ──
+  // ── 給油エリアの残りスペース: 休憩時間合計・空車移動時間合計を表示 ──
   const usedFuelW = cx - x;
   const remainingFuelW = fuelAreaW - usedFuelW;
   if (remainingFuelW > 0) {
-    const breakLblW = Math.min(58, Math.floor(remainingFuelW * 0.55));
-    const breakValW = remainingFuelW - breakLblW;
+    const halfRemainW  = Math.floor(remainingFuelW / 2);
+    const halfRemainW2 = remainingFuelW - halfRemainW;
+
+    // 休憩時間合計
+    const breakLblW = Math.min(50, Math.floor(halfRemainW * 0.55));
+    const breakValW = halfRemainW - breakLblW;
     if (breakLblW > 10 && breakValW > 5) {
       cell(doc, cx, y, breakLblW, rowH, '休憩時間合計', { ...fLabel, fontSize: 6.5 });
       cx += breakLblW;
       cell(doc, cx, y, breakValW, rowH, data.totalBreakTime || '', fVal);
       cx += breakValW;
     } else {
-      cell(doc, cx, y, remainingFuelW, rowH, '');
-      cx += remainingFuelW;
+      cell(doc, cx, y, halfRemainW, rowH, '');
+      cx += halfRemainW;
     }
+
+    // ✅ 追加: 空車移動時間合計（休憩時間合計と同じスタイル）
+    const emptyRunLblW = Math.min(66, Math.floor(halfRemainW2 * 0.6));
+    const emptyRunValW = halfRemainW2 - emptyRunLblW;
+    if (emptyRunLblW > 10 && emptyRunValW > 5) {
+      cell(doc, cx, y, emptyRunLblW, rowH, '空車移動時間合計', { ...fLabel, fontSize: 6 });
+      cx += emptyRunLblW;
+      cell(doc, cx, y, emptyRunValW, rowH, data.totalEmptyRunTime || '', fVal);
+      cx += emptyRunValW;
+    } else {
+      cell(doc, cx, y, halfRemainW2, rowH, '');
+      cx += halfRemainW2;
+    }
+
     cx = x + fuelAreaW;
   }
 
