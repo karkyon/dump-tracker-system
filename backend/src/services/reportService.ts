@@ -1911,6 +1911,71 @@ class ReportService {
           : `${totalBreakMinutes}分`)
       : '';
 
+    // 要件No.17・18: 荷役作業時間合計（CARGO_WORK_START〜CARGO_WORK_ENDのペア）
+    // totalBreakMinutesと全く同じ集計パターンを踏襲
+    let totalCargoWorkMinutes = 0;
+    for (const op of operations) {
+      const sortedDetailsForCargo = [...(op.operationDetails ?? [])].sort((a: any, b: any) =>
+        (a.sequenceNumber ?? a.sequence_number ?? 0) - (b.sequenceNumber ?? b.sequence_number ?? 0)
+      );
+      let cargoStartAt: Date | null = null;
+      for (const d of sortedDetailsForCargo) {
+        const at = ((d as any).activityType ?? (d as any).activity_type ?? '').toString().toUpperCase();
+        if (at === 'CARGO_WORK_START') {
+          const st = (d as any).actualStartTime ?? (d as any).actual_start_time;
+          cargoStartAt = st ? new Date(st) : null;
+        } else if (at === 'CARGO_WORK_END') {
+          if (cargoStartAt) {
+            const endRaw = (d as any).actualStartTime ?? (d as any).actual_start_time
+                        ?? (d as any).actualEndTime   ?? (d as any).actual_end_time;
+            const endAt = endRaw ? new Date(endRaw) : null;
+            if (endAt) {
+              const diffMin = Math.round((endAt.getTime() - cargoStartAt.getTime()) / 60000);
+              if (diffMin > 0) totalCargoWorkMinutes += diffMin;
+            }
+            cargoStartAt = null;
+          }
+        }
+      }
+    }
+    const totalCargoWorkTime = totalCargoWorkMinutes > 0
+      ? (totalCargoWorkMinutes >= 60
+          ? `${Math.floor(totalCargoWorkMinutes / 60)}時間${String(totalCargoWorkMinutes % 60).padStart(2, '0')}分`
+          : `${totalCargoWorkMinutes}分`)
+      : '';
+
+    // 要件No.15・16: 待機時間合計（WAITING_START〜WAITING_ENDのペア）
+    let totalWaitingMinutes = 0;
+    for (const op of operations) {
+      const sortedDetailsForWaiting = [...(op.operationDetails ?? [])].sort((a: any, b: any) =>
+        (a.sequenceNumber ?? a.sequence_number ?? 0) - (b.sequenceNumber ?? b.sequence_number ?? 0)
+      );
+      let waitStartAt: Date | null = null;
+      for (const d of sortedDetailsForWaiting) {
+        const at = ((d as any).activityType ?? (d as any).activity_type ?? '').toString().toUpperCase();
+        if (at === 'WAITING_START') {
+          const st = (d as any).actualStartTime ?? (d as any).actual_start_time;
+          waitStartAt = st ? new Date(st) : null;
+        } else if (at === 'WAITING_END') {
+          if (waitStartAt) {
+            const endRaw = (d as any).actualStartTime ?? (d as any).actual_start_time
+                        ?? (d as any).actualEndTime   ?? (d as any).actual_end_time;
+            const endAt = endRaw ? new Date(endRaw) : null;
+            if (endAt) {
+              const diffMin = Math.round((endAt.getTime() - waitStartAt.getTime()) / 60000);
+              if (diffMin > 0) totalWaitingMinutes += diffMin;
+            }
+            waitStartAt = null;
+          }
+        }
+      }
+    }
+    const totalWaitingTime = totalWaitingMinutes > 0
+      ? (totalWaitingMinutes >= 60
+          ? `${Math.floor(totalWaitingMinutes / 60)}時間${String(totalWaitingMinutes % 60).padStart(2, '0')}分`
+          : `${totalWaitingMinutes}分`)
+      : '';
+
     // 全inspection_records を統合
     const allInspRecords: any[] = [];
     for (const op of operations) {
@@ -1979,8 +2044,12 @@ class ReportService {
       leftInspItems: leftItems,
       middleInspItems: middleItems,
       rightInspItems: rightItems,
-      // 要件No.2: 交代運転者氏名があれば備考欄の先頭に自動で追記する
-      remarks: (firstOp as any)?.relayDriverName ? `交代運転者: ${(firstOp as any).relayDriverName}` : '',
+      // 要件No.2・15・16・17・18: 交代運転者氏名・待機時間・荷役作業時間を備考欄に自動追記
+      remarks: [
+        (firstOp as any)?.relayDriverName ? `交代運転者: ${(firstOp as any).relayDriverName}` : '',
+        totalCargoWorkTime ? `荷役作業時間合計: ${totalCargoWorkTime}` : '',
+        totalWaitingTime ? `待機時間合計: ${totalWaitingTime}` : '',
+      ].filter(Boolean).join(' / '),
     };
 
     // ===== PDF 生成 =====
