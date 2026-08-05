@@ -144,7 +144,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       console.log('📥 [Maps Loading Debug] Creating new Google Maps script tag...');
       const script = document.createElement('script');
       script.id = 'google-maps-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker,places&loading=async`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker,places,geometry&loading=async`;
       script.async = true;
       script.defer = true;
       script.onload = () => {
@@ -318,6 +318,43 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
               segStart = i;
             }
           }
+        }
+
+        // ✅ Phase2: 推定経路（Google Routes API）のポリライン重ね描画
+        if ((window as any).google?.maps?.geometry?.encoding && routeSegments.length > 0) {
+          const estimateInfoWindow = new google.maps.InfoWindow();
+          routeSegments
+            .filter(seg => seg.routePolyline && (seg.distanceSource === 'GPS_PARTIAL_ESTIMATE' || seg.distanceSource === 'FULL_ESTIMATE'))
+            .forEach(seg => {
+              try {
+                const decodedPath = (window as any).google.maps.geometry.encoding.decodePath(seg.routePolyline as string);
+                const estimatePolyline = new google.maps.Polyline({
+                  path: decodedPath,
+                  geodesic: true,
+                  strokeColor: '#F97316',
+                  strokeOpacity: 0,
+                  strokeWeight: 3,
+                  icons: [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: '#F97316', scale: 3 },
+                    offset: '0',
+                    repeat: '10px',
+                  }],
+                  map: map,
+                });
+                const sourceLabel = seg.distanceSource === 'GPS_PARTIAL_ESTIMATE'
+                  ? '一部推定（記録済みGPS地点を経由するGoogle推奨ルート）'
+                  : '全推定（Google推奨ルート）';
+                estimatePolyline.addListener('click', (e: any) => {
+                  estimateInfoWindow.setContent(
+                    `<div style="font-size:12px;line-height:1.6;">🧭 推定経路<br>区間: ${seg.fromActivityType} → ${seg.toActivityType}<br>距離: ${Number(seg.distanceKm).toFixed(2)} km<br>根拠: ${sourceLabel}</div>`
+                  );
+                  estimateInfoWindow.setPosition(e.latLng);
+                  estimateInfoWindow.open(map);
+                });
+              } catch (decodeErr) {
+                console.warn('⚠️ [Map Debug] 推定経路ポリラインのデコード失敗', decodeErr);
+              }
+            });
         }
 
         // GPS記録ポイントのインフォウィンドウ（個別マーカーはrouteGpsLogs数が多いため省略）
@@ -882,6 +919,14 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         fetchOperationActivities(),
         fetchIntegratedTimeline(operationId),
         fetchInspectionItemDetails(operationId),
+        (async () => {
+          try {
+            const res = await apiClient.get(`/route-segments/${operationId}`);
+            const d: any = res;
+            const arr = d?.data?.data ?? d?.data ?? [];
+            setRouteSegments(Array.isArray(arr) ? arr : []);
+          } catch { /* 区間距離データ取得失敗は致命的ではない（Phase1/2機能） */ }
+        })(),
         (async () => {
           try {
             const res = await apiClient.get('/items', { params: { page: 1, limit: 100 } });
