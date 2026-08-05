@@ -403,6 +403,15 @@ export class ExpressApp {
       logger.error('❌ feedbackRoutes 読み込み失敗', error);
     }
 
+    // 運行区間距離（GPS実測/Routes API推定）ルート
+    try {
+      const routeSegmentRoutes = require('./routes/routeSegmentRoutes').default || require('./routes/routeSegmentRoutes');
+      this.app.use('/api/v1/route-segments', routeSegmentRoutes);
+      logger.info('✅ 運行区間距離APIルート登録完了: /api/v1/route-segments');
+    } catch (error) {
+      logger.error('❌ routeSegmentRoutes 読み込み失敗', error);
+    }
+
     // ログビューアAPI（管理者専用）
     try {
       const logRoutes = require('./routes/logRoutes').default || require('./routes/logRoutes');
