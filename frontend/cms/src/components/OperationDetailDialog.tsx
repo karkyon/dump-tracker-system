@@ -49,6 +49,15 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
   }>>([]);
   // ✅ DB実記録件数（間引き前の総件数）
   const [totalGpsCount, setTotalGpsCount] = useState<number>(0);
+  // ✅ Phase2: 運行区間距離（GPS実測/Routes API推定）
+  const [routeSegments, setRouteSegments] = useState<Array<{
+    segmentIndex: number;
+    fromActivityType: string;
+    toActivityType: string;
+    distanceSource: string;
+    distanceKm: number;
+    routePolyline: string | null;
+  }>>([]);
 
   // ✅ タイムラインイベントからGPSポイントを抽出（地図表示用）
   const timelineGpsPoints = useMemo(() => {
@@ -913,6 +922,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       setOperationDebugTimelineEvents([]);
       setRouteGpsLogs([]);
       setTotalGpsCount(0);
+      setRouteSegments([]);
       setError(null);
       setActiveTab('basic');  // タブも基本情報に戻す
       // Google Mapsインスタンスをクリア（次の運行で再初期化させる）
