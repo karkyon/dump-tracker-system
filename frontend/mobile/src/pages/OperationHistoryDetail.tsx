@@ -646,13 +646,13 @@ type ActGroup =
                     const itemsLbl = (act.itemNames && act.itemNames.length > 0) ? act.itemNames.join('、') : act.itemName;
                     return (
                       <div key={gi} style={{ border: `2px solid ${bdr}`, borderRadius: 10, overflow: 'hidden' }}>
-                        <div style={{ background: hBg, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ background: hBg, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 13, fontWeight: 700, color: hFg }}>
                             🚛 {lbl}{g.groupNum > 1 ? `（${g.groupNum}回目）` : ''}
                           </span>
                           {/* 🆕 荷役作業トグルの表示（積込グループのみ） */}
                           {isL && (act as any).hasCargoWork && (
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#3730A3', background: '#EEF2FF', padding: '1px 6px', borderRadius: 4 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', background: '#F97316', padding: '2px 8px', borderRadius: 999, boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>
                               🔧 荷役あり
                             </span>
                           )}

@@ -2095,7 +2095,7 @@ const OperationRecord: React.FC = () => {
                               </span>
                               {/* 🆕 荷役作業トグルの表示（積込グループのみ） */}
                               {isLd && (act as any).hasCargoWork && (
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#3730A3', background: '#EEF2FF', padding: '1px 6px', borderRadius: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', background: '#F97316', padding: '2px 8px', borderRadius: 999, boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>
                                   🔧 荷役あり
                                 </span>
                               )}

@@ -357,6 +357,7 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     unloadingEnd: string;
     plannedLoadingTime: string;    // 要件No.11: 積込の到着指定時刻
     plannedUnloadingTime: string;  // 要件No.11: 荷降の到着指定時刻
+    hasCargoWork: boolean;         // 🆕 荷役作業の有無（日報の荷役列に使用）
   }
 
   const rawCycles: RawCycle[] = [];
@@ -419,6 +420,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         // 要件No.11: 積込の到着指定時刻（operation_details.planned_time）
         plannedLoadingTime: formatTime((d as any).planned_time ?? (d as any).plannedTime),
         plannedUnloadingTime: '',
+        // 🆕 荷役作業の有無（この積込レコード自身の値）
+        hasCargoWork: !!((d as any).hasCargoWork ?? (d as any).has_cargo_work),
       };
     } else if (at.startsWith('UNLOADING')) {
       // 荷降レコード（1行でactualStartTime〜actualEndTimeを保持）
@@ -449,6 +452,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
           // 要件No.11: 積込を経由しない単独荷降の到着指定時刻
           plannedLoadingTime: '',
           plannedUnloadingTime: formatTime((d as any).planned_time ?? (d as any).plannedTime),
+          // 🆕 積込を経由しない単独荷降は荷役対象外
+          hasCargoWork: false,
         });
         cur = null;
       }
@@ -578,6 +583,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
       //    このサイクル単体の値を保持する（1サイクル=1回の積込・荷降=1台扱い）
       vehicleCount: 1,
       quantityTons: c.quantityTons,
+      // 🆕 荷役作業の有無（日報の荷役列に使用）
+      hasCargoWork: c.hasCargoWork,
     };
 
     // ✅ 修正: 「直前に追加されたグループと同じキーか」でのみ統合する。

@@ -54,9 +54,10 @@ const COL_COUNT = 32;        // 台数（変更なし）
 const COL_TONS = 38;         // トン数（変更なし）
 const COL_CONDITION = 30;    // 積付状況
 const COL_MOVE = 30;         // ★ 移動時間列
+const COL_CARGO = 26;        // 🆕 荷役作業の有無（積込のみ、○表示）
 // D対応: 積み込み時間列（残り幅 = 約221pt, 3等分 ≈ 73.6pt/sub-col）
 const COL_TIME = CONTENT_W - COL_CONTRACTOR - COL_LOADING - COL_UNLOADING
-               - COL_ITEM - COL_COUNT - COL_TONS - COL_CONDITION;
+               - COL_ITEM - COL_COUNT - COL_TONS - COL_CONDITION - COL_CARGO;
 
 // 点検表（3列）
 const INSP_GROUP_W = Math.floor(CONTENT_W / 3);   // ≈ 270
@@ -85,6 +86,7 @@ export interface TripTimeRow {
   plannedTimeLabel?: string;  // 要件No.11: 到着指定日時（計画時刻）ラベル（空文字/undefinedなら非表示）
   vehicleCount?: number;   // ✅ 追加: この行(1サイクル)単体の台数。グループ化で省略せず行ごとに表示するため
   quantityTons?: number;   // ✅ 追加: この行(1サイクル)単体のトン数
+  hasCargoWork?: boolean;  // 🆕 荷役作業の有無（日報の荷役列に○表示するため）
 }
 
 /** 1グループ（同一客先+積込場所+荷降場所+品目）の記録 */
@@ -460,6 +462,7 @@ function drawOperationColHeaders(
   cell(doc, cx, y, COL_COUNT,      h, '台数',     f8); cx += COL_COUNT;
   cell(doc, cx, y, COL_TONS,       h, 'トン数',   f8); cx += COL_TONS;
   cell(doc, cx, y, COL_CONDITION,  h, '積付状況', f8); cx += COL_CONDITION;
+  cell(doc, cx, y, COL_CARGO,       h, '荷役',     f8); cx += COL_CARGO;
 
   // ★ 時間列: drawOperationRowsAll と完全一致した幅計算
   // timeAreaW = COL_TIME - COL_MOVE （積込+荷降の合計）
@@ -661,6 +664,8 @@ function drawOperationRowsAll(
         cell(doc, cx, ry, COL_COUNT,      rh, rowVehicleCount > 0 ? String(rowVehicleCount) : '', fOpt); cx += COL_COUNT;
         cell(doc, cx, ry, COL_TONS,       rh, rowTons > 0 ? String(rowTons) : '', fOpt); cx += COL_TONS;
         cell(doc, cx, ry, COL_CONDITION,  rh, '○', fOpt); cx += COL_CONDITION;
+        // 🆕 荷役作業の有無（このサイクルの積込に荷役があった場合のみ○）
+        cell(doc, cx, ry, COL_CARGO,      rh, row.hasCargoWork ? '○' : '', fOpt); cx += COL_CARGO;
       }
 
       // 時刻データ（全行共通）

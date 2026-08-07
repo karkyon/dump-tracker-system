@@ -2018,7 +2018,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             return (
                               <div key={`group-${gIdx}`} className={`border-2 ${borderCls} rounded-lg overflow-hidden`}>
                                 {/* グループヘッダー */}
-                                <div className={`${headerBg} border-b px-4 py-2 flex items-center gap-2`}>
+                                <div className={`${headerBg} border-b px-4 py-2 flex items-center gap-2 flex-wrap`}>
                                   <Truck className={`w-4 h-4 ${headerTextCls} flex-shrink-0`} />
                                   <span className={`text-sm font-bold ${headerTextCls}`}>
                                     {groupLabel}
@@ -2026,7 +2026,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                   </span>
                                   {/* 🆕 荷役作業トグルの表示（積込グループのみ） */}
                                   {isLoading && ((group.completedEvent as any)?.hasCargoWork || (group.arrivedEvent as any).hasCargoWork) && (
-                                    <span className="text-xs font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                                    <span className="text-xs font-bold text-white bg-orange-500 px-2 py-1 rounded-full flex-shrink-0 shadow-sm">
                                       🔧 荷役あり
                                     </span>
                                   )}
