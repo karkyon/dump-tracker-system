@@ -2024,6 +2024,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                                     {groupLabel}
                                     {group.groupNum > 1 && `（${group.groupNum}回目）`}
                                   </span>
+                                  {/* 🆕 荷役作業トグルの表示（積込グループのみ） */}
+                                  {isLoading && (group.arrivedEvent as any).hasCargoWork && (
+                                    <span className="text-xs font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                                      🔧 荷役あり
+                                    </span>
+                                  )}
                                   {group.arrivedEvent.location && (
                                     <span className="text-xs text-gray-500 truncate">
                                       ─ {group.arrivedEvent.location.name}

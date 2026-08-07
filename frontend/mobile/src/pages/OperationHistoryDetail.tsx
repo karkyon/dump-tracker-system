@@ -650,6 +650,12 @@ type ActGroup =
                           <span style={{ fontSize: 13, fontWeight: 700, color: hFg }}>
                             🚛 {lbl}{g.groupNum > 1 ? `（${g.groupNum}回目）` : ''}
                           </span>
+                          {/* 🆕 荷役作業トグルの表示（積込グループのみ） */}
+                          {isL && (act as any).hasCargoWork && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#3730A3', background: '#EEF2FF', padding: '1px 6px', borderRadius: 4 }}>
+                              🔧 荷役あり
+                            </span>
+                          )}
                           {loc && <span style={{ fontSize: 11, color: '#6b7280' }}>─ {loc}</span>}
                           {act.customerName && (
                             <span style={{ fontSize: 11, fontWeight: 600, color: hFg }}>
