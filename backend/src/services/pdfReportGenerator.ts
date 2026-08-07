@@ -157,6 +157,8 @@ export interface DailyDriverReportData {
   middleInspItems: InspCheckItem[]; // 点検中列
   rightInspItems: InspCheckItem[];  // 点検右列（1項目）
   remarks: string;                // 備考
+  managerName?: string;           // 🆕 運行管理者名（帳票出力者の苗字）→ 丸印風スタンプに使用
+  operationApproved?: boolean;    // 🆕 運行の可否（true=可 / false=否。未指定時は可として扱う）
 }
 
 // =====================================
@@ -333,7 +335,8 @@ function drawTitle(
   y: number,
   w: number,
   h: number,
-  fontB: string
+  fontB: string,
+  data?: DailyDriverReportData
 ): void {
   doc.rect(x, y, w, h).strokeColor('#000000').lineWidth(1).stroke();
   doc.font(fontB).fontSize(13).fillColor('#000000');
@@ -344,6 +347,27 @@ function drawTitle(
     characterSpacing: 2,
     lineBreak: false,
   });
+
+  // 🆕 運行の可否スタンプ（タイトル行右端に独立描画。他の列幅には一切影響しない）
+  if (data) {
+    const approved = data.operationApproved !== false; // 未指定は「可」扱い
+    const label = approved ? '可' : '否';
+    const stampR = Math.min(11, (h - 6) / 2);
+    const stampCx = x + w - stampR - 8;
+    const stampCy = y + h / 2;
+    doc.save();
+    doc.circle(stampCx, stampCy, stampR)
+      .lineWidth(1.2)
+      .strokeColor(approved ? '#C0392B' : '#555555')
+      .stroke();
+    doc.font(fontB).fontSize(approved ? 11 : 10).fillColor(approved ? '#C0392B' : '#555555');
+    doc.text(label, stampCx - stampR, stampCy - (approved ? 6.5 : 6), {
+      width: stampR * 2,
+      align: 'center',
+      lineBreak: false,
+    });
+    doc.restore();
+  }
 }
 
 /**
@@ -508,7 +532,7 @@ function drawPageHeader(
   currentPage: number,
   totalPages: number
 ): number {
-  drawTitle(doc, x, y, w, TITLE_H, fontB);
+  drawTitle(doc, x, y, w, TITLE_H, fontB, data);
   if (totalPages > 1) {
     doc.font(fontN).fontSize(7).fillColor('#000000');
     doc.text(
@@ -867,8 +891,26 @@ function drawFuelSection(
       const nameTy = y + (rowH - nameLineH) / 2 + 3; // 上部ラベル分を考慮して少し下
       doc.font(fontN).fontSize(nameFontSize).fillColor('#000000');
       doc.text(data.driverName, cx + 3, nameTy, { width: nameMaxW, align: 'center', lineBreak: false });
+    } else if (i === 1 && data.managerName) {
+      // 🆕 運行管理者欄: ラベル（上部）+ 苗字を丸印（電子印鑑）風に描画
+      doc.font(fontB).fontSize(6.5).fillColor('#000000');
+      doc.text(role, cx + 2, y + 3, { width: cellW - 4, align: 'center', lineBreak: false });
+      const stampR = Math.min(13, (rowH - 16) / 2);
+      const stampCx = cx + cellW / 2;
+      const stampCy = y + rowH / 2 + 5;
+      doc.save();
+      doc.circle(stampCx, stampCy, stampR).lineWidth(1).strokeColor('#C0392B').stroke();
+      let mgrFontSize = 11;
+      doc.font(fontB).fontSize(mgrFontSize).fillColor('#C0392B');
+      while (doc.widthOfString(data.managerName) > stampR * 1.7 && mgrFontSize > 6) {
+        mgrFontSize -= 0.5;
+        doc.font(fontB).fontSize(mgrFontSize);
+      }
+      const mgrTy = stampCy - mgrFontSize * 0.6;
+      doc.text(data.managerName, stampCx - stampR, mgrTy, { width: stampR * 2, align: 'center', lineBreak: false });
+      doc.restore();
     } else {
-      // 運行管理者・整備管理者: ラベルのみ（上部に小さく）
+      // 整備管理者（または運行管理者名未設定時）: ラベルのみ（上部に小さく）
       doc.font(fontB).fontSize(6.5).fillColor('#000000');
       doc.text(role, cx + 2, y + 3, { width: cellW - 4, align: 'center', lineBreak: false });
     }
@@ -990,7 +1032,7 @@ function drawDailyDriverReport(
   const currentPageRef = { value: 1 };
 
   // ① タイトル（1ページ目: ページ番号付き）
-  drawTitle(doc, x0, y, CONTENT_W, TITLE_H, fontB);
+  drawTitle(doc, x0, y, CONTENT_W, TITLE_H, fontB, data);
   if (totalPages > 1) {
     doc.font(fontN).fontSize(7).fillColor('#000000');
     doc.text(

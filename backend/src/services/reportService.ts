@@ -2034,6 +2034,13 @@ class ReportService {
     const middleItems = allMappedItems.slice(13, 26);
     const rightItems: any[] = [];  // 旧3列目は廃止
 
+    // 🆕 管理者印鑑・運行可否: report.user（帳票を出力したCMSログイン管理者）の氏名から
+    //    苗字部分（空白より前）を丸印風スタンプに使用する。
+    //    運行可否は当日の運行にCANCELLEDが1件も無ければ「可」として扱う。
+    const reportUserFullName: string = (report as any)?.user?.name ?? '';
+    const managerName = reportUserFullName.split(/[\s　]+/)[0] || '';
+    const operationApproved = !operations.some((op: any) => op.status === 'CANCELLED');
+
     // 帳票データ組み立て
     const dailyDriverData: any /* DailyDriverReportData */ = {
       reportDate: targetDate.toISOString().split('T')[0] ?? '',
@@ -2064,6 +2071,8 @@ class ReportService {
       fuelOdometerKm,
       totalBreakTime,  // 🆕 休憩時間合計
       totalEmptyRunTime,  // ✅ 追加: 空車移動時間合計
+      managerName,          // 🆕 運行管理者印（丸印風スタンプ）
+      operationApproved,    // 🆕 運行の可否
       oilLiters: '',
       hasGrease: false,
       hasPuncture: false,

@@ -159,9 +159,11 @@ async function callRoutesApi(
   destination: { latitude: number; longitude: number },
   intermediates: { latitude: number; longitude: number }[]
 ): Promise<RoutesApiResult> {
-  const apiKey = process.env.GOOGLE_ROUTES_API_KEY;
+  // ✅ 修正: Routes API専用キーが無ければ、既存のMaps用キー（同一GCPプロジェクトで
+  //    Routes APIが有効化されていれば動作する）にフォールバックする。
+  const apiKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
-    throw new Error('GOOGLE_ROUTES_API_KEY が設定されていません（.envに手動追加が必要）');
+    throw new Error('GOOGLE_ROUTES_API_KEY / GOOGLE_MAPS_API_KEY のいずれも設定されていません（.envに追加が必要）');
   }
 
   const requestBody = {
