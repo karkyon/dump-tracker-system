@@ -261,6 +261,7 @@ model OperationDetail {
   odometerKm        Decimal?  @map("odometer_km") @db.Decimal(8, 2)           // 🆕 給油時走行距離
   cargoWorkTypeCode Int?      @map("cargo_work_type_code")  // 要件No.17: 荷役作業番号（1〜11、CARGO_WORK_STARTレコードに設定）
   hasCargoWork      Boolean   @default(false) @map("has_cargo_work")  // 🆕 この積込(LOADING)に荷役作業が伴ったかどうか
+  idempotencyKey    String?   @map("idempotency_key") @db.VarChar(64)  // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用（新規作成系のみ）
   notes             String?
   // 🆕 複数品目リレーション
   operationDetailItems OperationDetailItem[]
@@ -279,6 +280,7 @@ model OperationDetail {
   operations        Operation @relation(fields: [operationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([operationId, sequenceNumber])
+  @@unique([operationId, idempotencyKey], map: "uq_operation_details_op_idempotency")
   @@index([activityType], map: "idx_operation_details_activity")
   @@index([itemId], map: "idx_operation_details_item")
   @@index([customerId], map: "idx_operation_details_customer")

@@ -1121,6 +1121,8 @@ const OperationRecord: React.FC = () => {
       const _p1Acc = (operationStore as any).loadingLocationAccuracy as number | undefined;
       const _p1CustomerId = (operationStore as any).loadingCustomerId as string | undefined;
       const _p1HasCargoWork = (operationStore as any).loadingHasCargoWork as boolean | undefined;
+      // 🆕 BUG-XXX: retryWithBackoffの再送でも同じキーを使い回す（ボタン押下1回=キー1個）
+      const _p1IdempotencyKey = crypto.randomUUID();
       await retryWithBackoff(
         () => apiService.startLoadingAtLocation(currentOperationId, {
           locationId: loadingLocationId,
@@ -1138,6 +1140,7 @@ const OperationRecord: React.FC = () => {
           customerId: _p1CustomerId,
           // 🆕 荷役作業トグル（D5で選択済みの値をstore経由で受け取り送信）
           hasCargoWork: _p1HasCargoWork,
+          idempotencyKey: _p1IdempotencyKey,
         } as any),
         3, 1000, '積込開始'
       );
@@ -1225,6 +1228,8 @@ const OperationRecord: React.FC = () => {
       const _u1Lat = (operationStore as any).unloadingLocationLat as number | undefined;
       const _u1Lng = (operationStore as any).unloadingLocationLng as number | undefined;
       const _u1Acc = (operationStore as any).unloadingLocationAccuracy as number | undefined;
+      // 🆕 BUG-XXX: retryWithBackoffの再送でも同じキーを使い回す
+      const _u1IdempotencyKey = crypto.randomUUID();
       await retryWithBackoff(
         () => apiService.startUnloadingAtLocation(currentOperationId, {
           locationId: unloadingLocationId,
@@ -1234,6 +1239,7 @@ const OperationRecord: React.FC = () => {
           accuracy: _u1Acc ?? currentPosition?.coords.accuracy ?? undefined,
           notes: '荷降開始',
           customerId: operationStore.customerId || undefined,
+          idempotencyKey: _u1IdempotencyKey,
         } as any),
         3, 1000, '荷降開始'
       );
@@ -1339,13 +1345,16 @@ const OperationRecord: React.FC = () => {
       console.log('☕ 休憩開始処理開始:', currentOperationId);
       
       // BUG-019: リトライ付き
+      // 🆕 BUG-XXX: retryWithBackoffの再送でも同じキーを使い回す
+      const _breakStartIdempotencyKey = crypto.randomUUID();
       const response = await retryWithBackoff(
         () => apiService.startBreak(currentOperationId, {
         latitude: currentPosition?.coords.latitude,
         longitude: currentPosition?.coords.longitude,
         accuracy: currentPosition?.coords.accuracy,  // 🆕 追加
         location: '',  // 休憩場所名（任意）
-        notes: ''  // メモ（任意）
+        notes: '',  // メモ（任意）
+        idempotencyKey: _breakStartIdempotencyKey
       }),
         3, 1000, '休憩開始'
       );
@@ -1403,12 +1412,15 @@ const OperationRecord: React.FC = () => {
       console.log('⏱️ 休憩終了処理開始:', currentOperationId);
       
       // BUG-019: リトライ付き
+      // 🆕 BUG-XXX: retryWithBackoffの再送でも同じキーを使い回す
+      const _breakEndIdempotencyKey = crypto.randomUUID();
       const response = await retryWithBackoff(
         () => apiService.endBreak(currentOperationId, {
         latitude: currentPosition?.coords.latitude,
         longitude: currentPosition?.coords.longitude,
         accuracy: currentPosition?.coords.accuracy,
-        notes: ''
+        notes: '',
+        idempotencyKey: _breakEndIdempotencyKey
       }),
         3, 1000, '休憩終了'
       );

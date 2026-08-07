@@ -127,6 +127,7 @@ export interface CreateTripDetailRequest {
   selectedItemIds?: string[];
   customItemName?: string;
   customerId?: string;
+  idempotencyKey?: string;  // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
 }
 
 // =====================================
@@ -369,6 +370,7 @@ export interface StartLoadingRequest {
   itemId?: string;
   quantity?: number;
   customItemName?: string;
+  idempotencyKey?: string;  // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
 }
 
 /**
@@ -407,6 +409,7 @@ export interface StartUnloadingRequest {
   accuracy?: number;
   startTime?: Date;
   notes?: string;
+  idempotencyKey?: string;  // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
 }
 
 /**

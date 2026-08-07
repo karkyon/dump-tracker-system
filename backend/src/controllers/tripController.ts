@@ -1456,7 +1456,9 @@ export class TripController {
         // 🆕 GPS位置情報を operation_details に保存
         latitude: breakData.latitude ? Number(breakData.latitude) : undefined,
         longitude: breakData.longitude ? Number(breakData.longitude) : undefined,
-        accuracy: breakData.accuracy ? Number(breakData.accuracy) : undefined
+        accuracy: breakData.accuracy ? Number(breakData.accuracy) : undefined,
+        // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
+        idempotencyKey: breakData.idempotencyKey || undefined
       };
 
       logger.info('☕ [API-STEP 12] activityInput 構築完了', {
@@ -1636,7 +1638,9 @@ export class TripController {
         // 🆕 GPS位置情報を operation_details に保存
         latitude: breakData.latitude ? Number(breakData.latitude) : undefined,
         longitude: breakData.longitude ? Number(breakData.longitude) : undefined,
-        accuracy: breakData.accuracy ? Number(breakData.accuracy) : undefined
+        accuracy: breakData.accuracy ? Number(breakData.accuracy) : undefined,
+        // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
+        idempotencyKey: breakData.idempotencyKey || undefined
       };
 
       logger.info('⏱️ [API-STEP 12] activityInput 構築完了', {

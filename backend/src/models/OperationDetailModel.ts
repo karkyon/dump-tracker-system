@@ -20,6 +20,7 @@ import { DatabaseService } from '../utils/database';
 // 🆕 GPS補完機能: 到着イベント記録の都度、区間距離を自動再計算するためのフック用
 import { triggerRouteSegmentRecompute } from '../services/routeDistanceService';
 import {
+  AppError,
   DatabaseError,
   NotFoundError,
   ValidationError
@@ -76,6 +77,7 @@ export interface OperationDetailCreateDTO {
   odometerKm?: number;           // 🆕 給油時走行距離
   notes?: string;
   hasCargoWork?: boolean;        // 🆕 この積込(LOADING)に荷役作業が伴ったかどうか
+  idempotencyKey?: string;       // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
   // 🆕 GPS位置情報フィールド
   latitude?: number;
   longitude?: number;
@@ -288,6 +290,7 @@ export class OperationDetailService {
         fuelCostYen: data.fuelCostYen ?? null,  // ✅ 給油金額専用カラム
         odometerKm: data.odometerKm ?? null,         // ✅ 給油時走行距離
         hasCargoWork: (data as any).hasCargoWork ?? false,  // 🆕 荷役作業の有無
+        idempotencyKey: (data as any).idempotencyKey ?? null,  // 🆕 重複INSERT防止用
         notes: data.notes,
         // 🆕 GPS位置情報を直接保存
         latitude: data.latitude ?? null,
@@ -355,6 +358,20 @@ export class OperationDetailService {
       return operationDetail;
 
     } catch (error) {
+      // 🆕 BUG-XXX: idempotencyKey重複（真の同時リクエスト競合）をP2002から検出し、
+      //    呼び出し元(tripService)が既存レコードを再取得して返せるよう専用コードを付与する
+      const errCode = (error as any)?.code || '';
+      const errMsg = (error as any)?.message || String(error);
+      const errTarget = (error as any)?.meta?.target;
+      const isIdempotencyConflict =
+        (errCode === 'P2002' || errMsg.includes('P2002') || errMsg.includes('Unique constraint')) &&
+        (Array.isArray(errTarget)
+          ? errTarget.some((t: string) => t.includes('idempotency'))
+          : String(errTarget || '').includes('idempotency') || errMsg.includes('idempotency'));
+      if (isIdempotencyConflict) {
+        logger.warn('運行詳細作成: idempotencyKey重複を検出（同時リクエスト競合）', { data });
+        throw new AppError('重複するリクエストを検出しました', 409, 'IDEMPOTENCY_DUPLICATE');
+      }
       logger.error('運行詳細作成エラー', { error, data });
       throw new DatabaseError('運行詳細の作成に失敗しました');
     }

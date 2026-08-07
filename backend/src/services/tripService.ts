@@ -1095,6 +1095,26 @@ class TripService {
         throw new ConflictError('進行中の運行ではありません');
       }
 
+      // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止（冪等性チェック）
+      // 同一operationId+idempotencyKeyの既存レコードがあれば、新規作成せずそれを返す
+      const addActivityIdempotencyKey = (activityData as any).idempotencyKey as string | undefined;
+      if (addActivityIdempotencyKey) {
+        const dupCheck = await this.operationDetailService.findMany({
+          where: { operationId: tripId, idempotencyKey: addActivityIdempotencyKey } as any,
+          take: 1
+        });
+        if (dupCheck && dupCheck.length > 0) {
+          logger.warn('[addActivity] 重複リクエスト検出（idempotencyKey一致）— 新規作成をスキップ', {
+            tripId, idempotencyKey: addActivityIdempotencyKey, existingId: dupCheck[0]!.id
+          });
+          return {
+            success: true,
+            data: dupCheck[0] as unknown as OperationDetailResponseDTO,
+            message: '（重複リクエストのため既存レコードを返却しました）'
+          };
+        }
+      }
+
       // 🔧 追加: sequenceNumber自動計算
       const existingDetails = await this.operationDetailService.findMany({
         where: { operationId: tripId },
@@ -1144,6 +1164,7 @@ class TripService {
         ...((activityData as any).hasCargoWork !== undefined
           ? { hasCargoWork: (activityData as any).hasCargoWork === true }
           : {}),
+        idempotencyKey: addActivityIdempotencyKey,  // 🆕 BUG-XXX: 重複INSERT防止用
       } as any;
 
       logger.info('🆕 GPS データマッピング確認', {
@@ -1152,7 +1173,28 @@ class TripService {
         hasGps: detailData.latitude != null && detailData.longitude != null
       });
 
-      const detail = await this.operationDetailService.create(detailData);
+      let detail;
+      try {
+        detail = await this.operationDetailService.create(detailData);
+      } catch (createError: any) {
+        // 🆕 BUG-XXX: 真の同時リクエスト競合でDBユニーク制約に引っかかった場合、
+        //    既存レコードを再取得して返す（新規作成失敗として扱わない）
+        if (createError?.code === 'IDEMPOTENCY_DUPLICATE' && addActivityIdempotencyKey) {
+          const raceDup = await this.operationDetailService.findMany({
+            where: { operationId: tripId, idempotencyKey: addActivityIdempotencyKey } as any,
+            take: 1
+          });
+          if (raceDup && raceDup.length > 0) {
+            logger.warn('[addActivity] 同時リクエスト競合を検出 — 既存レコードを返却', { tripId, idempotencyKey: addActivityIdempotencyKey });
+            return {
+              success: true,
+              data: raceDup[0] as unknown as OperationDetailResponseDTO,
+              message: '（重複リクエストのため既存レコードを返却しました）'
+            };
+          }
+        }
+        throw createError;
+      }
 
       logger.info('作業追加完了', { tripId, detailId: detail.id, sequenceNumber: nextSequenceNumber });
 
@@ -1221,6 +1263,25 @@ class TripService {
         throw new ConflictError('進行中の運行ではありません');
       }
 
+      // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止（冪等性チェック）
+      const startLoadingIdempotencyKey = (data as any).idempotencyKey as string | undefined;
+      if (startLoadingIdempotencyKey) {
+        const dupCheck = await this.operationDetailService.findMany({
+          where: { operationId: tripId, idempotencyKey: startLoadingIdempotencyKey } as any,
+          take: 1
+        });
+        if (dupCheck && dupCheck.length > 0) {
+          logger.warn('[startLoading] 重複リクエスト検出（idempotencyKey一致）— 新規作成をスキップ', {
+            tripId, idempotencyKey: startLoadingIdempotencyKey, existingId: dupCheck[0]!.id
+          });
+          return {
+            success: true,
+            data: dupCheck[0] as unknown as OperationDetailResponseDTO,
+            message: '（重複リクエストのため既存レコードを返却しました）'
+          };
+        }
+      }
+
       // 次のsequenceNumber取得
       const existingDetails = await this.operationDetailService.findMany({
         where: { operationId: tripId },
@@ -1251,6 +1312,7 @@ class TripService {
         actualEndTime: undefined,  // 🔥 重要: 開始時は null
         quantityTons: startQty ?? 0,  // P1: 数量あり
         notes: data.notes || '積込開始',
+        idempotencyKey: startLoadingIdempotencyKey,  // 🆕 BUG-XXX: 重複INSERT防止用
         locationId: data.locationId || undefined as any,
         hasCargoWork: (data as any).hasCargoWork === true,  // 🆕 荷役作業トグル（P1パターン）
       };
@@ -1259,7 +1321,26 @@ class TripService {
 
       logger.info('🚛 [startLoading] operation_detail作成開始', { detailData });
 
-      const detail = await this.operationDetailService.create(detailData);
+      let detail;
+      try {
+        detail = await this.operationDetailService.create(detailData);
+      } catch (createError: any) {
+        if (createError?.code === 'IDEMPOTENCY_DUPLICATE' && startLoadingIdempotencyKey) {
+          const raceDup = await this.operationDetailService.findMany({
+            where: { operationId: tripId, idempotencyKey: startLoadingIdempotencyKey } as any,
+            take: 1
+          });
+          if (raceDup && raceDup.length > 0) {
+            logger.warn('[startLoading] 同時リクエスト競合を検出 — 既存レコードを返却', { tripId, idempotencyKey: startLoadingIdempotencyKey });
+            return {
+              success: true,
+              data: raceDup[0] as unknown as OperationDetailResponseDTO,
+              message: '（重複リクエストのため既存レコードを返却しました）'
+            };
+          }
+        }
+        throw createError;
+      }
 
       logger.info('🚛✅ [startLoading] 積込開始完了', {
         tripId,
@@ -1471,6 +1552,25 @@ class TripService {
         throw new ConflictError('進行中の運行ではありません');
       }
 
+      // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止（冪等性チェック）
+      const startUnloadingIdempotencyKey = (data as any).idempotencyKey as string | undefined;
+      if (startUnloadingIdempotencyKey) {
+        const dupCheck = await this.operationDetailService.findMany({
+          where: { operationId: tripId, idempotencyKey: startUnloadingIdempotencyKey } as any,
+          take: 1
+        });
+        if (dupCheck && dupCheck.length > 0) {
+          logger.warn('[startUnloading] 重複リクエスト検出（idempotencyKey一致）— 新規作成をスキップ', {
+            tripId, idempotencyKey: startUnloadingIdempotencyKey, existingId: dupCheck[0]!.id
+          });
+          return {
+            success: true,
+            data: dupCheck[0] as unknown as OperationDetailResponseDTO,
+            message: '（重複リクエストのため既存レコードを返却しました）'
+          };
+        }
+      }
+
       // 次のsequenceNumber取得
       const existingDetails = await this.operationDetailService.findMany({
         where: { operationId: tripId },
@@ -1497,12 +1597,32 @@ class TripService {
         actualStartTime: data.startTime || new Date(),
         actualEndTime: undefined,  // 🔥 重要: 開始時は null
         quantityTons: 0,  // 積降開始時点では数量0
-        notes: data.notes || '積降開始'
+        notes: data.notes || '積降開始',
+        idempotencyKey: startUnloadingIdempotencyKey  // 🆕 BUG-XXX: 重複INSERT防止用
       };
 
       logger.info('📦 [startUnloading] operation_detail作成開始', { detailData });
 
-      const detail = await this.operationDetailService.create(detailData);
+      let detail;
+      try {
+        detail = await this.operationDetailService.create(detailData);
+      } catch (createError: any) {
+        if (createError?.code === 'IDEMPOTENCY_DUPLICATE' && startUnloadingIdempotencyKey) {
+          const raceDup = await this.operationDetailService.findMany({
+            where: { operationId: tripId, idempotencyKey: startUnloadingIdempotencyKey } as any,
+            take: 1
+          });
+          if (raceDup && raceDup.length > 0) {
+            logger.warn('[startUnloading] 同時リクエスト競合を検出 — 既存レコードを返却', { tripId, idempotencyKey: startUnloadingIdempotencyKey });
+            return {
+              success: true,
+              data: raceDup[0] as unknown as OperationDetailResponseDTO,
+              message: '（重複リクエストのため既存レコードを返却しました）'
+            };
+          }
+        }
+        throw createError;
+      }
 
       logger.info('📦✅ [startUnloading] 積降開始完了', {
         tripId,

@@ -142,6 +142,7 @@ export interface StartUnloadingRequest {
   startTime?: Date | string; // 開始時刻（省略時は現在時刻）
   notes?: string;            // メモ（オプション）
   customerId?: string;       // ✅ この荷降だけの独立した客先
+  idempotencyKey?: string;   // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
 }
 
 /**
@@ -175,6 +176,7 @@ export interface StartLoadingRequest {
   selectedItemIds?: string[];
   customerId?: string;       // ✅ この積込だけの独立した客先
   hasCargoWork?: boolean;    // 🆕 荷役作業の有無
+  idempotencyKey?: string;   // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
 }
 
 /**
@@ -895,6 +897,7 @@ class APIServiceClass {
       accuracy?: number;
       location?: string;
       notes?: string;
+      idempotencyKey?: string;  // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
     }
   ): Promise<APIResponse<any>> {
     try {
@@ -944,6 +947,7 @@ class APIServiceClass {
       longitude?: number;
       accuracy?: number;
       notes?: string;
+      idempotencyKey?: string;  // 🆕 BUG-XXX: retryWithBackoff再送による重複INSERT防止用
     }
   ): Promise<APIResponse<any>> {
     try {
