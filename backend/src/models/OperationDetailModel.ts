@@ -18,7 +18,7 @@ import { PrismaClient } from '@prisma/client';
 // 🎯 Phase 1-A完成基盤の活用
 import { DatabaseService } from '../utils/database';
 // 🆕 GPS補完機能: 到着イベント記録の都度、区間距離を自動再計算するためのフック用
-import { computeAndSaveRouteSegments } from '../services/routeDistanceService';
+import { triggerRouteSegmentRecompute } from '../services/routeDistanceService';
 import {
   DatabaseError,
   NotFoundError,
@@ -349,13 +349,8 @@ export class OperationDetailService {
       // 🆕 GPS補完機能: 積込・荷降・給油・休憩、いずれの到着イベント記録でも、
       //    この運行の区間距離(実車/空車)を自動的に再計算する。
       //    fire-and-forget（await しない）: 失敗してもこの記録自体は失敗させない。
-      computeAndSaveRouteSegments(operationDetail.operationId).catch((segErr) => {
-        logger.warn('区間距離の自動再計算に失敗しました（記録自体は正常に保存済み）', {
-          operationId: operationDetail.operationId,
-          detailId: operationDetail.id,
-          error: segErr instanceof Error ? segErr.message : segErr,
-        });
-      });
+      // デバウンス+直列化: 短時間の連続イベントでのレースコンディションを防ぐ
+      triggerRouteSegmentRecompute(operationDetail.operationId);
 
       return operationDetail;
 
@@ -487,13 +482,8 @@ export class OperationDetailService {
       logger.info('運行詳細更新完了', { id });
       // 🆕 GPS補完機能: 積込完了・荷降完了など、既存レコードの更新時にも
       //    区間距離を自動的に再計算する（GPS座標や時刻が確定するタイミングのため）。
-      computeAndSaveRouteSegments(updated.operationId).catch((segErr) => {
-        logger.warn('区間距離の自動再計算に失敗しました（更新自体は正常に保存済み）', {
-          operationId: updated.operationId,
-          detailId: updated.id,
-          error: segErr instanceof Error ? segErr.message : segErr,
-        });
-      });
+      // デバウンス+直列化: 短時間の連続イベントでのレースコンディションを防ぐ
+      triggerRouteSegmentRecompute(updated.operationId);
 
       return updated;
 

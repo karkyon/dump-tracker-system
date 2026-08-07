@@ -521,3 +521,69 @@ export async function getRouteSegments(operationId: string) {
     orderBy: { segmentIndex: 'asc' }
   });
 }
+
+// =====================================
+// 🆕 デバウンス+直列化トリガー
+// =====================================
+// 積込・休憩・給油・荷降など、短時間（1秒未満）に連続してイベントが
+// 発生した場合、computeAndSaveRouteSegments の delete→再作成が並行実行
+// されるとレースコンディションで不整合な区間データが混入する。
+// これを防ぐため、operationIdごとに:
+//   1) 一定時間(DEBOUNCE_MS)デバウンスし、連続イベントの最後の1回だけを
+//      実際にトリガーする
+//   2) 実行中のcomputeが終わるまで次のcomputeを開始しない（直列化）
+// という2段構えで防止する。
+
+const DEBOUNCE_MS = 1500;
+const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const runningPromises = new Map<string, Promise<void>>();
+const pendingRerun = new Set<string>();
+
+async function runSerialized(operationId: string): Promise<void> {
+  if (runningPromises.has(operationId)) {
+    // 既に実行中なら、完了後にもう一度だけ再実行するようマークして戻る
+    pendingRerun.add(operationId);
+    return;
+  }
+
+  const exec = (async () => {
+    try {
+      await computeAndSaveRouteSegments(operationId);
+    } catch (err) {
+      logger.warn('区間距離の自動再計算に失敗しました', {
+        operationId,
+        error: err instanceof Error ? err.message : err,
+      });
+    } finally {
+      runningPromises.delete(operationId);
+      if (pendingRerun.has(operationId)) {
+        pendingRerun.delete(operationId);
+        // 実行中に新たなイベントが来ていた場合、最新状態で1回だけ追いかけ実行する
+        void runSerialized(operationId);
+      }
+    }
+  })();
+
+  runningPromises.set(operationId, exec);
+  await exec;
+}
+
+/**
+ * 到着イベント記録の都度呼び出す、デバウンス付き区間距離再計算トリガー。
+ * fire-and-forget前提（呼び出し元でawaitしない）。
+ */
+export function triggerRouteSegmentRecompute(operationId: string): void {
+  if (!operationId) return;
+
+  const existing = debounceTimers.get(operationId);
+  if (existing) {
+    clearTimeout(existing);
+  }
+
+  const timer = setTimeout(() => {
+    debounceTimers.delete(operationId);
+    void runSerialized(operationId);
+  }, DEBOUNCE_MS);
+
+  debounceTimers.set(operationId, timer);
+}
