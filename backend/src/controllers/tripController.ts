@@ -14,6 +14,7 @@ import { Response } from 'express';
 // 🎯 Phase 1完成基盤の活用
 import { asyncHandler } from '../utils/asyncHandler';
 import {
+  AppError,
   AuthorizationError,
   ConflictError,
   NotFoundError,
@@ -180,9 +181,7 @@ export class TripController {
     } catch (error) {
       logger.error('運行記録詳細取得エラー', { error, tripId: req.params.id });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -247,9 +246,7 @@ export class TripController {
     } catch (error) {
       logger.error('運行記録作成エラー', { error, body: req.body });
 
-      if (error instanceof ValidationError ||
-        error instanceof NotFoundError ||
-        error instanceof ConflictError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -297,9 +294,7 @@ export class TripController {
     } catch (error) {
       logger.error('運行記録更新エラー', { error, tripId: req.params.id, body: req.body });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -347,9 +342,7 @@ export class TripController {
     } catch (error) {
       logger.error('運行終了エラー', { error, tripId: req.params.id, body: req.body });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -411,9 +404,7 @@ export class TripController {
     } catch (error) {
       logger.error('GPS位置情報更新エラー', { error, tripId: req.params.id, body: req.body });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -522,9 +513,7 @@ export class TripController {
     } catch (error) {
       logger.error('燃料記録追加エラー', { error, tripId: req.params.id, body: req.body });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -823,9 +812,7 @@ export class TripController {
         timestamp: new Date().toISOString()
       });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -1112,9 +1099,7 @@ export class TripController {
         timestamp: new Date().toISOString()
       });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -1524,9 +1509,7 @@ export class TripController {
         timestamp: new Date().toISOString()
       });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {
@@ -1706,9 +1689,7 @@ export class TripController {
         timestamp: new Date().toISOString()
       });
 
-      if (error instanceof ValidationError ||
-        error instanceof AuthorizationError ||
-        error instanceof NotFoundError) {
+      if (error instanceof AppError) {
         const errResponse = errorResponse(error.message, error.statusCode, error.code);
         res.status(error.statusCode).json(errResponse);
       } else {

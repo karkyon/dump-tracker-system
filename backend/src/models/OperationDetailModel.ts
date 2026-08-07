@@ -373,7 +373,17 @@ export class OperationDetailService {
         throw new AppError('重複するリクエストを検出しました', 409, 'IDEMPOTENCY_DUPLICATE');
       }
       logger.error('運行詳細作成エラー', { error, data });
-      throw new DatabaseError('運行詳細の作成に失敗しました');
+      // 🔧 修正(BUG-ERR-MASK): 実際のPrismaエラーコード/メッセージを握りつぶさず、
+      //    診断用にcode/messageへ含める（画面のトーストから直接原因特定できるように）
+      const diagPrismaCode = errCode || 'UNKNOWN';
+      const diagMessage = errMsg.length > 150 ? errMsg.substring(0, 150) : errMsg;
+      throw new DatabaseError(
+        `運行詳細の作成に失敗しました: ${diagMessage}`,
+        'operationDetail.create',
+        diagPrismaCode,
+        'operation_details',
+        `DATABASE_ERROR_${diagPrismaCode}`
+      );
     }
   }
 
