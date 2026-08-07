@@ -67,7 +67,10 @@ jobs:
             # 🔧 修正: スキーマ反映の失敗を握りつぶさない。失敗時はここでジョブを
             #    失敗させ、コード(dist)とDBスキーマの不整合を即座に検知できるようにする。
             ./node_modules/.bin/prisma generate --schema=./prisma/schema.camel.prisma
-            ./node_modules/.bin/prisma db push --schema=./prisma/schema.camel.prisma
+            # 🔧 修正(BUG-DBPUSH-SILENT): データロス警告時の対話プロンプトが
+            #    非対話環境で自動的に「no」扱いされ、Push cancelledのままexit 0で
+            #    成功扱いになりスキーマが一切反映されない障害が発生したため付与。
+            ./node_modules/.bin/prisma db push --schema=./prisma/schema.camel.prisma --accept-data-loss
             sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo systemctl restart dump-tracker-backend
