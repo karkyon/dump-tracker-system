@@ -260,6 +260,7 @@ model OperationDetail {
   fuelCostYen       Decimal?  @map("fuel_cost_yen") @db.Decimal(10, 2)  // 🆕 給油金額（operation_detailsで個別管理）
   odometerKm        Decimal?  @map("odometer_km") @db.Decimal(8, 2)           // 🆕 給油時走行距離
   cargoWorkTypeCode Int?      @map("cargo_work_type_code")  // 要件No.17: 荷役作業番号（1〜11、CARGO_WORK_STARTレコードに設定）
+  hasCargoWork      Boolean   @default(false) @map("has_cargo_work")  // 🆕 この積込(LOADING)に荷役作業が伴ったかどうか
   notes             String?
   // 🆕 複数品目リレーション
   operationDetailItems OperationDetailItem[]

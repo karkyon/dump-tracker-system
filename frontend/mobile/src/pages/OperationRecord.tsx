@@ -1120,6 +1120,7 @@ const OperationRecord: React.FC = () => {
       const _p1Lng = (operationStore as any).loadingLocationLng as number | undefined;
       const _p1Acc = (operationStore as any).loadingLocationAccuracy as number | undefined;
       const _p1CustomerId = (operationStore as any).loadingCustomerId as string | undefined;
+      const _p1HasCargoWork = (operationStore as any).loadingHasCargoWork as boolean | undefined;
       await retryWithBackoff(
         () => apiService.startLoadingAtLocation(currentOperationId, {
           locationId: loadingLocationId,
@@ -1135,6 +1136,8 @@ const OperationRecord: React.FC = () => {
           customItemName: _p1CustomItemName,
           // ✅ この積込だけの独立した客先
           customerId: _p1CustomerId,
+          // 🆕 荷役作業トグル（D5で選択済みの値をstore経由で受け取り送信）
+          hasCargoWork: _p1HasCargoWork,
         } as any),
         3, 1000, '積込開始'
       );

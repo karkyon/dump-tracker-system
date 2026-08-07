@@ -1140,6 +1140,10 @@ class TripService {
         ...((activityData as any).cargoWorkTypeCode !== undefined
           ? { cargoWorkTypeCode: Number((activityData as any).cargoWorkTypeCode) }
           : {}),
+        // 🆕 荷役作業トグル: この積込(LOADING)に荷役作業が伴ったかどうか（P2/P3パターン）
+        ...((activityData as any).hasCargoWork !== undefined
+          ? { hasCargoWork: (activityData as any).hasCargoWork === true }
+          : {}),
       } as any;
 
       logger.info('🆕 GPS データマッピング確認', {
@@ -1248,6 +1252,7 @@ class TripService {
         quantityTons: startQty ?? 0,  // P1: 数量あり
         notes: data.notes || '積込開始',
         locationId: data.locationId || undefined as any,
+        hasCargoWork: (data as any).hasCargoWork === true,  // 🆕 荷役作業トグル（P1パターン）
       };
       // ✅ P1: selectedItemIds が渡された場合は completeLoading で保存するため保存済みとしてメモ
       const startSelectedItemIds = (data as any).selectedItemIds as string[] | undefined;

@@ -144,10 +144,8 @@ const LoadingInput: React.FC = () => {
   // ---- 最終確認チェックボックス（D5a統合: "上記の内容で間違いありません"） ----
   const [finalConfirmed, setFinalConfirmed] = useState(false);
 
-  // ---- 荷役作業（要件No.17・18、2026-07-15吉原様案） ----
-  const [cargoWorkStarted, setCargoWorkStarted] = useState(false);
-  const [cargoWorkEnded, setCargoWorkEnded] = useState(false);
-  const [cargoWorkSubmitting, setCargoWorkSubmitting] = useState(false);
+  // ---- 荷役作業トグル（2026-08吉原様案: 品目選択画面に配置。旧・独立ボタン式(要件No.17/18)は撤去） ----
+  const [hasCargoWork, setHasCargoWork] = useState(false);
 
   // ---- 送信中フラグ ----
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -355,59 +353,6 @@ const LoadingInput: React.FC = () => {
     img.src = objectUrl;
   };
 
-  /**
-   * 荷役開始ボタン（要件No.17・18、2026-07-15吉原様案）
-   * 押した時点で時間計測開始。荷役が無い場合はこのボタンを押さず、
-   * これまで通り確認チェックボックス→運行開始で進める。
-   */
-  const handleCargoWorkStart = async () => {
-    const currentOperationId = operationStore.operationId;
-    if (!currentOperationId) {
-      toast.error('運行IDが見つかりません');
-      return;
-    }
-    setCargoWorkSubmitting(true);
-    try {
-      await apiService.createOperationDetailEvent({
-        operationId: currentOperationId,
-        activityType: 'CARGO_WORK_START',
-        actualStartTime: new Date(),
-        quantityTons: 0,
-      });
-      setCargoWorkStarted(true);
-      toast.success('荷役作業を開始しました');
-    } catch (error) {
-      console.error('❌ 荷役開始記録エラー:', error);
-      toast.error('荷役開始の記録に失敗しました');
-    } finally {
-      setCargoWorkSubmitting(false);
-    }
-  };
-
-  /**
-   * 荷役終了記録（要件No.17・18）
-   * 確認チェックボックスON時、荷役中であれば自動的に呼び出す。
-   * 「そこで終了時間記録=積込完了時間、GPS位置記録=積込場所」という
-   * 吉原様の指定どおり、以降の既存フロー（運行開始ボタン等）は一切変更しない。
-   */
-  const handleCargoWorkEnd = async () => {
-    const currentOperationId = operationStore.operationId;
-    if (!currentOperationId) return;
-    try {
-      await apiService.createOperationDetailEvent({
-        operationId: currentOperationId,
-        activityType: 'CARGO_WORK_END',
-        actualStartTime: new Date(),
-        actualEndTime: new Date(),
-        quantityTons: 0,
-      });
-      setCargoWorkEnded(true);
-    } catch (error) {
-      console.error('❌ 荷役終了記録エラー:', error);
-      toast.error('荷役終了の記録に失敗しました（そのまま進めます）');
-    }
-  };
-
   const handleStartOperation = async () => {
     // ---- バリデーション ----
     if (
@@ -515,6 +460,8 @@ const LoadingInput: React.FC = () => {
         (operationStore as any).loadingLocationLat = position.coords.latitude;
         (operationStore as any).loadingLocationLng = position.coords.longitude;
         (operationStore as any).loadingLocationAccuracy = position.coords.accuracy;
+        // 🆕 荷役作業トグル（P1: 積込開始ボタン押下時にstartLoadingへ渡すためstoreに保存）
+        (operationStore as any).loadingHasCargoWork = hasCargoWork;
         // フェーズ更新してAT_LOADINGへ
         operationStore.setPhase('AT_LOADING');
         apiService.logOperationEvent({
@@ -543,6 +490,7 @@ const LoadingInput: React.FC = () => {
         customItemName: formData.customItemName || undefined,  // ✅ 手入力品目名
         quantity: formData.quantity,
         notes: formData.notes || undefined,
+        hasCargoWork,  // 🆕 荷役作業トグル（P2/P3パターン）
         // P3: endTime を同時送信 → actualStartTime = actualEndTime
         ...(_lpNow === 3 ? { endTime: _nowTime } : {}),
       });
@@ -809,6 +757,59 @@ const LoadingInput: React.FC = () => {
             品目を選択＊（複数選択可能）
           </p>
 
+          {/* 🆕 荷役作業トグル（2026-08吉原様案）: この積込に荷役作業が伴う場合はON */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+              marginBottom: '14px',
+              background: hasCargoWork ? '#eff6ff' : '#f9fafb',
+              border: `1px solid ${hasCargoWork ? '#93c5fd' : '#e5e7eb'}`,
+              borderRadius: '8px',
+            }}
+          >
+            <div>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#374151' }}>
+                荷役作業
+              </p>
+              <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#6b7280' }}>
+                この積込に荷役（積込の実作業）が伴う場合はONにしてください
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHasCargoWork(v => !v)}
+              aria-pressed={hasCargoWork}
+              style={{
+                position: 'relative',
+                width: '44px',
+                height: '24px',
+                borderRadius: '12px',
+                border: 'none',
+                cursor: 'pointer',
+                background: hasCargoWork ? '#2563eb' : '#d1d5db',
+                transition: 'background 0.2s',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '2px',
+                  left: hasCargoWork ? '22px' : '2px',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  transition: 'left 0.2s',
+                }}
+              />
+            </button>
+          </div>
+
           {/* REQ-009: 品目区分ごとにグループ表示 */}
           {isLoadingItems ? (
             <div style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>
@@ -1008,48 +1009,6 @@ const LoadingInput: React.FC = () => {
           </div>
         </div>
 
-        {/* ----- 荷役作業（要件No.17・18、2026-07-15吉原様案）----- */}
-        <div
-          style={{
-            background: 'white',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '16px',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-          }}
-        >
-          <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#6b7280' }}>
-            荷役（積込の実作業）がある場合は押してください。無い場合はこのまま次へ進めます。
-          </p>
-          {!cargoWorkStarted ? (
-            <button
-              onClick={handleCargoWorkStart}
-              disabled={cargoWorkSubmitting}
-              style={{
-                width: '100%',
-                padding: '14px',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                color: 'white',
-                background: cargoWorkSubmitting ? '#93c5fd' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: cargoWorkSubmitting ? 'not-allowed' : 'pointer',
-              }}
-            >
-              荷役開始
-            </button>
-          ) : cargoWorkEnded ? (
-            <div style={{ fontSize: '14px', color: '#059669', fontWeight: 'bold' }}>
-              荷役作業を記録しました
-            </div>
-          ) : (
-            <div style={{ fontSize: '14px', color: '#2563eb', fontWeight: 'bold' }}>
-              荷役作業中です（「上記の内容で間違いありません」にチェックすると終了時刻を記録します）
-            </div>
-          )}
-        </div>
-
         {/* ----- 最終確認チェックボックス（D5a統合）----- */}
         <div
           style={{
@@ -1073,11 +1032,7 @@ const LoadingInput: React.FC = () => {
               type="checkbox"
               checked={finalConfirmed}
               onChange={e => {
-                const checked = e.target.checked;
-                setFinalConfirmed(checked);
-                if (checked && cargoWorkStarted && !cargoWorkEnded) {
-                  handleCargoWorkEnd();
-                }
+                setFinalConfirmed(e.target.checked);
               }}
               style={{
                 width: '22px',

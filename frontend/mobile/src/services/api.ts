@@ -114,6 +114,8 @@ export interface RecordLoadingArrivalRequest {
   customerId?: string;       // ✅ この積込だけの独立した客先
   quantity?: number;         // 積載量（オプション）
   notes?: string;            // メモ（オプション）
+  endTime?: Date | string;   // P3パターン: actualStartTime=actualEndTime同時記録用
+  hasCargoWork?: boolean;    // 🆕 荷役作業の有無
 }
 
 // 🆕 D5/D6機能: 積降記録リクエスト
@@ -172,6 +174,7 @@ export interface StartLoadingRequest {
   customItemName?: string;
   selectedItemIds?: string[];
   customerId?: string;       // ✅ この積込だけの独立した客先
+  hasCargoWork?: boolean;    // 🆕 荷役作業の有無
 }
 
 /**

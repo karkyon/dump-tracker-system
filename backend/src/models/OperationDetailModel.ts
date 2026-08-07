@@ -73,6 +73,7 @@ export interface OperationDetailCreateDTO {
   fuelCostYen?: number;          // 🆕 給油金額専用カラム
   odometerKm?: number;           // 🆕 給油時走行距離
   notes?: string;
+  hasCargoWork?: boolean;        // 🆕 この積込(LOADING)に荷役作業が伴ったかどうか
   // 🆕 GPS位置情報フィールド
   latitude?: number;
   longitude?: number;
@@ -284,6 +285,7 @@ export class OperationDetailService {
         quantityTons: data.quantityTons,
         fuelCostYen: data.fuelCostYen ?? null,  // ✅ 給油金額専用カラム
         odometerKm: data.odometerKm ?? null,         // ✅ 給油時走行距離
+        hasCargoWork: (data as any).hasCargoWork ?? false,  // 🆕 荷役作業の有無
         notes: data.notes,
         // 🆕 GPS位置情報を直接保存
         latitude: data.latitude ?? null,

@@ -712,6 +712,8 @@ export class TripController {
           : {}),
         // 積込～荷降しごとに独立した客先情報を持たせるため customerId をパススルー
         ...((activityData as any).customerId ? { customerId: (activityData as any).customerId } : {}),
+        // 🆕 荷役作業トグル: この積込(LOADING)に荷役作業が伴ったかどうか
+        ...((activityData as any).hasCargoWork !== undefined ? { hasCargoWork: (activityData as any).hasCargoWork === true } : {}),
         // 🆕 GPS データを operation_details に保存
         latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude ? Number(activityData.longitude) : undefined,
