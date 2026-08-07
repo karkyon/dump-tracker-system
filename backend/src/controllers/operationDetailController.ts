@@ -44,6 +44,7 @@ interface TimelineEvent {
   timestamp: Date | null;
   customerId?: string | null;
   customerName?: string | null;
+  hasCargoWork?: boolean;
   location?: {
     id: string;
     name: string;
@@ -428,6 +429,7 @@ export class OperationDetailController {
             // 未設定の場合のみ運行全体の客先にフォールバックする
             customerId: detail.customerId ?? operation?.customerId ?? null,
             customerName: (detail as any).customers?.name ?? (operation as any)?.customer?.name ?? null,
+            hasCargoWork: (detail as any).hasCargoWork ?? false,
           });
 
           // 🆕 積込: 積込完了イベント
@@ -461,7 +463,8 @@ export class OperationDetailController {
                 sequenceOrder: di.sequenceOrder,
               })),
               customItemName: loadCustomItemName || null,
-              notes: loadNotesRest || null
+              notes: loadNotesRest || null,
+              hasCargoWork: (detail as any).hasCargoWork ?? false,
             });
           }
           } // ✅ FIX: 空LOADING非表示 if(!_isEmptyLoading) の閉じ
