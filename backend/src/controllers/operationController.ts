@@ -48,26 +48,41 @@ export class OperationController {
       limit = 20,
       status,
       vehicleId,
+      driverId,
       startDate,
       endDate,
       search
     } = req.query as PaginationQuery & {
       status?: string;
       vehicleId?: string;
+      driverId?: string;
       startDate?: string;
       endDate?: string;
       search?: string;
     };
 
-    logger.info('運行一覧取得', { userId, page, limit, status, vehicleId, search });
+    logger.info('運行一覧取得', { userId, page, limit, status, vehicleId, driverId, search });
 
     // WHERE句構築
     const where: any = {};
     if (vehicleId) where.vehicleId = vehicleId;
+    // 🔧 修正: driverIdがクエリパラメータの分割代入から漏れており、
+    //    CMSから送られていても一切絞り込みに反映されていなかった
+    if (driverId) where.driverId = driverId;
     if (status) where.status = status;
     if (startDate || endDate) {
       where.actualStartTime = {};
-      if (startDate) where.actualStartTime.gte = new Date(startDate);
+      if (startDate) {
+        where.actualStartTime.gte = new Date(startDate);
+        // 🔧 修正: endDateが指定されていない単一日付フィルタの場合、
+        //    「その日以降すべて」になってしまい絞り込みが機能していなかった。
+        //    endDate未指定時はstartDateの「その日の終わり」を上限として補完する。
+        if (!endDate) {
+          const endOfDay = new Date(startDate);
+          endOfDay.setHours(23, 59, 59, 999);
+          where.actualStartTime.lte = endOfDay;
+        }
+      }
       if (endDate) where.actualStartTime.lte = new Date(endDate);
     }
 
