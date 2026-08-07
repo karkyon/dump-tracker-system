@@ -405,13 +405,13 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
   //    バックグラウンドで常時記録されているGPSログ(gps_logs)の
   //    最初/最後の1点を、それぞれ運行開始地点・運行終了地点とみなす。
   if (gpsLogs.length > 0) {
-    const firstLog = gpsLogs[0];
-    const lastLog = gpsLogs[gpsLogs.length - 1];
+    const firstLog = gpsLogs[0]!;
+    const lastLog = gpsLogs[gpsLogs.length - 1]!;
     const firstLogTime = new Date(firstLog.recordedAt as any);
     const lastLogTime = new Date(lastLog.recordedAt as any);
 
-    const earliestStopTime = stops.length > 0 ? stops[0].time.getTime() : Infinity;
-    const latestStopTime = stops.length > 0 ? stops[stops.length - 1].time.getTime() : -Infinity;
+    const earliestStopTime = stops.length > 0 ? stops[0]!.time.getTime() : Infinity;
+    const latestStopTime = stops.length > 0 ? stops[stops.length - 1]!.time.getTime() : -Infinity;
 
     if (firstLogTime.getTime() < earliestStopTime) {
       stops.unshift({
