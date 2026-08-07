@@ -58,11 +58,16 @@ jobs:
             #    握りつぶされ本番スキーマが一度も自動更新されていなかった。
             cp /tmp/backend-deploy/prisma/schema.camel.prisma prisma/schema.camel.prisma
             export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
-            npm ci
+            # 🔧 修正(BUG-CICD-NPX): npm ci の失敗を検知せず後続コマンドが実行され、
+            #    壊れた node_modules のまま prisma generate/db push が走っていたため明示チェック追加
+            npm ci || { echo "❌ npm ci に失敗しました。デプロイを中断します"; exit 1; }
+            # 🔧 修正(BUG-CICD-NPX): npx prisma はグローバルのv7を引っ張り、
+            #    プロジェクト固定のv6(url=env()構文)と非互換のため絶対に使用しない。
+            #    必ずプロジェクトにpinされたローカルバイナリを使用する。
             # 🔧 修正: スキーマ反映の失敗を握りつぶさない。失敗時はここでジョブを
             #    失敗させ、コード(dist)とDBスキーマの不整合を即座に検知できるようにする。
-            npx prisma generate --schema=./prisma/schema.camel.prisma
-            npx prisma db push --schema=./prisma/schema.camel.prisma
+            ./node_modules/.bin/prisma generate --schema=./prisma/schema.camel.prisma
+            ./node_modules/.bin/prisma db push --schema=./prisma/schema.camel.prisma
             sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo systemctl restart dump-tracker-backend
