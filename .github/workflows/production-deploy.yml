@@ -52,11 +52,17 @@ jobs:
             cp -r /tmp/backend-deploy/dist .
             cp /tmp/backend-deploy/package*.json .
             mkdir -p prisma
-            cp /tmp/backend-deploy/schema.camel.prisma prisma/ 2>/dev/null || true
+            # 🔧 修正: strip_components:1 適用後の実際の配置先は
+            #    /tmp/backend-deploy/prisma/schema.camel.prisma （prisma/有り）。
+            #    以前は prisma/ 無しのパスを探して常に失敗し、|| true で
+            #    握りつぶされ本番スキーマが一度も自動更新されていなかった。
+            cp /tmp/backend-deploy/prisma/schema.camel.prisma prisma/schema.camel.prisma
             export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
             npm ci
-            npx prisma generate --schema=./prisma/schema.camel.prisma 2>/dev/null || true
-            npx prisma db push --schema=./prisma/schema.camel.prisma 2>/dev/null || true
+            # 🔧 修正: スキーマ反映の失敗を握りつぶさない。失敗時はここでジョブを
+            #    失敗させ、コード(dist)とDBスキーマの不整合を即座に検知できるようにする。
+            npx prisma generate --schema=./prisma/schema.camel.prisma
+            npx prisma db push --schema=./prisma/schema.camel.prisma
             sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo -u postgres psql dump_tracker_prod -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dump_tracker_user;" 2>/dev/null || true
             sudo systemctl restart dump-tracker-backend
