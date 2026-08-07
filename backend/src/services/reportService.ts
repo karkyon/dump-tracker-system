@@ -68,6 +68,7 @@ import {
   getFiscalYearRange,
 } from './annualTransportReportService';
 import { generateAnnualTransportReportPDF } from './annualTransportReportPDF';
+import { getRouteSegments } from './routeDistanceService';
 
 // 🎯 完成済みサービス層との統合連携（3層統合管理システム活用）
 import type { VehicleService } from './vehicleService';
@@ -2002,6 +2003,33 @@ class ReportService {
           : `${totalWaitingMinutes}分`)
       : '';
 
+    // 🆕 運行距離補完機能Phase3: 実車距離・空車距離合計
+    //    OperationRouteSegment（GPS実測/Routes API推定の区間距離）を
+    //    fromActivityTypeで実車(LOADING発)/空車(UNLOADING発)に分類・合算する。
+    //    reportService既存の「空車移動時間」定義（荷降完了→次の積込開始）と揃えている。
+    let totalLoadedDistanceKm = 0;
+    let totalEmptyDistanceKm = 0;
+    for (const op of operations) {
+      try {
+        const segments: any[] = await getRouteSegments(op.id);
+        for (const seg of segments) {
+          const km = Number(seg.distanceKm) || 0;
+          if (String(seg.fromActivityType).toUpperCase() === 'UNLOADING') {
+            totalEmptyDistanceKm += km;
+          } else {
+            totalLoadedDistanceKm += km;
+          }
+        }
+      } catch (segErr) {
+        logger.warn('[ReportService] 区間距離取得失敗（実車/空車距離集計をスキップ）', {
+          operationId: op.id,
+          error: segErr instanceof Error ? segErr.message : segErr,
+        });
+      }
+    }
+    const totalLoadedDistanceText = totalLoadedDistanceKm > 0 ? `${totalLoadedDistanceKm.toFixed(1)}km` : '';
+    const totalEmptyDistanceText  = totalEmptyDistanceKm  > 0 ? `${totalEmptyDistanceKm.toFixed(1)}km`  : '';
+
     // 全inspection_records を統合
     const allInspRecords: any[] = [];
     for (const op of operations) {
@@ -2081,10 +2109,13 @@ class ReportService {
       middleInspItems: middleItems,
       rightInspItems: rightItems,
       // 要件No.2・15・16・17・18: 交代運転者氏名・待機時間・荷役作業時間を備考欄に自動追記
+      // 🆕 運行距離補完機能Phase3: 実車距離合計・空車距離合計を備考欄に自動追記
       remarks: [
         (firstOp as any)?.relayDriverName ? `交代運転者: ${(firstOp as any).relayDriverName}` : '',
         totalCargoWorkTime ? `荷役作業時間合計: ${totalCargoWorkTime}` : '',
         totalWaitingTime ? `待機時間合計: ${totalWaitingTime}` : '',
+        totalLoadedDistanceText ? `実車距離合計: ${totalLoadedDistanceText}` : '',
+        totalEmptyDistanceText ? `空車距離合計: ${totalEmptyDistanceText}` : '',
       ].filter(Boolean).join(' / '),
     };
 
