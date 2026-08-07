@@ -353,8 +353,9 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
   const operation = await prisma.operation.findUnique({
     where: { id: operationId },
     include: {
+      // 🔧 修正: locationIdの有無で絞り込まない。積込・荷降だけでなく
+      //    休憩・給油・その他すべてのイベントを区間の起点/終点候補にする。
       operationDetails: {
-        where: { locationId: { not: null } },
         orderBy: { sequenceNumber: 'asc' },
         include: { locations: true }
       }
@@ -364,6 +365,12 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
   if (!operation) {
     throw new NotFoundError('指定された運行が見つかりません');
   }
+
+  const gpsLogs = await prisma.gpsLog.findMany({
+    where: { operationId },
+    orderBy: { recordedAt: 'asc' },
+    select: { latitude: true, longitude: true, recordedAt: true, accuracyMeters: true }
+  });
 
   const stops: StopPoint[] = (operation as any).operationDetails
     .map((detail: any) => {
@@ -393,6 +400,39 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     })
     .filter((s: StopPoint | null): s is StopPoint => s !== null);
 
+  // 🆕 運行開始（出庫）・運行終了（帰庫）の仮想stopを追加する。
+  //    operations テーブルには出庫/帰庫地点のカラムが無いため、
+  //    バックグラウンドで常時記録されているGPSログ(gps_logs)の
+  //    最初/最後の1点を、それぞれ運行開始地点・運行終了地点とみなす。
+  if (gpsLogs.length > 0) {
+    const firstLog = gpsLogs[0];
+    const lastLog = gpsLogs[gpsLogs.length - 1];
+    const firstLogTime = new Date(firstLog.recordedAt as any);
+    const lastLogTime = new Date(lastLog.recordedAt as any);
+
+    const earliestStopTime = stops.length > 0 ? stops[0].time.getTime() : Infinity;
+    const latestStopTime = stops.length > 0 ? stops[stops.length - 1].time.getTime() : -Infinity;
+
+    if (firstLogTime.getTime() < earliestStopTime) {
+      stops.unshift({
+        sequenceNumber: -1,
+        activityType: 'TRIP_START',
+        time: firstLogTime,
+        latitude: Number(firstLog.latitude),
+        longitude: Number(firstLog.longitude),
+      });
+    }
+    if (lastLogTime.getTime() > latestStopTime) {
+      stops.push({
+        sequenceNumber: 999999,
+        activityType: 'TRIP_END',
+        time: lastLogTime,
+        latitude: Number(lastLog.latitude),
+        longitude: Number(lastLog.longitude),
+      });
+    }
+  }
+
   if (stops.length < 2) {
     logger.info('区間計算対象となる停車地点が不足しているためスキップ', {
       operationId,
@@ -400,12 +440,6 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     });
     return [];
   }
-
-  const gpsLogs = await prisma.gpsLog.findMany({
-    where: { operationId },
-    orderBy: { recordedAt: 'asc' },
-    select: { latitude: true, longitude: true, recordedAt: true, accuracyMeters: true }
-  });
 
   const allGpsPoints: GpsPoint[] = gpsLogs
     .filter((log: any) => !log.accuracyMeters || Number(log.accuracyMeters) <= 150)

@@ -2010,21 +2010,28 @@ class ReportService {
           : `${totalWaitingMinutes}分`)
       : '';
 
-    // 🆕 運行距離補完機能Phase3: 実車距離・空車距離合計
-    //    OperationRouteSegment（GPS実測/Routes API推定の区間距離）を
-    //    fromActivityTypeで実車(LOADING発)/空車(UNLOADING発)に分類・合算する。
-    //    reportService既存の「空車移動時間」定義（荷降完了→次の積込開始）と揃えている。
+    // 🆕 運行距離補完機能Phase3（全イベント対応版）: 実車距離・空車距離合計
+    //    区間は積込・荷降だけでなく休憩・給油・運行開始/終了も含めて
+    //    切れ目なく並んでいるため、実車/空車の状態を先頭から引き継ぎながら
+    //    分類する（休憩・給油区間は直前の積込/荷降状態をそのまま引き継ぐ）。
     let totalLoadedDistanceKm = 0;
     let totalEmptyDistanceKm = 0;
     for (const op of operations) {
       try {
         const segments: any[] = await getRouteSegments(op.id);
+        let loadedState = false;
         for (const seg of segments) {
+          const from = String(seg.fromActivityType).toUpperCase();
+          if (from === 'LOADING') {
+            loadedState = true;
+          } else if (from === 'UNLOADING') {
+            loadedState = false;
+          }
           const km = Number(seg.distanceKm) || 0;
-          if (String(seg.fromActivityType).toUpperCase() === 'UNLOADING') {
-            totalEmptyDistanceKm += km;
-          } else {
+          if (loadedState) {
             totalLoadedDistanceKm += km;
+          } else {
+            totalEmptyDistanceKm += km;
           }
         }
       } catch (segErr) {
