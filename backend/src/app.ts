@@ -372,6 +372,20 @@ export class ExpressApp {
       })
     );
 
+    // 運行区間距離（GPS実測/Routes API推定）ルート
+    // 🔧 FIX 2026-08-13: routes/index.ts 内の catch-all 404 ハンドラー
+    //    (router.use(...NotFoundError...)) がここより後に登録されていたせいで
+    //    先にマッチしてしまい、GET/POST /api/v1/route-segments/* が
+    //    常に404を返していた問題を修正。/api/v1 統合ルート登録より
+    //    前に登録することで解消する。
+    try {
+      const routeSegmentRoutes = require('./routes/routeSegmentRoutes').default || require('./routes/routeSegmentRoutes');
+      this.app.use('/api/v1/route-segments', routeSegmentRoutes);
+      logger.info('✅ 運行区間距離APIルート登録完了: /api/v1/route-segments');
+    } catch (error) {
+      logger.error('❌ routeSegmentRoutes 読み込み失敗', error);
+    }
+
     // 🎯 統合APIルート設定
     let routes: any;
     try {
@@ -401,15 +415,6 @@ export class ExpressApp {
       logger.info('✅ フィードバック管理APIルート登録完了: /api/v1/feedback');
     } catch (error) {
       logger.error('❌ feedbackRoutes 読み込み失敗', error);
-    }
-
-    // 運行区間距離（GPS実測/Routes API推定）ルート
-    try {
-      const routeSegmentRoutes = require('./routes/routeSegmentRoutes').default || require('./routes/routeSegmentRoutes');
-      this.app.use('/api/v1/route-segments', routeSegmentRoutes);
-      logger.info('✅ 運行区間距離APIルート登録完了: /api/v1/route-segments');
-    } catch (error) {
-      logger.error('❌ routeSegmentRoutes 読み込み失敗', error);
     }
 
     // ログビューアAPI（管理者専用）
