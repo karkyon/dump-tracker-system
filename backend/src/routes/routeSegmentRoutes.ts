@@ -23,7 +23,9 @@ router.get(
   authenticateToken(),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { operationId } = req.params as { operationId: string };
+    console.log(`[RouteSegments][API] GET /route-segments/${operationId} リクエスト受信 (userId=${req.user?.userId})`);
     const segments = await getRouteSegments(operationId);
+    console.log(`[RouteSegments][API] GET /route-segments/${operationId} レスポンス: ${segments.length}件`);
     return sendSuccess(res, segments, '運行区間距離を取得しました');
   })
 );
@@ -37,8 +39,10 @@ router.post(
   authenticateToken(),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { operationId } = req.params as { operationId: string };
+    console.log(`[RouteSegments][API] POST /route-segments/${operationId}/compute リクエスト受信 (userId=${req.user?.userId})`);
     logger.info('運行区間距離の再計算リクエスト', { operationId, userId: req.user?.userId });
     const segments = await computeAndSaveRouteSegments(operationId);
+    console.log(`[RouteSegments][API] POST /route-segments/${operationId}/compute レスポンス: ${segments.length}件`);
     return sendSuccess(res, segments, '運行区間距離を再計算しました');
   })
 );

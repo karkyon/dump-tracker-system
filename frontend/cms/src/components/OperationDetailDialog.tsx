@@ -321,7 +321,13 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         }
 
         // ✅ Phase2: 推定経路（Google Routes API）のポリライン重ね描画
+        console.log('[RouteSegments][Frontend] 🖌️ 描画チェック: routeSegments件数=' + routeSegments.length + ', geometry libロード済み=' + !!(window as any).google?.maps?.geometry?.encoding);
+        if (routeSegments.length > 0) {
+          console.log('[RouteSegments][Frontend] 🖌️ routeSegments詳細:', routeSegments.map(s => ({ idx: s.segmentIndex, from: s.fromActivityType, to: s.toActivityType, source: s.distanceSource, hasPolyline: !!s.routePolyline })));
+        }
         if ((window as any).google?.maps?.geometry?.encoding && routeSegments.length > 0) {
+          const orangeCandidates = routeSegments.filter(seg => seg.routePolyline && (seg.distanceSource === 'GPS_PARTIAL_ESTIMATE' || seg.distanceSource === 'FULL_ESTIMATE'));
+          console.log(`[RouteSegments][Frontend] 🖌️ オレンジ線描画対象: ${orangeCandidates.length}件 / 全${routeSegments.length}件`);
           const estimateInfoWindow = new google.maps.InfoWindow();
           routeSegments
             .filter(seg => seg.routePolyline && (seg.distanceSource === 'GPS_PARTIAL_ESTIMATE' || seg.distanceSource === 'FULL_ESTIMATE'))
@@ -920,12 +926,22 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         fetchIntegratedTimeline(operationId),
         fetchInspectionItemDetails(operationId),
         (async () => {
+          console.log('[RouteSegments][Frontend] 🌐 GET /route-segments/' + operationId + ' 開始');
           try {
             const res = await apiClient.get(`/route-segments/${operationId}`);
             const d: any = res;
+            console.log('[RouteSegments][Frontend] 📡 レスポンス生データ:', d);
             const arr = d?.data?.data ?? d?.data ?? [];
-            setRouteSegments(Array.isArray(arr) ? arr : []);
-          } catch { /* 区間距離データ取得失敗は致命的ではない（Phase1/2機能） */ }
+            const list = Array.isArray(arr) ? arr : [];
+            const sourceCounts = list.reduce((acc: Record<string, number>, seg: any) => {
+              acc[seg.distanceSource] = (acc[seg.distanceSource] || 0) + 1;
+              return acc;
+            }, {});
+            console.log(`[RouteSegments][Frontend] ✅ 区間データ取得完了: ${list.length}件, 内訳=`, sourceCounts);
+            setRouteSegments(list);
+          } catch (segErr) {
+            console.error('[RouteSegments][Frontend] ❌ 区間距離データ取得失敗:', segErr);
+          }
         })(),
         (async () => {
           try {

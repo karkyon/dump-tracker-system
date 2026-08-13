@@ -162,7 +162,9 @@ async function callRoutesApi(
   // ✅ 修正: Routes API専用キーが無ければ、既存のMaps用キー（同一GCPプロジェクトで
   //    Routes APIが有効化されていれば動作する）にフォールバックする。
   const apiKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  console.log(`[RouteSegments] 🔑 Routes APIキー確認: ${apiKey ? `設定あり(末尾4桁=...${apiKey.slice(-4)})` : '未設定'}`);
   if (!apiKey) {
+    console.log('[RouteSegments] ❌ GOOGLE_ROUTES_API_KEY / GOOGLE_MAPS_API_KEY が未設定のため Routes API呼び出し不可');
     throw new Error('GOOGLE_ROUTES_API_KEY / GOOGLE_MAPS_API_KEY のいずれも設定されていません（.envに追加が必要）');
   }
 
@@ -190,8 +192,10 @@ async function callRoutesApi(
   });
 
   const json: any = await response.json();
+  console.log(`[RouteSegments] 📡 Routes APIレスポンス: HTTP ${response.status}, routes件数=${json?.routes?.length ?? 0}`);
 
   if (!response.ok || !json.routes || json.routes.length === 0) {
+    console.log(`[RouteSegments] ❌ Routes APIエラー詳細: ${JSON.stringify(json).slice(0, 500)}`);
     logger.error('Routes API呼び出し失敗', { status: response.status, body: json });
     throw new Error(`Routes API呼び出し失敗: ${response.status} ${JSON.stringify(json).slice(0, 300)}`);
   }
@@ -264,6 +268,7 @@ async function resolveSegment(
   };
 
   const availability = classifyGpsAvailability(gpsPoints);
+  console.log(`[RouteSegments] 🧭 区間#${segmentIndex} (${from.activityType}→${to.activityType}) GPS可用性判定: ${availability} (GPS点数=${gpsPoints.length})`);
 
   if (availability === 'ACTUAL') {
     let distanceKm = 0;
@@ -275,6 +280,7 @@ async function resolveSegment(
         gpsPoints[i]!.longitude
       );
     }
+    console.log(`[RouteSegments] ✅ 区間#${segmentIndex}: GPS実測のみで距離算出 = ${distanceKm.toFixed(3)}km（Routes API呼び出しなし）`);
     return {
       ...base,
       distanceSource: 'GPS_ACTUAL',
@@ -293,6 +299,7 @@ async function resolveSegment(
     { latitude: to.latitude, longitude: to.longitude }
   );
   if (cached) {
+    console.log(`[RouteSegments] 💾 区間#${segmentIndex}: キャッシュ済み区間を再利用 = ${cached.distanceKm.toFixed(3)}km（Routes API呼び出しなし）`);
     return {
       ...base,
       distanceSource: availability === 'PARTIAL' ? 'GPS_PARTIAL_ESTIMATE' : 'FULL_ESTIMATE',
@@ -308,12 +315,16 @@ async function resolveSegment(
       ? simplifyWaypoints(gpsPoints).map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
       : [];
 
+  console.log(`[RouteSegments] 🌐 区間#${segmentIndex}: Google Routes APIを呼び出します (availability=${availability}, 中間点=${intermediates.length}件)`);
+
   try {
     const result = await callRoutesApi(
       { latitude: from.latitude, longitude: from.longitude },
       { latitude: to.latitude, longitude: to.longitude },
       intermediates
     );
+
+    console.log(`[RouteSegments] ✅ 区間#${segmentIndex}: Routes API成功 = ${(result.distanceMeters / 1000).toFixed(3)}km, polyline長=${result.encodedPolyline?.length ?? 0}文字`);
 
     return {
       ...base,
@@ -324,6 +335,7 @@ async function resolveSegment(
       apiRequestSnapshot: result.rawResponse
     };
   } catch (error) {
+    console.log(`[RouteSegments] ❌ 区間#${segmentIndex}: Routes API失敗、直線距離フォールバックへ切替 = ${(straightKm * FALLBACK_STRAIGHT_FACTOR).toFixed(3)}km / エラー: ${error instanceof Error ? error.message : String(error)}`);
     logger.warn('Routes API失敗、直線距離フォールバックを使用', {
       error: error instanceof Error ? error.message : error,
       segmentIndex
@@ -344,6 +356,7 @@ async function resolveSegment(
 // =====================================
 
 export async function computeAndSaveRouteSegments(operationId: string): Promise<SegmentResult[]> {
+  console.log(`[RouteSegments] ▶️▶️▶️ computeAndSaveRouteSegments 開始: operationId=${operationId}`);
   const prisma = DatabaseService.getInstance();
 
   if (!operationId) {
@@ -371,6 +384,7 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     orderBy: { recordedAt: 'asc' },
     select: { latitude: true, longitude: true, recordedAt: true, accuracyMeters: true }
   });
+  console.log(`[RouteSegments] 📍 GPSログ件数: ${gpsLogs.length}件`);
 
   const stops: StopPoint[] = (operation as any).operationDetails
     .map((detail: any) => {
@@ -433,7 +447,10 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     }
   }
 
+  console.log(`[RouteSegments] 🛑 停車地点(stops)数: ${stops.length}`, stops.map((s: any) => `${s.activityType}@${s.time.toISOString()}`));
+
   if (stops.length < 2) {
+    console.log(`[RouteSegments] ⚠️ 停車地点が2未満のため区間計算をスキップします (operationId=${operationId})`);
     logger.info('区間計算対象となる停車地点が不足しているためスキップ', {
       operationId,
       stopCount: stops.length
@@ -505,6 +522,7 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     }))
   });
 
+  console.log(`[RouteSegments] 🏁 computeAndSaveRouteSegments 完了: operationId=${operationId}, 区間数=${results.length}, sources=[${results.map((r) => r.distanceSource).join(', ')}]`);
   logger.info('運行区間距離の算出・保存完了', {
     operationId,
     segmentCount: results.length,
@@ -515,11 +533,14 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
 }
 
 export async function getRouteSegments(operationId: string) {
+  console.log(`[RouteSegments] 🔍 getRouteSegments 呼び出し: operationId=${operationId}`);
   const prisma = DatabaseService.getInstance();
-  return (prisma as any).operationRouteSegment.findMany({
+  const segments = await (prisma as any).operationRouteSegment.findMany({
     where: { operationId },
     orderBy: { segmentIndex: 'asc' }
   });
+  console.log(`[RouteSegments] 🔍 getRouteSegments 結果: ${segments.length}件, sources=[${segments.map((s: any) => s.distanceSource).join(', ')}]`);
+  return segments;
 }
 
 // =====================================
