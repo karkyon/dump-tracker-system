@@ -558,21 +558,23 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
       select: { totalDistanceKm: true, loadedDistanceKm: true }
     });
 
+    // 🆕 方針転換: オドメーター入力値の有無に関係なく、
+    // 常にGPS実測+Routes API推定の区間距離合計を
+    // totalDistanceKm / loadedDistanceKm として採用する。
+    // （テスト入力等の不正確な手入力値が「実測値」として
+    // 残り続けるのを防ぐため。生のオドメーター値(startOdometer/
+    // endOdometer)自体は別カラムとして残るため監査記録は失われない）
     const opUpdateData: any = {
       routeSegmentDistanceKm: sumTotal,
       routeSegmentLoadedDistanceKm: sumLoaded,
-      routeSegmentDistanceSource: distanceSourceLabel
+      routeSegmentDistanceSource: distanceSourceLabel,
+      totalDistanceKm: sumTotal,
+      loadedDistanceKm: sumLoaded
     };
-    const willOverwriteTotal = currentOperation?.totalDistanceKm === null || currentOperation?.totalDistanceKm === undefined;
-    const willOverwriteLoaded = currentOperation?.loadedDistanceKm === null || currentOperation?.loadedDistanceKm === undefined;
-    if (willOverwriteTotal) {
-      opUpdateData.totalDistanceKm = sumTotal;
-    }
-    if (willOverwriteLoaded) {
-      opUpdateData.loadedDistanceKm = sumLoaded;
-    }
+    const previousTotalDistanceKm = currentOperation?.totalDistanceKm ?? null;
+    const previousLoadedDistanceKm = currentOperation?.loadedDistanceKm ?? null;
     await prisma.operation.update({ where: { id: operationId }, data: opUpdateData });
-    console.log(`[RouteSegments] 📝 Operationへ反映: total=${sumTotal.toFixed(3)}km, loaded=${sumLoaded.toFixed(3)}km, source=${distanceSourceLabel}, totalDistanceKm上書き=${willOverwriteTotal}, loadedDistanceKm上書き=${willOverwriteLoaded}`);
+    console.log(`[RouteSegments] 📝 Operationへ反映(常時上書き): total=${sumTotal.toFixed(3)}km(旧値=${previousTotalDistanceKm}), loaded=${sumLoaded.toFixed(3)}km(旧値=${previousLoadedDistanceKm}), source=${distanceSourceLabel}`);
   } catch (updateErr) {
     console.log(`[RouteSegments] ⚠️ Operationへの距離反映に失敗: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`);
     logger.warn('運行距離のOperationへの反映に失敗', {
