@@ -939,6 +939,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
             }, {});
             console.log(`[RouteSegments][Frontend] ✅ 区間データ取得完了: ${list.length}件, 内訳=`, sourceCounts);
             setRouteSegments(list);
+            // 🆕 FIX: GPSタブを開く前に前もってgeometryライブラリを読み込んでおく
+            if (list.length > 0 && (window as any).google?.maps?.importLibrary) {
+              (window as any).google.maps.importLibrary('geometry').catch((e: any) => {
+                console.warn('[RouteSegments][Frontend] ⚠️ geometryライブラリの先読みに失敗:', e);
+              });
+            }
           } catch (segErr) {
             console.error('[RouteSegments][Frontend] ❌ 区間距離データ取得失敗:', segErr);
           }
