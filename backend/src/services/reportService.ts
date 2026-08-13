@@ -2016,6 +2016,8 @@ class ReportService {
     //    分類する（休憩・給油区間は直前の積込/荷降状態をそのまま引き継ぐ）。
     let totalLoadedDistanceKm = 0;
     let totalEmptyDistanceKm = 0;
+    let dayHasActualSegment = false;
+    let dayHasEstimatedSegment = false;
     for (const op of operations) {
       try {
         const segments: any[] = await getRouteSegments(op.id);
@@ -2033,6 +2035,11 @@ class ReportService {
           } else {
             totalEmptyDistanceKm += km;
           }
+          if (seg.distanceSource === 'GPS_ACTUAL') {
+            dayHasActualSegment = true;
+          } else {
+            dayHasEstimatedSegment = true;
+          }
         }
       } catch (segErr) {
         logger.warn('[ReportService] 区間距離取得失敗（実車/空車距離集計をスキップ）', {
@@ -2041,8 +2048,11 @@ class ReportService {
         });
       }
     }
-    const totalLoadedDistanceText = totalLoadedDistanceKm > 0 ? `${totalLoadedDistanceKm.toFixed(1)}km` : '';
-    const totalEmptyDistanceText  = totalEmptyDistanceKm  > 0 ? `${totalEmptyDistanceKm.toFixed(1)}km`  : '';
+    const distanceLabel = dayHasEstimatedSegment && dayHasActualSegment ? '（一部推定）'
+      : dayHasEstimatedSegment ? '（推定）'
+      : dayHasActualSegment ? '（実測）' : '';
+    const totalLoadedDistanceText = totalLoadedDistanceKm > 0 ? `${totalLoadedDistanceKm.toFixed(1)}km${distanceLabel}` : '';
+    const totalEmptyDistanceText  = totalEmptyDistanceKm  > 0 ? `${totalEmptyDistanceKm.toFixed(1)}km${distanceLabel}`  : '';
 
     // 全inspection_records を統合
     const allInspRecords: any[] = [];

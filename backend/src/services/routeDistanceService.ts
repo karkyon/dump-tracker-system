@@ -529,6 +529,58 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     sources: results.map((r) => r.distanceSource)
   });
 
+  try {
+    let loadedState = false;
+    let sumTotal = 0;
+    let sumLoaded = 0;
+    let hasActual = false;
+    let hasEstimated = false;
+    for (const seg of results) {
+      const fromType = String((seg as any).fromActivityType).toUpperCase();
+      if (fromType === 'LOADING') {
+        loadedState = true;
+      } else if (fromType === 'UNLOADING') {
+        loadedState = false;
+      }
+      const km = Number(seg.distanceKm) || 0;
+      sumTotal += km;
+      if (loadedState) sumLoaded += km;
+      if (seg.distanceSource === 'GPS_ACTUAL') {
+        hasActual = true;
+      } else {
+        hasEstimated = true;
+      }
+    }
+    const distanceSourceLabel = hasEstimated && hasActual ? 'MIXED' : hasEstimated ? 'ESTIMATED' : 'ACTUAL';
+
+    const currentOperation = await prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { totalDistanceKm: true, loadedDistanceKm: true }
+    });
+
+    const opUpdateData: any = {
+      routeSegmentDistanceKm: sumTotal,
+      routeSegmentLoadedDistanceKm: sumLoaded,
+      routeSegmentDistanceSource: distanceSourceLabel
+    };
+    const willOverwriteTotal = currentOperation?.totalDistanceKm === null || currentOperation?.totalDistanceKm === undefined;
+    const willOverwriteLoaded = currentOperation?.loadedDistanceKm === null || currentOperation?.loadedDistanceKm === undefined;
+    if (willOverwriteTotal) {
+      opUpdateData.totalDistanceKm = sumTotal;
+    }
+    if (willOverwriteLoaded) {
+      opUpdateData.loadedDistanceKm = sumLoaded;
+    }
+    await prisma.operation.update({ where: { id: operationId }, data: opUpdateData });
+    console.log(`[RouteSegments] 📝 Operationへ反映: total=${sumTotal.toFixed(3)}km, loaded=${sumLoaded.toFixed(3)}km, source=${distanceSourceLabel}, totalDistanceKm上書き=${willOverwriteTotal}, loadedDistanceKm上書き=${willOverwriteLoaded}`);
+  } catch (updateErr) {
+    console.log(`[RouteSegments] ⚠️ Operationへの距離反映に失敗: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`);
+    logger.warn('運行距離のOperationへの反映に失敗', {
+      operationId,
+      error: updateErr instanceof Error ? updateErr.message : updateErr
+    });
+  }
+
   return results;
 }
 

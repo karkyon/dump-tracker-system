@@ -335,6 +335,10 @@ model Operation {
   // 🆕 P1-05: 実績報告書用フィールド
   loadedDistanceKm                Decimal?           @map("loaded_distance_km") @db.Decimal(8, 2)
   revenueYen                      Int?               @map("revenue_yen")
+  // 🆕 運行距離補完機能: GPS実測/Routes API推定の区間距離合計
+  routeSegmentDistanceKm          Decimal?           @map("route_segment_distance_km") @db.Decimal(8, 3)
+  routeSegmentLoadedDistanceKm    Decimal?           @map("route_segment_loaded_distance_km") @db.Decimal(8, 3)
+  routeSegmentDistanceSource      String?            @map("route_segment_distance_source") @db.VarChar(20)
   gpsLogs                         GpsLog[]
   inspectionRecords               InspectionRecord[]
   operationDetails                OperationDetail[]

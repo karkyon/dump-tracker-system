@@ -1436,6 +1436,14 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                             {operation.totalDistanceKm ? `${operation.totalDistanceKm} km` : '-'}
                           </p>
                         </div>
+                        {(operation as any).routeSegmentDistanceKm != null && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            GPS/Routes推定: {Number((operation as any).routeSegmentDistanceKm).toFixed(1)} km
+                            （{(operation as any).routeSegmentDistanceSource === 'ACTUAL' ? '実測'
+                              : (operation as any).routeSegmentDistanceSource === 'MIXED' ? '一部推定'
+                              : '推定'}）
+                          </p>
+                        )}
                       </div>
                       <div>
                         <p className="text-sm text-gray-500 mb-1">燃料消費</p>

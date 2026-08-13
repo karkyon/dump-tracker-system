@@ -314,17 +314,23 @@ function buildRegionData(
     const vehicleDaysWorked = Array.from(vehicleWorkDays.values())
       .reduce((sum, days) => sum + days.size, 0);
 
-    // 走行キロ
+    // 走行キロ (GPS/Routes推定値にフォールバック)
     const totalDistanceKm = regionOps.reduce(
-      (sum: number, op: any) =>
-        sum + (op.totalDistanceKm ? Number(op.totalDistanceKm) : 0),
+      (sum: number, op: any) => {
+        const v = op.totalDistanceKm ? Number(op.totalDistanceKm)
+          : op.routeSegmentDistanceKm ? Number(op.routeSegmentDistanceKm) : 0;
+        return sum + v;
+      },
       0
     );
 
-    // 実車キロ
+    // 実車キロ (GPS/Routes推定値にフォールバック)
     const loadedDistanceKm = regionOps.reduce(
-      (sum: number, op: any) =>
-        sum + (op.loadedDistanceKm ? Number(op.loadedDistanceKm) : 0),
+      (sum: number, op: any) => {
+        const v = op.loadedDistanceKm ? Number(op.loadedDistanceKm)
+          : op.routeSegmentLoadedDistanceKm ? Number(op.routeSegmentLoadedDistanceKm) : 0;
+        return sum + v;
+      },
       0
     );
 
@@ -385,7 +391,8 @@ function buildAvailabilityCheck(
 ): DataAvailabilityCheck {
   const unassignedRegionCount = vehicles.filter((v: any) => !v.region).length;
   const missingLoadedDistanceCount = operations.filter(
-    (op: any) => op.loadedDistanceKm === null || op.loadedDistanceKm === undefined
+    (op: any) => (op.loadedDistanceKm === null || op.loadedDistanceKm === undefined)
+      && (op.routeSegmentLoadedDistanceKm === null || op.routeSegmentLoadedDistanceKm === undefined)
   ).length;
   const missingRevenueCount = operations.filter(
     (op: any) => op.revenueYen === null || op.revenueYen === undefined
