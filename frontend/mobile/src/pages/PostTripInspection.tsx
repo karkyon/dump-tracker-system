@@ -75,6 +75,76 @@ const PostTripInspection: React.FC = () => {
   const [endOdometer, setEndOdometer] = useState<number | null>(null);
   const [endFuelLevel, setEndFuelLevel] = useState<number | null>(null);
 
+  // ============================================
+  // 🆕 終了走行距離オートフィル + 上下ボタン微調整
+  // ============================================
+  // GPS(フロント累積)から推定した走行距離を開始時走行距離に加算し、
+  // 終了走行距離の初期値としてあらかじめ表示する。
+  // ドライバーは実際のオドメーター値との差分を上下ボタンで微調整するだけでよい。
+  // （自動計算はあくまで初期値。ユーザーが一度でも値を確定させたら上書きしない）
+  const ODOMETER_STEP_KM = 0.1;
+  const hasAutoFilledOdometerRef = useRef(false);
+  const stepperIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stepperTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (hasAutoFilledOdometerRef.current) return;
+    if (endOdometer !== null) return;
+    if (startMileage === null || startMileage === undefined) return;
+    if (!storedTotalDistanceKm || storedTotalDistanceKm <= 0) return;
+
+    const estimated = Math.round((startMileage + storedTotalDistanceKm) * 10) / 10;
+    setEndOdometer(estimated);
+    hasAutoFilledOdometerRef.current = true;
+    console.log('[D8] 🧮 終了走行距離を自動計算で初期表示', {
+      startMileage,
+      estimatedDistance: storedTotalDistanceKm,
+      prefilledEndOdometer: estimated
+    });
+  }, [startMileage, storedTotalDistanceKm, endOdometer]);
+
+  const clampOdometer = (value: number): number => {
+    if (startMileage !== null && startMileage !== undefined && value < startMileage) {
+      return startMileage;
+    }
+    return Math.round(value * 10) / 10;
+  };
+
+  const adjustEndOdometer = (delta: number) => {
+    setEndOdometer(prev => {
+      const base = prev !== null && prev !== undefined
+        ? prev
+        : (startMileage !== null && startMileage !== undefined ? startMileage : 0);
+      return clampOdometer(base + delta);
+    });
+  };
+
+  const stopOdometerStepperHold = () => {
+    if (stepperIntervalRef.current) {
+      clearInterval(stepperIntervalRef.current);
+      stepperIntervalRef.current = null;
+    }
+    if (stepperTimeoutRef.current) {
+      clearTimeout(stepperTimeoutRef.current);
+      stepperTimeoutRef.current = null;
+    }
+  };
+
+  const startOdometerStepperHold = (delta: number) => {
+    adjustEndOdometer(delta);
+    stopOdometerStepperHold();
+    // 長押しで連続加算（500ms待機後、120ms間隔で連続実行）
+    stepperTimeoutRef.current = setTimeout(() => {
+      stepperIntervalRef.current = setInterval(() => {
+        adjustEndOdometer(delta);
+      }, 120);
+    }, 500);
+  };
+
+  useEffect(() => {
+    return () => stopOdometerStepperHold();
+  }, []);
+
   // ✅ BUG修正: 運行終了成功後にresetOperation()でoperationId/vehicleIdが
   //   nullになると、下のuseEffect（依存配列に operationId/vehicleId を含む）が
   //   再実行され、「運行情報が見つかりません」エラーが誤表示されてしまう。
@@ -607,22 +677,58 @@ const PostTripInspection: React.FC = () => {
               　→ 終了時はこの値より大きい値を入力してください
             </div>
           )}
-          <input
-            type="number"
-            step="0.1"
-            value={endOdometer || ''}
-            onChange={(e) => {
-              const val = e.target.value ? parseFloat(e.target.value) : null;
-              setEndOdometer(val);
-            }}
-            placeholder={startMileage ? `${startMileage} より大きい値` : '例: 12567.5'}
-            className={`w-full px-4 py-3 text-lg font-semibold border-2 rounded-lg
-              focus:outline-none focus:ring-2 transition-all duration-200
-              ${endOdometer !== null && startMileage !== null && startMileage !== undefined && endOdometer <= startMileage
-                ? 'border-red-400 focus:border-red-500 focus:ring-red-200 bg-red-50'
-                : 'border-amber-300 focus:border-amber-500 focus:ring-amber-200'
-              }`}
-          />
+          <div className="flex items-stretch gap-2">
+            <button
+              type="button"
+              onPointerDown={() => startOdometerStepperHold(-ODOMETER_STEP_KM)}
+              onPointerUp={stopOdometerStepperHold}
+              onPointerLeave={stopOdometerStepperHold}
+              onPointerCancel={stopOdometerStepperHold}
+              className="flex-shrink-0 w-14 rounded-lg border-2 border-amber-300 bg-white
+                text-amber-700 text-2xl font-bold flex items-center justify-center
+                active:bg-amber-100 active:scale-95 transition-all duration-100
+                select-none"
+              aria-label="走行距離を減らす"
+            >
+              −
+            </button>
+            <input
+              type="number"
+              step="0.1"
+              value={endOdometer || ''}
+              onChange={(e) => {
+                const val = e.target.value ? parseFloat(e.target.value) : null;
+                setEndOdometer(val);
+              }}
+              placeholder={startMileage ? `${startMileage} より大きい値` : '例: 12567.5'}
+              className={`flex-1 min-w-0 px-4 py-3 text-lg font-semibold border-2 rounded-lg
+                text-center
+                focus:outline-none focus:ring-2 transition-all duration-200
+                ${endOdometer !== null && startMileage !== null && startMileage !== undefined && endOdometer <= startMileage
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-200 bg-red-50'
+                  : 'border-amber-300 focus:border-amber-500 focus:ring-amber-200'
+                }`}
+            />
+            <button
+              type="button"
+              onPointerDown={() => startOdometerStepperHold(ODOMETER_STEP_KM)}
+              onPointerUp={stopOdometerStepperHold}
+              onPointerLeave={stopOdometerStepperHold}
+              onPointerCancel={stopOdometerStepperHold}
+              className="flex-shrink-0 w-14 rounded-lg border-2 border-amber-300 bg-white
+                text-amber-700 text-2xl font-bold flex items-center justify-center
+                active:bg-amber-100 active:scale-95 transition-all duration-100
+                select-none"
+              aria-label="走行距離を増やす"
+            >
+              ＋
+            </button>
+          </div>
+          {startMileage !== null && startMileage !== undefined && (storedTotalDistanceKm || 0) > 0 && (
+            <p className="text-xs text-amber-700 mt-1">
+              🧮 GPS推定走行距離（{(storedTotalDistanceKm || 0).toFixed(1)} km）を加算した値を初期表示しています。実際のオドメーター値に合わせて上のボタンで微調整してください。
+            </p>
+          )}
           {/* ✅ BUG-044: リアルタイム逆転エラー表示 */}
           {endOdometer !== null && startMileage !== null && startMileage !== undefined && endOdometer <= startMileage && (
             <p className="text-xs text-red-600 font-bold mt-1">
