@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useMasterStore } from '../store/masterStore';
 import { Location } from '../types';
@@ -10,6 +10,7 @@ import Table, { ActionButtons } from '../components/common/Table';
 import Pagination from '../components/common/Pagination';
 import { ConfirmDialog } from '../components/common/Modal';
 import LocationFormModal from '../components/location/LocationFormModal';
+import DuplicateLocationMerge from '../components/location/DuplicateLocationMerge';
 import { SectionLoading } from '../components/ui/LoadingSpinner';
 import { formatDate } from '../utils/helpers';
 import { apiClient } from '../utils/api';
@@ -33,6 +34,7 @@ const LocationManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   // ✅ BUG-DELETE-LOCAL: 削除済みIDをローカルで管理（論理削除でも画面から即消す）
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -384,7 +386,15 @@ const LocationManagement: React.FC = () => {
             積込場所・荷降場所の登録・編集・削除を行います
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowMergeModal(true)}
+            className="flex items-center"
+          >
+            <Layers className="h-4 w-4 mr-2" />
+            重複メンテナンス
+          </Button>
           <Button
             variant="primary"
             onClick={handleCreate}
@@ -491,6 +501,16 @@ const LocationManagement: React.FC = () => {
         confirmText="削除"
         variant="danger"
         loading={locationLoading}
+      />
+
+      {/* 🆕 重複場所メンテナンス */}
+      <DuplicateLocationMerge
+        isOpen={showMergeModal}
+        onClose={() => setShowMergeModal(false)}
+        onMerged={() => {
+          fetchLocations();
+          fetchUsageStats();
+        }}
       />
     </div>
   );

@@ -589,6 +589,14 @@ export const locationAPI = {
    */
   async deleteLocation(id: string): Promise<ApiResponse<void>> {
     return apiClient.delete(`/locations/${id}`);
+  },
+
+  /**
+   * 🆕 場所統合（重複場所メンテナンス）
+   * 統合元の場所に紐づく運行記録を統合先へ付け替え、統合元は無効化する。
+   */
+  async mergeLocations(targetId: string, sourceLocationIds: string[]): Promise<ApiResponse<any>> {
+    return apiClient.post(`/locations/${targetId}/merge`, { sourceLocationIds });
   }
 };
 

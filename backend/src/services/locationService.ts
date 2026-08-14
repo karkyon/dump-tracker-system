@@ -513,6 +513,104 @@ class LocationServiceWrapper {
     }
   }
 
+  /**
+   * 🆕 位置統合（重複場所メンテナンス）
+   * 統合元(sourceLocationIds)に紐づく運行記録(operation_details)を
+   * 統合先(targetId)へ一括で付け替え、統合元は論理削除（isActive=false）する。
+   */
+  async mergeLocations(
+    targetId: string,
+    sourceLocationIds: string[],
+    requesterId: string,
+    requesterRole: UserRole
+  ): Promise<{
+    success: true;
+    message: string;
+    data: {
+      targetId: string;
+      merged: Array<{ id: string; name: string; reassignedCount: number }>;
+      totalReassigned: number;
+    };
+  }> {
+    try {
+      // 権限チェック
+      this.checkLocationAccess(requesterId, requesterRole, 'delete');
+
+      if (!targetId) {
+        throw new ValidationError('統合先の場所IDは必須です');
+      }
+      if (!Array.isArray(sourceLocationIds) || sourceLocationIds.length === 0) {
+        throw new ValidationError('統合元の場所IDを1件以上指定してください');
+      }
+
+      // 統合先自身の除外・重複排除
+      const uniqueSourceIds = Array.from(new Set(sourceLocationIds)).filter(id => id !== targetId);
+      if (uniqueSourceIds.length === 0) {
+        throw new ValidationError('統合元として有効な場所IDがありません（統合先自身は指定できません）');
+      }
+
+      const targetLocation = await this.locationService.findUnique({ where: { id: targetId } }) as any;
+      if (!targetLocation) {
+        throw new NotFoundError('統合先の場所が見つかりません');
+      }
+
+      const sourceLocations = await this.locationService.findMany({
+        where: { id: { in: uniqueSourceIds } }
+      }) as any[];
+      if (sourceLocations.length !== uniqueSourceIds.length) {
+        const foundIds = new Set(sourceLocations.map((l: any) => l.id));
+        const missing = uniqueSourceIds.filter(id => !foundIds.has(id));
+        throw new NotFoundError(`統合元の場所が見つかりません: ${missing.join(', ')}`);
+      }
+
+      const merged: Array<{ id: string; name: string; reassignedCount: number }> = [];
+      let totalReassigned = 0;
+
+      await this.db.$transaction(async (tx) => {
+        for (const source of sourceLocations) {
+          const updateResult = await tx.operationDetail.updateMany({
+            where: { locationId: source.id },
+            data: { locationId: targetId }
+          });
+
+          await tx.location.update({
+            where: { id: source.id },
+            data: { isActive: false }
+          });
+
+          merged.push({
+            id: source.id,
+            name: source.name,
+            reassignedCount: updateResult.count
+          });
+          totalReassigned += updateResult.count;
+        }
+      });
+
+      logger.info('位置統合完了', {
+        targetId,
+        targetName: targetLocation.name,
+        merged,
+        totalReassigned,
+        requesterId
+      });
+
+      return {
+        success: true,
+        message: `${merged.length}件の場所を「${targetLocation.name}」に統合しました（運行記録${totalReassigned}件を付け替え）`,
+        data: {
+          targetId,
+          merged,
+          totalReassigned
+        }
+      };
+
+    } catch (error) {
+      logger.error('位置統合エラー', { error, targetId, sourceLocationIds, requesterId });
+      throw error;
+    }
+  }
+
   // =====================================
   // 🔍 検索・分析メソッド群
   // =====================================

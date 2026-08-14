@@ -68,6 +68,7 @@ import {
   getLocationsMapSummary,
   getLocationsUsageStats,
   getNearbyLocations,
+  mergeLocations,
   updateLocation
 } from '../controllers/locationController';
 
@@ -807,6 +808,54 @@ router.put('/:id', requireManager, validateId, updateLocation);
  *         description: 権限エラー（管理者のみ）
  */
 router.delete('/:id', requireAdmin, validateId, deleteLocation);
+
+/**
+ * @swagger
+ * /locations/{targetId}/merge:
+ *   post:
+ *     summary: 🆕 位置統合（重複場所メンテナンス）
+ *     description: |
+ *       複数の統合元の場所に紐づく運行記録を統合先の場所へ一括で付け替え、
+ *       統合元の場所は無効化（論理削除）する（管理者・マネージャーのみ）。
+ *     tags:
+ *       - 📍 位置管理 (Location Management)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: targetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 統合先の場所ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - sourceLocationIds
+ *             properties:
+ *               sourceLocationIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *     responses:
+ *       200:
+ *         description: 統合成功
+ *       400:
+ *         description: バリデーションエラー
+ *       401:
+ *         description: 認証エラー
+ *       403:
+ *         description: 権限エラー
+ *       404:
+ *         description: 場所が見つかりません
+ */
+router.post('/:targetId/merge', requireRole(['ADMIN', 'MANAGER'] as UserRole[]), mergeLocations);
 
 // =====================================
 // 🏥 ヘルスチェック・メタデータ

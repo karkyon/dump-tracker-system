@@ -363,6 +363,67 @@ class LocationController {
     }
   });
 
+  /**
+   * 🆕 位置統合（重複場所メンテナンス）
+   * POST /api/v1/locations/:targetId/merge
+   */
+  mergeLocations = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        throw new AuthorizationError('認証が必要です');
+      }
+
+      // 権限チェック（管理者・マネージャーのみ）
+      if (req.user.role !== 'ADMIN' && req.user.role !== 'MANAGER') {
+        throw new AuthorizationError('場所統合の実行権限がありません（管理者・マネージャーのみ）');
+      }
+
+      const { targetId } = req.params;
+      if (!targetId) {
+        throw new ValidationError('統合先の場所IDが必要です');
+      }
+
+      const { sourceLocationIds } = req.body as { sourceLocationIds?: string[] };
+      if (!Array.isArray(sourceLocationIds) || sourceLocationIds.length === 0) {
+        throw new ValidationError('統合元の場所ID（sourceLocationIds）を1件以上指定してください');
+      }
+
+      const result = await this.locationServiceWrapper.mergeLocations(
+        targetId,
+        sourceLocationIds,
+        req.user.userId,
+        req.user.role as UserRole
+      );
+
+      const response = successResponse(result.data, result.message);
+      logger.info('位置統合', {
+        targetId,
+        sourceLocationIds,
+        totalReassigned: result.data.totalReassigned,
+        userId: req.user.userId
+      });
+
+      res.status(200).json(response);
+
+    } catch (error) {
+      logger.error('位置統合エラー', { error, targetId: req.params.targetId, userId: req.user?.userId });
+
+      if (error instanceof NotFoundError) {
+        const errorRes = errorResponse(error.message, error.statusCode, error.code);
+        res.status(error.statusCode).json(errorRes);
+      } else if (error instanceof ValidationError) {
+        const errorRes = errorResponse(error.message, error.statusCode, error.code);
+        res.status(error.statusCode).json(errorRes);
+      } else if (error instanceof AuthorizationError) {
+        const errorRes = errorResponse(error.message, error.statusCode, error.code);
+        res.status(error.statusCode).json(errorRes);
+      } else {
+        const errorRes = errorResponse('場所の統合に失敗しました', 500, 'MERGE_LOCATIONS_ERROR');
+        res.status(500).json(errorRes);
+      }
+    }
+  });
+
   // =====================================
   // 高度な位置機能（既存完全実装保持）
   // =====================================
@@ -897,7 +958,8 @@ export const {
   getNearbyLocations,
   getLocationsByType,
   getLocationsMapSummary,
-  getLocationsUsageStats
+  getLocationsUsageStats,
+  mergeLocations
 } = locationController;
 
 // クラスエクスポート
