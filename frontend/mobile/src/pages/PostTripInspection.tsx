@@ -86,22 +86,67 @@ const PostTripInspection: React.FC = () => {
   const hasAutoFilledOdometerRef = useRef(false);
   const stepperIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepperTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 🆕 Routes API区間距離推定（GPS実軌跡+道路ルートを加味した距離）
+  const [isEstimatingDistance, setIsEstimatingDistance] = useState(false);
+  const [routeEstimatedDistanceKm, setRouteEstimatedDistanceKm] = useState<number | null>(null);
+
+  // 🆕 画面表示時、現在の運行のGPS軌跡をもとにRoutes APIで区間距離を
+  //    再計算する（実際に記録されたGPSポイントを加味した道路沿いの推定距離）。
+  //    tripService.endTrip側の区間距離再計算(BUG-100KM修正)と同じロジックを
+  //    終了走行距離の初期値算出にも流用する。
+  useEffect(() => {
+    if (!operationId) return;
+    let cancelled = false;
+    setIsEstimatingDistance(true);
+    apiService.computeRouteSegments(operationId)
+      .then((res) => {
+        if (cancelled) return;
+        const segments = (res && (res as any).data) || [];
+        if (Array.isArray(segments) && segments.length > 0) {
+          const sumKm = segments.reduce(
+            (acc: number, s: any) => acc + (Number(s.distanceKm) || 0),
+            0
+          );
+          setRouteEstimatedDistanceKm(Math.round(sumKm * 10) / 10);
+          console.log('[D8] 🛣️ Routes API区間距離推定完了', {
+            operationId,
+            segmentCount: segments.length,
+            sumKm
+          });
+        } else {
+          console.warn('[D8] ⚠️ Routes API区間距離が0件、フロントGPS値にフォールバック');
+        }
+      })
+      .catch((err) => {
+        console.warn('[D8] ⚠️ Routes API区間距離の取得に失敗、フロントGPS値にフォールバック', err);
+      })
+      .finally(() => {
+        if (!cancelled) setIsEstimatingDistance(false);
+      });
+    return () => { cancelled = true; };
+  }, [operationId]);
 
   useEffect(() => {
     if (hasAutoFilledOdometerRef.current) return;
     if (endOdometer !== null) return;
     if (startMileage === null || startMileage === undefined) return;
-    if (!storedTotalDistanceKm || storedTotalDistanceKm <= 0) return;
+    if (isEstimatingDistance) return; // Routes API計算完了を待つ
 
-    const estimated = Math.round((startMileage + storedTotalDistanceKm) * 10) / 10;
+    const estimatedDistance = (routeEstimatedDistanceKm !== null && routeEstimatedDistanceKm > 0)
+      ? routeEstimatedDistanceKm
+      : (storedTotalDistanceKm || 0);
+    if (estimatedDistance <= 0) return;
+
+    const estimated = Math.round((startMileage + estimatedDistance) * 10) / 10;
     setEndOdometer(estimated);
     hasAutoFilledOdometerRef.current = true;
     console.log('[D8] 🧮 終了走行距離を自動計算で初期表示', {
       startMileage,
-      estimatedDistance: storedTotalDistanceKm,
+      estimatedDistance,
+      source: (routeEstimatedDistanceKm !== null && routeEstimatedDistanceKm > 0) ? 'routes_api' : 'frontend_gps',
       prefilledEndOdometer: estimated
     });
-  }, [startMileage, storedTotalDistanceKm, endOdometer]);
+  }, [startMileage, storedTotalDistanceKm, routeEstimatedDistanceKm, isEstimatingDistance, endOdometer]);
 
   const clampOdometer = (value: number): number => {
     if (startMileage !== null && startMileage !== undefined && value < startMileage) {
@@ -724,9 +769,19 @@ const PostTripInspection: React.FC = () => {
               ＋
             </button>
           </div>
-          {startMileage !== null && startMileage !== undefined && (storedTotalDistanceKm || 0) > 0 && (
+          {isEstimatingDistance && (
+            <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              GPS走行軌跡からRoutes APIで走行距離を計算中...
+            </p>
+          )}
+          {!isEstimatingDistance && startMileage !== null && startMileage !== undefined &&
+            ((routeEstimatedDistanceKm !== null && routeEstimatedDistanceKm > 0) || (storedTotalDistanceKm || 0) > 0) && (
             <p className="text-xs text-amber-700 mt-1">
-              🧮 GPS推定走行距離（{(storedTotalDistanceKm || 0).toFixed(1)} km）を加算した値を初期表示しています。実際のオドメーター値に合わせて上のボタンで微調整してください。
+              🧮 {(routeEstimatedDistanceKm !== null && routeEstimatedDistanceKm > 0)
+                ? `GPS走行軌跡＋Routes API推定距離（${routeEstimatedDistanceKm.toFixed(1)} km）`
+                : `GPS推定走行距離（${(storedTotalDistanceKm || 0).toFixed(1)} km）`}
+              を加算した値を初期表示しています。実際のオドメーター値に合わせて上のボタンで微調整してください。
             </p>
           )}
           {/* ✅ BUG-044: リアルタイム逆転エラー表示 */}

@@ -549,6 +549,25 @@ class APIServiceClass {
   }
 
   /**
+   * 🆕 運行区間距離の再計算（GPS実測+Routes API推定）
+   * POST /api/v1/route-segments/:operationId/compute
+   * 現在記録されているGPS軌跡をもとに、Routes APIで道路に沿った
+   * 走行距離を区間ごとに再計算する。運行終了前に呼び出すことで、
+   * 「終了走行距離」のオートフィル初期値として利用する。
+   */
+  async computeRouteSegments(operationId: string): Promise<APIResponse<any[]>> {
+    try {
+      const response = await this.axiosInstance.post<APIResponse<any[]>>(
+        `/route-segments/${operationId}/compute`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('[API] 区間距離再計算エラー:', error);
+      throw error;
+    }
+  }
+
+  /**
    * アクション記録（積込・積下）
    * POST /api/v1/mobile/operations/action
    */
