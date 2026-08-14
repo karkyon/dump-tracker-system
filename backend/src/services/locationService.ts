@@ -573,9 +573,12 @@ class LocationServiceWrapper {
             data: { locationId: targetId }
           });
 
-          await tx.location.update({
-            where: { id: source.id },
-            data: { isActive: false }
+          // ✅ 修正: 統合元は運行記録の付け替え後、参照が0件になるため
+          //    無効化（論理削除）ではなく完全削除する。
+          //    運行記録自体(operation_details)のデータは失われず、
+          //    統合先(targetId)に紐づいたまま完全に保持される。
+          await tx.location.delete({
+            where: { id: source.id }
           });
 
           merged.push({
