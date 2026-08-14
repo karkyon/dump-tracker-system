@@ -13,6 +13,7 @@ import { apiClient } from '../utils/api';
 // ✅ 修正: OperationDetailDialogをインポート
 import OperationDetailDialog from '../components/OperationDetailDialog';
 import OperationsMapView from '../components/OperationsMapView';
+import DuplicateLocationMerge from '../components/location/DuplicateLocationMerge';
 
 interface Operation {
   id: string;
@@ -114,6 +115,9 @@ const OperationRecords: React.FC = () => {
   const [vehicleFilter, setVehicleFilter] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<Operation | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  // 🆕 地図バルーンから起動する重複場所メンテナンス用
+  const [mapMergeBaseLocation, setMapMergeBaseLocation] = useState<any | null>(null);
+  const [mapRefreshKey, setMapRefreshKey] = useState(0);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -308,7 +312,11 @@ const OperationRecords: React.FC = () => {
         </div>
 
       {activeView === 'MAP' ? (
-        <OperationsMapView onJumpToList={handleJumpToList} />
+        <OperationsMapView
+          key={mapRefreshKey}
+          onJumpToList={handleJumpToList}
+          onOpenDuplicateMerge={(loc) => setMapMergeBaseLocation(loc)}
+        />
       ) : (
       <>
       <div className="p-6">
@@ -363,6 +371,18 @@ const OperationRecords: React.FC = () => {
       </>
       )}
       </div>
+
+      {/* 🆕 地図バルーンから起動する重複場所メンテナンス（デフォルト半径150m） */}
+      <DuplicateLocationMerge
+        isOpen={!!mapMergeBaseLocation}
+        onClose={() => setMapMergeBaseLocation(null)}
+        initialBaseLocation={mapMergeBaseLocation}
+        initialRadiusM={150}
+        onMerged={() => {
+          setMapMergeBaseLocation(null);
+          setMapRefreshKey((k) => k + 1);
+        }}
+      />
     </div>
   );
 };

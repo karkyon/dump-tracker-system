@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTLog } from '../hooks/useTLog';
-import { Plus, Search, Layers } from 'lucide-react';
+import { Plus, Search, Wrench } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useMasterStore } from '../store/masterStore';
 import { Location } from '../types';
@@ -387,14 +387,16 @@ const LocationManagement: React.FC = () => {
           </p>
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex items-center gap-2">
-          <Button
-            variant="outline"
+          <button
+            type="button"
             onClick={() => setShowMergeModal(true)}
-            className="flex items-center"
+            className="flex items-center px-4 py-2 rounded-lg font-semibold text-sm text-white
+              bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700
+              shadow-md hover:shadow-lg transition-all duration-150 border border-amber-600"
           >
-            <Layers className="h-4 w-4 mr-2" />
+            <Wrench className="h-4 w-4 mr-2" />
             重複メンテナンス
-          </Button>
+          </button>
           <Button
             variant="primary"
             onClick={handleCreate}

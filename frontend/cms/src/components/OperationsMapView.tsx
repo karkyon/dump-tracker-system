@@ -54,6 +54,8 @@ interface LocationMapSummary {
 interface OperationsMapViewProps {
   /** 「詳細」ボタン押下時: 一覧表示タブへ切替＋場所名で絞り込み */
   onJumpToList: (locationName: string) => void;
+  /** 🆕「重複メンテ」ボタン押下時: このピンの場所を起点に重複場所メンテナンスモーダルを開く */
+  onOpenDuplicateMerge?: (loc: LocationMapSummary) => void;
 }
 
 const PERIOD_OPTIONS = [
@@ -97,7 +99,7 @@ const getPinColor = (loc: LocationMapSummary): string => {
   return loc.locationType === 'DELIVERY' ? '#dc2626' : '#2563eb';
 };
 
-const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) => {
+const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList, onOpenDuplicateMerge }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -194,8 +196,11 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
         📍 ${loc.address}<br/>
         🕐 最終利用: ${formatLastUsed(loc.lastUsedAt)}
       </div>
-      <button id="jump-btn-${loc.id}" style="width:100%;background:#1e293b;color:white;border:none;border-radius:6px;padding:7px 0;font-size:12.5px;font-weight:700;cursor:pointer;">
+      <button id="jump-btn-${loc.id}" style="width:100%;background:#1e293b;color:white;border:none;border-radius:6px;padding:7px 0;font-size:12.5px;font-weight:700;cursor:pointer;margin-bottom:6px;">
         📋 詳細（運行記録に絞り込み）
+      </button>
+      <button id="merge-btn-${loc.id}" style="width:100%;background:linear-gradient(135deg,#f59e0b,#ea580c);color:white;border:none;border-radius:6px;padding:7px 0;font-size:12.5px;font-weight:700;cursor:pointer;">
+        🔧 重複メンテ
       </button>
     `;
 
@@ -207,8 +212,12 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList }) =
       if (btn) {
         btn.addEventListener('click', () => onJumpToList(loc.name));
       }
+      const mergeBtn = document.getElementById(`merge-btn-${loc.id}`);
+      if (mergeBtn && onOpenDuplicateMerge) {
+        mergeBtn.addEventListener('click', () => onOpenDuplicateMerge(loc));
+      }
     });
-  }, [onJumpToList]);
+  }, [onJumpToList, onOpenDuplicateMerge]);
 
   // ---- ピン描画 ----
   useEffect(() => {

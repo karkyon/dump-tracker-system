@@ -16,6 +16,10 @@ interface DuplicateLocationMergeProps {
   isOpen: boolean;
   onClose: () => void;
   onMerged: () => void;
+  /** 🆕 呼び出し元(地図バルーン等)から起点の場所を直接渡す場合に指定。指定時は起点検索UIをスキップする */
+  initialBaseLocation?: any;
+  /** 🆕 initialBaseLocation指定時に適用する初期検索半径(m)。省略時は100m */
+  initialRadiusM?: number;
 }
 
 interface UsageStat { loading: number; unloading: number; }
@@ -38,7 +42,34 @@ const normalizeAddress = (addr?: string | null): string => {
   return addr.replace(/[\s　]+/g, '').trim();
 };
 
-const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen, onClose, onMerged }) => {
+// ✅ 追加: 場所種別のカテゴリ分類（積込/積降/両方が混在すると誤統合の危険があるため）
+type LocationTypeCategory = 'ALL' | 'PICKUP' | 'DELIVERY' | 'BOTH' | 'OTHER';
+const categoryOf = (locationType?: string | null): LocationTypeCategory => {
+  if (locationType === 'PICKUP' || locationType === 'DEPOT') return 'PICKUP';
+  if (locationType === 'DELIVERY' || locationType === 'DESTINATION') return 'DELIVERY';
+  if (locationType === 'BOTH') return 'BOTH';
+  return 'OTHER';
+};
+const CATEGORY_LABELS: Record<LocationTypeCategory, string> = {
+  ALL: 'すべて', PICKUP: '積込', DELIVERY: '積降', BOTH: '両方', OTHER: '種別未設定'
+};
+const CATEGORY_BADGE_CLASS: Record<LocationTypeCategory, string> = {
+  ALL: 'bg-gray-100 text-gray-700',
+  PICKUP: 'bg-blue-100 text-blue-800',
+  DELIVERY: 'bg-green-100 text-green-800',
+  BOTH: 'bg-purple-100 text-purple-800',
+  OTHER: 'bg-gray-100 text-gray-500',
+};
+// 起点(base)と候補(candidate)の種別が「異なる現場」である危険度が高い組み合わせかどうか
+// （どちらかがBOTHの場合は積込・積降どちらの実績もあり得るため許容する）
+const isTypeMismatch = (baseLoc: any, candidateLoc: any): boolean => {
+  const b = categoryOf(baseLoc?.locationType);
+  const c = categoryOf(candidateLoc?.locationType);
+  if (b === 'BOTH' || c === 'BOTH' || b === 'OTHER' || c === 'OTHER') return false;
+  return b !== c;
+};
+
+const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen, onClose, onMerged, initialBaseLocation, initialRadiusM }) => {
   const [baseQuery, setBaseQuery] = useState('');
   const [baseCandidates, setBaseCandidates] = useState<any[]>([]);
   const [baseSearching, setBaseSearching] = useState(false);
@@ -52,6 +83,9 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [merging, setMerging] = useState(false);
+  // ✅ 追加: 積込/積降/両方の種別フィルタ（種別が異なる場所の誤統合を防ぐため）
+  const [locationTypeFilter, setLocationTypeFilter] = useState<LocationTypeCategory>('ALL');
+  const [typeMismatchAck, setTypeMismatchAck] = useState(false);
 
   const baseSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nearbyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,18 +109,22 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
   }, []);
 
   // モーダルを開くたびに状態をリセット
+  // ✅ 修正: initialBaseLocation が渡された場合（地図バルーン等からの起動）は
+  //    起点をあらかじめセットし、検索半径も initialRadiusM を優先する。
   useEffect(() => {
     if (isOpen) {
       setBaseQuery('');
       setBaseCandidates([]);
-      setBaseLocation(null);
-      setRadiusM(100);
+      setBaseLocation(initialBaseLocation || null);
+      setRadiusM(initialRadiusM ?? 100);
+      setLocationTypeFilter(categoryOf(initialBaseLocation?.locationType));
       setNearbyCandidates([]);
       setSelectedIds(new Set());
       setConfirmOpen(false);
+      setTypeMismatchAck(false);
       fetchUsageStats();
     }
-  }, [isOpen, fetchUsageStats]);
+  }, [isOpen, initialBaseLocation, initialRadiusM, fetchUsageStats]);
 
   // 起点候補の検索（デバウンス）
   useEffect(() => {
@@ -194,7 +232,11 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
     });
   };
 
+  const filteredCandidates = nearbyCandidates.filter(c =>
+    locationTypeFilter === 'ALL' || categoryOf(c.location.locationType) === locationTypeFilter
+  );
   const selectedCandidates = nearbyCandidates.filter(c => selectedIds.has(c.location.id));
+  const hasTypeMismatch = selectedCandidates.some(c => isTypeMismatch(baseLocation, c.location));
   const selectedTotalRecords = selectedCandidates.reduce((sum, c) => {
     const stats = usageStatsMap[c.location.id];
     if (!stats) return sum;
@@ -242,7 +284,7 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
               </div>
               <button
                 type="button"
-                onClick={() => { setBaseLocation(null); setBaseQuery(''); setSelectedIds(new Set()); }}
+                onClick={() => { setBaseLocation(null); setBaseQuery(''); setSelectedIds(new Set()); setLocationTypeFilter('ALL'); setTypeMismatchAck(false); }}
                 className="text-xs text-blue-600 underline flex-shrink-0 ml-2"
               >
                 変更
@@ -272,7 +314,7 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
                     <button
                       key={loc.id}
                       type="button"
-                      onClick={() => { setBaseLocation(loc); setBaseCandidates([]); }}
+                      onClick={() => { setBaseLocation(loc); setBaseCandidates([]); setLocationTypeFilter(categoryOf(loc.locationType)); setTypeMismatchAck(false); }}
                       className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                     >
                       <p className="text-sm font-medium text-gray-800 truncate">{loc.name}</p>
@@ -315,17 +357,35 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-bold text-gray-700">
-                (3) 統合する場所を選択（{nearbyCandidates.length}件中 {selectedIds.size}件選択）
+                (3) 統合する場所を選択（{filteredCandidates.length}件中 {selectedIds.size}件選択）
               </label>
               {nearbyLoading && <span className="text-xs text-gray-400">検索中...</span>}
             </div>
+            {/* ✅ 追加: 種別フィルタ（積込/積降が混在する誤統合を防ぐ） */}
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+              {(['ALL', 'PICKUP', 'DELIVERY', 'BOTH'] as LocationTypeCategory[]).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setLocationTypeFilter(cat)}
+                  className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                    locationTypeFilter === cat
+                      ? 'bg-gray-800 text-white border-gray-800'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {CATEGORY_LABELS[cat]}
+                </button>
+              ))}
+              <span className="text-xs text-gray-400 ml-1">起点の種別: {CATEGORY_LABELS[categoryOf(baseLocation.locationType)]}</span>
+            </div>
             <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
-              {!nearbyLoading && nearbyCandidates.length === 0 && (
+              {!nearbyLoading && filteredCandidates.length === 0 && (
                 <p className="px-3 py-4 text-sm text-gray-400 text-center">
-                  半径{radiusM}m以内に他の場所は見つかりませんでした
+                  条件に合う候補が見つかりませんでした
                 </p>
               )}
-              {nearbyCandidates.map((c) => {
+              {filteredCandidates.map((c) => {
                 const stats = usageStatsMap[c.location.id];
                 const checked = selectedIds.has(c.location.id);
                 return (
@@ -340,8 +400,11 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
                       className="flex-shrink-0"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium text-gray-800 truncate">{c.location.name}</p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${CATEGORY_BADGE_CLASS[categoryOf(c.location.locationType)]}`}>
+                          {CATEGORY_LABELS[categoryOf(c.location.locationType)]}
+                        </span>
                         {c.distanceM !== null ? (
                           <span className="text-xs text-gray-400 flex-shrink-0">{c.distanceM}m</span>
                         ) : (
@@ -352,6 +415,11 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
                         {isMobileRegistered(c.location) && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 flex-shrink-0">
                             アプリから
+                          </span>
+                        )}
+                        {isTypeMismatch(baseLocation, c.location) && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 flex-shrink-0 font-bold">
+                            ⚠ 種別が異なる場所
                           </span>
                         )}
                       </div>
@@ -388,9 +456,31 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
               {selectedCandidates.map(c => (
                 <li key={c.location.id}>
                   {c.location.name}（{c.distanceM !== null ? `${c.distanceM}m` : '住所一致'}）
+                  {isTypeMismatch(baseLocation, c.location) && (
+                    <span className="ml-1 text-red-700 font-bold">⚠ 種別が異なります（{CATEGORY_LABELS[categoryOf(c.location.locationType)]}）</span>
+                  )}
                 </li>
               ))}
             </ul>
+
+            {hasTypeMismatch && (
+              <div className="border border-red-300 bg-red-50 rounded-lg p-3">
+                <p className="text-sm text-red-800 font-bold mb-2">
+                  ⚠ 起点（{CATEGORY_LABELS[categoryOf(baseLocation?.locationType)]}）と種別が異なる場所が含まれています
+                </p>
+                <p className="text-xs text-red-700 mb-2">
+                  積込場所と荷降場所は本来別の現場である可能性があります。同じ現場であることを確認したうえで統合してください。
+                </p>
+                <label className="flex items-center gap-2 text-xs text-red-800 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={typeMismatchAck}
+                    onChange={(e) => setTypeMismatchAck(e.target.checked)}
+                  />
+                  種別が異なる場所を含むことを確認したうえで統合します
+                </label>
+              </div>
+            )}
           </div>
         )}
 
@@ -398,10 +488,10 @@ const DuplicateLocationMerge: React.FC<DuplicateLocationMergeProps> = ({ isOpen,
         <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
           {confirmOpen ? (
             <>
-              <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={merging}>
+              <Button variant="outline" onClick={() => { setConfirmOpen(false); setTypeMismatchAck(false); }} disabled={merging}>
                 戻る
               </Button>
-              <Button variant="danger" onClick={handleMerge} loading={merging} disabled={merging}>
+              <Button variant="danger" onClick={handleMerge} loading={merging} disabled={merging || (hasTypeMismatch && !typeMismatchAck)}>
                 統合を実行
               </Button>
             </>
