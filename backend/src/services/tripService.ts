@@ -46,6 +46,12 @@ import {
   type GpsLogResponseDTO
 } from '../models/GpsLogModel';
 
+// 🆕 BUG-100KM再修正: 運行終了時にGPS/Routes API区間距離を再計算し、
+//    オドメーター/フロント値ベースの値がtotalDistanceKmに残り続けるのを防止する
+//    （routeDistanceService.computeAndSaveRouteSegments の
+//     「常時上書き」方針と整合させるための呼び出し）
+import { triggerRouteSegmentRecompute } from './routeDistanceService';
+
 // 🎯 Prismaからの型インポート
 import { ActivityType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -745,6 +751,14 @@ class TripService {
 
         logger.info('🏁✅ [endTrip] GPS記録完了');
       }
+
+      // 🆕 BUG-100KM再修正: オドメーター/フロント値ベースの値が
+      //    totalDistanceKmとして残り続けるのを防ぐため、運行終了確定後に
+      //    GPS実測+Routes API推定の区間距離を再計算し、常に上書きする。
+      //    ※GPSログ/停車地点が不足する場合は再計算がスキップされ、
+      //      オドメーター差分などの値がそのままフォールバックとして残る。
+      triggerRouteSegmentRecompute(tripId);
+      logger.info('🛣️ [GPS-DIST] 運行終了に伴う区間距離の再計算をトリガーしました', { tripId });
 
       return {
         success: true,
