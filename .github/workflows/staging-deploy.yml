@@ -50,7 +50,11 @@ jobs:
             cp -r /tmp/backend-deploy/dist .
             cp /tmp/backend-deploy/package*.json .
             mkdir -p prisma
-            cp /tmp/backend-deploy/schema.camel.prisma prisma/
+            # 🔧 修正(BUG-CICD-SCHEMA-PATH): strip_components:1 適用後の実際の配置先は
+            #    /tmp/backend-deploy/prisma/schema.camel.prisma （prisma/ 付き）。
+            #    以前は prisma/ 無しのパスを探して常に失敗し、エラーが握りつぶされたまま
+            #    staging スキーマが一度も自動更新されていなかった（production側は修正済みだった）。
+            cp /tmp/backend-deploy/prisma/schema.camel.prisma prisma/schema.camel.prisma
             export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
             # 🔧 修正(BUG-CICD-NPX): npm ci の失敗を検知せず後続コマンドが実行され、
             #    壊れた node_modules のまま prisma generate/db push が走っていたため明示チェック追加
