@@ -154,6 +154,48 @@ interface RoutesApiResult {
   rawResponse: any;
 }
 
+// =====================================
+// Routes APIキー取得(CMS/DB暗号化保存を優先、.envへフォールバック)
+// =====================================
+let _routesApiKeyCache: { key: string | undefined; expiresAt: number } | null = null;
+const ROUTES_API_KEY_CACHE_MS = 60 * 1000;
+
+async function getRoutesApiKey(): Promise<string | undefined> {
+  const now = Date.now();
+  if (_routesApiKeyCache && _routesApiKeyCache.expiresAt > now) {
+    return _routesApiKeyCache.key;
+  }
+
+  let resolvedKey: string | undefined;
+  try {
+    const prisma = DatabaseService.getInstance();
+    const row = await (prisma as any).systemSetting.findUnique({
+      where: { key: 'integration.google_routes_api_key_encrypted' }
+    });
+    if (row?.value) {
+      const { decryptData } = await import('../utils/crypto');
+      const payload = JSON.parse(row.value);
+      const result = decryptData(payload);
+      if (result.success && result.data) {
+        resolvedKey = result.data;
+      } else {
+        logger.warn('Google Routes APIキーの復号に失敗しました。.envにフォールバックします', { error: result.error });
+      }
+    }
+  } catch (error) {
+    logger.warn('Google Routes APIキーのDB取得に失敗しました。.envにフォールバックします', {
+      error: error instanceof Error ? error.message : error
+    });
+  }
+
+  if (!resolvedKey) {
+    resolvedKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  }
+
+  _routesApiKeyCache = { key: resolvedKey, expiresAt: now + ROUTES_API_KEY_CACHE_MS };
+  return resolvedKey;
+}
+
 async function callRoutesApi(
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number },
@@ -161,7 +203,7 @@ async function callRoutesApi(
 ): Promise<RoutesApiResult> {
   // ✅ 修正: Routes API専用キーが無ければ、既存のMaps用キー（同一GCPプロジェクトで
   //    Routes APIが有効化されていれば動作する）にフォールバックする。
-  const apiKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey = await getRoutesApiKey();
   console.log(`[RouteSegments] 🔑 Routes APIキー確認: ${apiKey ? `設定あり(末尾4桁=...${apiKey.slice(-4)})` : '未設定'}`);
   if (!apiKey) {
     console.log('[RouteSegments] ❌ GOOGLE_ROUTES_API_KEY / GOOGLE_MAPS_API_KEY が未設定のため Routes API呼び出し不可');

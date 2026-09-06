@@ -103,6 +103,9 @@ export const getIntegrationSettings = async (
           projectId: firebaseProjectId,
           storageBucket: raw['integration.firebase_storage_bucket'] || '',
         },
+        googleRoutes: {
+          apiKeyConfigured: !!(raw['integration.google_routes_api_key_encrypted']),
+        },
         backlog: {
           spaceKey:   raw['integration.backlog_space_key']   || process.env['BACKLOG_SPACE_KEY']   || '',
           projectId:  raw['integration.backlog_project_id']  || process.env['BACKLOG_PROJECT_ID']  || '',
@@ -114,6 +117,64 @@ export const getIntegrationSettings = async (
     });
   } catch (error) {
     logger.error('連携設定取得エラー', { error });
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/v1/settings/system/integration/google-routes
+ * Google Routes APIキーを暗号化してDBに保存
+ * body: { apiKey: string }
+ */
+export const saveGoogleRoutesSettings = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { apiKey } = req.body as { apiKey?: string };
+    if (!apiKey || apiKey.trim().length < 10) {
+      res.status(400).json({ success: false, message: 'apiKey は必須です（10文字以上）' });
+      return;
+    }
+
+    const { encryptData } = await import('../utils/crypto');
+    const encrypted = encryptData(apiKey.trim());
+    if (!encrypted.success || !encrypted.data) {
+      res.status(500).json({ success: false, message: `暗号化に失敗しました: ${encrypted.error || '不明なエラー'}` });
+      return;
+    }
+
+    await db.systemSetting.upsert({
+      where: { key: 'integration.google_routes_api_key_encrypted' },
+      create: { key: 'integration.google_routes_api_key_encrypted', value: JSON.stringify(encrypted.data) },
+      update: { value: JSON.stringify(encrypted.data) },
+    });
+
+    logger.info('Google Routes APIキー保存完了（暗号化済み）');
+    res.json({ success: true, message: 'Google Routes APIキーを保存しました' });
+  } catch (error) {
+    logger.error('Google Routes APIキー保存エラー', { error });
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/v1/settings/system/integration/google-routes
+ */
+export const deleteGoogleRoutesSettings = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    await db.systemSetting.deleteMany({
+      where: { key: 'integration.google_routes_api_key_encrypted' },
+    });
+    logger.info('Google Routes APIキー削除完了');
+    res.json({ success: true, message: 'Google Routes APIキー設定を削除しました' });
+  } catch (error) {
+    logger.error('Google Routes APIキー削除エラー', { error });
     next(error);
   }
 };

@@ -108,6 +108,11 @@ const SystemSettings: React.FC = () => {
   const [firebaseUploading, setFirebaseUploading] = useState(false);
   const [firebaseSaved, setFirebaseSaved] = useState(false);
   const [firebaseError, setFirebaseError] = useState<any>(null);
+  // Google Routes APIキー設定 State
+  const [routesApiKeyInput, setRoutesApiKeyInput] = useState('');
+  const [routesApiKeySaving, setRoutesApiKeySaving] = useState(false);
+  const [routesApiKeySaved, setRoutesApiKeySaved] = useState(false);
+  const [routesApiKeyError, setRoutesApiKeyError] = useState<any>(null);
 
   const fetchIntegrationSettings = useCallback(async () => {
     try {
@@ -142,6 +147,33 @@ const SystemSettings: React.FC = () => {
     if (!confirm('Firebase設定を削除しますか？フィードバック機能が使用できなくなります。')) return;
     try {
       await fetch(`${API_BASE_URL}/settings/system/integration/firebase`, { method: 'DELETE', headers: getAuthHeaders() });
+      await fetchIntegrationSettings();
+    } catch { /* ignore */ }
+  };
+
+  // Google Routes APIキー保存
+  const handleSaveRoutesApiKey = async () => {
+    if (!routesApiKeyInput.trim()) return;
+    setRoutesApiKeySaving(true); setRoutesApiKeyError(null); setRoutesApiKeySaved(false);
+    try {
+      const res = await fetch(`${API_BASE_URL}/settings/system/integration/google-routes`, {
+        method: 'PUT', headers: getAuthHeaders(),
+        body: JSON.stringify({ apiKey: routesApiKeyInput.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || `エラー: ${res.status}`);
+      setRoutesApiKeySaved(true); setRoutesApiKeyInput('');
+      setTimeout(() => setRoutesApiKeySaved(false), 5000);
+      await fetchIntegrationSettings();
+    } catch (e: any) { setRoutesApiKeyError(e.message || '保存に失敗しました'); }
+    finally { setRoutesApiKeySaving(false); }
+  };
+
+  // Google Routes APIキー削除
+  const handleDeleteRoutesApiKey = async () => {
+    if (!confirm('Google Routes APIキー設定を削除しますか？GPS区間距離の道路ルート補完が直線距離フォールバックのみになります。')) return;
+    try {
+      await fetch(`${API_BASE_URL}/settings/system/integration/google-routes`, { method: 'DELETE', headers: getAuthHeaders() });
       await fetchIntegrationSettings();
     } catch { /* ignore */ }
   };
@@ -1255,6 +1287,46 @@ const SystemSettings: React.FC = () => {
                 </Button>
                 {integrationSettings?.firebase?.configured && (
                   <Button variant="secondary" onClick={handleDeleteFirebaseSettings}>
+                    <Trash2 className="w-4 h-4 mr-2" />設定を削除
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Google Routes API */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">🗺️ Google Routes API 連携設定</h2>
+                <p className="text-sm text-gray-500 mt-1">GPS区間距離の道路ルート補完（積込〜荷降間の推奨経路取得）に使用するAPIキー</p>
+              </div>
+              {integrationSettings?.googleRoutes?.apiKeyConfigured && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✅ 設定済み</span>
+              )}
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">APIキー</label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Google Cloud Console で発行したRoutes API用キー（IP制限推奨）。保存すると暗号化してDBに保存されます。
+                </p>
+                <input
+                  type="password"
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+                  placeholder={integrationSettings?.googleRoutes?.apiKeyConfigured ? '設定済み（変更する場合のみ入力）' : 'APIキーを入力'}
+                  value={routesApiKeyInput}
+                  onChange={(e) => setRoutesApiKeyInput(e.target.value)}
+                />
+              </div>
+              {routesApiKeyError && <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">❌ {routesApiKeyError}</div>}
+              {routesApiKeySaved && <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-700">✅ Google Routes APIキーを保存しました</div>}
+              <div className="flex gap-3">
+                <Button onClick={handleSaveRoutesApiKey} disabled={!routesApiKeyInput.trim() || routesApiKeySaving}>
+                  <Save className="w-4 h-4 mr-2" />{routesApiKeySaving ? '保存中...' : '保存'}
+                </Button>
+                {integrationSettings?.googleRoutes?.apiKeyConfigured && (
+                  <Button variant="secondary" onClick={handleDeleteRoutesApiKey}>
                     <Trash2 className="w-4 h-4 mr-2" />設定を削除
                   </Button>
                 )}
