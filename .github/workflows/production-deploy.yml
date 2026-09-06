@@ -86,12 +86,22 @@ jobs:
         working-directory: ./frontend/mobile
         run: npm ci
 
+      - name: 🔍 既存.env.productionからMaps APIキーを取得(Production Mobile)
+        id: existing_prod_mobile_maps_key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          EXISTING_KEY=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} "grep '^VITE_GOOGLE_MAPS_API_KEY=' ~/projects/dump-tracker/frontend/mobile/.env.production 2>/dev/null | head -1 | cut -d'=' -f2-" || echo "")
+          echo "maps_key=$EXISTING_KEY" >> $GITHUB_OUTPUT
+          rm -f ~/.ssh/deploy_key
+
       - name: 🔧 Create Production .env for Mobile
         working-directory: ./frontend/mobile
         run: |
           cat > .env.production << EOF
           VITE_API_BASE_URL=/api/v1
-          VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
+          VITE_GOOGLE_MAPS_API_KEY=${{ steps.existing_prod_mobile_maps_key.outputs.maps_key || 'AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk' }}
           VITE_APP_ENV=production
           VITE_GOOGLE_MAP_ID=793b2cb3013694b0700a2152
           VITE_DEBUG=false
@@ -137,12 +147,22 @@ jobs:
         working-directory: ./frontend/cms
         run: npm ci
 
+      - name: 🔍 既存.env.productionからMaps APIキーを取得(Production CMS)
+        id: existing_prod_cms_maps_key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          EXISTING_KEY=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} "grep '^VITE_GOOGLE_MAPS_API_KEY=' ~/projects/dump-tracker/frontend/cms/.env.production 2>/dev/null | head -1 | cut -d'=' -f2-" || echo "")
+          echo "maps_key=$EXISTING_KEY" >> $GITHUB_OUTPUT
+          rm -f ~/.ssh/deploy_key
+
       - name: 🔧 Create Production .env for CMS
         working-directory: ./frontend/cms
         run: |
           cat > .env.production << EOF
           VITE_API_BASE_URL=/api/v1
-          VITE_GOOGLE_MAPS_API_KEY=AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk
+          VITE_GOOGLE_MAPS_API_KEY=${{ steps.existing_prod_cms_maps_key.outputs.maps_key || 'AIzaSyCpQGN2eC7q0jE-wZdVO_NauO5_NgmVerk' }}
           VITE_APP_ENV=production
           VITE_GPS_UPDATE_INTERVAL=5000
           VITE_DEBUG=false
