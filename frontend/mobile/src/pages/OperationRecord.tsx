@@ -678,23 +678,17 @@ const OperationRecord: React.FC = () => {
       });
 
       if (dialogType === 'LOADING') {
-        console.log('🚛 積込場所選択完了 → startLoadingAtLocation呼び出し後LoadingInput画面へ遷移');
+        console.log('🚛 積込場所選択完了 → LoadingInput画面へ遷移');
 
-        // ★ GPS状態修正: navigate前にLOADINGレコードをDBに作成
-        // これによりGPSモニタリングが「運行中」→「積込中」に正しく変わる
-        try {
-          await apiService.startLoadingAtLocation(currentOperationId, {
-            locationId: selectedLocation.location.id,
-            latitude: currentPosition.coords.latitude,
-            longitude: currentPosition.coords.longitude,
-            accuracy: currentPosition.coords.accuracy,
-            startTime: new Date(),
-          });
-          console.log('✅ startLoadingAtLocation完了 → GPSステータス: 積込中');
-        } catch (startLoadingErr) {
-          // 失敗しても遷移は継続（LoadingInputで再度API呼ぶフローは維持）
-          console.warn('⚠️ startLoadingAtLocation失敗（遷移は継続）:', startLoadingErr);
-        }
+        // 🔧 BUG-DUP-LOADING修正(2026-09-06): 以前はここでstartLoadingAtLocationを呼び
+        // LOADINGレコードを作成していたが、この後の実フロー
+        // (P1=OperationRecordのhandleLoadingStart / P2,P3=LoadingInputのrecordLoadingArrival)
+        // で改めて同じAPIまたはaddActivityが呼ばれるため、常に「開始のみで終了時刻が
+        // 入らない孤児レコード」が1件多く作られる不具合の原因だった
+        // (全LOADINGレコードの54.4%が孤児化・65/69運行で発生を確認)。
+        // GPSステータス表示は直後のoperationStore.setPhase('AT_LOADING')で
+        // 十分反映されるため、ここでのDB書き込みは行わない。
+        // (UNLOADING側は既に同様の理由で呼び出しを行っておらず、孤児率0.3%と正常だった)
 
         // 状態更新（座標も保存）
         setOperation(prev => ({
@@ -899,19 +893,8 @@ const OperationRecord: React.FC = () => {
 
         toast.success(`新規地点「${registeredLocation.name}」を登録しました`);
 
-        // ★ GPS状態修正: navigate前にLOADINGレコードをDBに作成
-        try {
-          await apiService.startLoadingAtLocation(currentOperationId, {
-            locationId: registeredLocation.id,
-            latitude: currentPosition.coords.latitude,
-            longitude: currentPosition.coords.longitude,
-            accuracy: currentPosition.coords.accuracy,
-            startTime: new Date(),
-          });
-          console.log('✅ [新規地点] startLoadingAtLocation完了 → GPSステータス: 積込中');
-        } catch (startLoadingErr) {
-          console.warn('⚠️ [新規地点] startLoadingAtLocation失敗（遷移は継続）:', startLoadingErr);
-        }
+        // 🔧 BUG-DUP-LOADING修正(2026-09-06): startLoadingAtLocationの重複呼び出しを削除。
+        // 理由は handleLocationDialogConfirm 内の同修正コメントを参照。
 
         // LoadingInput画面へ遷移（既存地点選択フローと同じ）
         setShowRegistrationDialog(false);
