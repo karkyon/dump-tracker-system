@@ -206,8 +206,8 @@ async function callRoutesApi(
   const apiKey = await getRoutesApiKey();
   console.log(`[RouteSegments] 🔑 Routes APIキー確認: ${apiKey ? `設定あり(末尾4桁=...${apiKey.slice(-4)})` : '未設定'}`);
   if (!apiKey) {
-    console.log('[RouteSegments] ❌ GOOGLE_ROUTES_API_KEY / GOOGLE_MAPS_API_KEY が未設定のため Routes API呼び出し不可');
-    throw new Error('GOOGLE_ROUTES_API_KEY / GOOGLE_MAPS_API_KEY のいずれも設定されていません（.envに追加が必要）');
+    console.log('[RouteSegments] ❌ Google Routes APIキーが未設定のため Routes API呼び出し不可');
+    throw new Error('APIKEY_NOT_CONFIGURED: Google Routes APIキーが設定されていません（CMS「システム設定→連携設定」または.envのGOOGLE_ROUTES_API_KEYを設定してください）');
   }
 
   const requestBody = {
@@ -238,7 +238,15 @@ async function callRoutesApi(
 
   if (!response.ok || !json.routes || json.routes.length === 0) {
     console.log(`[RouteSegments] ❌ Routes APIエラー詳細: ${JSON.stringify(json).slice(0, 500)}`);
-    logger.error('Routes API呼び出し失敗', { status: response.status, body: json });
+    const errStatus = json?.error?.status || '';
+    const errMessage = json?.error?.message || '';
+    const isAuthError = response.status === 400 || response.status === 401 || response.status === 403
+      || errStatus === 'PERMISSION_DENIED' || errStatus === 'UNAUTHENTICATED'
+      || /api key not valid|api_key_invalid/i.test(errMessage);
+    logger.error('Routes API呼び出し失敗', { status: response.status, errStatus, errMessage, body: json });
+    if (isAuthError) {
+      throw new Error(`APIKEY_INVALID: Google Routes APIキーが無効です（認証エラー: HTTP ${response.status} ${errStatus} ${errMessage}）。CMS「システム設定→連携設定」でキーを再設定するか、Google Cloud ConsoleでのAPI有効化/IP制限設定を確認してください。`);
+    }
     throw new Error(`Routes API呼び出し失敗: ${response.status} ${JSON.stringify(json).slice(0, 300)}`);
   }
 
@@ -377,18 +385,22 @@ async function resolveSegment(
       apiRequestSnapshot: result.rawResponse
     };
   } catch (error) {
-    console.log(`[RouteSegments] ❌ 区間#${segmentIndex}: Routes API失敗、直線距離フォールバックへ切替 = ${(straightKm * FALLBACK_STRAIGHT_FACTOR).toFixed(3)}km / エラー: ${error instanceof Error ? error.message : String(error)}`);
-    logger.warn('Routes API失敗、直線距離フォールバックを使用', {
-      error: error instanceof Error ? error.message : error,
-      segmentIndex
-    });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.log(`[RouteSegments] ❌ 区間#${segmentIndex}: Routes API失敗、直線距離フォールバックへ切替 = ${(straightKm * FALLBACK_STRAIGHT_FACTOR).toFixed(3)}km / エラー: ${errMsg}`);
+    if (errMsg.startsWith('APIKEY_NOT_CONFIGURED')) {
+      logger.error('[GPS補完機能] Routes APIキーが未設定のため道路ルート補完が機能していません。CMS「システム設定→連携設定」からAPIキーを設定してください。', { segmentIndex });
+    } else if (errMsg.startsWith('APIKEY_INVALID')) {
+      logger.error('[GPS補完機能] Routes APIキーが無効(認証エラー)です。キーの値・API有効化・IP制限設定を確認してください。', { segmentIndex, detail: errMsg });
+    } else {
+      logger.warn('Routes API失敗、直線距離フォールバックを使用', { error: errMsg, segmentIndex });
+    }
     return {
       ...base,
       distanceSource: 'FALLBACK_STRAIGHT',
       distanceKm: straightKm * FALLBACK_STRAIGHT_FACTOR,
       routePolyline: null,
       inputWaypoints: { origin: from, destination: to },
-      apiRequestSnapshot: { error: error instanceof Error ? error.message : String(error) }
+      apiRequestSnapshot: { error: errMsg }
     };
   }
 }

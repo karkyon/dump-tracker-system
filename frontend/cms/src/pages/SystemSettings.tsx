@@ -291,11 +291,11 @@ const SystemSettings: React.FC = () => {
   // ① 事業者情報タブの NEW バッジを削除
   // =====================================
   const tabs = [
-    { id: 'general',   label: '一般設定',   icon: Settings      },
-    { id: 'operation', label: '運行設定',   icon: Settings      },
-    { id: 'business',  label: '事業者情報', icon: Building2     },
-    { id: 'logs',      label: 'ログ管理',   icon: AlertTriangle },
-    // 連携設定（APIキー等）は開発者ツール (/developer) へ移動
+    { id: 'general',     label: '一般設定',   icon: Settings      },
+    { id: 'operation',   label: '運行設定',   icon: Settings      },
+    { id: 'business',    label: '事業者情報', icon: Building2     },
+    { id: 'integration', label: '連携設定',   icon: Settings      },
+    { id: 'logs',        label: 'ログ管理',   icon: AlertTriangle },
   ];
 
   // =====================================
