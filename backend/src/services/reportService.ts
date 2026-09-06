@@ -1721,6 +1721,75 @@ class ReportService {
       ? new Date(params.date)
       : (report.startDate ? new Date(report.startDate) : new Date());
 
+    // ✅ 新機能(2026-09-06 フィードバック対応): 車両未指定(全車両)の場合は
+    // 車両ごとにPDFを分けて生成し、1つのPDFに結合する。
+    // (従来は全車両の運行を1台分の日報であるかのように1つのデータへ統合しており、
+    //  どの行がどの車両のものか区別できない不具合があった)
+    // 既存の単一車両向けロジックには一切手を加えず、車両ごとに自分自身を
+    // 再帰呼び出しして結果をpdf-libで結合するだけの安全な構成にしている。
+    if (!params?.vehicleId) {
+      const _jstOff = 9 * 60 * 60 * 1000;
+      const _jstDate = new Date(targetDate.getTime() + _jstOff);
+      const _y = _jstDate.getUTCFullYear();
+      const _m = _jstDate.getUTCMonth();
+      const _d = _jstDate.getUTCDate();
+      const _startOfDay = new Date(Date.UTC(_y, _m, _d, 0, 0, 0, 0) - _jstOff);
+      const _endOfDay = new Date(Date.UTC(_y, _m, _d, 23, 59, 59, 999) - _jstOff);
+
+      const _vehicleWhere: any = {
+        OR: [
+          { actualStartTime: { gte: _startOfDay, lte: _endOfDay } },
+          { AND: [{ actualStartTime: null }, { plannedStartTime: { gte: _startOfDay, lte: _endOfDay } }] },
+          { AND: [{ actualStartTime: null }, { plannedStartTime: null }, { actualEndTime: { gte: _startOfDay, lte: _endOfDay } }] },
+        ],
+      };
+      if (params?.driverId) _vehicleWhere.driverId = params.driverId;
+
+      const _distinctOps = await (this.db as any).operation.findMany({
+        where: _vehicleWhere,
+        select: { vehicleId: true },
+        distinct: ['vehicleId'],
+      });
+      const _vehicleIds: string[] = _distinctOps.map((o: any) => o.vehicleId).filter(Boolean);
+
+      if (_vehicleIds.length > 1) {
+        logger.info('[Report] 全車両日報: 車両ごとに分割生成します', { count: _vehicleIds.length, vehicleIds: _vehicleIds });
+
+        const { PDFDocument: _MergePDFDocument } = await import('pdf-lib');
+        const _mergedPdf = await _MergePDFDocument.create();
+        const _fs = require('fs');
+        const _tempPaths: string[] = [];
+
+        for (const _vid of _vehicleIds) {
+          const { filePath: _vPath } = await this.generateDailyOperationPDF({
+            ...report,
+            id: `${report.id}_v${String(_vid).slice(0, 8)}`,
+            parameters: { ...params, vehicleId: _vid },
+          });
+          _tempPaths.push(_vPath);
+          const _bytes = _fs.readFileSync(_vPath);
+          const _srcDoc = await _MergePDFDocument.load(_bytes);
+          const _pages = await _mergedPdf.copyPages(_srcDoc, _srcDoc.getPageIndices());
+          _pages.forEach((p: any) => _mergedPdf.addPage(p));
+        }
+
+        const _pathMod = require('path');
+        const _dateLabel = params?.date || targetDate.toISOString().split('T')[0];
+        const _fileName = `daily_report_${_dateLabel}_${report.id}.pdf`;
+        const _outputPath = _pathMod.join(require('process').cwd(), 'generated_reports', _fileName);
+        const _mergedBytes = await _mergedPdf.save();
+        _fs.writeFileSync(_outputPath, _mergedBytes);
+
+        for (const _tp of _tempPaths) {
+          try { _fs.unlinkSync(_tp); } catch { /* ignore */ }
+        }
+
+        logger.info('[Report] 全車両日報: 結合完了', { outputPath: _outputPath, vehicleCount: _vehicleIds.length });
+        return { filePath: _outputPath, fileSize: _fs.statSync(_outputPath).size };
+      }
+      // 車両が0台または1台のみの場合は、従来通り1本のPDFとして生成する(下に続く)
+    }
+
     // ✅ JST(+9時間)で日付境界を計算
     const _rptJstOff = 9 * 60 * 60 * 1000;
     const _rptJstDate = new Date(targetDate.getTime() + _rptJstOff);
