@@ -13,6 +13,22 @@ const DEFAULTS: Record<string, string> = {
 };
 
 /**
+ * 暗号化済みJSON文字列を復号し、末尾4桁のみ返す(CMS表示用ヒント)
+ */
+async function decryptLast4(encryptedJson: string | undefined): Promise<string | null> {
+  if (!encryptedJson) return null;
+  try {
+    const { decryptData } = await import('../utils/crypto');
+    const payload = JSON.parse(encryptedJson);
+    const result = decryptData(payload);
+    if (result.success && result.data) {
+      return result.data.slice(-4);
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
  * GET /api/v1/settings/system
  */
 export const getSystemSettings = async (
@@ -105,18 +121,97 @@ export const getIntegrationSettings = async (
         },
         googleRoutes: {
           apiKeyConfigured: !!(raw['integration.google_routes_api_key_encrypted']),
+          last4: await decryptLast4(raw['integration.google_routes_api_key_encrypted']),
         },
         backlog: {
-          spaceKey:   raw['integration.backlog_space_key']   || process.env['BACKLOG_SPACE_KEY']   || '',
-          projectId:  raw['integration.backlog_project_id']  || process.env['BACKLOG_PROJECT_ID']  || '',
-          projectKey: raw['integration.backlog_project_key'] || process.env['BACKLOG_PROJECT_KEY'] || '',
-          // APIキーはマスク表示
-          apiKeyConfigured: !!(raw['integration.backlog_api_key'] || process.env['BACKLOG_API_KEY']),
+          spaceKey:   raw['integration.backlog_space_key']   || '',
+          projectId:  raw['integration.backlog_project_id']  || '',
+          projectKey: raw['integration.backlog_project_key'] || '',
+          apiKeyConfigured: !!(raw['integration.backlog_api_key_encrypted']),
+          last4: await decryptLast4(raw['integration.backlog_api_key_encrypted']),
         },
       },
     });
   } catch (error) {
     logger.error('連携設定取得エラー', { error });
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/v1/settings/system/integration/backlog
+ * Backlog接続設定を保存(APIキーは暗号化してDBに保存)
+ * body: { spaceKey?: string, projectId?: string, projectKey?: string, apiKey?: string }
+ */
+export const saveBacklogSettings = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { spaceKey, projectId, projectKey, apiKey } = req.body as {
+      spaceKey?: string; projectId?: string; projectKey?: string; apiKey?: string;
+    };
+
+    if (spaceKey !== undefined) {
+      await db.systemSetting.upsert({
+        where: { key: 'integration.backlog_space_key' },
+        create: { key: 'integration.backlog_space_key', value: spaceKey },
+        update: { value: spaceKey },
+      });
+    }
+    if (projectId !== undefined) {
+      await db.systemSetting.upsert({
+        where: { key: 'integration.backlog_project_id' },
+        create: { key: 'integration.backlog_project_id', value: projectId },
+        update: { value: projectId },
+      });
+    }
+    if (projectKey !== undefined) {
+      await db.systemSetting.upsert({
+        where: { key: 'integration.backlog_project_key' },
+        create: { key: 'integration.backlog_project_key', value: projectKey },
+        update: { value: projectKey },
+      });
+    }
+    if (apiKey && apiKey.trim().length >= 10) {
+      const { encryptData } = await import('../utils/crypto');
+      const encrypted = encryptData(apiKey.trim());
+      if (!encrypted.success || !encrypted.data) {
+        res.status(500).json({ success: false, message: `暗号化に失敗しました: ${encrypted.error || '不明なエラー'}` });
+        return;
+      }
+      await db.systemSetting.upsert({
+        where: { key: 'integration.backlog_api_key_encrypted' },
+        create: { key: 'integration.backlog_api_key_encrypted', value: JSON.stringify(encrypted.data) },
+        update: { value: JSON.stringify(encrypted.data) },
+      });
+    }
+
+    logger.info('Backlog連携設定保存完了');
+    res.json({ success: true, message: 'Backlog連携設定を保存しました' });
+  } catch (error) {
+    logger.error('Backlog連携設定保存エラー', { error });
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/v1/settings/system/integration/backlog
+ */
+export const deleteBacklogSettings = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    await db.systemSetting.deleteMany({
+      where: { key: { startsWith: 'integration.backlog_' } },
+    });
+    logger.info('Backlog連携設定削除完了');
+    res.json({ success: true, message: 'Backlog連携設定を削除しました' });
+  } catch (error) {
+    logger.error('Backlog連携設定削除エラー', { error });
     next(error);
   }
 };

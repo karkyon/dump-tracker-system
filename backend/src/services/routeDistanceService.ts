@@ -189,7 +189,7 @@ async function getRoutesApiKey(): Promise<string | undefined> {
   }
 
   if (!resolvedKey) {
-    resolvedKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+    logger.error('[GPS補完機能] Google Routes APIキーがDBに設定されていません。CMS「システム設定→連携設定」から設定してください(.envは参照しません)');
   }
 
   _routesApiKeyCache = { key: resolvedKey, expiresAt: now + ROUTES_API_KEY_CACHE_MS };

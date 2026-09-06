@@ -5,6 +5,7 @@
 import logger from '../utils/logger';
 import { getFirestore as getFirestoreAsync, getStorage as getStorageAsync } from '../lib/firebase-admin';
 import * as admin from 'firebase-admin';
+import { DatabaseService } from '../utils/database';
 
 // =============================================
 // 型定義
@@ -338,12 +339,41 @@ export class FeedbackService {
     customTitle?: string,
     customBody?: string
   ): Promise<{ issueId: string; issueKey: string }> {
-    const apiKey = process.env['BACKLOG_API_KEY'];
-    const spaceKey = process.env['BACKLOG_SPACE_KEY'] || 'jadeworks';
-    const projectId = process.env['BACKLOG_PROJECT_ID'];
+    const settingsDb = DatabaseService.getInstance();
+    const settingRows = await (settingsDb as any).systemSetting.findMany({
+      where: { key: { in: [
+        'integration.backlog_api_key_encrypted',
+        'integration.backlog_space_key',
+        'integration.backlog_project_id',
+      ] } }
+    });
+    const settingsMap: Record<string, string> = {};
+    for (const row of settingRows) {
+      if (row.value !== null) settingsMap[row.key] = row.value;
+    }
 
-    if (!apiKey) throw new Error('BACKLOG_API_KEY が .env に設定されていません');
-    if (!projectId) throw new Error('BACKLOG_PROJECT_ID が .env に設定されていません');
+    let apiKey: string | undefined;
+    if (settingsMap['integration.backlog_api_key_encrypted']) {
+      const { decryptData } = await import('../utils/crypto');
+      const payload = JSON.parse(settingsMap['integration.backlog_api_key_encrypted']);
+      const result = decryptData(payload);
+      if (result.success && result.data) {
+        apiKey = result.data;
+      } else {
+        logger.error('[Backlog連携] APIキーの復号に失敗しました', { error: result.error });
+      }
+    }
+    const spaceKey = settingsMap['integration.backlog_space_key'] || 'jadeworks';
+    const projectId = settingsMap['integration.backlog_project_id'];
+
+    if (!apiKey) {
+      logger.error('[Backlog連携] APIキーが未設定です。CMS「システム設定→連携設定」から設定してください。');
+      throw new Error('Backlog APIキーが設定されていません（CMS「システム設定→連携設定」から設定してください）');
+    }
+    if (!projectId) {
+      logger.error('[Backlog連携] プロジェクトIDが未設定です。CMS「システム設定→連携設定」から設定してください。');
+      throw new Error('Backlog プロジェクトIDが設定されていません（CMS「システム設定→連携設定」から設定してください）');
+    }
 
     const fb = await this.getById(id);
     if (!fb) throw new Error(`フィードバック ID=${id} が見つかりません`);

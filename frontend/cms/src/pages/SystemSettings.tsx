@@ -113,6 +113,14 @@ const SystemSettings: React.FC = () => {
   const [routesApiKeySaving, setRoutesApiKeySaving] = useState(false);
   const [routesApiKeySaved, setRoutesApiKeySaved] = useState(false);
   const [routesApiKeyError, setRoutesApiKeyError] = useState<any>(null);
+  // Backlog連携設定 State
+  const [backlogSpaceKeyInput, setBacklogSpaceKeyInput] = useState('');
+  const [backlogProjectIdInput, setBacklogProjectIdInput] = useState('');
+  const [backlogProjectKeyInput, setBacklogProjectKeyInput] = useState('');
+  const [backlogApiKeyInput, setBacklogApiKeyInput] = useState('');
+  const [backlogSaving, setBacklogSaving] = useState(false);
+  const [backlogSaved, setBacklogSaved] = useState(false);
+  const [backlogError, setBacklogError] = useState<any>(null);
 
   const fetchIntegrationSettings = useCallback(async () => {
     try {
@@ -124,6 +132,14 @@ const SystemSettings: React.FC = () => {
   }, []);
 
   useEffect(() => { fetchIntegrationSettings(); }, [fetchIntegrationSettings]);
+
+  useEffect(() => {
+    if (integrationSettings?.backlog) {
+      setBacklogSpaceKeyInput(integrationSettings.backlog.spaceKey || '');
+      setBacklogProjectIdInput(integrationSettings.backlog.projectId || '');
+      setBacklogProjectKeyInput(integrationSettings.backlog.projectKey || '');
+    }
+  }, [integrationSettings]);
 
   const handleSaveFirebaseSettings = async () => {
     if (!firebaseFile) return;
@@ -174,6 +190,38 @@ const SystemSettings: React.FC = () => {
     if (!confirm('Google Routes APIキー設定を削除しますか？GPS区間距離の道路ルート補完が直線距離フォールバックのみになります。')) return;
     try {
       await fetch(`${API_BASE_URL}/settings/system/integration/google-routes`, { method: 'DELETE', headers: getAuthHeaders() });
+      await fetchIntegrationSettings();
+    } catch { /* ignore */ }
+  };
+
+  // Backlog設定保存
+  const handleSaveBacklogSettings = async () => {
+    setBacklogSaving(true); setBacklogError(null); setBacklogSaved(false);
+    try {
+      const body: any = {
+        spaceKey: backlogSpaceKeyInput.trim(),
+        projectId: backlogProjectIdInput.trim(),
+        projectKey: backlogProjectKeyInput.trim(),
+      };
+      if (backlogApiKeyInput.trim()) body.apiKey = backlogApiKeyInput.trim();
+      const res = await fetch(`${API_BASE_URL}/settings/system/integration/backlog`, {
+        method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || `エラー: ${res.status}`);
+      setBacklogSaved(true); setBacklogApiKeyInput('');
+      setTimeout(() => setBacklogSaved(false), 5000);
+      await fetchIntegrationSettings();
+    } catch (e: any) { setBacklogError(e.message || '保存に失敗しました'); }
+    finally { setBacklogSaving(false); }
+  };
+
+  // Backlog設定削除
+  const handleDeleteBacklogSettings = async () => {
+    if (!confirm('Backlog連携設定を削除しますか？フィードバックのBacklog起票機能が使用できなくなります。')) return;
+    try {
+      await fetch(`${API_BASE_URL}/settings/system/integration/backlog`, { method: 'DELETE', headers: getAuthHeaders() });
+      setBacklogSpaceKeyInput(''); setBacklogProjectIdInput(''); setBacklogProjectKeyInput('');
       await fetchIntegrationSettings();
     } catch { /* ignore */ }
   };
@@ -1305,6 +1353,12 @@ const SystemSettings: React.FC = () => {
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✅ 設定済み</span>
               )}
             </div>
+            {integrationSettings?.googleRoutes?.apiKeyConfigured && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4 text-sm">
+                <div className="font-semibold text-green-800 mb-1">現在の設定</div>
+                <div className="text-green-700 font-mono">末尾4桁: ...{integrationSettings.googleRoutes.last4 || '????'}</div>
+              </div>
+            )}
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">APIキー</label>
@@ -1336,24 +1390,58 @@ const SystemSettings: React.FC = () => {
 
           {/* Backlog */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-2">🎫 Backlog 連携設定</h2>
-            <p className="text-sm text-gray-500 mb-4">フィードバックのBacklog起票に使用する接続設定（サーバーの .env で管理）</p>
-            <div className="bg-gray-50 border border-gray-200 rounded-md p-4 space-y-2 text-sm">
-              <div className="grid grid-cols-2 gap-2">
-                <span className="text-gray-500 font-medium">スペースキー</span>
-                <span className="font-mono">{integrationSettings?.backlog?.spaceKey || '未設定'}</span>
-                <span className="text-gray-500 font-medium">プロジェクトキー</span>
-                <span className="font-mono">{integrationSettings?.backlog?.projectKey || '未設定'}</span>
-                <span className="text-gray-500 font-medium">プロジェクトID</span>
-                <span className="font-mono">{integrationSettings?.backlog?.projectId || '未設定'}</span>
-                <span className="text-gray-500 font-medium">APIキー</span>
-                {integrationSettings?.backlog?.apiKeyConfigured
-                  ? <span className="text-green-600">✅ 設定済み（.envで管理）</span>
-                  : <span className="text-red-500">❌ 未設定 — backend/.env に BACKLOG_API_KEY を追加</span>
-                }
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">🎫 Backlog 連携設定</h2>
+                <p className="text-sm text-gray-500 mt-1">フィードバックのBacklog起票に使用する接続設定</p>
+              </div>
+              {integrationSettings?.backlog?.apiKeyConfigured && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✅ 設定済み</span>
+              )}
+            </div>
+            {integrationSettings?.backlog?.apiKeyConfigured && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4 text-sm">
+                <div className="font-semibold text-green-800 mb-1">現在の設定</div>
+                <div className="text-green-700 font-mono">APIキー末尾4桁: ...{integrationSettings.backlog.last4 || '????'}</div>
+              </div>
+            )}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">スペースキー</label>
+                  <input type="text" className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+                    value={backlogSpaceKeyInput} onChange={(e) => setBacklogSpaceKeyInput(e.target.value)} placeholder="例: jadeworks" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">プロジェクトID</label>
+                  <input type="text" className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+                    value={backlogProjectIdInput} onChange={(e) => setBacklogProjectIdInput(e.target.value)} placeholder="数値のプロジェクトID" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">プロジェクトキー</label>
+                  <input type="text" className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+                    value={backlogProjectKeyInput} onChange={(e) => setBacklogProjectKeyInput(e.target.value)} placeholder="例: DUMPTRACKER2026" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">APIキー</label>
+                  <input type="password" className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+                    placeholder={integrationSettings?.backlog?.apiKeyConfigured ? '設定済み（変更する場合のみ入力）' : 'APIキーを入力'}
+                    value={backlogApiKeyInput} onChange={(e) => setBacklogApiKeyInput(e.target.value)} />
+                </div>
+              </div>
+              {backlogError && <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">❌ {backlogError}</div>}
+              {backlogSaved && <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-700">✅ Backlog連携設定を保存しました</div>}
+              <div className="flex gap-3">
+                <Button onClick={handleSaveBacklogSettings} disabled={backlogSaving}>
+                  <Save className="w-4 h-4 mr-2" />{backlogSaving ? '保存中...' : '保存'}
+                </Button>
+                {integrationSettings?.backlog?.apiKeyConfigured && (
+                  <Button variant="secondary" onClick={handleDeleteBacklogSettings}>
+                    <Trash2 className="w-4 h-4 mr-2" />設定を削除
+                  </Button>
+                )}
               </div>
             </div>
-            <p className="text-xs text-gray-400 mt-3">※ Backlog APIキー等の機密情報はサーバーの .env ファイルで管理しています</p>
           </div>
         </div>
       )}
