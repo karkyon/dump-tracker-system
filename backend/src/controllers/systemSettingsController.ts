@@ -119,6 +119,10 @@ export const getIntegrationSettings = async (
           projectId: firebaseProjectId,
           storageBucket: raw['integration.firebase_storage_bucket'] || '',
         },
+        mapsApiKey: {
+          apiKeyConfigured: !!(raw['integration.maps_api_key_encrypted']),
+          last4: await decryptLast4(raw['integration.maps_api_key_encrypted']),
+        },
         googleRoutes: {
           apiKeyConfigured: !!(raw['integration.google_routes_api_key_encrypted']),
           last4: await decryptLast4(raw['integration.google_routes_api_key_encrypted']),
@@ -212,6 +216,109 @@ export const deleteBacklogSettings = async (
     res.json({ success: true, message: 'Backlog連携設定を削除しました' });
   } catch (error) {
     logger.error('Backlog連携設定削除エラー', { error });
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/v1/settings/system/integration/maps-api-key
+ * Google Maps JavaScript APIキー(CMS/モバイル共通)を暗号化してDBに保存し、
+ * 両フロントエンドの.env.productionを更新してバックグラウンドで再ビルドする。
+ * (nginxが静的ファイルを直接配信する構成のため、ビルド完了後の再起動は不要)
+ * body: { apiKey: string }
+ */
+export const saveMapsApiKeySettings = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { apiKey } = req.body as { apiKey?: string };
+    if (!apiKey || apiKey.trim().length < 10) {
+      res.status(400).json({ success: false, message: 'apiKey は必須です（10文字以上）' });
+      return;
+    }
+    const trimmedKey = apiKey.trim();
+
+    const { encryptData } = await import('../utils/crypto');
+    const encrypted = encryptData(trimmedKey);
+    if (!encrypted.success || !encrypted.data) {
+      res.status(500).json({ success: false, message: `暗号化に失敗しました: ${encrypted.error || '不明なエラー'}` });
+      return;
+    }
+
+    await db.systemSetting.upsert({
+      where: { key: 'integration.maps_api_key_encrypted' },
+      create: { key: 'integration.maps_api_key_encrypted', value: JSON.stringify(encrypted.data) },
+      update: { value: JSON.stringify(encrypted.data) },
+    });
+
+    // フロントエンド2つの.env.productionを更新し、バックグラウンドで再ビルドを開始
+    const path = require('path');
+    const fs = require('fs');
+    const { exec } = require('child_process');
+
+    const rebuildFrontendApp = (appDir: string, envFilePath: string, appLabel: string) => {
+      try {
+        let envContent = '';
+        if (fs.existsSync(envFilePath)) {
+          envContent = fs.readFileSync(envFilePath, 'utf-8');
+        }
+        const keyLine = `VITE_GOOGLE_MAPS_API_KEY=${trimmedKey}`;
+        if (/^VITE_GOOGLE_MAPS_API_KEY=.*$/m.test(envContent)) {
+          envContent = envContent.replace(/^VITE_GOOGLE_MAPS_API_KEY=.*$/m, keyLine);
+        } else {
+          envContent = (envContent.trim() ? envContent.trim() + '\n' : '') + keyLine + '\n';
+        }
+        fs.writeFileSync(envFilePath, envContent, 'utf-8');
+      } catch (e) {
+        logger.error(`[MapsAPIキー] ${appLabel} .envファイル書き込み失敗`, { error: e instanceof Error ? e.message : e });
+        return;
+      }
+
+      logger.info(`[MapsAPIキー] ${appLabel} バックグラウンドビルド開始`, { appDir });
+      exec('npm run build', { cwd: appDir, timeout: 5 * 60 * 1000 }, (error: any, _stdout: string, stderr: string) => {
+        if (error) {
+          logger.error(`[MapsAPIキー] ${appLabel} ビルド失敗`, { error: error.message, stderr: (stderr || '').slice(-2000) });
+        } else {
+          logger.info(`[MapsAPIキー] ${appLabel} ビルド完了(nginxが静的ファイルを配信するため再起動不要)`, { appDir });
+        }
+      });
+    };
+
+    const cmsDir = path.join(process.cwd(), '..', 'frontend', 'cms');
+    const mobileDir = path.join(process.cwd(), '..', 'frontend', 'mobile');
+    rebuildFrontendApp(cmsDir, path.join(cmsDir, '.env.production'), 'CMS');
+    rebuildFrontendApp(mobileDir, path.join(mobileDir, '.env.production'), 'モバイル');
+
+    logger.info('Google Maps APIキー保存完了(暗号化済み・両フロントエンドの再ビルドをバックグラウンドで開始)');
+    res.json({
+      success: true,
+      message: 'Google Maps APIキーを保存しました。CMS/モバイル両方の再ビルドをバックグラウンドで開始しました(反映まで数分かかります。再起動は不要です)'
+    });
+  } catch (error) {
+    logger.error('Google Maps APIキー保存エラー', { error });
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/v1/settings/system/integration/maps-api-key
+ * DB上の記録のみ削除する(既にビルド済みのファイルには影響しません)
+ */
+export const deleteMapsApiKeySettings = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    await db.systemSetting.deleteMany({
+      where: { key: 'integration.maps_api_key_encrypted' },
+    });
+    logger.info('Google Maps APIキー削除完了(DB記録のみ。既にビルド済みのファイルはそのまま残ります)');
+    res.json({ success: true, message: 'Google Maps APIキー設定を削除しました(既にビルド済みのファイルには影響しません)' });
+  } catch (error) {
+    logger.error('Google Maps APIキー削除エラー', { error });
     next(error);
   }
 };

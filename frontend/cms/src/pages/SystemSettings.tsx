@@ -121,6 +121,11 @@ const SystemSettings: React.FC = () => {
   const [backlogSaving, setBacklogSaving] = useState(false);
   const [backlogSaved, setBacklogSaved] = useState(false);
   const [backlogError, setBacklogError] = useState<any>(null);
+  // Google Maps APIキー(CMS/モバイル共通) State
+  const [mapsApiKeyInput, setMapsApiKeyInput] = useState('');
+  const [mapsApiKeySaving, setMapsApiKeySaving] = useState(false);
+  const [mapsApiKeySaved, setMapsApiKeySaved] = useState(false);
+  const [mapsApiKeyError, setMapsApiKeyError] = useState<any>(null);
 
   const fetchIntegrationSettings = useCallback(async () => {
     try {
@@ -222,6 +227,33 @@ const SystemSettings: React.FC = () => {
     try {
       await fetch(`${API_BASE_URL}/settings/system/integration/backlog`, { method: 'DELETE', headers: getAuthHeaders() });
       setBacklogSpaceKeyInput(''); setBacklogProjectIdInput(''); setBacklogProjectKeyInput('');
+      await fetchIntegrationSettings();
+    } catch { /* ignore */ }
+  };
+
+  // Google Maps APIキー(CMS/モバイル共通)保存
+  const handleSaveMapsApiKey = async () => {
+    if (!mapsApiKeyInput.trim()) return;
+    setMapsApiKeySaving(true); setMapsApiKeyError(null); setMapsApiKeySaved(false);
+    try {
+      const res = await fetch(`${API_BASE_URL}/settings/system/integration/maps-api-key`, {
+        method: 'PUT', headers: getAuthHeaders(),
+        body: JSON.stringify({ apiKey: mapsApiKeyInput.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || `エラー: ${res.status}`);
+      setMapsApiKeySaved(true); setMapsApiKeyInput('');
+      setTimeout(() => setMapsApiKeySaved(false), 8000);
+      await fetchIntegrationSettings();
+    } catch (e: any) { setMapsApiKeyError(e.message || '保存に失敗しました'); }
+    finally { setMapsApiKeySaving(false); }
+  };
+
+  // Google Maps APIキー削除
+  const handleDeleteMapsApiKey = async () => {
+    if (!confirm('Google Maps APIキーのDB記録を削除しますか？既にビルド済みのCMS/モバイルの表示には影響しません。')) return;
+    try {
+      await fetch(`${API_BASE_URL}/settings/system/integration/maps-api-key`, { method: 'DELETE', headers: getAuthHeaders() });
       await fetchIntegrationSettings();
     } catch { /* ignore */ }
   };
@@ -1335,6 +1367,52 @@ const SystemSettings: React.FC = () => {
                 </Button>
                 {integrationSettings?.firebase?.configured && (
                   <Button variant="secondary" onClick={handleDeleteFirebaseSettings}>
+                    <Trash2 className="w-4 h-4 mr-2" />設定を削除
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Google Maps API (CMS/モバイル共通) */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">🗺️ Google Maps API 連携設定（CMS/モバイル共通）</h2>
+                <p className="text-sm text-gray-500 mt-1">CMS・モバイルアプリの地図表示に使用するAPIキー。保存すると両方の再ビルドがバックグラウンドで自動実行されます（反映まで数分。再起動は不要）</p>
+              </div>
+              {integrationSettings?.mapsApiKey?.apiKeyConfigured && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✅ 設定済み</span>
+              )}
+            </div>
+            {integrationSettings?.mapsApiKey?.apiKeyConfigured && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4 text-sm">
+                <div className="font-semibold text-green-800 mb-1">現在の設定</div>
+                <div className="text-green-700 font-mono">末尾4桁: ...{integrationSettings.mapsApiKey.last4 || '????'}</div>
+              </div>
+            )}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">APIキー</label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Google Cloud Console で発行したMaps JavaScript API用キー。CMS・モバイル両方に同じ値が適用されます。
+                </p>
+                <input
+                  type="password"
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+                  placeholder={integrationSettings?.mapsApiKey?.apiKeyConfigured ? '設定済み（変更する場合のみ入力）' : 'APIキーを入力'}
+                  value={mapsApiKeyInput}
+                  onChange={(e) => setMapsApiKeyInput(e.target.value)}
+                />
+              </div>
+              {mapsApiKeyError && <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">❌ {mapsApiKeyError}</div>}
+              {mapsApiKeySaved && <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-700">✅ 保存しました。CMS/モバイルの再ビルドをバックグラウンドで開始しました（反映まで数分かかります）</div>}
+              <div className="flex gap-3">
+                <Button onClick={handleSaveMapsApiKey} disabled={!mapsApiKeyInput.trim() || mapsApiKeySaving}>
+                  <Save className="w-4 h-4 mr-2" />{mapsApiKeySaving ? '保存中...' : '保存'}
+                </Button>
+                {integrationSettings?.mapsApiKey?.apiKeyConfigured && (
+                  <Button variant="secondary" onClick={handleDeleteMapsApiKey}>
                     <Trash2 className="w-4 h-4 mr-2" />設定を削除
                   </Button>
                 )}
