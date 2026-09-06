@@ -541,7 +541,14 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
 
     // 移動時間 = 積込終了 → 荷降開始（区間内に休憩があれば休憩時間を差し引く）
     const moveMinRaw = diffMinutes(c.loadingEnd, c.unloadingStart);
-    const moveMin = subtractBreakOverlap(c.loadingEnd, c.unloadingStart, moveMinRaw);
+    let moveMin = subtractBreakOverlap(c.loadingEnd, c.unloadingStart, moveMinRaw);
+    // ✅ 修正(BUG-MOVETIME-OVERFLOW, フィードバック35Rf93UDTHat5hxioTpG関連調査で発覚):
+    // diffMinutesはHH:MM(時刻のみ)同士の差分しか計算できないため、実際には日をまたいで
+    // いないのに、データ起因(タイムスタンプのズレ等)で終了時刻の時分が開始時刻より前に
+    // 見えてしまうケースで「24時間経過した」と誤認し、1434分のような意味のない巨大な
+    // 値を表示してしまっていた。空車移動時間で既に採用している「12時間を超えたら
+    // 表示しない」という安全策を移動時間にも適用する。
+    if (moveMin >= 12 * 60) moveMin = -1;
     // 積込時間(分)
     const loadMin = diffMinutes(c.loadingStart, c.loadingEnd);
     // 荷降時間(分)
