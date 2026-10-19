@@ -42,12 +42,12 @@ export class GpsService {
    */
   async getAllVehiclePositions() {
     try {
+      // ✅ FIX(性能障害): Prismaの include gpsLogs { take: 1 } は親ごとのLIMITをSQLに落とさず
+      //   全車両の gps_logs 全件をNodeに読み込んでからメモリで切り捨てるため、
+      //   GPSログ蓄積に伴い30秒タイムアウト→プロセス過負荷→502を引き起こしていた。
+      //   車両ごとの最新1件を LATERAL + LIMIT 1 で取得する方式に変更（idx_gps_logs_vehicle_time を使用）。
       const vehicles = await this.prisma.vehicle.findMany({
         include: {
-          gpsLogs: {
-            orderBy: { recordedAt: 'desc' },
-            take: 1
-          },
           operations: {
             where: {
               status: 'IN_PROGRESS'
@@ -77,8 +77,43 @@ export class GpsService {
         }
       });
 
+      const latestRows = await this.prisma.$queryRaw<Array<{
+        vehicle_id: string;
+        latitude: Decimal;
+        longitude: Decimal;
+        altitude: Decimal | null;
+        speed_kmh: Decimal | null;
+        heading: Decimal | null;
+        accuracy_meters: Decimal | null;
+        recorded_at: Date;
+      }>>`
+        SELECT v.id AS vehicle_id, g.latitude, g.longitude, g.altitude, g.speed_kmh,
+               g.heading, g.accuracy_meters, g.recorded_at
+        FROM vehicles v
+        CROSS JOIN LATERAL (
+          SELECT gl.latitude, gl.longitude, gl.altitude, gl.speed_kmh,
+                 gl.heading, gl.accuracy_meters, gl.recorded_at
+          FROM gps_logs gl
+          WHERE gl.vehicle_id = v.id
+          ORDER BY gl.recorded_at DESC
+          LIMIT 1
+        ) g
+      `;
+      const latestMap = new Map<string, {
+        latitude: Decimal; longitude: Decimal; altitude: Decimal | null;
+        speedKmh: Decimal | null; heading: Decimal | null;
+        accuracyMeters: Decimal | null; recordedAt: Date;
+      }>();
+      for (const r of latestRows) {
+        latestMap.set(r.vehicle_id, {
+          latitude: r.latitude, longitude: r.longitude, altitude: r.altitude,
+          speedKmh: r.speed_kmh, heading: r.heading,
+          accuracyMeters: r.accuracy_meters, recordedAt: r.recorded_at
+        });
+      }
+
       return vehicles.map(vehicle => {
-        const latestGps = vehicle.gpsLogs[0];
+        const latestGps = latestMap.get(vehicle.id);
         const activeOperation = vehicle.operations[0];
 
         return {

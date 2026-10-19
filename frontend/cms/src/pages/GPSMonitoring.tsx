@@ -413,12 +413,17 @@ const GPSMonitoring: React.FC = () => {
   const infoWindowRef   = useRef<google.maps.InfoWindow | null>(null);
   const routePolyRef    = useRef<any>(null);
   const pingRingRef     = useRef<HTMLElement | null>(null);
+  // ✅ FIX: 前回リクエスト未完了時の多重ポーリング防止（サーバー過負荷の連鎖を防ぐ）
+  const fetchingRef     = useRef(false);
 
   // =====================================
   // データ取得 & ポーリング
   // =====================================
 
   const fetchVehiclePositions = useCallback(async (isManual = false): Promise<void> => {
+    if (fetchingRef.current) return;
+    if (!isManual && typeof document !== 'undefined' && document.hidden) return;
+    fetchingRef.current = true;
     if (isManual) setLoading(true);
     try {
       const response = await apiClient.get<any>('/gps/realtime/vehicles');
@@ -435,6 +440,7 @@ const GPSMonitoring: React.FC = () => {
       setIsConnected(false);
       setError(err.message ?? 'データの取得中にエラーが発生しました');
     } finally {
+      fetchingRef.current = false;
       if (isManual) setLoading(false);
     }
   }, []);

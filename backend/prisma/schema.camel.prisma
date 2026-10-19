@@ -46,6 +46,7 @@ model GpsLog {
 
   @@index([recordedAt], map: "idx_gps_logs_time")
   @@index([vehicleId], map: "idx_gps_logs_vehicle")
+  @@index([vehicleId, recordedAt(sort: Desc)], map: "idx_gps_logs_vehicle_time")
   @@map("gps_logs")
 }
 
