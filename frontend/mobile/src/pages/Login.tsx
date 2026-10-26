@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useTLog } from '../hooks/useTLog';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { User, Lock, Loader, CheckCircle2, AlertCircle, Truck } from 'lucide-react';
+import { User, Lock, Loader, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 
 const Login: React.FC = () => {
@@ -155,7 +155,7 @@ const Login: React.FC = () => {
       <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="max-w-md mx-auto px-6 py-5">
           <div className="flex items-center space-x-3">
-            <Truck className="w-7 h-7" />
+            <img src="/icons/icon-192.png" alt="スマートダンプ" className="w-11 h-11 rounded-lg shadow-md bg-white flex-shrink-0" />
             <div>
               <h1 className="text-xl font-bold">スマートダンプ</h1>
               <p className="text-blue-100 text-xs mt-0.5">ダンプトラック運行記録・日報管理</p>

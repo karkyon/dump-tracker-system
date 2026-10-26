@@ -155,9 +155,12 @@ const Home: React.FC = () => {
         }}
       >
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-1">スマートダンプ</h1>
-            <p className="text-sm text-white/80">Smart Dump</p>
+          <div className="flex items-center space-x-3">
+            <img src="/icons/icon-192.png" alt="スマートダンプ" className="w-12 h-12 rounded-lg shadow-md bg-white flex-shrink-0" />
+            <div>
+              <h1 className="text-2xl font-bold mb-1">スマートダンプ</h1>
+              <p className="text-sm text-white/80">Smart Dump</p>
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             {/* 季節アイコン表示 */}
