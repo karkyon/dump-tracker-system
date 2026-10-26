@@ -302,7 +302,7 @@ class ServerManager {
 
     // コンソール表示
     console.log('\n' + '='.repeat(70));
-    console.log('🚀 Dump Tracker API サーバー起動完了 (HTTPS対応)');
+    console.log('🚀 スマートダンプ API サーバー起動完了 (HTTPS対応)');
     console.log('='.repeat(70));
     console.log(`🔒 プロトコル: ${startupInfo.protocol}`);
     console.log(`🌐 環境: ${startupInfo.environment}`);

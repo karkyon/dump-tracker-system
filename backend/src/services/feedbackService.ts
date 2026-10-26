@@ -707,7 +707,7 @@ export class FeedbackService {
       '',
       '---',
       '',
-      '*Dump Tracker フィードバックシステムより自動起票*',
+      '*スマートダンプ フィードバックシステムより自動起票*',
       `*Firebase Document ID: ${fb.id}*`,
       `*カテゴリ: ${category} | 種別: ${typePrefix} | 影響度: ${fb.severity}*`,
     ].filter(line => line !== undefined && line !== null);

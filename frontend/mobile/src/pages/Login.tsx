@@ -157,8 +157,8 @@ const Login: React.FC = () => {
           <div className="flex items-center space-x-3">
             <Truck className="w-7 h-7" />
             <div>
-              <h1 className="text-xl font-bold">運転日報アプリ</h1>
-              <p className="text-blue-100 text-xs mt-0.5">ダンプトラック運行記録システム</p>
+              <h1 className="text-xl font-bold">スマートダンプ</h1>
+              <p className="text-blue-100 text-xs mt-0.5">ダンプトラック運行記録・日報管理</p>
             </div>
           </div>
         </div>
@@ -323,7 +323,7 @@ const Login: React.FC = () => {
           {/* バージョン情報 */}
           <div className="text-center text-sm text-gray-500">
             <p>Version 1.0.0</p>
-            <p className="text-xs text-gray-400 mt-1">© 2025 ダンプ運行記録システム</p>
+            <p className="text-xs text-gray-400 mt-1">© 2026 スマートダンプ</p>
           </div>
         </div>
       </main>

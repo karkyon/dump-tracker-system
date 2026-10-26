@@ -274,9 +274,9 @@ router.get('/health', asyncHandler(async (req: Request, res: Response) => {
   const errorStats = getErrorStatistics();
 
   const apiInfo = {
-    name: 'ダンプ運行記録システム API',
+    name: 'スマートダンプ API',
     version: '1.0.0',
-    description: 'ダンプトラック運行記録・管理システム REST API',
+    description: 'スマートダンプ ダンプトラック運行記録・管理 REST API',
     status: 'running',
     architecture: 'integrated', // 統合版であることを示す
 

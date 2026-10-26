@@ -7,7 +7,7 @@ import './index.css';
 
 // 開発環境での詳細ログ
 if (import.meta.env.DEV) {
-  console.log('🚀 ダンプ運行記録モバイルアプリ起動中...');
+  console.log('🚀 スマートダンプ モバイルアプリ起動中...');
   console.log('📋 環境変数:');
   console.log('- API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
   console.log('- NODE_ENV:', import.meta.env.MODE);

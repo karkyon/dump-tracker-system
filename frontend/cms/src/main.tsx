@@ -101,7 +101,7 @@ const testApiConnection = async () => {
 // アプリケーション初期化
 const initializeApp = async () => {
   try {
-    console.log('🚀 DumpTracker フロントエンド初期化開始...');
+    console.log('🚀 スマートダンプ フロントエンド初期化開始...');
     
     // エラーハンドリングセットアップ
     setupErrorHandling();

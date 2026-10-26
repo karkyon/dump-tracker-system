@@ -142,7 +142,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               )}
               <div className="ml-3">
                 <h1 className="text-sm font-semibold text-white">
-                  ダンプ運行記録システム
+                  スマートダンプ
                 </h1>
               </div>
             </div>
@@ -181,7 +181,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <div className="flex-shrink-0 bg-gray-900 p-4">
             <div className="text-xs text-gray-400">
               <p>Version 1.0.0</p>
-              <p className="mt-1">© 2025 運行記録システム</p>
+              <p className="mt-1">© 2026 スマートダンプ</p>
             </div>
           </div>
         </div>

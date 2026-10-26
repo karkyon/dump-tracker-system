@@ -307,7 +307,7 @@ const FeedbackDetail: React.FC = () => {
       '',
       '---',
       '',
-      '*Dump Tracker フィードバックシステムより自動起票*',
+      '*スマートダンプ フィードバックシステムより自動起票*',
       `*Firebase Document ID: ${fb.id}*`,
       `*カテゴリ: ${category} | 種別: ${prefix} | 影響度: ${fb.severity}*`,
     ].filter(l => l !== undefined && l !== null).join('\n'));

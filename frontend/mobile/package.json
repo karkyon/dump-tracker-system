@@ -1,7 +1,7 @@
 {
   "name": "dump-tracker-mobile",
-  "displayName": "ダンプ運行記録モバイル",
-  "description": "ダンプトラック運行記録・GPS追跡・運行管理モバイルアプリ",
+  "displayName": "スマートダンプ",
+  "description": "スマートダンプ - ダンプトラック運行記録・GPS追跡・運行管理モバイルアプリ",
   "version": "1.0.0",
   "private": true,
   "type": "module",

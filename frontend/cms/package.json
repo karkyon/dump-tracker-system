@@ -1,7 +1,7 @@
 {
   "name": "dump-tracker-frontend",
   "displayName": "ダンプトラッカー",
-  "description": "ダンプトラック運行記録・GPS追跡・日報管理システム フロントエンド",
+  "description": "スマートダンプ - ダンプトラック運行記録・GPS追跡・日報管理システム フロントエンド",
   "version": "1.0.0",
   "private": true,
   "type": "module",

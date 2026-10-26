@@ -1,4 +1,4 @@
-# ダンプ運行記録モバイルアプリ
+# スマートダンプ モバイルアプリ
 
 ダンプトラック運行記録・GPS追跡・運行管理システムのモバイルアプリケーションです。
 
@@ -260,4 +260,4 @@ npm install
 
 **Version 1.0.0** - 2025-01-07
 
-**© 2025 Dump Tracker System. All rights reserved.**
+**© 2026 スマートダンプ. All rights reserved.**

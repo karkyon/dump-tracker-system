@@ -196,7 +196,7 @@ const App: React.FC = () => {
 
   // アプリ起動時にサーバー接続確認
   useEffect(() => {
-    console.log('🚀 ダンプ運行記録モバイルアプリ起動中...');
+    console.log('🚀 スマートダンプ モバイルアプリ起動中...');
     console.log('📋 環境変数:');
     console.log(`  - API_BASE_URL: ${import.meta.env.VITE_API_BASE_URL || '未設定'}`);
     console.log(`  - NODE_ENV: ${import.meta.env.MODE}`);

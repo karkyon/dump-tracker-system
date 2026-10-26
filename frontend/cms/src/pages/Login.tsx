@@ -116,7 +116,7 @@ const Login: React.FC = () => {
             </svg>
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            ダンプ運行記録アプリ
+            スマートダンプ
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             管理者向けCMS
@@ -193,8 +193,8 @@ const Login: React.FC = () => {
 
         {/* システム情報 */}
         <div className="text-center text-xs text-gray-400">
-          <p>ダンプ運行記録システム v1.0.0</p>
-          <p className="mt-1">© 2025 All rights reserved.</p>
+          <p>スマートダンプ v1.0.0</p>
+          <p className="mt-1">© 2026 スマートダンプ. All rights reserved.</p>
         </div>
       </div>
     </div>

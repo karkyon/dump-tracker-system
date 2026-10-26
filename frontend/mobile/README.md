@@ -1,4 +1,4 @@
-# 🚛 Dump Tracker — Mobile App
+# 🚛 スマートダンプ — Mobile App
 
 ダンプトラック運行記録モバイルアプリ
 

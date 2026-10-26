@@ -156,8 +156,8 @@ const Home: React.FC = () => {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-1">ダンプ運行記録</h1>
-            <p className="text-sm text-white/80">Dump Tracker</p>
+            <h1 className="text-2xl font-bold mb-1">スマートダンプ</h1>
+            <p className="text-sm text-white/80">Smart Dump</p>
           </div>
           <div className="flex items-center space-x-2">
             {/* 季節アイコン表示 */}
@@ -301,7 +301,7 @@ const Home: React.FC = () => {
         {/* フッター */}
         <div className="text-center text-gray-400 pt-4">
           <p className="text-xs mb-1">Version 1.0.0</p>
-          <p className="text-xs">© 2025 ダンプ運行記録システム</p>
+          <p className="text-xs">© 2026 スマートダンプ</p>
         </div>
       </main>
     </div>

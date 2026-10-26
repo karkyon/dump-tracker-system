@@ -68,7 +68,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Dump Tracker API - 企業レベル完全統合システム',
+      title: 'スマートダンプ API - 企業レベル完全統合システム',
       version: '2.0.0',
       description: `
 # ダンプ運行管理システム - 企業レベル完全統合システム API
@@ -166,7 +166,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 **企業レベル完全統合システムとして、包括的な業務デジタル化・効率化・最適化を実現**
       `,
       contact: {
-        name: 'Dump Tracker Development Team',
+        name: 'スマートダンプ Development Team',
         email: 'dev@dump-tracker.com',
         url: 'https://dump-tracker.com'
       },
@@ -642,7 +642,7 @@ const swaggerUiOptions = {
       background-color: #f5f3ff;
     }
   `,
-  customSiteTitle: 'Dump Tracker API - 企業レベル完全統合システム',
+  customSiteTitle: 'スマートダンプ API - 企業レベル完全統合システム',
   customfavIcon: '/favicon.ico',
   swaggerOptions: {
     // 🎯 重要: UI動作最適化設定

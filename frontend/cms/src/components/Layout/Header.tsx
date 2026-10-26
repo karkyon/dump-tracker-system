@@ -15,17 +15,23 @@ interface HeaderProps {
   isSidebarOpen: boolean;
 }
 
+
+/** 旧システム名（localStorage 保存値）を新名称へ移行 */
+const LEGACY_SYSTEM_NAMES = ['ダンプ運行記録システム', 'ダンプ運行記録管理システム', 'ダンプ運行記録アプリ', '運行記録システム'];
+const migrateSystemName = <T extends { systemName?: string }>(s: T): T =>
+  s && (!s.systemName || LEGACY_SYSTEM_NAMES.includes(s.systemName)) ? { ...s, systemName: 'スマートダンプ' } : s;
+
 /** localStorage から一般設定を読み込むユーティリティ */
 const loadGeneralSettings = () => {
   try {
     const raw = localStorage.getItem(GENERAL_SETTINGS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return migrateSystemName(JSON.parse(raw));
   } catch {
     // パースエラーは無視してデフォルト値を返す
   }
   return {
     companyName: 'ダンプ運送株式会社',
-    systemName:  'ダンプ運行記録システム',
+    systemName:  'スマートダンプ',
   };
 };
 
@@ -118,7 +124,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarOpen }) => {
                 <div className="ml-3">
                   {/* ① システム名を generalSettings.systemName から表示 */}
                   <h1 className="text-lg font-semibold text-gray-900">
-                    {generalSettings.systemName || 'ダンプ運行記録システム'}
+                    {generalSettings.systemName || 'スマートダンプ'}
                   </h1>
                   {/* ① 会社名を generalSettings.companyName からサブテキスト表示 */}
                   <p className="text-sm text-gray-500">

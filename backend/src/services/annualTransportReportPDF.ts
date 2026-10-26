@@ -340,9 +340,9 @@ function drawAnnualTransportReport(
 
   // 生成日時（フッター）
   const now = new Date();
-  doc.font('Helvetica').fontSize(6).fillColor('#888')
+  doc.font(fN).fontSize(6).fillColor('#888')
     .text(
-      `生成: ${now.toLocaleString('ja-JP')}　DumpTracker`,
+      `生成: ${now.toLocaleString('ja-JP')}　スマートダンプ`,
       ML, PAGE_H - MB - 8,
       { width: CONTENT_W, align: 'right', lineBreak: false }
     );

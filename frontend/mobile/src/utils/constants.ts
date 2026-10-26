@@ -286,11 +286,11 @@ export const SUCCESS_MESSAGES = {
 // =============================================================================
 
 export const APP_INFO = {
-  NAME: 'ダンプ運行記録アプリ',
+  NAME: 'スマートダンプ',
   VERSION: '1.0.0',
-  DESCRIPTION: 'ダンプトラック運行記録・GPS追跡・運行管理システム',
+  DESCRIPTION: 'スマートダンプ - ダンプトラック運行記録・GPS追跡・運行管理',
   DEVELOPER: 'Development Team',
-  COPYRIGHT: '© 2025 Dump Tracker. All rights reserved.'
+  COPYRIGHT: '© 2026 スマートダンプ. All rights reserved.'
 };
 
 // =============================================================================

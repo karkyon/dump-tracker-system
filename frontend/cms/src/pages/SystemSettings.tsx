@@ -265,9 +265,14 @@ const SystemSettings: React.FC = () => {
   const [generalSettings, setGeneralSettings] = useState(() => {
     try {
       const raw = localStorage.getItem(GENERAL_SETTINGS_KEY);
-      return raw ? JSON.parse(raw) : {
+      const LEGACY = ['ダンプ運行記録システム', 'ダンプ運行記録管理システム', 'ダンプ運行記録アプリ', '運行記録システム'];
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && (!parsed.systemName || LEGACY.includes(parsed.systemName))) {
+        parsed.systemName = 'スマートダンプ';
+      }
+      return parsed ? parsed : {
         companyName: 'ダンプ運送株式会社',
-        systemName:  'ダンプ運行記録システム',
+        systemName:  'スマートダンプ',
         timezone:    'Asia/Tokyo',
         language:    'ja',
         dateFormat:  'YYYY/MM/DD',
@@ -276,7 +281,7 @@ const SystemSettings: React.FC = () => {
     } catch {
       return {
         companyName: 'ダンプ運送株式会社',
-        systemName:  'ダンプ運行記録システム',
+        systemName:  'スマートダンプ',
         timezone:    'Asia/Tokyo',
         language:    'ja',
         dateFormat:  'YYYY/MM/DD',
