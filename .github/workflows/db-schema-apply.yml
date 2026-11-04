@@ -38,7 +38,7 @@ jobs:
         run: |
           [ "${{ inputs.confirm }}" = "APPLY" ] || { echo "::error::confirm に APPLY と入力してください"; exit 1; }
           [ "${{ github.ref }}" = "refs/heads/main" ] || { echo "::error::適用できるのは main のスキーマだけです"; exit 1; }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: SSH setup
         run: |
           set -euo pipefail

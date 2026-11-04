@@ -33,10 +33,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -151,14 +151,18 @@ jobs:
 
           TS=$(date +%Y%m%d-%H%M%S); mkdir -p "$BK"
           echo "== 配置前のバックアップ（現在の画面・backend）"
-          tar czf "$BK/predeploy-$TS-app.tgz" -C "$ROOT" backend/dist frontend/mobile/dist frontend/cms/dist DEPLOYED_COMMIT 2>/dev/null || tar czf "$BK/predeploy-$TS-app.tgz" -C "$ROOT" backend/dist frontend/mobile/dist frontend/cms/dist
+          ITEMS="backend/dist frontend/mobile/dist frontend/cms/dist"
+          [ -f "$ROOT/DEPLOYED_COMMIT" ] && ITEMS="$ITEMS DEPLOYED_COMMIT"
+          tar czf "$BK/predeploy-$TS-app.tgz" -C "$ROOT" $ITEMS
           if [ "$TARGET" = production ]; then
             echo "== 本番DBのバックアップ"
             pg_dump -Fc -d "${DBURL%%\?*}" -f "$BK/predeploy-$TS-db.dump"
             ls -lh "$BK/predeploy-$TS-db.dump"
           fi
-          ls -1t "$BK"/predeploy-*-app.tgz | tail -n +11 | xargs -r rm -f
-          ls -1t "$BK"/predeploy-*-db.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
+          # 古いバックアップは新しい順に10件だけ残す（該当ファイルが無くてもエラーにしない）
+          for pat in 'predeploy-*-app.tgz' 'predeploy-*-db.dump'; do
+            find "$BK" -maxdepth 1 -name "$pat" -printf '%T@ %p\n' | sort -rn | tail -n +11 | cut -d' ' -f2- | xargs -r rm -f
+          done
 
           echo "== backend"
           rm -rf dist && cp -r "$NEW/backend/dist" dist

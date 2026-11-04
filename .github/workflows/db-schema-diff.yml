@@ -19,7 +19,7 @@ jobs:
       HOST: ${{ inputs.target == 'production' && secrets.SD_PROD_HOST || secrets.SD_STAGING_HOST }}
       EXPECTED_HOSTNAME: ${{ inputs.target == 'production' && 'smart-dump-vm-prod' || 'smart-dump-vm-staging' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: SSH setup
         run: |
           set -euo pipefail
