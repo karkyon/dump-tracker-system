@@ -367,8 +367,12 @@ export const useOperationStore = create<OperationState>()(
           customerName: null,
           loadingLocationLat: null,   // 🆕
           loadingLocationLng: null,   // 🆕
-          unloadingLocation: null
-        });
+          unloadingLocation: null,
+          // ✅ FIX No.33: 前の運行の積込入力内容を引き継がない
+          loadingHasCargoWork: undefined, loadingItemId: undefined, loadingCustomerId: undefined,
+          loadingCustomItemName: undefined, loadingSelectedItemIds: undefined,
+          loadingQuantity: undefined, loadingNotes: undefined,
+        } as any);
       }
     }),
     {
@@ -409,8 +413,20 @@ export const useOperationStore = create<OperationState>()(
           totalDistanceKm: state.totalDistanceKm, // ✅ Fix-S11-8
           loadingLocationLat: state.loadingLocationLat,   // 🆕
           loadingLocationLng: state.loadingLocationLng,   // 🆕
-          unloadingLocation: state.unloadingLocation
-        };
+          unloadingLocation: state.unloadingLocation,
+          // ✅ FIX No.19: 積込/荷降パターンを永続化（従来は再読込で既定値P2/U2に戻り、
+          //   P1/P3・U1/U3の車両がP2/U2の動作になっていた）
+          loadingPattern: state.loadingPattern,
+          unloadingPattern: state.unloadingPattern,
+          // ✅ FIX No.33: 積込入力で選んだ内容（P1の荷役フラグ等）も再読込で消えないよう永続化
+          loadingHasCargoWork: (state as any).loadingHasCargoWork,
+          loadingItemId: (state as any).loadingItemId,
+          loadingCustomerId: (state as any).loadingCustomerId,
+          loadingCustomItemName: (state as any).loadingCustomItemName,
+          loadingSelectedItemIds: (state as any).loadingSelectedItemIds,
+          loadingQuantity: (state as any).loadingQuantity,
+          loadingNotes: (state as any).loadingNotes,
+        } as any;
       },
       // デバッグ: 復元時のログ
       onRehydrateStorage: () => {

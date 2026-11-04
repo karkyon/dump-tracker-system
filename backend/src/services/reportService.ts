@@ -326,13 +326,29 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     const t = new Date(raw).getTime();
     return Number.isNaN(t) ? 0 : t;
   };
+  // ✅ FIX No.3（FB mSSww8VJ 日報の列ずれ）:
+  //   従来は actual_start_time 順に並べて積込→荷降を交互に組み合わせていたため、
+  //   荷降した場所でそのまま積込む往復運行などで開始時刻の前後が入れ替わると、
+  //   以降の積込・荷降の組み合わせが1行ずつずれていた。
+  //   アプリ・CMSの運行タイムラインと同じ「記録順（sequence_number）」で並べる。
+  //   （イベント追加は挿入位置に合わせて sequence_number を採番し直すため、記録順＝業務の順序）
+  //   同一運行内は sequence_number、運行が複数ある場合は運行の開始時刻順。
+  const opStartOf = (d: any): number => {
+    const t = (d as any)._opStartTime ? new Date((d as any)._opStartTime).getTime() : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
   allDetails.sort((a, b) => {
-    const ta = toTimestamp(a);
-    const tb = toTimestamp(b);
-    if (ta !== tb) return ta - tb;
+    const oa = (a.operation_id ?? a.operationId ?? '') as string;
+    const ob = (b.operation_id ?? b.operationId ?? '') as string;
+    if (oa !== ob) {
+      const d = (opStartOf(a) || toTimestamp(a)) - (opStartOf(b) || toTimestamp(b));
+      if (d !== 0) return d;
+      return oa < ob ? -1 : 1;
+    }
     const sa = a.sequence_number ?? a.sequenceNumber ?? 0;
     const sb = b.sequence_number ?? b.sequenceNumber ?? 0;
-    return sa - sb;
+    if (sa !== sb) return sa - sb;
+    return toTimestamp(a) - toTimestamp(b);
   });
 
   // ✅ FIX: 実際のDB(ActivityType enum)には LOADING / UNLOADING の2値のみが存在し、
@@ -358,7 +374,18 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     plannedLoadingTime: string;    // 要件No.11: 積込の到着指定時刻
     plannedUnloadingTime: string;  // 要件No.11: 荷降の到着指定時刻
     hasCargoWork: boolean;         // 🆕 荷役作業の有無（日報の荷役列に使用）
+    // ✅ FIX No.2: 実時刻（ms）。HH:MM同士の差分では終了<開始が「日またぎ」と誤認され 1439分 になっていた
+    loadingStartAt?: number | null;
+    loadingEndAt?: number | null;
+    unloadingStartAt?: number | null;
+    unloadingEndAt?: number | null;
   }
+
+  const toMs = (v: any): number | null => {
+    if (!v) return null;
+    const t = new Date(v).getTime();
+    return Number.isNaN(t) ? null : t;
+  };
 
   const rawCycles: RawCycle[] = [];
   let cur: Partial<RawCycle> | null = null;
@@ -395,6 +422,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     const startT: string = formatTime(d.actual_start_time ?? d.actualStartTime);
     const endT: string   = formatTime(d.actual_end_time   ?? d.actualEndTime);
     const customerName: string = (d as any)._opCustomerName ?? '';
+    const startAt = toMs(d.actual_start_time ?? d.actualStartTime);
+    const endAt = toMs(d.actual_end_time ?? d.actualEndTime);
 
     if (at.startsWith('LOADING')) {
       // ✅ 空LOADING除外（到着のみ・品目なし・qty=0・完了前・notes='積込開始'の放置データ）
@@ -417,6 +446,10 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         loadingEnd: endT,
         unloadingStart: '',
         unloadingEnd: '',
+        loadingStartAt: startAt,
+        loadingEndAt: endAt,
+        unloadingStartAt: null,
+        unloadingEndAt: null,
         // 要件No.11: 積込の到着指定時刻（operation_details.planned_time）
         plannedLoadingTime: formatTime((d as any).planned_time ?? (d as any).plannedTime),
         plannedUnloadingTime: '',
@@ -430,6 +463,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         cur.unloadingLocation = locName;
         cur.unloadingStart    = startT;
         cur.unloadingEnd      = endT;
+        cur.unloadingStartAt  = startAt;
+        cur.unloadingEndAt    = endAt;
         // 要件No.11: 荷降の到着指定時刻（operation_details.planned_time）
         cur.plannedUnloadingTime = formatTime((d as any).planned_time ?? (d as any).plannedTime);
         if (qty > 0 && (cur.quantityTons ?? 0) === 0) cur.quantityTons = qty;
@@ -437,6 +472,16 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
         rawCycles.push(cur as RawCycle);
         cur = null;
       } else {
+        // ✅ FIX No.3: 同じ荷降の重複記録（手動の荷降完了＋離脱検知の自動完了、イベント追加の重複など）は
+        //   独立した行にせず、直前の荷降に統合する（同じ場所・開始が10分以内）。
+        const prevCycle = rawCycles[rawCycles.length - 1];
+        if (!cur && prevCycle && prevCycle.unloadingLocation && prevCycle.unloadingLocation === locName
+            && prevCycle.unloadingStartAt != null && startAt != null
+            && Math.abs(startAt - prevCycle.unloadingStartAt) <= 10 * 60 * 1000) {
+          if (!prevCycle.unloadingEnd && endT) { prevCycle.unloadingEnd = endT; prevCycle.unloadingEndAt = endAt; }
+          logger.warn('📄 [日報] 重複した荷降記録を統合', { location: locName, start: startT });
+          continue;
+        }
         // 積込なしの単独荷降、または連続荷降（前サイクルは既に確定済み）
         if (cur) rawCycles.push(cur as RawCycle); // 念のため、宙に浮いたサイクルを先に確定
         rawCycles.push({
@@ -449,6 +494,10 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
           loadingEnd: '',
           unloadingStart: startT,
           unloadingEnd: endT,
+          loadingStartAt: null,
+          loadingEndAt: null,
+          unloadingStartAt: startAt,
+          unloadingEndAt: endAt,
           // 要件No.11: 積込を経由しない単独荷降の到着指定時刻
           plannedLoadingTime: '',
           plannedUnloadingTime: formatTime((d as any).planned_time ?? (d as any).plannedTime),
@@ -477,7 +526,8 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     if (d < 0) d += 24 * 60;
     return d;
   };
-  const minutesStr = (m: number): string => m < 0 ? '' : `${m}分`;
+  // ✅ FIX No.2: -2 = 終了時刻が開始時刻より前（入力ミス等）→ 要確認
+  const minutesStr = (m: number): string => m === -2 ? '要確認' : (m < 0 ? '' : `${m}分`);
 
   // ---------- 休憩時間区間の収集（移動時間から除外するため）----------
   // 積込終了〜荷降開始の間に休憩(BREAK_START〜BREAK_END)が発生していた場合、
@@ -549,10 +599,21 @@ function buildGroupedTrips(operationDetailsList: any[][]): any[] {
     // 値を表示してしまっていた。空車移動時間で既に採用している「12時間を超えたら
     // 表示しない」という安全策を移動時間にも適用する。
     if (moveMin >= 12 * 60) moveMin = -1;
+    // ✅ FIX No.2: 実時刻で差分を取る。終了＜開始（データの逆転）は「要確認」と表示（従来は 1439分 等）
+    const realDiff = (a?: number | null, b?: number | null): number => {
+      if (a == null || b == null) return -1;
+      const d = Math.round((b - a) / 60000);
+      if (d < 0) return -2;            // 逆転
+      if (d >= 12 * 60) return -1;     // 12時間以上は異常値として表示しない
+      return d;
+    };
+    if (c.loadingEndAt != null && c.unloadingStartAt != null && c.unloadingStartAt < c.loadingEndAt) moveMin = -2;
     // 積込時間(分)
-    const loadMin = diffMinutes(c.loadingStart, c.loadingEnd);
+    const loadMin = (c.loadingStartAt != null || c.loadingEndAt != null)
+      ? realDiff(c.loadingStartAt, c.loadingEndAt) : diffMinutes(c.loadingStart, c.loadingEnd);
     // 荷降時間(分)
-    const unlMin  = diffMinutes(c.unloadingStart, c.unloadingEnd);
+    const unlMin  = (c.unloadingStartAt != null || c.unloadingEndAt != null)
+      ? realDiff(c.unloadingStartAt, c.unloadingEndAt) : diffMinutes(c.unloadingStart, c.unloadingEnd);
 
     // 要件No.10: 空車区間 = 直前サイクルの荷降完了 → 今回サイクルの積込開始
     //    （休憩が重なっていればその分を差し引く。0分以下・12時間超・不明瞭な値は表示しない）
@@ -1112,7 +1173,20 @@ class ReportService {
         data: {
           reportType: PrismaReportType.DAILY_OPERATION,
           format: (params.format as PrismaReportFormat) || PrismaReportFormat.PDF,
-          title: `日次運行レポート - ${params.date}`,
+          // ✅ FIX No.30: 「Fri Oct 30 2026 …」のような英語日付になっていたため、JSTの日本語日付＋車番に
+          title: await (async () => {
+            const d = new Date(params.date as any);
+            const jst = isNaN(d.getTime()) ? String(params.date)
+              : new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(d);
+            let plate = '全車両';
+            if ((params as any).vehicleId) {
+              try {
+                const v = await this.db.vehicle.findUnique({ where: { id: (params as any).vehicleId }, select: { plateNumber: true } });
+                if (v?.plateNumber) plate = v.plateNumber;
+              } catch { /* 車番不明 */ }
+            }
+            return `日次運行レポート - ${jst} - ${plate}`;
+          })(),
           description: '日次運行詳細レポート',
           generatedBy: params.requesterId,
           status: ReportGenerationStatus.PENDING,
@@ -1938,6 +2012,7 @@ class ReportService {
       return (op.operationDetails ?? []).map((d: any) => ({
         ...d,
         _opCustomerName: d.customers?.name ?? opCustomerName,
+        _opStartTime: op.actualStartTime ?? op.plannedStartTime ?? null,  // ✅ FIX No.3: 運行間の並び順
       }));
     });
     const cycles = buildTripCycles(allDetailsList);
@@ -2166,7 +2241,21 @@ class ReportService {
     //    苗字部分（空白より前）を丸印風スタンプに使用する。
     //    運行可否は当日の運行にCANCELLEDが1件も無ければ「可」として扱う。
     const reportUserFullName: string = (report as any)?.user?.name ?? '';
-    const managerName = reportUserFullName.split(/[\s　]+/)[0] || '';
+    // ✅ FIX No.13（FB vO8lzrau）: 運行管理者・整備管理者をマスタ（システム設定）に登録して印字する。
+    //   未登録の場合は従来どおり帳票出力者の苗字を運行管理者印に使う。
+    let registeredOpManager = '';
+    let registeredMaintManager = '';
+    try {
+      const rows = await DatabaseService.getInstance().systemSetting.findMany({
+        where: { key: { in: ['report.operation_manager_name', 'report.maintenance_manager_name'] } }
+      });
+      for (const r of rows) {
+        if (r.key === 'report.operation_manager_name') registeredOpManager = (r.value || '').trim();
+        if (r.key === 'report.maintenance_manager_name') registeredMaintManager = (r.value || '').trim();
+      }
+    } catch (e) { logger.warn('[ReportService] 管理者名設定の取得に失敗（出力者名で代替）', { e: String(e) }); }
+    const managerName = registeredOpManager || reportUserFullName.split(/[\s　]+/)[0] || '';
+    const maintenanceManagerName = registeredMaintManager;
     const operationApproved = !operations.some((op: any) => op.status === 'CANCELLED');
 
     // 帳票データ組み立て
@@ -2200,6 +2289,7 @@ class ReportService {
       totalBreakTime,  // 🆕 休憩時間合計
       totalEmptyRunTime,  // ✅ 追加: 空車移動時間合計
       managerName,          // 🆕 運行管理者印（丸印風スタンプ）
+      maintenanceManagerName, // ✅ FIX No.13: 整備管理者印
       operationApproved,    // 🆕 運行の可否
       oilLiters: '',
       hasGrease: false,

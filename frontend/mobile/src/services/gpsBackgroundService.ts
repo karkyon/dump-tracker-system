@@ -102,23 +102,30 @@ async function _sendToBackend(position: GeolocationPosition): Promise<void> {
     return;
   }
 
+  const point = {
+    operationId: _operationId,
+    vehicleId: _vehicleId || undefined,
+    latitude,
+    longitude,
+    accuracy,
+    heading: heading ?? undefined,
+    speed: speed != null ? speed * 3.6 : undefined, // m/s → km/h
+    timestamp: new Date(position.timestamp).toISOString(),
+  };
+
   _sendAbortController = new AbortController();
+  const signal = _sendAbortController.signal;
   try {
     // apiService を動的 import してモジュール循環参照を回避
     const { apiService } = await import('./api');
-    await apiService.updateGPSLocation({
-      operationId: _operationId,
-      vehicleId: _vehicleId || undefined,
-      latitude,
-      longitude,
-      accuracy,
-      heading: heading ?? undefined,
-      speed: speed != null ? speed * 3.6 : undefined, // m/s → km/h
-      timestamp: new Date(position.timestamp).toISOString(),
-    });
+    // ✅ FIX No.24: signal を渡すことで abort() が実際に送信を中断する（従来は渡しておらず機能していなかった）
+    await apiService.updateGPSLocation(point, { signal, silent: true });
 
     _lastSentAt = Date.now();
     _errorCount = 0;
+
+    // ✅ FIX No.6: 送信失敗で溜めた位置を、通信が回復したら古い順に再送（GPS欠落→推定距離の過大化を防ぐ）
+    await _flushPending(apiService, signal);
 
     logGPSEvent({ type: 'API_SUCCESS', lat: latitude, lng: longitude, accuracy,
       operationId: _operationId,
@@ -131,13 +138,58 @@ async function _sendToBackend(position: GeolocationPosition): Promise<void> {
     // ②修正: AbortError は正常中断（バックグラウンド移行時）のためエラーカウントしない
     if (err instanceof Error && err.name === 'AbortError') {
       console.warn('[GPS-BG] ⚠️ 送信中断（バックグラウンド移行）');
+    } else if ((err as any)?.code === 'ERR_CANCELED') {
+      console.warn('[GPS-BG] ⚠️ 送信中断（abort）');
+      _enqueuePending(point);
     } else {
+      const st = (err as any)?.response?.status;
+      // 4xx（運行終了済み等）は再送しない。通信失敗・タイムアウト・5xx のみ溜める
+      if (!st || st >= 500) _enqueuePending(point);
       console.error(`[GPS-BG] ❌ 送信エラー(${_errorCount}回目):`, err);
       logGPSEvent({ type: 'API_ERROR', lat: latitude, lng: longitude,
         detail: { error: String(err), errorCount: _errorCount } });
     }
   } finally {
     _sendAbortController = null; // ②修正: 送信完了/失敗後にリセット
+  }
+}
+
+
+// ============================================================
+// ✅ FIX No.6: 送信失敗した位置の再送キュー（端末localStorageに保持、最大500点）
+// ============================================================
+const PENDING_KEY = 'sd_gps_pending_v1';
+const PENDING_MAX = 500;
+type PendingPoint = { operationId: string; timestamp: string; [k: string]: any };
+
+function _loadPending(): PendingPoint[] {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); } catch { return []; }
+}
+function _savePending(list: PendingPoint[]): void {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(list.slice(-PENDING_MAX))); } catch { /* 容量超過は無視 */ }
+}
+function _enqueuePending(p: PendingPoint): void {
+  const list = _loadPending();
+  if (!list.some(x => x.timestamp === p.timestamp && x.operationId === p.operationId)) list.push(p);
+  _savePending(list);
+}
+export function getPendingGpsCount(): number { return _loadPending().length; }
+
+async function _flushPending(apiService: any, signal: AbortSignal): Promise<void> {
+  let list = _loadPending();
+  if (list.length === 0) return;
+  console.log(`[GPS-BG] 🔁 未送信 ${list.length} 点を再送`);
+  while (list.length > 0 && !signal.aborted) {
+    const p = list[0];
+    try {
+      await apiService.updateGPSLocation(p, { signal, silent: true });
+    } catch (e: any) {
+      const st = e?.response?.status;
+      if (!st || st >= 500) break;          // まだ不調 → 次回に持ち越し
+      // 4xx（運行終了済みなど）は破棄
+    }
+    list.shift();
+    _savePending(list);
   }
 }
 

@@ -419,6 +419,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
   // 品目（複数選択）
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [quantity, setQuantity] = useState('');
+  const [hasCargoWork, setHasCargoWork] = useState(false);  // ✅ FIX No.7
   // 給油
   const [fuelAmount, setFuelAmount] = useState('');
   const [fuelCost,   setFuelCost]   = useState('');
@@ -456,6 +457,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
     // ✅ 手入力品目名の初期値
     setCustomItemNameInput(activity.customItemName || '');
     setQuantity(activity.quantity != null && activity.quantity > 0 ? String(activity.quantity) : '');
+    setHasCargoWork(!!(activity as any).hasCargoWork);
     // ✅ 給油金額・量を既入力値としてプレフィル（ブランク初期化バグ修正）
     setFuelAmount(activity.quantity != null && activity.quantity > 0 ? String(activity.quantity) : '');
     setFuelCost(activity.fuelCostYen != null && activity.fuelCostYen > 0 ? String(activity.fuelCostYen) : '');
@@ -588,6 +590,7 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
         }
         if (quantity) payload.quantityTons = parseFloat(quantity);
         if (customItemNameInput.trim()) payload.customItemName = customItemNameInput.trim();
+        payload.hasCargoWork = hasCargoWork;  // ✅ FIX No.7
       }
       // ✅ 修正: 客先は積込・荷降どちらの新規追加でも保存する（従来isLoad限定で荷降側が欠落していた）
       // 荷降は画面上に客先選択UIを出さない設計だが、＋マーカーからの追加時は
@@ -876,6 +879,12 @@ const ActivityEditSheet: React.FC<ActivityEditSheetProps> = ({
               </div>
               <input type="number" inputMode="decimal" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="例: 12.5" step="0.1" min="0" style={{ ...inputStyle, fontSize: 16, height: 44 }} />
             </div>
+            {/* ✅ FIX No.7（FB Shy5804w）: 荷役作業のチェック忘れを編集・追加画面で直せるようにする */}
+            {isLoad(activity.activityType) && (
+            <label data-testid="cargo-work-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, padding: '6px 0' }}>
+              <input type="checkbox" checked={hasCargoWork} onChange={e => setHasCargoWork(e.target.checked)} style={{ width: 20, height: 20 }} />
+              荷役作業あり
+            </label>)}
           </>)}
 
           {/* 給油専用 */}

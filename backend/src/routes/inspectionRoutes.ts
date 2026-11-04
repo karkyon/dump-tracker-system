@@ -187,6 +187,24 @@ router.use((req, res, next) => {
  *       401:
  *         description: 認証エラー
  */
+// ✅ FIX No.27: CMS 運行記録詳細「点検項目」タブ用。運行に紐づく点検の項目別結果を返す。
+//   従来、画面側の項目詳細は一度も取得されず（state の setter が未使用）、常に0件と表示されていた。
+//   管理者専用のデバッグAPIではなく、管理者・マネージャーが使える正規のAPIとして提供する。
+router.get(
+  '/operation/:operationId/items',
+  requireRole(['ADMIN', 'MANAGER'] as UserRole[]),
+  async (req, res) => {
+    try {
+      const { getDebugService } = await import('../services/debugService');
+      const result: any = await getDebugService().getInspectionItemDetails(String(req.params.operationId));
+      res.json({ success: true, data: result?.data ?? result ?? [] });
+    } catch (e) {
+      logger.error('点検項目詳細取得エラー', { error: e instanceof Error ? e.message : String(e) });
+      res.status(500).json({ success: false, message: '点検項目の取得に失敗しました', code: 'INSPECTION_ITEMS_ERROR' });
+    }
+  }
+);
+
 router.get(
   '/',
   (req, res, next) => {

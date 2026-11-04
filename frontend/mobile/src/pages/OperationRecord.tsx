@@ -256,6 +256,27 @@ const OperationRecord: React.FC = () => {
   }, [operationStore.operationStartTime, operationStore.operationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
+  // ✅ FIX No.19: 運行記録画面の表示時に、車両の積込/荷降パターンをサーバーと同期する
+  //   7/5の同期処理（d3c8eff）は現在ルートに無い OperationMain.tsx にあり実行されていなかった。
+  useEffect(() => {
+    const opId = operationStore.operationId;
+    if (!opId) return;
+    let cancelled = false;
+    apiService.getCurrentOperation().then((res: any) => {
+      const d = res?.data;
+      if (cancelled || !res?.success || !d || d.tripId !== opId || !d.vehicleInfo) return;
+      const lp = d.vehicleInfo.loadingPattern != null ? Number(d.vehicleInfo.loadingPattern) : operationStore.loadingPattern;
+      const up = d.vehicleInfo.unloadingPattern != null ? Number(d.vehicleInfo.unloadingPattern) : operationStore.unloadingPattern;
+      if (lp !== operationStore.loadingPattern || up !== operationStore.unloadingPattern) {
+        console.warn('[パターン同期] ローカルとサーバーのズレを補正', {
+          local: [operationStore.loadingPattern, operationStore.unloadingPattern], server: [lp, up]
+        });
+        useOperationStore.setState({ loadingPattern: lp, unloadingPattern: up } as any);
+      }
+    }).catch(() => console.warn('[パターン同期] 取得失敗（ローカル値で継続）'));
+    return () => { cancelled = true; };
+  }, [operationStore.operationId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // operationStoreのフェーズ変更を監視して同期
   useEffect(() => {
     setOperation(prev => ({
@@ -289,13 +310,30 @@ const OperationRecord: React.FC = () => {
     }
   }, [isTracking, startTracking]);
 
+  // ✅ FIX No.21: 離脱検知距離を CMS「運行設定」(system_settings.departure_alert_distance_m) から取得
+  //   従来は 200m 固定で、CMSで変更しても反映されなかった。取得失敗時は 200m。
+  const [alertDistanceKm, setAlertDistanceKm] = useState<number>(0.2);
+  useEffect(() => {
+    apiService.getSystemSettings()
+      .then(st => {
+        const m = Number(st?.departure_alert_distance_m);
+        if (Number.isFinite(m) && m >= 50 && m <= 2000) {
+          setAlertDistanceKm(m / 1000);
+          console.log('[離脱検知] 設定距離:', m, 'm');
+        }
+      })
+      .catch(() => console.warn('[離脱検知] 設定取得失敗 → 既定200m'));
+  }, []);
+
+  // ✅ FIX No.1: 積込場所から最後に「範囲内」にいた時刻（自動積込完了の終了時刻に使う）
+  const lastInsideLoadingAtRef = React.useRef<number | null>(null);
+
   // 🆕 距離検知: 積込/荷降場所から離れたら自動フェーズ移行
   const departureAlertFiredRef = React.useRef(false);
   useEffect(() => {
     if (!currentPosition) return;
 
     const phase = operation.phase;
-    const alertDistanceKm = 0.2; // デフォルト200m = 0.2km（将来: system_settingsから取得）
 
     // 積込完了後（TO_UNLOADING移動中）でない場合はスキップ
     // 積込場所到着 v2.1中（AT_LOADING）に積込場所から離れたら自動的に TO_UNLOADING へ
@@ -317,13 +355,40 @@ const OperationRecord: React.FC = () => {
         loadingLng
       );
 
+      if (dist < alertDistanceKm) {
+        lastInsideLoadingAtRef.current = currentPosition.timestamp || Date.now();
+      }
+
       if (dist >= alertDistanceKm && !departureAlertFiredRef.current) {
         departureAlertFiredRef.current = true;
-        toast('📦 積込場所から離れました。荷降場所へ移動中に切り替えます', {
+        toast('📦 積込場所から離れました。積込完了を記録し、荷降場所へ移動中に切り替えます', {
           icon: '🚛',
           duration: 4000,
           style: { background: '#FF9800', color: '#fff', fontWeight: 'bold' }
         });
+
+        // ✅ FIX No.1（FB Td8UMr0L・mSSww8VJ）: 積込完了を押し忘れて離れた場合も積込完了を記録する
+        //   従来は画面のフェーズだけ切り替え、積込の終了時刻が空のまま残り、
+        //   日報の積込「終」「時間」「移動時間」が空欄になっていた（荷降側は自動完了していた）。
+        //   終了時刻は「最後に積込場所の範囲内にいたGPS時刻」（無ければ現在時刻）。
+        const opIdForAuto = operationStore.operationId;
+        if (opIdForAuto) {
+          const endAt = new Date(lastInsideLoadingAtRef.current ?? Date.now());
+          const loadingItemId = (operationStore as any).loadingItemId as string | undefined;
+          apiService.completeLoadingAtLocation(opIdForAuto, {
+            endTime: endAt,
+            notes: '自動積込完了（離脱検知）',
+            autoCompleted: true,
+            ...(loadingItemId ? { itemId: loadingItemId } : {}),
+          } as any).then(() => {
+            console.log('🚛 自動積込完了 記録:', endAt.toISOString());
+          }).catch(err => {
+            // 積込開始前に離れた（積込レコードが無い）場合は記録対象なし
+            console.warn('自動積込完了: 記録なし/失敗', err?.response?.status, err?.message);
+          });
+        }
+        lastInsideLoadingAtRef.current = null;
+
         setOperation(prev => ({ ...prev, phase: 'TO_UNLOADING' }));
         operationStore.setPhase('TO_UNLOADING');
         console.log('🚛 自動フェーズ移行: AT_LOADING → TO_UNLOADING (距離:', (dist * 1000).toFixed(0), 'm)');
@@ -375,7 +440,7 @@ const OperationRecord: React.FC = () => {
         departureAlertFiredRef.current = false;
       }
     }
-  }, [currentPosition, operation.phase]);
+  }, [currentPosition, operation.phase, alertDistanceKm]);
 
   // ✅ BUG修正: 上記と完全に重複した「離脱検知→自動フェーズ移行」useEffectが
   // 依存配列 [currentPosition, operation.phase] が同一のまま2つ存在していた
@@ -2512,7 +2577,8 @@ function getPhaseLabel(phase: OperationPhase): string {
     case 'LOADING_IN_PROGRESS': return '積込中';
     case 'TO_UNLOADING': return '荷降場所へ移動中';
     case 'AT_UNLOADING': return '荷降場所到着';
-    // UNLOADING_IN_PROGRESS: 廃止
+    // ✅ FIX No.20: U1の荷降作業中が「不明」と表示されていた
+    case 'UNLOADING_IN_PROGRESS': return '荷降作業中';
     case 'BREAK': return '休憩中';
     case 'REFUEL': return '給油中';
     default: return '不明';

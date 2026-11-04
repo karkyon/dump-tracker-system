@@ -76,3 +76,8 @@ if (import.meta.env.DEV) {
   console.log('📱 モバイルアプリケーションが正常に起動しました');
   console.log('🌐 アクセスURL: https://localhost:3002');
 }
+// ✅ FIX No.32: 設定画面のフォントサイズを起動時から反映
+try {
+  const fs = JSON.parse(localStorage.getItem('appSettings') || '{}')?.display?.fontSize;
+  document.documentElement.style.fontSize = fs === 'small' ? '14px' : fs === 'large' ? '18px' : '16px';
+} catch { /* 既定 */ }

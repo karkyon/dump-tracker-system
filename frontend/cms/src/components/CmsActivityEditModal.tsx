@@ -26,6 +26,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
   const [locationName, setLocationName] = React.useState('');
   const [notes,     setNotes]     = React.useState('');
   const [quantity,  setQuantity]  = React.useState('');
+  const [hasCargoWork, setHasCargoWork] = React.useState(false);  // ✅ FIX No.7
   const [fuelAmt,   setFuelAmt]   = React.useState('');
   const [fuelCost,  setFuelCost]  = React.useState('');
   const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
@@ -60,6 +61,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
     setLocationName(event.locationName ?? '');
     setNotes(isBreakEvt(event.eventType) ? stripBreakAutoNotes(event.notes ?? '') : (event.notes ?? ''));
     setQuantity(event.quantityTons && event.quantityTons > 0 ? String(event.quantityTons) : '');
+    setHasCargoWork(!!(event as any).hasCargoWork);
     if (event.eventType === 'POST_INSPECTION') {
       // ✅ 正しいフィールドから初期値を取得
       // overall_notes → 点検メモ
@@ -171,6 +173,13 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
           }
           if (quantity) body.quantityTons = parseFloat(quantity);
           if (currentCustomerId) body.customerId = currentCustomerId;
+          body.hasCargoWork = hasCargoWork;  // ✅ FIX No.7
+        }
+        // ✅ FIX No.2: 完了時刻が到着時刻より前なら保存しない（日報の「1439分」の原因）
+        if (body.actualEndTime && new Date(body.actualEndTime).getTime() < new Date(body.actualStartTime).getTime()) {
+          setSaveError('完了時刻が到着時刻より前になっています。時刻を確認してください');
+          setSaving(false);
+          return;
         }
         const res = await apiClient.put(`/operation-details/${event.realDetailId}`, body);
         if ((res as any).success || (res as any).data || (res as any).id) {
@@ -236,6 +245,7 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
           // ✅ notes への品目名埋め込みは廃止
         }
         if (quantity) body.quantityTons = parseFloat(quantity);
+        if (event.eventType === 'LOADING_COMPLETED') body.hasCargoWork = hasCargoWork;  // ✅ FIX No.7
       }
       // ✅ 給油: 専用カラムに保存（notes 埋め込み廃止）
       if (isFuelEvt(event.eventType)) {
@@ -523,6 +533,12 @@ const CmsActivityEditModal: React.FC<CmsActivityEditModalProps> = ({
                 placeholder="例: 12.5" step="0.1" min="0"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
             </div>
+            {/* ✅ FIX No.7（FB Shy5804w）: 荷役作業のチェック忘れを編集・追加画面で直せるようにする */}
+            {(event.eventType === 'LOADING_COMPLETED' || isLoadGroupEvt(event.eventType)) && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 py-1" data-testid="cargo-work-toggle">
+              <input type="checkbox" checked={hasCargoWork} onChange={e => setHasCargoWork(e.target.checked)} className="w-4 h-4" />
+              荷役作業あり（日報の「荷役」欄に〇）
+            </label>)}
           </>)}
 
           {/* ── 積降(到着): 場所名・GPS地図 ── */}

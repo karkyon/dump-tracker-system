@@ -305,7 +305,13 @@ class APIServiceClass {
       },
       async (error: AxiosError<any>) => {
         console.error('[API] Response error:', error);
-        
+
+        // ✅ FIX No.6: バックグラウンド処理（GPS送信など）はトーストを出さない
+        //   従来はGPS送信がタイムアウトするたびに「リクエストがタイムアウトしました」が繰り返し表示された
+        if ((error.config as any)?._silent) {
+          return Promise.reject(error);
+        }
+
         if (error.response) {
           const status = error.response.status;
           const message = error.response.data?.message || error.message;
@@ -362,7 +368,7 @@ class APIServiceClass {
             if (isRetryable) {
               toast.error(
                 '⚠️ 一時的なサーバーエラーです。しばらくしてから再試行してください',
-                { duration: 6000 }
+                { duration: 6000, id: 'server-temporary-error' }
               );
             } else {
               const displayCode = errorCode || `HTTP_${status}`;
@@ -375,9 +381,9 @@ class APIServiceClass {
             toast.error(message || 'エラーが発生しました');
           }
         } else if (error.code === 'ECONNABORTED') {
-          toast.error('リクエストがタイムアウトしました');
+          toast.error('リクエストがタイムアウトしました', { id: 'request-timeout' });
         } else if (error.message === 'Network Error') {
-          toast.error('ネットワークエラー: サーバーに接続できません');
+          toast.error('ネットワークエラー: サーバーに接続できません', { id: 'network-error' });
         }
         
         return Promise.reject(error);
@@ -1310,14 +1316,28 @@ class APIServiceClass {
   }
 
   /**
+   * ✅ FIX No.21: システム設定（離脱検知距離など）を取得
+   * GET /api/v1/settings/system
+   */
+  async getSystemSettings(): Promise<Record<string, string>> {
+    const response = await this.axiosInstance.get<any>('/settings/system', { _silent: true } as any);
+    return (response.data?.data || {}) as Record<string, string>;
+  }
+
+  /**
    * GPS位置更新ログ
    * POST /api/v1/mobile/gps/log
    */
-  async updateGPSLocation(data: GPSLogData): Promise<APIResponse<any>> {
+  async updateGPSLocation(
+    data: GPSLogData,
+    opts: { signal?: AbortSignal; silent?: boolean } = {}
+  ): Promise<APIResponse<any>> {
     try {
+      // ✅ FIX No.6/24: 中断用 signal を axios に渡す／既定でトースト非表示（バックグラウンド送信）
       const response = await this.axiosInstance.post<APIResponse<any>>(
         '/mobile/gps/log',
-        data
+        data,
+        { signal: opts.signal, timeout: 15000, _silent: opts.silent !== false } as any
       );
       return response.data;
     } catch (error) {
@@ -1779,7 +1799,8 @@ export async function retryWithBackoff<T>(
 }
 
 function isRetryableServerError(status: number, errorCode: string): boolean {
-  if (status === 503) return true;
+  // ✅ FIX No.9: 502/504（nginxがbackendから応答を受けられない＝一時的な過負荷・再起動中）も一時エラー扱い
+  if (status === 502 || status === 503 || status === 504) return true;
   const retryableCodes: string[] = [
     'DATABASE_CONNECTION_FAILED',
     'EXTERNAL_SERVICE_UNAVAILABLE',

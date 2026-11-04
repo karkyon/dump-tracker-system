@@ -103,6 +103,20 @@ const AccidentRecordManagement: React.FC = () => {
   const [showModal, setShowModal]     = useState(false);
   const [editingId, setEditingId]     = useState<string | null>(null);
   const [form, setForm]               = useState<Partial<AccidentRecord>>(EMPTY_FORM);
+  // ✅ FIX No.31: 事故記録に車両・運転者を登録できるよう選択肢を取得（従来はフォームに項目が無く常に未設定）
+  const [vehicleOpts, setVehicleOpts] = useState<{ id: string; label: string }[]>([]);
+  const [driverOpts, setDriverOpts]   = useState<{ id: string; label: string }[]>([]);
+  useEffect(() => {
+    const pick = (x: any, keys: string[]): any[] => Array.isArray(x) ? x
+      : (x && typeof x === 'object' ? (keys.map(k => pick(x[k], keys)).find(a => a.length) || []) : []);
+    fetch(`${_API}/vehicles?limit=100`, { headers: _headers() }).then(r => r.json()).then(j => {
+      setVehicleOpts(pick(j, ['data', 'vehicles', 'items']).map((v: any) => ({ id: v.id, label: v.plateNumber + (v.model ? `（${v.model}）` : '') })));
+    }).catch(() => setVehicleOpts([]));
+    fetch(`${_API}/users?limit=100`, { headers: _headers() }).then(r => r.json()).then(j => {
+      setDriverOpts(pick(j, ['data', 'users', 'items']).filter((u: any) => u.isActive !== false)
+        .map((u: any) => ({ id: u.id, label: u.name + (u.role === 'DRIVER' ? '' : '（管理者）') })));
+    }).catch(() => setDriverOpts([]));
+  }, []);
   const [saving, setSaving]           = useState(false);
   const [formError, setFormError]     = useState<string | null>(null);
 
@@ -454,6 +468,30 @@ const AccidentRecordManagement: React.FC = () => {
                     onChange={e => setForm({ ...form, injuries: e.target.value === '' ? 0 : Number(e.target.value) })}
                     onFocus={e => e.target.select()}
                   />
+                </div>
+
+                {/* ✅ FIX No.31: 車両・運転者 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">車両（任意）</label>
+                  <select data-testid="accident-vehicle"
+                    className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={form.vehicleId ?? ''}
+                    onChange={e => setForm({ ...form, vehicleId: e.target.value || null })}
+                  >
+                    <option value="">選択してください</option>
+                    {vehicleOpts.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">運転者（任意）</label>
+                  <select data-testid="accident-driver"
+                    className="block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={form.driverId ?? ''}
+                    onChange={e => setForm({ ...form, driverId: e.target.value || null })}
+                  >
+                    <option value="">選択してください</option>
+                    {driverOpts.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                  </select>
                 </div>
 
                 {/* 管轄区域 */}

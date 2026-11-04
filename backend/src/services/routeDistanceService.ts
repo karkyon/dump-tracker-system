@@ -50,6 +50,35 @@ const SIMPLIFY_EPSILON_METERS = 30;
 const FALLBACK_STRAIGHT_FACTOR = 1.3;
 const ZERO_DISTANCE_THRESHOLD_KM = 0.05;
 
+// ✅ FIX No.23: 距離計算ログを console.log ではなく logger（logs/combined.log）に出す
+const rlog = (...args: any[]): void => {
+  logger.info(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+};
+
+// ✅ FIX No.4/8（FB mSSww8VJ・ULL7kXwz）: 高速道路・有料道路を使わない経路で推定する。
+//   CMS「運行設定」の route.avoid_highways / route.avoid_tolls（既定: true）で切替。
+let _routeModCache: { v: { avoidHighways: boolean; avoidTolls: boolean }; exp: number } | null = null;
+export async function getRouteModifiers(): Promise<{ avoidHighways: boolean; avoidTolls: boolean }> {
+  if (_routeModCache && _routeModCache.exp > Date.now()) return _routeModCache.v;
+  let avoidHighways = true, avoidTolls = true;
+  try {
+    const rows = await DatabaseService.getInstance().systemSetting.findMany({
+      where: { key: { in: ['route.avoid_highways', 'route.avoid_tolls'] } }
+    });
+    for (const r of rows) {
+      if (r.key === 'route.avoid_highways') avoidHighways = r.value !== 'false';
+      if (r.key === 'route.avoid_tolls') avoidTolls = r.value !== 'false';
+    }
+  } catch { /* 既定値 */ }
+  const v = { avoidHighways, avoidTolls };
+  _routeModCache = { v, exp: Date.now() + 60_000 };
+  return v;
+}
+
+/** GPS点の間隔がこの秒数を超えたら「途切れ」とみなして、その間だけ道路距離を推定する */
+const GAP_FILL_MIN_STRAIGHT_KM = 0.3;   // これ未満の途切れは直線距離で十分（APIを呼ばない）
+const MAX_GAP_FILL_CALLS = 10;          // 1区間あたりのRoutes API呼び出し上限
+
 const ROUTES_API_ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 
 // =====================================
@@ -204,9 +233,9 @@ async function callRoutesApi(
   // ✅ 修正: Routes API専用キーが無ければ、既存のMaps用キー（同一GCPプロジェクトで
   //    Routes APIが有効化されていれば動作する）にフォールバックする。
   const apiKey = await getRoutesApiKey();
-  console.log(`[RouteSegments] 🔑 Routes APIキー確認: ${apiKey ? `設定あり(末尾4桁=...${apiKey.slice(-4)})` : '未設定'}`);
+  rlog(`[RouteSegments] 🔑 Routes APIキー確認: ${apiKey ? `設定あり(末尾4桁=...${apiKey.slice(-4)})` : '未設定'}`);
   if (!apiKey) {
-    console.log('[RouteSegments] ❌ Google Routes APIキーが未設定のため Routes API呼び出し不可');
+    rlog('[RouteSegments] ❌ Google Routes APIキーが未設定のため Routes API呼び出し不可');
     throw new Error('APIKEY_NOT_CONFIGURED: Google Routes APIキーが設定されていません（CMS「システム設定→連携設定」または.envのGOOGLE_ROUTES_API_KEYを設定してください）');
   }
 
@@ -218,6 +247,7 @@ async function callRoutesApi(
     })),
     travelMode: 'DRIVE',
     routingPreference: 'TRAFFIC_UNAWARE',
+    routeModifiers: await getRouteModifiers(),
     computeAlternativeRoutes: false,
     languageCode: 'ja-JP',
     units: 'METRIC'
@@ -234,10 +264,10 @@ async function callRoutesApi(
   });
 
   const json: any = await response.json();
-  console.log(`[RouteSegments] 📡 Routes APIレスポンス: HTTP ${response.status}, routes件数=${json?.routes?.length ?? 0}`);
+  rlog(`[RouteSegments] 📡 Routes APIレスポンス: HTTP ${response.status}, routes件数=${json?.routes?.length ?? 0}`);
 
   if (!response.ok || !json.routes || json.routes.length === 0) {
-    console.log(`[RouteSegments] ❌ Routes APIエラー詳細: ${JSON.stringify(json).slice(0, 500)}`);
+    rlog(`[RouteSegments] ❌ Routes APIエラー詳細: ${JSON.stringify(json).slice(0, 500)}`);
     const errStatus = json?.error?.status || '';
     const errMessage = json?.error?.message || '';
     const isAuthError = response.status === 400 || response.status === 401 || response.status === 403
@@ -272,14 +302,19 @@ async function findCachedSegment(
 
   const candidates = await (prisma as any).operationRouteSegment.findMany({
     where: {
-      distanceSource: { in: ['GPS_PARTIAL_ESTIMATE', 'FULL_ESTIMATE'] },
+      // ✅ FIX No.4: キャッシュはGPSを全く使わない完全推定のみ。一部推定は当日のGPSで計算する
+      distanceSource: 'FULL_ESTIMATE',
       computedAt: { gte: cutoff }
     },
     orderBy: { computedAt: 'desc' },
     take: 200
   });
 
+  const mods = await getRouteModifiers();
   const match = candidates.find((seg: any) => {
+    // ✅ FIX No.4: 高速回避の条件が同じもののみ再利用（高速経由で計算された過去区間を使い回さない）
+    const iw = seg.inputWaypoints || {};
+    if (iw.avoidHighways !== mods.avoidHighways || iw.avoidTolls !== mods.avoidTolls) return false;
     return (
       round(Number(seg.fromLatitude)) === round(from.latitude) &&
       round(Number(seg.fromLongitude)) === round(from.longitude) &&
@@ -318,7 +353,7 @@ async function resolveSegment(
   };
 
   const availability = classifyGpsAvailability(gpsPoints);
-  console.log(`[RouteSegments] 🧭 区間#${segmentIndex} (${from.activityType}→${to.activityType}) GPS可用性判定: ${availability} (GPS点数=${gpsPoints.length})`);
+  rlog(`[RouteSegments] 🧭 区間#${segmentIndex} (${from.activityType}→${to.activityType}) GPS可用性判定: ${availability} (GPS点数=${gpsPoints.length})`);
 
   if (availability === 'ACTUAL') {
     let distanceKm = 0;
@@ -330,7 +365,7 @@ async function resolveSegment(
         gpsPoints[i]!.longitude
       );
     }
-    console.log(`[RouteSegments] ✅ 区間#${segmentIndex}: GPS実測のみで距離算出 = ${distanceKm.toFixed(3)}km（Routes API呼び出しなし）`);
+    rlog(`[RouteSegments] ✅ 区間#${segmentIndex}: GPS実測のみで距離算出 = ${distanceKm.toFixed(3)}km（Routes API呼び出しなし）`);
     return {
       ...base,
       distanceSource: 'GPS_ACTUAL',
@@ -343,16 +378,58 @@ async function resolveSegment(
 
   const straightKm = calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
 
+  // ✅ FIX No.4（FB mSSww8VJ）: GPSが一部途切れた区間は、途切れた部分だけを道路距離で補い、
+  //   GPSが取れている部分は実測距離を使う。従来は1か所でも途切れると区間全体を
+  //   間引いたGPS点経由のRoutes API推定に置き換えており、過大（59km→76km）になっていた。
+  if (availability === 'PARTIAL') {
+    const mods = await getRouteModifiers();
+    const pts = [{ latitude: from.latitude, longitude: from.longitude, recordedAt: from.time } as GpsPoint, ...gpsPoints,
+                 { latitude: to.latitude, longitude: to.longitude, recordedAt: to.time } as GpsPoint];
+    let actualKm = 0, filledKm = 0, apiCalls = 0, fallbackGaps = 0;
+    const gaps: any[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]!, b = pts[i]!;
+      const d = calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+      const gapSec = (new Date(b.recordedAt as any).getTime() - new Date(a.recordedAt as any).getTime()) / 1000;
+      if (gapSec <= GPS_GAP_THRESHOLD_SECONDS || d < GAP_FILL_MIN_STRAIGHT_KM) { actualKm += d; continue; }
+      if (apiCalls < MAX_GAP_FILL_CALLS) {
+        try {
+          apiCalls++;
+          const r = await callRoutesApi({ latitude: a.latitude, longitude: a.longitude }, { latitude: b.latitude, longitude: b.longitude }, []);
+          const km = r.distanceMeters / 1000;
+          filledKm += km;
+          gaps.push({ gapSec: Math.round(gapSec), straightKm: +d.toFixed(3), routeKm: +km.toFixed(3) });
+          continue;
+        } catch (e) {
+          rlog(`[RouteSegments] ⚠️ 途切れ補完のRoutes API失敗 → 直線×${FALLBACK_STRAIGHT_FACTOR}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      fallbackGaps++;
+      filledKm += d * FALLBACK_STRAIGHT_FACTOR;
+      gaps.push({ gapSec: Math.round(gapSec), straightKm: +d.toFixed(3), fallbackKm: +(d * FALLBACK_STRAIGHT_FACTOR).toFixed(3) });
+    }
+    const totalKm = actualKm + filledKm;
+    rlog(`[RouteSegments] 🧩 区間#${segmentIndex}: GPS実測=${actualKm.toFixed(3)}km + 途切れ補完=${filledKm.toFixed(3)}km（${gaps.length}か所, API=${apiCalls}回, 直線代替=${fallbackGaps}） = ${totalKm.toFixed(3)}km`);
+    return {
+      ...base,
+      distanceSource: 'GPS_PARTIAL_ESTIMATE',
+      distanceKm: totalKm,
+      routePolyline: null,
+      inputWaypoints: { method: 'GAP_FILL', actualKm, filledKm, gaps, ...mods },
+      apiRequestSnapshot: { apiCalls, fallbackGaps }
+    };
+  }
+
   const cached = await findCachedSegment(
     prisma,
     { latitude: from.latitude, longitude: from.longitude },
     { latitude: to.latitude, longitude: to.longitude }
   );
   if (cached) {
-    console.log(`[RouteSegments] 💾 区間#${segmentIndex}: キャッシュ済み区間を再利用 = ${cached.distanceKm.toFixed(3)}km（Routes API呼び出しなし）`);
+    rlog(`[RouteSegments] 💾 区間#${segmentIndex}: キャッシュ済み区間を再利用 = ${cached.distanceKm.toFixed(3)}km（Routes API呼び出しなし）`);
     return {
       ...base,
-      distanceSource: availability === 'PARTIAL' ? 'GPS_PARTIAL_ESTIMATE' : 'FULL_ESTIMATE',
+      distanceSource: 'FULL_ESTIMATE',
       distanceKm: cached.distanceKm,
       routePolyline: cached.routePolyline,
       inputWaypoints: { cached: true },
@@ -360,12 +437,10 @@ async function resolveSegment(
     };
   }
 
-  const intermediates =
-    availability === 'PARTIAL'
-      ? simplifyWaypoints(gpsPoints).map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
-      : [];
+  // PARTIAL は上で処理済み。ここは GPS が全く無い区間（FULL）のみ
+  const intermediates: { latitude: number; longitude: number }[] = [];
 
-  console.log(`[RouteSegments] 🌐 区間#${segmentIndex}: Google Routes APIを呼び出します (availability=${availability}, 中間点=${intermediates.length}件)`);
+  rlog(`[RouteSegments] 🌐 区間#${segmentIndex}: Google Routes APIを呼び出します (availability=${availability}, 中間点=${intermediates.length}件)`);
 
   try {
     const result = await callRoutesApi(
@@ -374,19 +449,19 @@ async function resolveSegment(
       intermediates
     );
 
-    console.log(`[RouteSegments] ✅ 区間#${segmentIndex}: Routes API成功 = ${(result.distanceMeters / 1000).toFixed(3)}km, polyline長=${result.encodedPolyline?.length ?? 0}文字`);
+    rlog(`[RouteSegments] ✅ 区間#${segmentIndex}: Routes API成功 = ${(result.distanceMeters / 1000).toFixed(3)}km, polyline長=${result.encodedPolyline?.length ?? 0}文字`);
 
     return {
       ...base,
-      distanceSource: availability === 'PARTIAL' ? 'GPS_PARTIAL_ESTIMATE' : 'FULL_ESTIMATE',
+      distanceSource: 'FULL_ESTIMATE',
       distanceKm: result.distanceMeters / 1000,
       routePolyline: result.encodedPolyline,
-      inputWaypoints: { origin: from, intermediates, destination: to },
+      inputWaypoints: { origin: from, intermediates, destination: to, ...(await getRouteModifiers()) },
       apiRequestSnapshot: result.rawResponse
     };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    console.log(`[RouteSegments] ❌ 区間#${segmentIndex}: Routes API失敗、直線距離フォールバックへ切替 = ${(straightKm * FALLBACK_STRAIGHT_FACTOR).toFixed(3)}km / エラー: ${errMsg}`);
+    rlog(`[RouteSegments] ❌ 区間#${segmentIndex}: Routes API失敗、直線距離フォールバックへ切替 = ${(straightKm * FALLBACK_STRAIGHT_FACTOR).toFixed(3)}km / エラー: ${errMsg}`);
     if (errMsg.startsWith('APIKEY_NOT_CONFIGURED')) {
       logger.error('[GPS補完機能] Routes APIキーが未設定のため道路ルート補完が機能していません。CMS「システム設定→連携設定」からAPIキーを設定してください。', { segmentIndex });
     } else if (errMsg.startsWith('APIKEY_INVALID')) {
@@ -410,7 +485,7 @@ async function resolveSegment(
 // =====================================
 
 export async function computeAndSaveRouteSegments(operationId: string): Promise<SegmentResult[]> {
-  console.log(`[RouteSegments] ▶️▶️▶️ computeAndSaveRouteSegments 開始: operationId=${operationId}`);
+  rlog(`[RouteSegments] ▶️▶️▶️ computeAndSaveRouteSegments 開始: operationId=${operationId}`);
   const prisma = DatabaseService.getInstance();
 
   if (!operationId) {
@@ -438,7 +513,7 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     orderBy: { recordedAt: 'asc' },
     select: { latitude: true, longitude: true, recordedAt: true, accuracyMeters: true }
   });
-  console.log(`[RouteSegments] 📍 GPSログ件数: ${gpsLogs.length}件`);
+  rlog(`[RouteSegments] 📍 GPSログ件数: ${gpsLogs.length}件`);
 
   const stops: StopPoint[] = (operation as any).operationDetails
     .map((detail: any) => {
@@ -501,10 +576,10 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     }
   }
 
-  console.log(`[RouteSegments] 🛑 停車地点(stops)数: ${stops.length}`, stops.map((s: any) => `${s.activityType}@${s.time.toISOString()}`));
+  rlog(`[RouteSegments] 🛑 停車地点(stops)数: ${stops.length}`, stops.map((s: any) => `${s.activityType}@${s.time.toISOString()}`));
 
   if (stops.length < 2) {
-    console.log(`[RouteSegments] ⚠️ 停車地点が2未満のため区間計算をスキップします (operationId=${operationId})`);
+    rlog(`[RouteSegments] ⚠️ 停車地点が2未満のため区間計算をスキップします (operationId=${operationId})`);
     logger.info('区間計算対象となる停車地点が不足しているためスキップ', {
       operationId,
       stopCount: stops.length
@@ -576,7 +651,7 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
     }))
   });
 
-  console.log(`[RouteSegments] 🏁 computeAndSaveRouteSegments 完了: operationId=${operationId}, 区間数=${results.length}, sources=[${results.map((r) => r.distanceSource).join(', ')}]`);
+  rlog(`[RouteSegments] 🏁 computeAndSaveRouteSegments 完了: operationId=${operationId}, 区間数=${results.length}, sources=[${results.map((r) => r.distanceSource).join(', ')}]`);
   logger.info('運行区間距離の算出・保存完了', {
     operationId,
     segmentCount: results.length,
@@ -609,8 +684,14 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
 
     const currentOperation = await prisma.operation.findUnique({
       where: { id: operationId },
-      select: { totalDistanceKm: true, loadedDistanceKm: true }
+      select: { totalDistanceKm: true, loadedDistanceKm: true, startOdometer: true, endOdometer: true }
     });
+    // ✅ FIX No.4: メーター値（終了−開始）が入力されていれば、それを総走行距離とする。
+    //   実車距離はGPS/推定の実車比率で按分する。GPS推定値は route_segment_* に別途残す。
+    const odoStart = currentOperation?.startOdometer != null ? Number(currentOperation.startOdometer) : NaN;
+    const odoEnd = currentOperation?.endOdometer != null ? Number(currentOperation.endOdometer) : NaN;
+    const odoDiff = odoEnd - odoStart;
+    const useOdometer = Number.isFinite(odoDiff) && odoDiff > 0 && odoDiff < 5000;
 
     // 🆕 方針転換: オドメーター入力値の有無に関係なく、
     // 常にGPS実測+Routes API推定の区間距離合計を
@@ -622,15 +703,18 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
       routeSegmentDistanceKm: sumTotal,
       routeSegmentLoadedDistanceKm: sumLoaded,
       routeSegmentDistanceSource: distanceSourceLabel,
-      totalDistanceKm: sumTotal,
-      loadedDistanceKm: sumLoaded
+      totalDistanceKm: useOdometer ? odoDiff : sumTotal,
+      loadedDistanceKm: useOdometer
+        ? (sumTotal > 0 ? Math.round(odoDiff * (sumLoaded / sumTotal) * 100) / 100 : 0)
+        : sumLoaded
     };
+    rlog(`[RouteSegments] 📏 総距離の採用元: ${useOdometer ? `メーター差 ${odoDiff}km` : 'GPS/推定の合計'}（GPS/推定=${sumTotal.toFixed(3)}km）`);
     const previousTotalDistanceKm = currentOperation?.totalDistanceKm ?? null;
     const previousLoadedDistanceKm = currentOperation?.loadedDistanceKm ?? null;
     await prisma.operation.update({ where: { id: operationId }, data: opUpdateData });
-    console.log(`[RouteSegments] 📝 Operationへ反映(常時上書き): total=${sumTotal.toFixed(3)}km(旧値=${previousTotalDistanceKm}), loaded=${sumLoaded.toFixed(3)}km(旧値=${previousLoadedDistanceKm}), source=${distanceSourceLabel}`);
+    rlog(`[RouteSegments] 📝 Operationへ反映(常時上書き): total=${sumTotal.toFixed(3)}km(旧値=${previousTotalDistanceKm}), loaded=${sumLoaded.toFixed(3)}km(旧値=${previousLoadedDistanceKm}), source=${distanceSourceLabel}`);
   } catch (updateErr) {
-    console.log(`[RouteSegments] ⚠️ Operationへの距離反映に失敗: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`);
+    rlog(`[RouteSegments] ⚠️ Operationへの距離反映に失敗: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`);
     logger.warn('運行距離のOperationへの反映に失敗', {
       operationId,
       error: updateErr instanceof Error ? updateErr.message : updateErr
@@ -641,13 +725,13 @@ export async function computeAndSaveRouteSegments(operationId: string): Promise<
 }
 
 export async function getRouteSegments(operationId: string) {
-  console.log(`[RouteSegments] 🔍 getRouteSegments 呼び出し: operationId=${operationId}`);
+  rlog(`[RouteSegments] 🔍 getRouteSegments 呼び出し: operationId=${operationId}`);
   const prisma = DatabaseService.getInstance();
   const segments = await (prisma as any).operationRouteSegment.findMany({
     where: { operationId },
     orderBy: { segmentIndex: 'asc' }
   });
-  console.log(`[RouteSegments] 🔍 getRouteSegments 結果: ${segments.length}件, sources=[${segments.map((s: any) => s.distanceSource).join(', ')}]`);
+  rlog(`[RouteSegments] 🔍 getRouteSegments 結果: ${segments.length}件, sources=[${segments.map((s: any) => s.distanceSource).join(', ')}]`);
   return segments;
 }
 

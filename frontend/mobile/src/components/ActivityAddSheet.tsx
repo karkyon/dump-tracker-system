@@ -132,6 +132,7 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, vehicl
   const [startHHMM, setStartHHMM] = useState('');
   const [endHHMM, setEndHHMM] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [hasCargoWork, setHasCargoWork] = useState(false);  // ✅ FIX No.7
   const [fuelAmt, setFuelAmt] = useState('');
   const [fuelCost, setFuelCost] = useState('');
   const [notes, setNotes] = useState('');
@@ -256,6 +257,7 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, vehicl
           payload.selectedItemIds = selectedItemIds;
         }
         if (quantity) payload.quantityTons = parseFloat(quantity);
+        if (eventType === 'LOADING') payload.hasCargoWork = hasCargoWork;  // ✅ FIX No.7
       }
       if (isFuelType) {
         if (fuelAmt) payload.quantityTons = parseFloat(fuelAmt);
@@ -410,6 +412,12 @@ const ActivityAddSheet: React.FC<ActivityAddSheetProps> = ({ operationId, vehicl
             )}
             <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, fontWeight: 500 }}>数量（t）</div>
             <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} style={inputStyle} />
+            {/* ✅ FIX No.7（FB Shy5804w）: 荷役作業のチェック忘れを編集・追加画面で直せるようにする */}
+            {eventType === 'LOADING' && (
+            <label data-testid="cargo-work-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, padding: '6px 0' }}>
+              <input type="checkbox" checked={hasCargoWork} onChange={e => setHasCargoWork(e.target.checked)} style={{ width: 20, height: 20 }} />
+              荷役作業あり
+            </label>)}
           </div>
         )}
 

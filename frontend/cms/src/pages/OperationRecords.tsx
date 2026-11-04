@@ -235,8 +235,44 @@ const OperationRecords: React.FC = () => {
     setIsDetailModalOpen(true);
   };
 
-  const handleExportCSV = () => {
-    console.log('Export CSV');
+  // ✅ FIX No.26: 「CSV出力」が console.log だけで何も出力されなかった。
+  //   現在の絞り込み条件（車両・運転手・運行日・キーワード）で全件を取得し、Excelで開けるCSV（UTF-8 BOM付き）を保存する。
+  const handleExportCSV = async () => {
+    try {
+      const all: any[] = [];
+      for (let page = 1; page <= 100; page++) {
+        const res: any = await apiClient.get('/operations', { params: {
+          page, limit: 100,
+          ...(vehicleFilter && { vehicleId: vehicleFilter }),
+          ...(driverFilter && { driverId: driverFilter }),
+          ...(dateFilter && { startDate: dateFilter }),
+          ...(searchQuery.trim() && { search: searchQuery.trim() })
+        } });
+        // 一覧取得（fetchOperations）と同じ形で取り出す
+        const inner: any = res?.data; const bd: any = inner?.data || inner;
+        const rows: any[] = Array.isArray(bd?.data) ? bd.data : (Array.isArray(bd) ? bd : []);
+        all.push(...rows);
+        if (rows.length < 100) break;
+      }
+      const fmt = (v: any) => v ? new Date(v).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '';
+      const statusJa: Record<string, string> = { IN_PROGRESS: '運行中', COMPLETED: '完了', CANCELLED: 'キャンセル', PLANNING: '計画中' };
+      const header = ['運行番号', '運行日', '開始日時', '終了日時', '運転手', '車両', '客先', 'ステータス', '開始メーター(km)', '終了メーター(km)', '走行距離(km)', '実車距離(km)'];
+      const esc = (v: any) => { const t = v == null ? '' : String(v); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+      const lines = [header.join(',')].concat(all.map((r: any) => [
+        r.operationNumber, r.actualStartTime ? new Date(r.actualStartTime).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '',
+        fmt(r.actualStartTime), fmt(r.actualEndTime), r.usersOperationsDriverIdTousers?.name, r.vehicles?.plateNumber, r.customer?.name,
+        statusJa[r.status] || r.status, r.startOdometer, r.endOdometer, r.totalDistanceKm, r.loadedDistanceKm
+      ].map(esc).join(',')));
+      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `運行記録_${new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' })}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {
+      console.error('CSV出力エラー', e);
+      alert('CSV出力に失敗しました');
+    }
   };
 
   const handlePageChange = (newPage: number) => {

@@ -5,6 +5,7 @@
 //   ② 会社ロゴ: localStorage の COMPANY_LOGO_KEY から読み込み表示
 //   既存機能: 通知ボタン・ユーザーメニュー・ログアウト処理を100%保持
 
+import { API_BASE_URL } from '../../utils/constants';
 import React, { useEffect, useState } from 'react';
 import { Menu, X, Bell, User, LogOut, Settings } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
@@ -46,6 +47,25 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarOpen }) => {
   const [logoUrl, setLogoUrl] = useState<string | null>(() => {
     return localStorage.getItem(COMPANY_LOGO_KEY) || null;
   });
+
+  // ✅ FIX No.28: サーバーに保存された会社名・ロゴを取得し、このPCにも反映（他のPCで設定した内容を共有）
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    fetch(`${API_BASE_URL}/settings/system`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        const d = j?.data || {};
+        if (typeof d['company.name'] === 'string' && d['company.name']) {
+          const cur = loadGeneralSettings();
+          localStorage.setItem(GENERAL_SETTINGS_KEY, JSON.stringify({ ...cur, companyName: d['company.name'], ...(d['company.system_name'] ? { systemName: d['company.system_name'] } : {}) }));
+        }
+        if (typeof d['company.logo_data_url'] === 'string') {
+          if (d['company.logo_data_url']) localStorage.setItem(COMPANY_LOGO_KEY, d['company.logo_data_url']);
+          else localStorage.removeItem(COMPANY_LOGO_KEY);
+        }
+      }).catch(() => undefined);
+  }, []);
 
   // ① storage イベント: 別タブでの更新を同期
   useEffect(() => {
@@ -154,7 +174,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarOpen }) => {
                     {user?.name || 'ユーザー'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {user?.role === 'ADMIN' ? '管理者' : '運転手'}
+                    {/* ✅ FIX No.25: マネージャーが「運転手」と表示されていた */}{user?.role === 'ADMIN' ? '管理者' : user?.role === 'MANAGER' ? 'マネージャー' : '運転手'}
                   </p>
                 </div>
               </div>

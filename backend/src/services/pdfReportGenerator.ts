@@ -161,6 +161,7 @@ export interface DailyDriverReportData {
   remarks: string;                // 備考
   managerName?: string;           // 🆕 運行管理者名（帳票出力者の苗字）→ 丸印風スタンプに使用
   operationApproved?: boolean;    // 🆕 運行の可否（true=可 / false=否。未指定時は可として扱う）
+  maintenanceManagerName?: string; // ✅ FIX No.13: 整備管理者名（システム設定で登録）
 }
 
 // =====================================
@@ -350,23 +351,27 @@ function drawTitle(
     lineBreak: false,
   });
 
-  // 🆕 運行の可否スタンプ（タイトル行右端に独立描画。他の列幅には一切影響しない）
+  // ✅ FIX No.13（FB vO8lzrau）: 運行の可否を「可□ 否□」様式で表示し、該当側を ■ にする
+  //   （従来は丸印の「可」のみ）。タイトル行右端に独立描画。他の列幅には影響しない。
   if (data) {
     const approved = data.operationApproved !== false; // 未指定は「可」扱い
-    const label = approved ? '可' : '否';
-    const stampR = Math.min(11, (h - 6) / 2);
-    const stampCx = x + w - stampR - 8;
-    const stampCy = y + h / 2;
+    const fs = 9;
+    const boxS = 7.5;
+    const labelW = 12;
+    const itemW = labelW + boxS + 6;
+    const totalW = itemW * 2 + 18;
+    const bx0 = x + w - totalW - 10;
+    const by = y + (h - boxS) / 2;
     doc.save();
-    doc.circle(stampCx, stampCy, stampR)
-      .lineWidth(1.2)
-      .strokeColor(approved ? '#C0392B' : '#555555')
-      .stroke();
-    doc.font(fontB).fontSize(approved ? 11 : 10).fillColor(approved ? '#C0392B' : '#555555');
-    doc.text(label, stampCx - stampR, stampCy - (approved ? 6.5 : 6), {
-      width: stampR * 2,
-      align: 'center',
-      lineBreak: false,
+    doc.font(fontB).fontSize(fs).fillColor('#000000');
+    doc.text('運行', bx0, y + (h - fs * 1.3) / 2, { width: 18, align: 'left', lineBreak: false });
+    [['可', approved], ['否', !approved]].forEach(([lbl, on], idx) => {
+      const ix = bx0 + 18 + idx * itemW;
+      doc.font(fontB).fontSize(fs).fillColor('#000000');
+      doc.text(String(lbl), ix, y + (h - fs * 1.3) / 2, { width: labelW, align: 'center', lineBreak: false });
+      const rx = ix + labelW;
+      doc.rect(rx, by, boxS, boxS).lineWidth(0.8).strokeColor('#000000').stroke();
+      if (on) doc.rect(rx + 1.2, by + 1.2, boxS - 2.4, boxS - 2.4).fillColor('#000000').fill();
     });
     doc.restore();
   }
@@ -639,19 +644,12 @@ function drawOperationRowsAll(
       const ry = y;
       const rh = OP_ROW_H;
 
-      // 客先名・積込場所・荷降場所・品名は1行目のみ表示（同一グループのため省略）
-      // ✅ 修正: 台数・トン数・積付状況はグループ化で省略せず行ごとに表示する
-      if (rowIdx === 0) {
-        cell(doc, cx, ry, COL_CONTRACTOR, rh, trip.contractorName,   { ...fLeft }); cx += COL_CONTRACTOR;
-        cell(doc, cx, ry, COL_LOADING,    rh, trip.loadingLocation,   { ...fLeft }); cx += COL_LOADING;
-        cell(doc, cx, ry, COL_UNLOADING,  rh, trip.unloadingLocation, { ...fLeft }); cx += COL_UNLOADING;
-        cell(doc, cx, ry, COL_ITEM,       rh, trip.itemName,          { ...fLeft, wrap: true }); cx += COL_ITEM;
-      } else {
-        cell(doc, cx, ry, COL_CONTRACTOR, rh, ''); cx += COL_CONTRACTOR;
-        cell(doc, cx, ry, COL_LOADING,    rh, ''); cx += COL_LOADING;
-        cell(doc, cx, ry, COL_UNLOADING,  rh, ''); cx += COL_UNLOADING;
-        cell(doc, cx, ry, COL_ITEM,       rh, ''); cx += COL_ITEM;
-      }
+      // ✅ FIX No.12（FB 3bdfT3N0）: 客先名・積込場所・荷降場所・品名を2行目以降も全行に表示する
+      //   （従来は同一グループの2行目以降を空欄にしていたため、行単位で読めなかった）
+      cell(doc, cx, ry, COL_CONTRACTOR, rh, trip.contractorName,   { ...fLeft }); cx += COL_CONTRACTOR;
+      cell(doc, cx, ry, COL_LOADING,    rh, trip.loadingLocation,   { ...fLeft }); cx += COL_LOADING;
+      cell(doc, cx, ry, COL_UNLOADING,  rh, trip.unloadingLocation, { ...fLeft }); cx += COL_UNLOADING;
+      cell(doc, cx, ry, COL_ITEM,       rh, trip.itemName,          { ...fLeft, wrap: true }); cx += COL_ITEM;
       {
         // ✅ 修正: 台数・トン数は行ごとの実データを表示する
         //    （rows側にデータが無い旧データ経路のみ、1行目に限りtrip集計値へフォールバック）
@@ -913,6 +911,21 @@ function drawFuelSection(
       }
       const mgrTy = stampCy - mgrFontSize * 0.6;
       doc.text(data.managerName, stampCx - stampR, mgrTy, { width: stampR * 2, align: 'center', lineBreak: false });
+      doc.restore();
+    } else if (i === 2 && data.maintenanceManagerName) {
+      // ✅ FIX No.13: 整備管理者欄にも登録済みの管理者名を丸印で印字
+      doc.font(fontB).fontSize(6.5).fillColor('#000000');
+      doc.text(role, cx + 2, y + 3, { width: cellW - 4, align: 'center', lineBreak: false });
+      const mName = data.maintenanceManagerName;
+      const stampR = Math.min(13, (rowH - 16) / 2);
+      const stampCx = cx + cellW / 2;
+      const stampCy = y + rowH / 2 + 5;
+      doc.save();
+      doc.circle(stampCx, stampCy, stampR).lineWidth(1).strokeColor('#C0392B').stroke();
+      let fsz = 11;
+      doc.font(fontB).fontSize(fsz).fillColor('#C0392B');
+      while (doc.widthOfString(mName) > stampR * 1.7 && fsz > 6) { fsz -= 0.5; doc.font(fontB).fontSize(fsz); }
+      doc.text(mName, stampCx - stampR, stampCy - fsz * 0.6, { width: stampR * 2, align: 'center', lineBreak: false });
       doc.restore();
     } else {
       // 整備管理者（または運行管理者名未設定時）: ラベルのみ（上部に小さく）

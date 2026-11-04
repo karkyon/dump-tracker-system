@@ -50,6 +50,7 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
   const [endHHMM, setEndHHMM] = React.useState('');
   const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
   const [quantity, setQuantity] = React.useState('');
+  const [hasCargoWork, setHasCargoWork] = React.useState(false);  // ✅ FIX No.7
   const [fuelAmt, setFuelAmt] = React.useState('');
   const [fuelCost, setFuelCost] = React.useState('');
   const [notes, setNotes] = React.useState('');
@@ -259,6 +260,7 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
           payload.selectedItemIds = selectedItemIds;
         }
         if (quantity) payload.quantityTons = parseFloat(quantity);
+        if (eventType === 'LOADING') payload.hasCargoWork = hasCargoWork;  // ✅ FIX No.7
         // ✅ 客先: 積込・荷降どちらも保存する（積込〜荷降は1セットで同じ客先という仕様）
         if (currentCustomerId) payload.customerId = currentCustomerId;
       }
@@ -495,6 +497,12 @@ const CmsActivityAddModal: React.FC<CmsActivityAddModalProps> = ({
                   className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
                 <span className="text-xs text-gray-500">t</span>
               </div>
+            {/* ✅ FIX No.7（FB Shy5804w）: 荷役作業のチェック忘れを編集・追加画面で直せるようにする */}
+            {eventType === 'LOADING' && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 py-1" data-testid="cargo-work-toggle">
+              <input type="checkbox" checked={hasCargoWork} onChange={e => setHasCargoWork(e.target.checked)} className="w-4 h-4" />
+              荷役作業あり（日報の「荷役」欄に〇）
+            </label>)}
             </div>
           )}
 

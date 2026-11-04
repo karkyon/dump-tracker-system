@@ -450,6 +450,7 @@ export class MobileController {
       }
 
       const updatedTrip = endResult.data;
+      const alreadyCompleted = !!(updatedTrip as any).alreadyCompleted;
 
       // ✅ 運行終了距離で車両の currentMileage を更新（次回運行の開始距離に反映）
       const finalOdometer = req.body.endOdometer;
@@ -462,7 +463,7 @@ export class MobileController {
         bodyVehicleId: req.body.vehicleId,
         updatedTripKeys: updatedTrip ? Object.keys(updatedTrip) : []
       });
-      if (finalOdometer && vehicleIdForUpdate) {
+      if (finalOdometer && vehicleIdForUpdate && !alreadyCompleted) {
         try {
           const prisma = DatabaseService.getInstance();
           await prisma.vehicle.update({
@@ -485,16 +486,27 @@ export class MobileController {
           endTime: updatedTrip.actualEndTime || updatedTrip.plannedEndTime,
           totalDistance: updatedTrip.totalDistanceKm ? Number(updatedTrip.totalDistanceKm) : 0
         },
-        message: 'お疲れ様でした。運行を完了しました。'
+        alreadyCompleted,
+        message: alreadyCompleted ? '運行は既に終了しています。' : 'お疲れ様でした。運行を完了しました。'
       };
 
-      sendSuccess(res, mobileResponse, '運行を終了しました');
+      sendSuccess(res, mobileResponse, alreadyCompleted ? '運行は既に終了しています' : '運行を終了しました');
 
     } catch (error) {
+      // ✅ FIX No.35/9/17: 例外の種類ごとにHTTPステータス・コードを分ける（従来は全て500 OPERATION_END_ERROR）
+      const status = (error as any)?.statusCode && Number((error as any).statusCode) < 500 ? Number((error as any).statusCode) : 500;
+      const code = status === 404 ? 'OPERATION_NOT_FOUND'
+        : status === 409 ? ((error as any)?.code && (error as any).code !== 'CONFLICT_ERROR' ? (error as any).code : 'OPERATION_CONFLICT')
+        : status === 400 ? 'OPERATION_END_VALIDATION'
+        : 'OPERATION_END_ERROR';
       logger.error('モバイル運行終了エラー', {
-        error: error instanceof Error ? error.message : String(error)
+        tripId: req.params.id,
+        userId: req.user?.userId,
+        status, code,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       });
-      sendError(res, '運行の終了に失敗しました', 500, 'OPERATION_END_ERROR');
+      sendError(res, status < 500 && error instanceof Error ? error.message : '運行の終了に失敗しました', status, code);
     }
   });
 
@@ -645,6 +657,18 @@ export class MobileController {
             // vehicleIdがある場合のみvehiclesを追加
             if (coord.vehicleId) {
               createData.vehicles = { connect: { id: coord.vehicleId } };
+            }
+
+            // ✅ FIX No.6: 端末の再送キューによる重複を防ぐ（同一車両・同一記録時刻は1件のみ）
+            if (coord.vehicleId && coord.timestamp) {
+              const dup = await DatabaseService.getInstance().gpsLog.findFirst({
+                where: { vehicleId: coord.vehicleId, recordedAt: createData.recordedAt },
+                select: { id: true }
+              });
+              if (dup) {
+                logger.debug('🛰️ [GPS-DUP] 重複受信のため保存スキップ', { id: dup.id });
+                return dup;
+              }
             }
 
             const saved = await this.gpsLogService.create(createData);

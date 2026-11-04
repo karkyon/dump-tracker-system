@@ -169,6 +169,14 @@ router.get('/current-level', authenticateToken(), requireAdmin, asyncHandler(asy
 }));
 
 /** POST /api/v1/logs/archive */
+/** ✅ FIX No.29: GET /api/v1/logs/download — 現在のログ（combined.log）をダウンロード（CMS「ログ出力」用） */
+router.get('/download', authenticateToken(), requireAdmin, asyncHandler(async (_req: Request, res: Response) => {
+  const logPath = path.join(process.cwd(), 'logs', 'combined.log');
+  if (!fs.existsSync(logPath)) return res.status(404).json({ success: false, message: 'ログファイルがありません' });
+  const stamp = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  return res.download(logPath, `combined-${stamp}.log`);
+}));
+
 router.post('/archive', authenticateToken(), requireAdmin, asyncHandler(async (req: Request, res: Response) => {
   const logPath = path.join(process.cwd(), 'logs', 'combined.log');
   const archiveDir = path.join(process.cwd(), 'logs', 'archives');

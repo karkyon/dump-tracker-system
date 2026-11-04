@@ -649,10 +649,46 @@ class LocationController {
       const search = (req.query.search as string | undefined)?.trim();
 
       const locationWhere: any = { isActive: true };
-      // ✅ search は場所名（location.name）のみで判定する。
-      //    address や客先名まで対象にすると、検索語と無関係な場所が大量にヒットしてしまうため。
+      // ✅ FIX No.10/36（FB 9nG7nC2r）: 画面の表示どおり「場所名・客先名」で検索する。
+      //    客先名（名前・読み）に一致した場合は、その客先の積込・荷降の実績がある場所に限定する
+      //    （住所は対象外のまま＝無関係な場所が大量にヒットしない）。
+      //    customerId 指定時は、その客先の実績がある場所だけに絞る（客先→現場一覧の連携用）。
+      const customerIdParam = (req.query.customerId as string | undefined)?.trim();
+      let customerFilterIds: string[] | null = null;
+      if (customerIdParam) customerFilterIds = [customerIdParam];
+      let customerMatchedLocationIds: string[] = [];
+      const locIdsForCustomers = async (custIds: string[]): Promise<string[]> => {
+        if (custIds.length === 0) return [];
+        const rows = await db.operationDetail.findMany({
+          where: {
+            locationId: { not: null },
+            OR: [
+              { customerId: { in: custIds } },
+              { customerId: null, operations: { customerId: { in: custIds } } }
+            ]
+          },
+          select: { locationId: true },
+          distinct: ['locationId']
+        });
+        return rows.map(r => r.locationId!).filter(Boolean);
+      };
       if (search) {
-        locationWhere.name = { contains: search, mode: 'insensitive' };
+        const custs = await db.customer.findMany({
+          where: { OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { reading: { contains: search, mode: 'insensitive' } }
+          ] },
+          select: { id: true }
+        });
+        customerMatchedLocationIds = await locIdsForCustomers(custs.map(c => c.id));
+        locationWhere.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          ...(customerMatchedLocationIds.length > 0 ? [{ id: { in: customerMatchedLocationIds } }] : [])
+        ];
+      }
+      if (customerFilterIds) {
+        const ids = await locIdsForCustomers(customerFilterIds);
+        locationWhere.id = { in: ids };
       }
 
       // ---- 場所マスタ取得（locationType による事前フィルタなし） ----
@@ -693,9 +729,11 @@ class LocationController {
           activityType: true,
           actualStartTime: true,
           plannedTime: true,
+          customerId: true,
+          customers: { select: { id: true, name: true } },
           operations: {
             select: {
-              customer: { select: { name: true } }
+              customer: { select: { id: true, name: true } }
             }
           }
         }
@@ -727,7 +765,12 @@ class LocationController {
           agg.lastDate = ts;
         }
 
-        const customerName = d.operations?.customer?.name;
+        // ✅ FIX No.10: 積込・荷降ごとの客先（7/2導入）を優先し、未設定時のみ運行全体の客先
+        const customerName = (d as any).customers?.name ?? d.operations?.customer?.name;
+        if (customerFilterIds) {
+          const cid = (d as any).customers?.id ?? d.operations?.customer?.id;
+          if (!cid || !customerFilterIds.includes(cid)) { aggMap.set(d.locationId, agg); continue; }
+        }
         if (customerName) {
           agg.customerCounts.set(customerName, (agg.customerCounts.get(customerName) || 0) + 1);
         }
@@ -755,6 +798,9 @@ class LocationController {
           longitude: loc.longitude ? Number(loc.longitude) : null,
           locationType: loc.locationType,
           customerName: topCustomerName,
+          customerNames: agg ? [...agg.customerCounts.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]) : [],
+          matchedByCustomer: !!search && customerMatchedLocationIds.includes(loc.id)
+            && !loc.name.toLowerCase().includes(search.toLowerCase()),
           loadingCount,
           unloadingCount,
           operationCount: loadingCount + unloadingCount,

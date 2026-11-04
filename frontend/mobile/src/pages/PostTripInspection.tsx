@@ -195,6 +195,8 @@ const PostTripInspection: React.FC = () => {
   //   再実行され、「運行情報が見つかりません」エラーが誤表示されてしまう。
   //   意図的な終了処理によるリセットかどうかをこのrefで判定する。
   const hasEndedOperationRef = useRef(false);
+  // ✅ FIX No.35/9/17: 再押下時に降車後点検を重複作成しない（作成済みIDを保持）
+  const createdPostInspectionIdRef = useRef<string | null>(null);
 
   // 画面初期化
   useEffect(() => {
@@ -439,19 +441,23 @@ const PostTripInspection: React.FC = () => {
         notes: ''
       }));
 
-      const inspectionResponse = await apiService.createInspectionRecord({
-        vehicleId,
-        inspectorId: driverId,
-        inspectionType: 'POST_TRIP',
-        results: inspectionResults,
-        notes: notes || '降車後点検完了'
-      });
+      if (!createdPostInspectionIdRef.current) {
+        const inspectionResponse = await apiService.createInspectionRecord({
+          vehicleId,
+          inspectorId: driverId,
+          inspectionType: 'POST_TRIP',
+          results: inspectionResults,
+          notes: notes || '降車後点検完了'
+        });
 
-      if (!inspectionResponse.success) {
-        throw new Error('点検記録の作成に失敗しました');
+        if (!inspectionResponse.success) {
+          throw new Error('点検記録の作成に失敗しました');
+        }
+        createdPostInspectionIdRef.current = (inspectionResponse.data as any)?.id || 'created';
+        console.log('[D8] ✅ 降車時点検記録作成成功:', inspectionResponse.data?.id);
+      } else {
+        console.log('[D8] ♻️ 降車時点検は作成済みのため再作成しない:', createdPostInspectionIdRef.current);
       }
-
-      console.log('[D8] ✅ 降車時点検記録作成成功:', inspectionResponse.data?.id);
 
       // ============================================
       // ✅ 修正: endOdometerとendFuelLevelを送信
@@ -497,7 +503,9 @@ const PostTripInspection: React.FC = () => {
         notes: notes || ''
       });
 
-      const endResponse = await apiService.endOperation(operationId, {
+      // ✅ FIX No.35/9/17: 通信失敗・502・タイムアウト時は1回だけ自動再試行
+      //   （サーバー側は冪等なので、1回目が実は完了していても成功が返る）
+      const endPayload = {
         endTime: new Date(),
         endOdometer,
         endFuelLevel: endFuelLevel ?? undefined,
@@ -508,10 +516,23 @@ const PostTripInspection: React.FC = () => {
         ...(storedTotalDistanceKm !== undefined && storedTotalDistanceKm !== null && {
           totalDistanceKm: Number(storedTotalDistanceKm)
         })
-      });
+      };
+      const isRetryable = (e: any) => !e?.response || (e.response.status >= 500) || e.code === 'ECONNABORTED';
+      let endResponse: any;
+      try {
+        endResponse = await apiService.endOperation(operationId, endPayload);
+      } catch (firstErr: any) {
+        if (!isRetryable(firstErr)) throw firstErr;
+        console.warn('[D8] ⚠️ 運行終了1回目失敗→再試行', firstErr?.message);
+        await new Promise(r => setTimeout(r, 1500));
+        endResponse = await apiService.endOperation(operationId, endPayload);
+      }
 
       if (!endResponse.success) {
         throw new Error('運行終了に失敗しました');
+      }
+      if ((endResponse.data as any)?.alreadyCompleted) {
+        console.log('[D8] ℹ️ 運行は既に終了済み（前回の操作で完了していた）');
       }
 
       console.log('[D8] ✅ 運行終了成功');

@@ -113,6 +113,17 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList, onO
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PICKUP' | 'DELIVERY'>('ALL');
   const [period, setPeriod] = useState('ALL');
+  // ✅ FIX No.10（FB 9nG7nC2r）: 客先を選ぶと、その客先の積込・荷降実績がある現場だけを一覧・地図に表示
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [customerOptions, setCustomerOptions] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    apiClient.get('/customers', { params: { limit: 1000 } }).then((r: any) => {
+      const pick = (x: any): any[] | null => Array.isArray(x) ? x
+        : (x && typeof x === 'object' ? (pick(x.customers) || pick(x.items) || pick(x.data)) : null);
+      const arr = pick(r) || [];
+      setCustomerOptions(arr.filter((c: any) => c?.id && c?.name).map((c: any) => ({ id: c.id, name: c.name })));
+    }).catch(() => setCustomerOptions([]));
+  }, []);
 
   // ---- Google Maps スクリプト読み込み ----
   useEffect(() => {
@@ -128,6 +139,7 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList, onO
       const params: Record<string, string> = {};
       if (searchText.trim()) params.search = searchText.trim();
       if (typeFilter !== 'ALL') params.locationType = typeFilter;
+      if (customerFilter) params.customerId = customerFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
 
@@ -146,7 +158,7 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList, onO
     } finally {
       setLoading(false);
     }
-  }, [searchText, typeFilter, period]);
+  }, [searchText, typeFilter, period, customerFilter]);
 
   useEffect(() => {
     fetchSummary();
@@ -302,7 +314,7 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList, onO
     <div className="bg-white border border-gray-200 rounded-b-lg rounded-tr-lg p-4">
       {/* 検索・フィルターエリア */}
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">🔍 場所・客先名で検索</label>
             <input
@@ -312,6 +324,18 @@ const OperationsMapView: React.FC<OperationsMapViewProps> = ({ onJumpToList, onO
               placeholder="場所名・客先名を入力..."
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">客先で絞り込み</label>
+            <select
+              data-testid="map-customer-filter"
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+            >
+              <option value="">すべての客先</option>
+              {customerOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">場所種別</label>

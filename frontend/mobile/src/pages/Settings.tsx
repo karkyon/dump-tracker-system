@@ -54,6 +54,16 @@ interface SettingsData {
 /**
  * Settings画面コンポーネント - 季節テーマ設定追加版
  */
+// ✅ FIX No.32: 保存しても動作に反映されない設定項目（通知・ダークモード・画面向き・操作・アラート・データ）は
+//   誤解を招くため非表示にする（「GPS自動更新通知」は文言誤り）。実装時に true へ戻して個別に有効化する。
+const SHOW_UNIMPLEMENTED_SETTINGS = false;
+
+/** ✅ FIX No.32: フォントサイズ設定を画面全体に反映 */
+export function applyFontSizeSetting(size?: string): void {
+  const px = size === 'small' ? '14px' : size === 'large' ? '18px' : '16px';
+  document.documentElement.style.fontSize = px;
+}
+
 const Settings: React.FC = () => {
   useTLog('SETTINGS', '設定');
 
@@ -116,7 +126,9 @@ const Settings: React.FC = () => {
     try {
       const savedSettings = localStorage.getItem('appSettings');
       if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+        const parsed = JSON.parse(savedSettings);
+        setSettings(parsed);
+        applyFontSizeSetting(parsed?.display?.fontSize);
       }
     } catch (error) {
       console.error('設定読み込みエラー:', error);
@@ -148,6 +160,7 @@ const Settings: React.FC = () => {
   const handleSave = () => {
     try {
       localStorage.setItem('appSettings', JSON.stringify(settings));
+      applyFontSizeSetting(settings.display?.fontSize);  // ✅ FIX No.32
       setHasChanges(false);
       toast.success('設定を保存しました');
     } catch (error) {
@@ -223,6 +236,7 @@ const Settings: React.FC = () => {
       {/* 設定コンテンツ */}
       <div className="px-4 py-4 space-y-4">
         
+        {SHOW_UNIMPLEMENTED_SETTINGS && (<>
         {/* 通知設定 */}
         <section className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="bg-orange-50 px-4 py-3 flex items-center gap-2 border-b border-orange-100">
@@ -245,7 +259,7 @@ const Settings: React.FC = () => {
             </label>
             
             <label className="flex items-center justify-between">
-              <span className="text-gray-700">手渡高さデータ</span>
+              <span className="text-gray-700">GPS自動更新通知</span>
               <input
                 type="checkbox"
                 checked={settings.notifications.gpsAutoUpdate}
@@ -274,6 +288,7 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
+        </>)}
         {/* 表示設定 + 🆕 季節テーマ設定 */}
         <section className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="bg-pink-50 px-4 py-3 flex items-center gap-2 border-b border-pink-100">
@@ -339,6 +354,7 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
+            {SHOW_UNIMPLEMENTED_SETTINGS && (<>
             {/* ダークモード */}
             <label className="flex items-center justify-between">
               <span className="text-gray-700">ダークモード</span>
@@ -354,6 +370,7 @@ const Settings: React.FC = () => {
               />
             </label>
 
+            </>)}
             {/* フォントサイズ */}
             <div>
               <label className="block text-gray-700 mb-2">フォントサイズ</label>
@@ -369,6 +386,7 @@ const Settings: React.FC = () => {
               </select>
             </div>
 
+            {SHOW_UNIMPLEMENTED_SETTINGS && (<>
             {/* 画面向き */}
             <div>
               <label className="block text-gray-700 mb-2">画面向き設定</label>
@@ -383,9 +401,11 @@ const Settings: React.FC = () => {
                 <option value="auto">自動</option>
               </select>
             </div>
+            </>)}
           </div>
         </section>
 
+        {SHOW_UNIMPLEMENTED_SETTINGS && (<>
         {/* 操作設定 */}
         <section className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="bg-purple-50 px-4 py-3 flex items-center gap-2 border-b border-purple-100">
@@ -520,6 +540,7 @@ const Settings: React.FC = () => {
             </div>
           </div>
         </section>
+        </>)}
       </div>
 
       {/* 固定フッター（保存・リセットボタン） */}

@@ -492,6 +492,33 @@ class TripService {
    * ✅✅✅ 2025年12月27日修正: endTime → actualEndTime + 距離・燃料計算追加 ✅✅✅
    * 🔗🔗🔗 2025年12月27日追加: POST_TRIP点検記録自動紐付け 🔗🔗🔗
    */
+  /**
+   * ✅ FIX No.35: POST_TRIP 点検記録を運行に紐付ける（冪等・失敗しても例外を投げない）
+   * 再試行時に降車後点検が複数作られても、未紐付けの最新1件を紐付ける。
+   */
+  private async linkPostTripInspection(operation: any): Promise<void> {
+    try {
+      const prisma = DatabaseService.getInstance();
+      const already = await prisma.inspectionRecord.findFirst({
+        where: { operationId: operation.id, inspectionType: 'POST_TRIP' }, select: { id: true }
+      });
+      if (already) return;
+      const latest = await prisma.inspectionRecord.findFirst({
+        where: {
+          inspectorId: operation.driverId, vehicleId: operation.vehicleId, operationId: null,
+          inspectionType: 'POST_TRIP', createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (latest) {
+        await prisma.inspectionRecord.update({ where: { id: latest.id }, data: { operationId: operation.id } });
+        logger.info('🔗 POST_TRIP 点検記録を紐付け（再試行経路）', { operationId: operation.id, inspectionId: latest.id });
+      }
+    } catch (e) {
+      logger.warn('🔗 POST_TRIP 紐付け失敗（無視）', { error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
   async endTrip(
     tripId: string,
     request: EndTripRequest
@@ -504,8 +531,26 @@ class TripService {
         throw new NotFoundError('運行が見つかりません');
       }
 
+      // ✅ FIX No.35/9/17: 運行終了を冪等化
+      //   502/タイムアウトで応答が返らなかった1回目が実は完了していた場合、
+      //   再押下で「既に完了」→500となり運転手が終了できなかった。
+      //   既に完了している運行は、成功として現在の状態を返す（alreadyCompleted=true）。
       if (operation.status === 'COMPLETED') {
-        throw new ConflictError('運行は既に完了しています');
+        logger.warn('運行終了: 既に完了済みのため冪等に成功を返す', { tripId });
+        await this.linkPostTripInspection(operation).catch(() => undefined);
+        return {
+          success: true,
+          data: {
+            ...(operation as any),
+            tripStatus: 'COMPLETED' as TripStatus,
+            vehicleOperationStatus: 'AVAILABLE' as VehicleOperationStatus,
+            alreadyCompleted: true
+          } as TripOperationModel,
+          message: '運行は既に終了しています'
+        };
+      }
+      if (operation.status === 'CANCELLED') {
+        throw new ConflictError('運行はキャンセルされています', 'OPERATION_CANCELLED', undefined, 'OPERATION_CANCELLED');
       }
 
       // 距離・時間計算
@@ -739,17 +784,24 @@ class TripService {
           longitude: request.endLocation.longitude
         });
 
-        await this.recordGpsLocation(tripId, operation.vehicleId, {
-          latitude: Number(request.endLocation.latitude),
-          longitude: Number(request.endLocation.longitude),
-          altitude: 0,
-          speedKmh: 0,
-          heading: 0,
-          accuracyMeters: 10,
-          recordedAt: request.endTime || new Date()
-        });
-
-        logger.info('🏁✅ [endTrip] GPS記録完了');
+        // ✅ No.35 補足: 運行はこの時点で COMPLETED に更新済みのため、ここで例外を外へ出さない
+        //   （recordGpsLocation 内部でも例外を処理しているが、将来の変更に備えた防御）。
+        try {
+          await this.recordGpsLocation(tripId, operation.vehicleId, {
+            latitude: Number(request.endLocation.latitude),
+            longitude: Number(request.endLocation.longitude),
+            altitude: 0,
+            speedKmh: 0,
+            heading: 0,
+            accuracyMeters: 10,
+            recordedAt: request.endTime || new Date()
+          });
+          logger.info('🏁✅ [endTrip] GPS記録完了');
+        } catch (gpsErr) {
+          logger.warn('🏁⚠️ [endTrip] 終了地点GPSの記録に失敗（運行終了は完了済み）', {
+            tripId, error: gpsErr instanceof Error ? gpsErr.message : String(gpsErr)
+          });
+        }
       }
 
       // 🆕 BUG-100KM再修正: オドメーター/フロント値ベースの値が
@@ -828,7 +880,12 @@ class TripService {
                 model: true,
                 manufacturer: true,
                 status: true,
-                vehicleType: true
+                vehicleType: true,
+                // ✅ FIX No.19（根本原因）: 積込/荷降パターンを返していなかったため、
+                //   運行再開時の同期（/mobile/operations/current）が常に既定値 2 を返し、
+                //   P1/P3・U1/U3 の車両でもモバイルが P2/U2 として動作していた
+                loadingPattern: true,
+                unloadingPattern: true
               }
             },
             usersOperationsDriverIdTousers: {
@@ -1461,7 +1518,12 @@ class TripService {
 
       // ✅ 手入力品目名が含まれる場合は notes に反映（addActivityと同様のロジック）
       const completeCustomItemName = (data as any).customItemName as string | undefined;
-      const completeBaseNotes = data.notes || (loadingDetail.notes as string | null | undefined) || '';
+      // ✅ FIX No.1: 離脱検知による自動完了は、既存メモを上書きせず追記する
+      const isAutoComplete = !!(data as any).autoCompleted;
+      const prevNotes = (loadingDetail.notes as string | null | undefined) || '';
+      const completeBaseNotes = isAutoComplete
+        ? [prevNotes, data.notes].filter(Boolean).join(' ')
+        : (data.notes || prevNotes || '');
       const completeResolvedNotes = completeCustomItemName && !completeBaseNotes.includes('[手入力品目:')
         ? `[手入力品目: ${completeCustomItemName}]${completeBaseNotes ? ' ' + completeBaseNotes : ''}`
         : completeBaseNotes || undefined;
@@ -1473,7 +1535,12 @@ class TripService {
       const updatedDetail = await this.operationDetailService.update(
         loadingDetail.id,
         {
-          actualEndTime: data.endTime || new Date(),
+          // ✅ FIX No.2: 終了時刻が開始時刻より前にならないようにする（日報の1439分の発生源）
+          actualEndTime: (() => {
+            const end = data.endTime ? new Date(data.endTime) : new Date();
+            const st = loadingDetail.actualStartTime ? new Date(loadingDetail.actualStartTime as any) : null;
+            return st && end < st ? st : end;
+          })(),
           itemId: resolvedItemId,  // ✅ 修正: 既存 itemId を維持
           // 積込～荷降しごとに独立した客先情報（未送信なら既存値を維持）
           ...((data as any).customerId ? { customerId: (data as any).customerId } : {}),

@@ -153,6 +153,27 @@ const SEVERITY_LABELS: Record<number, string> = {
 // FeedbackService クラス
 // =============================================
 
+
+/**
+ * ✅ FIX No.34: Firestore の statusHistory を JSON で扱える形に正規化する。
+ * changedAt は Timestamp / {_seconds,_nanoseconds} / {seconds,nanoseconds} / 文字列 / Date のいずれもあり得る。
+ */
+export function toDateSafe(v: any): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (typeof v.toDate === 'function') { try { return v.toDate(); } catch { return null; } }
+  const sec = v._seconds ?? v.seconds;
+  if (typeof sec === 'number') return new Date(sec * 1000 + Math.floor((v._nanoseconds ?? v.nanoseconds ?? 0) / 1e6));
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+export function normalizeStatusHistory(raw: any): any[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(h => ({ ...h, changedAt: toDateSafe(h?.changedAt) }))
+    .sort((a, b) => (a.changedAt?.getTime() ?? 0) - (b.changedAt?.getTime() ?? 0));
+}
+
 export class FeedbackService {
   private readonly COLLECTIONS = ['feedback_mobile', 'feedback_cms'] as const;
 
@@ -181,7 +202,8 @@ export class FeedbackService {
       backlogIssueKey: data['backlogIssueKey'] || null,
       backlogLinkedAt: data['backlogLinkedAt']?.toDate?.() || null,
       backlogLinkedBy: data['backlogLinkedBy'] || null,
-      statusHistory: Array.isArray(data['statusHistory']) ? data['statusHistory'] : [],
+      // ✅ FIX No.34: changedAt が Firestore Timestamp のまま返っており、CMSで「Invalid Date」になっていた
+      statusHistory: normalizeStatusHistory(data['statusHistory']),
     };
   }
 

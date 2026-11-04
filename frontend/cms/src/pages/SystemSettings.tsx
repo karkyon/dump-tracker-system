@@ -331,6 +331,12 @@ const SystemSettings: React.FC = () => {
   });
   // 🆕 運行設定（離脱検知距離）
   const [departureAlertDistanceM, setDepartureAlertDistanceM] = useState<number>(200);
+  // ✅ FIX No.13: 日報に印字する運行管理者・整備管理者
+  const [reportOpManager, setReportOpManager] = useState('');
+  const [reportMaintManager, setReportMaintManager] = useState('');
+  // ✅ FIX No.4/8: 距離推定で高速道路・有料道路を使わない（既定: 使わない）
+  const [routeAvoidHighways, setRouteAvoidHighways] = useState(true);
+  const [routeAvoidTolls, setRouteAvoidTolls] = useState(true);
   const [operationSettingSaving, setOperationSettingSaving] = useState(false);
   const [operationSettingSaved, setOperationSettingSaved]   = useState(false);
 
@@ -341,6 +347,10 @@ const SystemSettings: React.FC = () => {
         if (data.departure_alert_distance_m) {
           setDepartureAlertDistanceM(parseInt(data.departure_alert_distance_m, 10));
         }
+        setReportOpManager(data['report.operation_manager_name'] || '');
+        setReportMaintManager(data['report.maintenance_manager_name'] || '');
+        setRouteAvoidHighways(data['route.avoid_highways'] !== 'false');
+        setRouteAvoidTolls(data['route.avoid_tolls'] !== 'false');
       })
       .catch(err => console.error('システム設定取得エラー:', err));
   }, []);
@@ -404,6 +414,9 @@ const SystemSettings: React.FC = () => {
       const dataUrl = e.target?.result as string;
       setLogoUrl(dataUrl);
       localStorage.setItem(COMPANY_LOGO_KEY, dataUrl);
+      // ✅ FIX No.28: 他のPCにも反映されるようサーバー（system_settings）にも保存
+      saveSystemSettings([{ key: 'company.logo_data_url', value: dataUrl }])
+        .catch(err => alert('ロゴのサーバー保存に失敗しました: ' + (err?.message || '')));
       console.log('✅ [SystemSettings] 会社ロゴを保存しました');
     };
     reader.readAsDataURL(file);
@@ -442,6 +455,7 @@ const SystemSettings: React.FC = () => {
     if (!confirm('会社ロゴを削除しますか？')) return;
     setLogoUrl(null);
     localStorage.removeItem(COMPANY_LOGO_KEY);
+    saveSystemSettings([{ key: 'company.logo_data_url', value: '' }]).catch(() => undefined);  // ✅ FIX No.28
     console.log('✅ [SystemSettings] 会社ロゴを削除しました');
   }, []);
 
@@ -452,6 +466,11 @@ const SystemSettings: React.FC = () => {
     try {
       // 一般設定を保存（localStorage）
       localStorage.setItem(GENERAL_SETTINGS_KEY, JSON.stringify(generalSettings));
+      // ✅ FIX No.28: 会社名・システム名をサーバーにも保存（従来はこのPCのブラウザにしか残らなかった）
+      await saveSystemSettings([
+        { key: 'company.name', value: String(generalSettings.companyName || '') },
+        { key: 'company.system_name', value: String(generalSettings.systemName || '') },
+      ]);
       // GPS走行軌跡設定を保存（localStorage）
       localStorage.setItem(GPS_TRACK_KEY, JSON.stringify(gpsTrackSettings));
       // ② ロゴは processLogoFile / handleLogoRemove 内で即時保存済みのため追加処理不要
@@ -485,23 +504,33 @@ const SystemSettings: React.FC = () => {
     }
   };
 
+  // ✅ FIX No.29: 「ログ出力」「ログクリア」が待つだけで何もしていなかった（完了メッセージのみ表示）
   const handleExportLogs = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('ログファイルをダウンロードしました');
-    } catch (error) {
-      alert('ログファイルのダウンロードに失敗しました');
+      const res = await fetch(`${API_BASE_URL}/logs/download`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="?([^";]+)"?/);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = m?.[1] || 'combined.log';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (error: any) {
+      alert('ログファイルのダウンロードに失敗しました: ' + (error?.message || ''));
     }
   };
 
   const handleClearLogs = async () => {
-    if (confirm('古いログを削除しますか？この操作は取り消せません。')) {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        alert('古いログを削除しました');
-      } catch (error) {
-        alert('ログの削除に失敗しました');
-      }
+    if (!confirm('現在のログを退避（アーカイブ）してから空にします。よろしいですか？\n退避したログは「開発者ツール → ログビューア」から取得できます。')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/logs/archive`, { method: 'POST', headers: getAuthHeaders() });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.success === false) throw new Error(j.message || `HTTP ${res.status}`);
+      alert(`ログを退避して空にしました（${j.data?.archiveFile || ''}）`);
+    } catch (error: any) {
+      alert('ログのクリアに失敗しました: ' + (error?.message || ''));
     }
   };
 
@@ -515,7 +544,11 @@ const SystemSettings: React.FC = () => {
     setOperationSettingSaved(false);
     try {
       await saveSystemSettings([
-        { key: 'departure_alert_distance_m', value: String(departureAlertDistanceM) }
+        { key: 'departure_alert_distance_m', value: String(departureAlertDistanceM) },
+        { key: 'report.operation_manager_name', value: reportOpManager.trim() },
+        { key: 'report.maintenance_manager_name', value: reportMaintManager.trim() },
+        { key: 'route.avoid_highways', value: routeAvoidHighways ? 'true' : 'false' },
+        { key: 'route.avoid_tolls', value: routeAvoidTolls ? 'true' : 'false' },
       ]);
       setOperationSettingSaved(true);
       setTimeout(() => setOperationSettingSaved(false), 3000);
@@ -999,9 +1032,36 @@ const SystemSettings: React.FC = () => {
 
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-xs text-blue-800 space-y-1">
                 <p className="font-semibold">動作説明</p>
-                <p>• 積込場所到着中に {departureAlertDistanceM}m 以上移動 → 「積降場所へ移動中」に自動切替</p>
-                <p>• 積降場所到着中に {departureAlertDistanceM}m 以上移動 → 積降完了を自動記録し「積込場所へ移動中」に切替</p>
+                <p>• 積込場所到着中に {departureAlertDistanceM}m 以上移動 → 積込完了を自動記録し「荷降場所へ移動中」に自動切替</p>
+                <p>• 荷降場所到着中に {departureAlertDistanceM}m 以上移動 → 荷降完了を自動記録し「積込場所へ移動中」に切替</p>
               </div>
+            </div>
+
+            {/* ✅ FIX No.13（FB vO8lzrau）: 日報の運行管理者・整備管理者 */}
+            <div className="mt-8 border-t pt-6">
+              <h3 className="text-base font-medium text-gray-900 mb-1">日報の管理者印</h3>
+              <p className="text-xs text-gray-500 mb-4">運転日報の「運行管理者」「整備管理者」欄に丸印で印字する名前（苗字など）。空欄の場合、運行管理者は帳票を出力した人の苗字、整備管理者は空欄になります。</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block text-sm text-gray-700">運行管理者
+                  <input data-testid="report-op-manager" value={reportOpManager} onChange={e => setReportOpManager(e.target.value)} maxLength={10}
+                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="例: 吉原" />
+                </label>
+                <label className="block text-sm text-gray-700">整備管理者
+                  <input data-testid="report-maint-manager" value={reportMaintManager} onChange={e => setReportMaintManager(e.target.value)} maxLength={10}
+                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="例: 山田" />
+                </label>
+              </div>
+            </div>
+            {/* ✅ FIX No.4/8（FB ULL7kXwz）: 距離推定の経路条件 */}
+            <div className="mt-8 border-t pt-6">
+              <h3 className="text-base font-medium text-gray-900 mb-1">走行距離の推定（GPSが途切れた区間）</h3>
+              <p className="text-xs text-gray-500 mb-4">GPSが途切れた区間の道路距離を推定するときの経路条件です。メーター値が入力されている運行は、メーター値が総走行距離になります。</p>
+              <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                <input type="checkbox" data-testid="route-avoid-highways" checked={routeAvoidHighways} onChange={e => setRouteAvoidHighways(e.target.checked)} />高速道路を使わない
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" data-testid="route-avoid-tolls" checked={routeAvoidTolls} onChange={e => setRouteAvoidTolls(e.target.checked)} />有料道路を使わない
+              </label>
             </div>
 
             {operationSettingSaved && (

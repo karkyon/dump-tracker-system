@@ -37,7 +37,9 @@ export const getSystemSettings = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const rows = await db.systemSetting.findMany();
+    // ✅ FIX No.37（今回発見）: 連携設定（integration.*）は秘密情報（Firebaseサービスアカウント等）を含むため、
+    //   一般の設定取得APIでは返さない。従来はログインした運転手でも全キーを取得できた。
+    const rows = await db.systemSetting.findMany({ where: { NOT: { key: { startsWith: 'integration.' } } } });
     const result: Record<string, string> = { ...DEFAULTS };
     for (const row of rows) {
       if (row.value !== null) result[row.key] = row.value;
@@ -63,6 +65,19 @@ export const updateSystemSettings = async (
     if (!Array.isArray(updates)) {
       res.status(400).json({ success: false, message: 'bodyは配列で送信してください' });
       return;
+    }
+    // ✅ FIX No.37: 連携設定は専用API（管理者のみ）以外から書き換えさせない
+    const forbidden = updates.filter(u => typeof u?.key !== 'string' || u.key.startsWith('integration.') || u.key.length > 100);
+    if (forbidden.length > 0) {
+      res.status(400).json({ success: false, message: 'このキーはこのAPIでは変更できません', code: 'FORBIDDEN_SETTING_KEY' });
+      return;
+    }
+    if (updates.some(u => u.key === 'departure_alert_distance_m')) {
+      const v = Number(updates.find(u => u.key === 'departure_alert_distance_m')!.value);
+      if (!Number.isFinite(v) || v < 50 || v > 2000) {
+        res.status(400).json({ success: false, message: '離脱検知距離は50〜2000mで指定してください', code: 'INVALID_SETTING_VALUE' });
+        return;
+      }
     }
     for (const { key, value } of updates) {
       await db.systemSetting.upsert({

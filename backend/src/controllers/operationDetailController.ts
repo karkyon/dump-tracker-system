@@ -784,7 +784,20 @@ export class OperationDetailController {
       data.actualEndTime = new Date(data.actualEndTime);
     }
 
+    // ✅ FIX No.2: 完了＜開始のイベント追加を拒否
+    if (data.actualStartTime && data.actualEndTime && new Date(data.actualEndTime).getTime() < new Date(data.actualStartTime).getTime()) {
+      throw new ValidationError('完了時刻が到着（開始）時刻より前になっています。時刻を確認してください', 'actualEndTime');
+    }
+    // ✅ FIX No.7: イベント追加で荷役作業フラグを受け付ける
+    const _addCargo = data.hasCargoWork;
+    delete data.hasCargoWork;
     const operationDetail = await this.operationDetailService.create(data);
+    if (_addCargo !== undefined && operationDetail && String((operationDetail as any).activityType).toUpperCase().startsWith('LOADING')) {
+      await DatabaseService.getInstance().operationDetail.update({
+        where: { id: (operationDetail as any).id }, data: { hasCargoWork: _addCargo === true || _addCargo === 'true' }
+      });
+      (operationDetail as any).hasCargoWork = _addCargo === true || _addCargo === 'true';
+    }
 
     // ✅ 修正: 「積込〜荷降は1セットで同じ客先」の仕様をイベント作成時にも強制する。
     // フロント側の直近積込客先の推測（画面上のタイムライン再取得タイミング次第）に
@@ -863,6 +876,51 @@ export class OperationDetailController {
    * PUT /operation-details/timeline-event/:eventId
    * eventIdパターン別にoperations/inspection_records/operation_detailsを更新
    */
+  /**
+   * ✅ FIX No.2 / No.7 / No.22: 運行明細の更新を共通化
+   *  - No.2: 完了時刻が到着（開始）時刻より前になる更新を拒否（日報の「1439分」の発生源）
+   *  - No.7（FB Shy5804w）: 荷役作業フラグ（hasCargoWork）を積込の編集で受け付ける
+   *  - No.22: 変更前後の値を audit_logs に記録（誰がいつ何を変えたか追えるようにする）
+   */
+  private async guardedDetailUpdate(req: AuthenticatedRequest, detailId: string, data: any, rawData: any): Promise<any> {
+    const db = DatabaseService.getInstance();
+    const before: any = await db.operationDetail.findUnique({ where: { id: detailId } });
+    if (!before) return null;
+    if (rawData && rawData.hasCargoWork !== undefined && String(before.activityType).toUpperCase().startsWith('LOADING')) {
+      data.hasCargoWork = rawData.hasCargoWork === true || rawData.hasCargoWork === 'true';
+    }
+    const st = data.actualStartTime !== undefined ? data.actualStartTime : before.actualStartTime;
+    const en = data.actualEndTime !== undefined ? data.actualEndTime : before.actualEndTime;
+    if (st && en && new Date(en).getTime() < new Date(st).getTime()) {
+      throw new ValidationError('完了時刻が到着（開始）時刻より前になっています。時刻を確認してください', 'actualEndTime');
+    }
+    const updated = await this.operationDetailService.update(detailId, data);
+    try {
+      const keys = Object.keys(data);
+      const norm = (v: any) => (v instanceof Date ? v.toISOString() : (v != null && typeof v === 'object' && 'toNumber' in v ? Number(v) : v));
+      const oldValues: any = {}; const newValues: any = {};
+      for (const k of keys) {
+        const o = norm(before[k]); const n = norm(data[k]);
+        if (JSON.stringify(o) !== JSON.stringify(n)) { oldValues[k] = o ?? null; newValues[k] = n ?? null; }
+      }
+      if (Object.keys(newValues).length > 0) {
+        await db.auditLog.create({
+          data: {
+            tableName: 'operation_details', operationType: 'UPDATE', recordId: detailId,
+            userId: req.user?.userId || null,
+            ipAddress: (req.ip || '').replace(/^::ffff:/, '') || null,
+            userAgent: String(req.headers['user-agent'] || '').slice(0, 500) || null,
+            oldValues: { ...oldValues, operationId: before.operationId, activityType: before.activityType },
+            newValues
+          } as any
+        });
+      }
+    } catch (e) {
+      logger.warn('運行明細の監査ログ記録に失敗（更新は成功）', { detailId, error: e instanceof Error ? e.message : String(e) });
+    }
+    return updated;
+  }
+
   updateTimelineEvent = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { eventId } = req.params;
     const rawData = req.body;
@@ -956,7 +1014,7 @@ export class OperationDetailController {
           if (arr[0]?.id) data.locationId = arr[0].id;
         } catch { /* 継続 */ }
       }
-      const updated = await this.operationDetailService.update(detailId, data);
+      const updated = await this.guardedDetailUpdate(req, detailId, data, rawData);
       if (!updated) return sendNotFound(res, '運行詳細が見つかりません');
       if (data.customerId !== undefined) {
         await applyCustomerCascade(detailId, (updated as any).activityType, data.customerId);
@@ -976,7 +1034,7 @@ export class OperationDetailController {
       if (rawData.customerId !== undefined) data.customerId = rawData.customerId;
       if (rawData.latitude !== undefined) data.latitude = rawData.latitude;
       if (rawData.longitude !== undefined) data.longitude = rawData.longitude;
-      const updated = await this.operationDetailService.update(detailId, data);
+      const updated = await this.guardedDetailUpdate(req, detailId, data, rawData);
       if (!updated) return sendNotFound(res, '運行詳細が見つかりません');
       // ✅ 複数品目: selectedItemIds が送られた場合は operationDetailItems を再構築
       if (Array.isArray(rawData.selectedItemIds) && rawData.selectedItemIds.length > 0) {
@@ -1037,7 +1095,7 @@ export class OperationDetailController {
         if (arr[0]?.id) data.locationId = arr[0].id;
       } catch { /* 継続 */ }
     }
-    const updated = await this.operationDetailService.update(eventId, data);
+    const updated = await this.guardedDetailUpdate(req, eventId, data, rawData);
     if (!updated) return sendNotFound(res, 'イベントが見つかりません');
     return sendSuccess(res, updated);
   });
@@ -1165,7 +1223,7 @@ export class OperationDetailController {
       data.notes = notesWorking;
     }
 
-    const operationDetail = await this.operationDetailService.update(id, data);
+    const operationDetail = await this.guardedDetailUpdate(req, id, data, rawData);
 
     if (!operationDetail) {
       return sendNotFound(res, '\u904b\u884c\u8a73\u7d30\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093');

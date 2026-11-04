@@ -13,12 +13,13 @@ import {
   saveMapsApiKeySettings,
   deleteMapsApiKeySettings,
 } from '../controllers/systemSettingsController';
-import { authenticateToken, requireAdmin } from '../middleware/auth';
+import { authenticateToken, requireAdmin, requireManagerOrAdmin } from '../middleware/auth';
 
 const router = Router();
 
 router.get('/', authenticateToken(), getSystemSettings);
-router.put('/', authenticateToken(), updateSystemSettings);
+// ✅ FIX No.37: 設定の書き換えは管理者・マネージャーのみ（従来は運転手でも可能だった）
+router.put('/', authenticateToken(), requireManagerOrAdmin, updateSystemSettings);
 
 router.get('/integration',             authenticateToken(), requireAdmin, getIntegrationSettings);
 router.put('/integration/firebase',    authenticateToken(), requireAdmin, saveFirebaseSettings);

@@ -235,16 +235,18 @@ const Home: React.FC = () => {
               <div className="bg-green-50 rounded-xl p-3 text-center">
                 <MapPin className="w-5 h-5 text-green-600 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-green-600">
-                  {(summary.totalDistance / 1000).toFixed(1)}
+                  {/* ✅ FIX No.5（FB R2XXEEMQ）: サーバーは km 単位。従来さらに÷1000 しており 48.7km が 0.0 と表示されていた */}
+                  {Number(summary.totalDistance || 0).toFixed(1)}
                 </p>
                 <p className="text-xs text-gray-600">走行距離(km)</p>
               </div>
               <div className="bg-purple-50 rounded-xl p-3 text-center">
                 <Clock className="w-5 h-5 text-purple-600 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-purple-600">
-                  {Math.floor(summary.totalDuration / 60)}
+                  {/* ✅ FIX No.5: 1時間未満が 0 になる切り捨て表示を h:mm 表示に */}
+                  {`${Math.floor((summary.totalDuration || 0) / 60)}:${String(Math.floor((summary.totalDuration || 0) % 60)).padStart(2, '0')}`}
                 </p>
-                <p className="text-xs text-gray-600">運行時間(h)</p>
+                <p className="text-xs text-gray-600">運行時間</p>
               </div>
             </div>
           ) : (

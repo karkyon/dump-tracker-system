@@ -70,9 +70,16 @@ export class OperationController {
     //    CMSから送られていても一切絞り込みに反映されていなかった
     if (driverId) where.driverId = driverId;
     if (status) where.status = status;
+    // ✅ FIX No.38（今回発見）: 「YYYY-MM-DD」を UTC の日付として解釈していたため、
+    //   運行日で絞り込むと JST 0:00〜9:00 に開始した運行が抜け、翌日の 0:00〜9:00 の運行が混ざっていた。
+    //   日付のみの指定は日本時間（Asia/Tokyo）の1日として扱う。
+    const isDateOnly = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
     if (startDate || endDate) {
       where.actualStartTime = {};
-      if (startDate) {
+      if (startDate && isDateOnly(startDate)) {
+        where.actualStartTime.gte = new Date(`${startDate}T00:00:00.000+09:00`);
+        where.actualStartTime.lte = new Date(`${(endDate && isDateOnly(endDate)) ? endDate : startDate}T23:59:59.999+09:00`);
+      } else if (startDate) {
         where.actualStartTime.gte = new Date(startDate);
         // 🔧 修正: endDateが指定されていない単一日付フィルタの場合、
         //    「その日以降すべて」になってしまい絞り込みが機能していなかった。
@@ -83,7 +90,8 @@ export class OperationController {
           where.actualStartTime.lte = endOfDay;
         }
       }
-      if (endDate) where.actualStartTime.lte = new Date(endDate);
+      if (endDate && !isDateOnly(endDate)) where.actualStartTime.lte = new Date(endDate);
+      else if (endDate && !startDate) where.actualStartTime.lte = new Date(`${endDate}T23:59:59.999+09:00`);
     }
 
     // ✅ キーワード検索: 運行番号・運転手名・車両番号・客先名・積込/積卸場所名

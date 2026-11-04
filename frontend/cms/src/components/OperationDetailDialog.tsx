@@ -38,7 +38,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
   // ✅ OperationDebug統合タイムライン用State
   const [operationDebugTimelineEvents, setOperationDebugTimelineEvents] = useState<OperationDebugTimelineEvent[]>([]);
-  const [inspectionItemDetails, _setInspectionItemDetails] = useState<InspectionItemDetail[]>([]);
+  const [inspectionItemDetails, setInspectionItemDetails] = useState<InspectionItemDetail[]>([]);
 
   // ✅ 走行軌跡用GPSログ state（イベントPINとは別）
   const [routeGpsLogs, setRouteGpsLogs] = useState<Array<{
@@ -811,6 +811,17 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
       setInspections(inspectionsData);
       setInspectionsError(null);
+
+      // ✅ FIX No.27: 点検項目タブの項目別結果を取得（従来は取得処理が無く常に0件）
+      try {
+        const itemsRes: any = await apiClient.get(`/inspections/operation/${operationId}/items`);
+        const raw: any = itemsRes?.data;
+        const list: any[] = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+        setInspectionItemDetails(list as InspectionItemDetail[]);
+      } catch (itemErr) {
+        console.warn('点検項目詳細の取得に失敗', itemErr);
+        setInspectionItemDetails([]);
+      }
 
     } catch (error: any) {
       console.error('❌ [Debug] 点検記録取得エラー', {
