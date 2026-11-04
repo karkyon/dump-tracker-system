@@ -1,0 +1,28 @@
+name: 🏭 Deploy to Production
+
+# 手動実行のみ。ステージングに同じコミットが配置済みでないと失敗する。
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '本番に配置する場合は production と入力'
+        required: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 入力の確認
+        run: |
+          [ "${{ inputs.confirm }}" = "production" ] || { echo "::error::confirm に production と入力してください"; exit 1; }
+          [ "${{ github.ref }}" = "refs/heads/main" ] || { echo "::error::本番に配置できるのは main だけです"; exit 1; }
+  deploy:
+    needs: guard
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      target: production
+    secrets: inherit

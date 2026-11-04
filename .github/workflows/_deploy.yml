@@ -1,0 +1,199 @@
+# 共通のデプロイ処理（deploy-staging.yml / deploy-production.yml から呼び出す）
+# - サーバーの設定（.env・nginx・CORS）は一切書き換えない
+# - スキーマがDBと一致しない場合は配置しない（先に db-schema-apply を実行する）
+# - 本番は「ステージングに同じコミットが配置済み」であることを必須にする
+name: _deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "staging または production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  APP_ROOT: /home/karkyon_dump/projects/smart-dump
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET: ${{ inputs.target }}
+      HOST: ${{ inputs.target == 'production' && secrets.SD_PROD_HOST || secrets.SD_STAGING_HOST }}
+      EXPECTED_HOSTNAME: ${{ inputs.target == 'production' && 'smart-dump-vm-prod' || 'smart-dump-vm-staging' }}
+      APP_DOMAIN: ${{ inputs.target == 'production' && 'app.smart-dump.com' || 'staging-app.smart-dump.com' }}
+      CMS_DOMAIN: ${{ inputs.target == 'production' && 'cms.smart-dump.com' || 'staging-cms.smart-dump.com' }}
+      DEPLOY_USER: ${{ secrets.SD_DEPLOY_USER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: SSH setup
+        run: |
+          set -euo pipefail
+          [ -n "$HOST" ] || { echo "::error::宛先ホストのSecretが未設定です"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SD_DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SD_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host target
+            HostName $HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking yes
+          Host staging
+            HostName ${{ secrets.SD_STAGING_HOST }}
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking yes
+          CFG
+          ACTUAL=$(ssh target 'hostname -s')
+          echo "接続先: $ACTUAL"
+          [ "$ACTUAL" = "$EXPECTED_HOSTNAME" ] || { echo "::error::接続先が $EXPECTED_HOSTNAME ではありません（$ACTUAL）"; exit 1; }
+
+      - name: "本番のみ: ステージングに同じコミットが配置済みか確認"
+        if: inputs.target == 'production'
+        run: |
+          set -euo pipefail
+          STG=$(ssh staging "cat $APP_ROOT/DEPLOYED_COMMIT 2>/dev/null || true")
+          echo "ステージング: ${STG:-（未配置）} / 今回: $GITHUB_SHA"
+          [ "$STG" = "$GITHUB_SHA" ] || { echo "::error::このコミットはまだステージングに配置されていません。先にステージングで確認してください"; exit 1; }
+
+      - name: Maps APIキーの取得（サーバーの .env.production → リポジトリ変数 の順）
+        id: maps
+        run: |
+          set -euo pipefail
+          K=$(ssh target "grep -h '^VITE_GOOGLE_MAPS_API_KEY=' $APP_ROOT/frontend/mobile/.env.production $APP_ROOT/frontend/cms/.env.production 2>/dev/null | head -1 | cut -d= -f2-" || true)
+          K=${K:-${{ vars.SD_GOOGLE_MAPS_API_KEY }}}
+          [ -n "$K" ] || { echo "::error::Maps APIキーが見つかりません"; exit 1; }
+          echo "::add-mask::$K"
+          echo "key=$K" >> "$GITHUB_OUTPUT"
+
+      - name: Build backend
+        working-directory: backend
+        run: npm ci && npm run build
+
+      - name: Build mobile
+        working-directory: frontend/mobile
+        run: |
+          set -euo pipefail
+          npm ci
+          cat > .env.production <<ENV
+          VITE_API_BASE_URL=/api/v1
+          VITE_GOOGLE_MAPS_API_KEY=${{ steps.maps.outputs.key }}
+          VITE_APP_ENV=${{ inputs.target }}
+          VITE_GOOGLE_MAP_ID=${{ vars.SD_GOOGLE_MAP_ID || '793b2cb3013694b0700a2152' }}
+          VITE_DEBUG=false
+          VITE_LOG_LEVEL=error
+          VITE_BUILD_TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          ENV
+          mkdir -p .cert && touch .cert/localhost-key.pem .cert/localhost-cert.pem
+          sed -i 's/useRef<number | null>/useRef<any>/g' src/pages/OperationMain.tsx || true
+          npm run build
+
+      - name: Build CMS
+        working-directory: frontend/cms
+        run: |
+          set -euo pipefail
+          npm ci
+          cat > .env.production <<ENV
+          VITE_API_BASE_URL=/api/v1
+          VITE_GOOGLE_MAPS_API_KEY=${{ steps.maps.outputs.key }}
+          VITE_APP_ENV=${{ inputs.target }}
+          VITE_GPS_UPDATE_INTERVAL=5000
+          VITE_DEBUG=false
+          VITE_LOG_LEVEL=error
+          ENV
+          npm run build
+
+      - name: Package & upload
+        run: |
+          set -euo pipefail
+          mkdir -p pkg/backend/prisma pkg/mobile pkg/cms
+          cp -r backend/dist pkg/backend/dist
+          cp backend/package.json backend/package-lock.json pkg/backend/
+          cp backend/prisma/schema.camel.prisma pkg/backend/prisma/
+          cp -r frontend/mobile/dist pkg/mobile/dist
+          cp -r frontend/cms/dist pkg/cms/dist
+          tar czf release.tgz -C pkg .
+          ssh target "rm -rf /tmp/sd-release && mkdir -p /tmp/sd-release && tar xzf - -C /tmp/sd-release" < release.tgz
+
+      - name: Deploy on server
+        run: |
+          ssh target "bash -s -- '$TARGET' '$GITHUB_SHA'" <<'REMOTE'
+          set -euo pipefail
+          TARGET=$1; SHA=$2
+          ROOT=$HOME/projects/smart-dump; NEW=/tmp/sd-release; BK=$HOME/backups
+          export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"
+          cd "$ROOT/backend"
+          DBURL=$(grep '^DATABASE_URL=' .env | cut -d= -f2- | tr -d '"')
+
+          echo "== スキーマの一致確認"
+          set +e
+          ./node_modules/.bin/prisma migrate diff --from-url "$DBURL" --to-schema-datamodel "$NEW/backend/prisma/schema.camel.prisma" --exit-code > /tmp/sd-schema-diff.sql
+          RC=$?; set -e
+          if [ $RC -eq 2 ]; then
+            echo "::error::DBのスキーマが今回のコードと一致しません。先に db-schema-apply（$TARGET）を実行してください"; cat /tmp/sd-schema-diff.sql; exit 1
+          elif [ $RC -ne 0 ]; then echo "::error::スキーマの確認に失敗しました"; exit 1; fi
+
+          TS=$(date +%Y%m%d-%H%M%S); mkdir -p "$BK"
+          echo "== 配置前のバックアップ（現在の画面・backend）"
+          tar czf "$BK/predeploy-$TS-app.tgz" -C "$ROOT" backend/dist frontend/mobile/dist frontend/cms/dist DEPLOYED_COMMIT 2>/dev/null || tar czf "$BK/predeploy-$TS-app.tgz" -C "$ROOT" backend/dist frontend/mobile/dist frontend/cms/dist
+          if [ "$TARGET" = production ]; then
+            echo "== 本番DBのバックアップ"
+            pg_dump -Fc -d "${DBURL%%\?*}" -f "$BK/predeploy-$TS-db.dump"
+            ls -lh "$BK/predeploy-$TS-db.dump"
+          fi
+          ls -1t "$BK"/predeploy-*-app.tgz | tail -n +11 | xargs -r rm -f
+          ls -1t "$BK"/predeploy-*-db.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
+
+          echo "== backend"
+          rm -rf dist && cp -r "$NEW/backend/dist" dist
+          cp "$NEW/backend/package.json" "$NEW/backend/package-lock.json" .
+          cp "$NEW/backend/prisma/schema.camel.prisma" prisma/schema.camel.prisma
+          npm ci --no-audit --no-fund
+          ./node_modules/.bin/prisma generate --schema=./prisma/schema.camel.prisma
+
+          echo "== mobile / cms"
+          for a in mobile cms; do
+            rm -rf "$ROOT/frontend/$a/dist.new" && cp -r "$NEW/$a/dist" "$ROOT/frontend/$a/dist.new"
+            chmod -R 755 "$ROOT/frontend/$a/dist.new"
+            rm -rf "$ROOT/frontend/$a/dist" && mv "$ROOT/frontend/$a/dist.new" "$ROOT/frontend/$a/dist"
+          done
+          [ -f "$ROOT/frontend/mobile/dist/sw.js" ] && echo "/* cache-bust: $TS */" >> "$ROOT/frontend/mobile/dist/sw.js"
+
+          echo "== 再起動"
+          sudo systemctl restart smart-dump-backend
+          for i in $(seq 1 20); do
+            curl -fsS -m 3 http://127.0.0.1:3000/api/v1/health >/dev/null 2>&1 && break; sleep 2
+          done
+          systemctl is-active smart-dump-backend
+          curl -fsS -m 5 http://127.0.0.1:3000/api/v1/health >/dev/null
+          echo "$SHA" > "$ROOT/DEPLOYED_COMMIT"
+          rm -rf "$NEW"
+          echo "✅ $TARGET に $SHA を配置しました（ロールバック用: $BK/predeploy-$TS-app.tgz）"
+          REMOTE
+
+      - name: 外部からの動作確認
+        run: |
+          set -euo pipefail
+          for u in "https://$APP_DOMAIN/api/v1/health" "https://$CMS_DOMAIN/api/v1/health" "https://$APP_DOMAIN/" "https://$CMS_DOMAIN/"; do
+            c=$(curl -s -m 10 -o /dev/null -w '%{http_code}' "$u"); echo "$u -> $c"; [ "$c" = 200 ] || exit 1
+          done
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key release.tgz

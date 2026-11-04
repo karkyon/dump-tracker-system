@@ -1,0 +1,47 @@
+name: 🔍 DB schema diff
+
+# 指定した環境のDBと、main の schema.camel.prisma の差分（SQL）を表示するだけ。DBは変更しない。
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    env:
+      HOST: ${{ inputs.target == 'production' && secrets.SD_PROD_HOST || secrets.SD_STAGING_HOST }}
+      EXPECTED_HOSTNAME: ${{ inputs.target == 'production' && 'smart-dump-vm-prod' || 'smart-dump-vm-staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH setup
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SD_DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SD_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf 'Host target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  StrictHostKeyChecking yes\n' "$HOST" "${{ secrets.SD_DEPLOY_USER }}" > ~/.ssh/config
+          [ "$(ssh target 'hostname -s')" = "$EXPECTED_HOSTNAME" ] || { echo "::error::接続先が違います"; exit 1; }
+      - name: Diff
+        run: |
+          ssh target "cat > /tmp/sd-schema.prisma" < backend/prisma/schema.camel.prisma
+          ssh target 'bash -s' <<'REMOTE'
+          set -uo pipefail
+          cd ~/projects/smart-dump/backend
+          DBURL=$(grep '^DATABASE_URL=' .env | cut -d= -f2- | tr -d '"')
+          ./node_modules/.bin/prisma migrate diff --from-url "$DBURL" --to-schema-datamodel /tmp/sd-schema.prisma --script --exit-code > /tmp/sd-diff.sql
+          RC=$?
+          if [ $RC -eq 0 ]; then echo "✅ 差分なし（DBとスキーマは一致）"
+          elif [ $RC -eq 2 ]; then echo "⚠️ 差分あり：以下のSQLが db-schema-apply で実行されます"; echo "-----"; cat /tmp/sd-diff.sql; echo "-----"
+               grep -inE 'DROP (TABLE|COLUMN|INDEX|TYPE)|ALTER COLUMN .* TYPE|DROP NOT NULL|SET NOT NULL' /tmp/sd-diff.sql && echo "⚠️ データ消失・失敗のおそれがある変更を含みます（apply では allow_destructive が必要）" || true
+          else echo "::error::差分の取得に失敗しました"; exit 1; fi
+          rm -f /tmp/sd-schema.prisma /tmp/sd-diff.sql
+          REMOTE
+      - if: always()
+        run: rm -f ~/.ssh/deploy_key

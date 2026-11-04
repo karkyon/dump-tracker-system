@@ -1,0 +1,87 @@
+name: 🛠 DB schema apply
+
+# main の schema.camel.prisma を指定した環境のDBに適用する。
+# - --accept-data-loss は使わない。DROP 等を含む場合は allow_destructive にチェックが必要
+# - 本番は「同じスキーマがステージングに適用済み」であることが必須。適用前に本番DBを自動バックアップ
+# - 差分SQLは1つのトランザクションで実行し、途中で失敗したら全体を取り消す
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        type: choice
+        options: [staging, production]
+        default: staging
+      confirm:
+        description: '適用する場合は APPLY と入力'
+        required: true
+      allow_destructive:
+        description: 'DROP 等のデータ消失を伴う変更を許可する'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-schema-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ${{ inputs.target }}
+      HOST: ${{ inputs.target == 'production' && secrets.SD_PROD_HOST || secrets.SD_STAGING_HOST }}
+      EXPECTED_HOSTNAME: ${{ inputs.target == 'production' && 'smart-dump-vm-prod' || 'smart-dump-vm-staging' }}
+    steps:
+      - name: 入力の確認
+        run: |
+          [ "${{ inputs.confirm }}" = "APPLY" ] || { echo "::error::confirm に APPLY と入力してください"; exit 1; }
+          [ "${{ github.ref }}" = "refs/heads/main" ] || { echo "::error::適用できるのは main のスキーマだけです"; exit 1; }
+      - uses: actions/checkout@v4
+      - name: SSH setup
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SD_DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SD_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf 'Host target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  StrictHostKeyChecking yes\nHost staging\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  StrictHostKeyChecking yes\n' \
+            "$HOST" "${{ secrets.SD_DEPLOY_USER }}" "${{ secrets.SD_STAGING_HOST }}" "${{ secrets.SD_DEPLOY_USER }}" > ~/.ssh/config
+          [ "$(ssh target 'hostname -s')" = "$EXPECTED_HOSTNAME" ] || { echo "::error::接続先が違います"; exit 1; }
+      - name: "本番のみ: 同じスキーマがステージングに適用済みか確認"
+        if: inputs.target == 'production'
+        run: |
+          set -euo pipefail
+          WANT=$(sha256sum backend/prisma/schema.camel.prisma | cut -c1-64)
+          STG=$(ssh staging 'cat ~/projects/smart-dump/SCHEMA_APPLIED 2>/dev/null || true')
+          echo "ステージング: ${STG:-（記録なし）} / 今回: $WANT"
+          [ "$STG" = "$WANT" ] || { echo "::error::このスキーマはまだステージングに適用されていません。先に target=staging で実行してください"; exit 1; }
+      - name: Apply
+        run: |
+          ssh target "cat > /tmp/sd-schema.prisma" < backend/prisma/schema.camel.prisma
+          ssh target "bash -s -- '$TARGET' '${{ inputs.allow_destructive }}'" <<'REMOTE'
+          set -euo pipefail
+          TARGET=$1; ALLOW=$2
+          ROOT=$HOME/projects/smart-dump; cd "$ROOT/backend"
+          DBURL=$(grep '^DATABASE_URL=' .env | cut -d= -f2- | tr -d '"'); PGURL=${DBURL%%\?*}
+          P=./node_modules/.bin/prisma; S=/tmp/sd-schema.prisma
+          HASH=$(sha256sum "$S" | cut -c1-64)
+          set +e; $P migrate diff --from-url "$DBURL" --to-schema-datamodel "$S" --script --exit-code > /tmp/sd-diff.sql; RC=$?; set -e
+          if [ $RC -eq 0 ]; then echo "✅ 差分なし。適用するものはありません"; echo "$HASH" > "$ROOT/SCHEMA_APPLIED"; rm -f "$S" /tmp/sd-diff.sql; exit 0; fi
+          [ $RC -eq 2 ] || { echo "::error::差分の取得に失敗しました"; exit 1; }
+          echo "----- 適用するSQL"; cat /tmp/sd-diff.sql; echo "-----"
+          if grep -iqE 'DROP (TABLE|COLUMN|INDEX|TYPE)|ALTER COLUMN .* TYPE|SET NOT NULL' /tmp/sd-diff.sql && [ "$ALLOW" != "true" ]; then
+            echo "::error::データ消失・失敗のおそれがある変更を含みます。内容を確認し、問題なければ allow_destructive にチェックして再実行してください"; exit 1
+          fi
+          if [ "$TARGET" = production ]; then
+            mkdir -p "$HOME/backups"; B="$HOME/backups/preschema-$(date +%Y%m%d-%H%M%S)-db.dump"
+            pg_dump -Fc -d "$PGURL" -f "$B"; ls -lh "$B"
+          fi
+          psql "$PGURL" -v ON_ERROR_STOP=1 --single-transaction -f /tmp/sd-diff.sql
+          $P migrate diff --from-url "$DBURL" --to-schema-datamodel "$S" --exit-code >/dev/null
+          echo "$HASH" > "$ROOT/SCHEMA_APPLIED"
+          rm -f "$S" /tmp/sd-diff.sql
+          echo "✅ $TARGET にスキーマを適用しました（DBとスキーマは一致）"
+          REMOTE
+      - if: always()
+        run: rm -f ~/.ssh/deploy_key
