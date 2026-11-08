@@ -64,6 +64,8 @@ const OperationRecord: React.FC = () => {
   
   const [isMapReady, setIsMapReady] = useState(false);
   const lastMapUpdateRef = useRef<number>(0);
+  // ✅ FIX（二重登録）: 荷降到着の重複防止キー。成功するまで同じキーを使い回す
+  const unloadingArrivalKeyRef = useRef<string | null>(null);
   const lastMarkerUpdateRef = useRef<number>(0);
   
   // operationStoreから運行IDを取得
@@ -789,7 +791,9 @@ const OperationRecord: React.FC = () => {
         const _upNow: number = Number(operationStore.unloadingPattern ?? 2);
         if (_upNow !== 1) {
           console.log(`🚛 荷降場所到着記録API呼び出し開始 (U${_upNow})`);
+          if (!unloadingArrivalKeyRef.current) unloadingArrivalKeyRef.current = crypto.randomUUID();  // ✅ FIX（二重登録）
           await apiService.recordUnloadingArrival(currentOperationId, {
+            idempotencyKey: unloadingArrivalKeyRef.current,
             locationId: selectedLocation.location.id,
             latitude: currentPosition.coords.latitude,
             longitude: currentPosition.coords.longitude,
@@ -800,6 +804,7 @@ const OperationRecord: React.FC = () => {
             // U3: 即時完了
             ...(_upNow === 3 ? { endTime: new Date() } : {}),
           } as any);
+          unloadingArrivalKeyRef.current = null;  // 成功したので次の荷降では新しいキー
           console.log('✅ 荷降場所到着記録完了');
         } else {
           console.log('[U1] 荷降場所到着: recordUnloadingArrival スキップ。handleUnloadingStartで記録。');
@@ -979,7 +984,9 @@ const OperationRecord: React.FC = () => {
           const _upReg: number = Number(operationStore.unloadingPattern ?? 2);
           if (_upReg !== 1) {
             console.log(`🚛 荷降場所到着記録API呼び出し開始 (U${_upReg}) [新規地点登録]`);
+            if (!unloadingArrivalKeyRef.current) unloadingArrivalKeyRef.current = crypto.randomUUID();  // ✅ FIX（二重登録）
             await apiService.recordUnloadingArrival(currentOperationId, {
+              idempotencyKey: unloadingArrivalKeyRef.current,
               locationId: registeredLocation.id,
               latitude: currentPosition.coords.latitude,
               longitude: currentPosition.coords.longitude,
@@ -988,6 +995,7 @@ const OperationRecord: React.FC = () => {
               customerId: operationStore.customerId || undefined,
               ...(_upReg === 3 ? { endTime: new Date() } : {}),
             } as any);
+            unloadingArrivalKeyRef.current = null;  // 成功したので次の荷降では新しいキー
             console.log('✅ 荷降場所到着記録完了');
           } else {
             console.log('[U1新規地点] recordUnloadingArrival スキップ。handleUnloadingStartで記録。');

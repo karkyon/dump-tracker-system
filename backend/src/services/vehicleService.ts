@@ -101,6 +101,14 @@ const EXTENDED_ERROR_CODES = {
 /**
  * ✅ FIX: 重複宣言を解消 (104行目, 1670行目エラー)
  */
+/**
+ * ✅ FIX: 監査ログ（audit_logs.user_id は UUID）に入れる利用者ID。
+ * 運行開始・終了時の自動更新は userId='system' で呼ばれ、UUID形式エラーで車両ステータスの更新ごと
+ * 失敗していた（運行中でも車両が「使用中」にならない）。UUID以外は null（システムによる変更）として記録する。
+ */
+const toAuditUserId = (id?: string | null): string | null =>
+  id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
+
 class VehicleService {
   // ✅ FIX: DATABASE_SERVICE.getInstance()を使用
   private readonly prisma = DATABASE_SERVICE.getInstance();
@@ -472,7 +480,7 @@ class VehicleService {
             tableName: 'VEHICLE',
             operationType: 'CREATE',
             recordId: vehicle.id,
-            userId: context.userId,
+            userId: toAuditUserId(context.userId),
             newValues: {
               plateNumber: vehicleData.plateNumber,
               model: vehicleData.model
@@ -586,7 +594,7 @@ class VehicleService {
             tableName: 'VEHICLE',
             operationType: 'UPDATE',
             recordId: vehicleId,
-            userId: context.userId,
+            userId: toAuditUserId(context.userId),
             oldValues: existingVehicle,
             newValues: vehicle
           }
@@ -692,7 +700,7 @@ class VehicleService {
             tableName: 'VEHICLE',
             operationType: context.hardDelete ? 'HARD_DELETE' : 'SOFT_DELETE',
             recordId: vehicleId,
-            userId: context.userId,
+            userId: toAuditUserId(context.userId),
             oldValues: {
               plateNumber: existingVehicle.plateNumber,
               model: existingVehicle.model

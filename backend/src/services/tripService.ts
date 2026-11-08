@@ -1250,7 +1250,9 @@ class TripService {
       } catch (createError: any) {
         // 🆕 BUG-XXX: 真の同時リクエスト競合でDBユニーク制約に引っかかった場合、
         //    既存レコードを再取得して返す（新規作成失敗として扱わない）
-        if (createError?.code === 'IDEMPOTENCY_DUPLICATE' && addActivityIdempotencyKey) {
+        // ✅ FIX（二重登録）: 同じキーの要求が同時に処理されると、後の方は連番（sequence_number）の重複で失敗する。
+        //    キーがある場合は失敗の種類に関わらず、先に作られた同じキーの記録を探して返す。
+        if (addActivityIdempotencyKey) {
           const raceDup = await this.operationDetailService.findMany({
             where: { operationId: tripId, idempotencyKey: addActivityIdempotencyKey } as any,
             take: 1

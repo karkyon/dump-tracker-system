@@ -151,6 +151,9 @@ const LoadingInput: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   // BUG-017: useRefで送信中フラグを管理（React state更新の非同期性による多重タップ防止）
   const isSubmittingRef = React.useRef(false);
+  // ✅ FIX（二重登録）: 積込到着の重複防止キー。画面を開いた時点で1つ作り、タイムアウト後の押し直しでも同じキーを送る
+  //   （従来キーが無く、応答が遅れて押し直すと積込が2件作られていた）
+  const loadingArrivalKeyRef = React.useRef<string>(crypto.randomUUID());
 
   // ------------------------------------------------------------
   // 客先切替ハンドラー（D4から移植）
@@ -491,6 +494,7 @@ const LoadingInput: React.FC = () => {
         quantity: formData.quantity,
         notes: formData.notes || undefined,
         hasCargoWork,  // 🆕 荷役作業トグル（P2/P3パターン）
+        idempotencyKey: loadingArrivalKeyRef.current,  // ✅ FIX（二重登録）
         // P3: endTime を同時送信 → actualStartTime = actualEndTime
         ...(_lpNow === 3 ? { endTime: _nowTime } : {}),
       });

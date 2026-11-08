@@ -116,6 +116,7 @@ export interface RecordLoadingArrivalRequest {
   notes?: string;            // メモ（オプション）
   endTime?: Date | string;   // P3パターン: actualStartTime=actualEndTime同時記録用
   hasCargoWork?: boolean;    // 🆕 荷役作業の有無
+  idempotencyKey?: string;   // ✅ FIX（二重登録）: 押し直し・再送でも同じキーを送り、サーバーで重複を防ぐ
 }
 
 // 🆕 D5/D6機能: 積降記録リクエスト
@@ -129,6 +130,7 @@ export interface RecordUnloadingArrivalRequest {
   customerId?: string;       // ✅ この荷降だけの独立した客先
   quantity?: number;         // 積降量（オプション）
   notes?: string;            // メモ（オプション）
+  idempotencyKey?: string;   // ✅ FIX（二重登録）: 押し直し・再送でも同じキーを送り、サーバーで重複を防ぐ
 }
 
 /**
@@ -679,7 +681,8 @@ class APIServiceClass {
       
       const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
         `/trips/${tripId}/loading`,
-        data
+        data,
+        { timeout: 30000 }  // ✅ FIX: DB混雑時に10秒で打ち切って押し直しを招かないよう延長
       );
       
       console.log('✅ 積込記録成功:', response.data);
@@ -718,7 +721,8 @@ class APIServiceClass {
       
       const response = await this.axiosInstance.post<APIResponse<ActivityRecordResponse>>(
         `/trips/${tripId}/unloading`,
-        data
+        data,
+        { timeout: 30000 }  // ✅ FIX: DB混雑時に10秒で打ち切って押し直しを招かないよう延長
       );
       
       console.log('✅ 積降記録成功:', response.data);

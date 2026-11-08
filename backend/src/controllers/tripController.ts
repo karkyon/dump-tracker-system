@@ -703,6 +703,9 @@ export class TripController {
         ...((activityData as any).customerId ? { customerId: (activityData as any).customerId } : {}),
         // 🆕 荷役作業トグル: この積込(LOADING)に荷役作業が伴ったかどうか
         ...((activityData as any).hasCargoWork !== undefined ? { hasCargoWork: (activityData as any).hasCargoWork === true } : {}),
+        // ✅ FIX（二重登録）: 押し直し・再送で同じ記録を二重に作らないよう、重複防止キーをサービスへ渡す
+        ...(typeof (activityData as any).idempotencyKey === 'string' && (activityData as any).idempotencyKey
+          ? { idempotencyKey: String((activityData as any).idempotencyKey).slice(0, 64) } : {}),
         // 🆕 GPS データを operation_details に保存
         latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude ? Number(activityData.longitude) : undefined,
@@ -990,6 +993,9 @@ export class TripController {
         notes: activityData.notes || '',
         // 積込～荷降しごとに独立した客先情報を持たせるため customerId をパススルー
         ...((activityData as any).customerId ? { customerId: (activityData as any).customerId } : {}),
+        // ✅ FIX（二重登録）: 押し直し・再送で同じ記録を二重に作らないよう、重複防止キーをサービスへ渡す
+        ...(typeof (activityData as any).idempotencyKey === 'string' && (activityData as any).idempotencyKey
+          ? { idempotencyKey: String((activityData as any).idempotencyKey).slice(0, 64) } : {}),
         // 🆕 GPS データを operation_details に保存
         latitude: activityData.latitude ? Number(activityData.latitude) : undefined,
         longitude: activityData.longitude ? Number(activityData.longitude) : undefined,
