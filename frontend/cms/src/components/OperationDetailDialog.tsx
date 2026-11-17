@@ -57,6 +57,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
     distanceSource: string;
     distanceKm: number;
     routePolyline: string | null;
+    inputWaypoints?: any;
   }>>([]);
 
   // ✅ タイムラインイベントからGPSポイントを抽出（地図表示用）
@@ -273,19 +274,84 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       });
       mapInstanceRef.current = map;
 
+      // =====================================================================
+      // ✅ 道路経路（Google Routes API）の収集
+      //   - 補完区間(GAP_FILL): 途切れごとに保存された道路ポリライン（inputWaypoints.gaps[].polyline）
+      //   - 全推定/旧方式: 区間全体の道路ポリライン（routePolyline）
+      //   → 直線ではなく道路をトレースして描画する。経路データが無い途切れだけ、最後の手段として直線(灰色破線)。
+      // =====================================================================
+      type RoadLeg = { path: google.maps.LatLngLiteral[]; from: google.maps.LatLngLiteral; to: google.maps.LatLngLiteral; label: string; km: number | null };
+      const roadLegs: RoadLeg[] = [];
+      const geoEnc = (window as any).google?.maps?.geometry?.encoding;
+      const decodeToLiteral = (enc: string): google.maps.LatLngLiteral[] =>
+        geoEnc.decodePath(enc).map((ll: any) => ({ lat: ll.lat(), lng: ll.lng() }));
+      if (geoEnc && routeSegments.length > 0) {
+        routeSegments.forEach(seg => {
+          const segLabel = `${seg.fromActivityType} → ${seg.toActivityType}`;
+          const gaps = seg.inputWaypoints?.method === 'GAP_FILL' && Array.isArray(seg.inputWaypoints?.gaps) ? seg.inputWaypoints.gaps : null;
+          try {
+            if (gaps) {
+              gaps.forEach((g: any) => {
+                if (!g?.polyline || !g.from || !g.to) return;
+                const path = decodeToLiteral(g.polyline);
+                if (path.length < 2) return;
+                roadLegs.push({
+                  path,
+                  from: { lat: Number(g.from.latitude), lng: Number(g.from.longitude) },
+                  to: { lat: Number(g.to.latitude), lng: Number(g.to.longitude) },
+                  label: `${segLabel}（GPS欠損を道路経路で補完）`,
+                  km: g.routeKm != null ? Number(g.routeKm) : null,
+                });
+              });
+            } else if (seg.routePolyline && (seg.distanceSource === 'GPS_PARTIAL_ESTIMATE' || seg.distanceSource === 'FULL_ESTIMATE')) {
+              const path = decodeToLiteral(seg.routePolyline);
+              if (path.length >= 2) {
+                roadLegs.push({
+                  path,
+                  from: path[0]!,
+                  to: path[path.length - 1]!,
+                  label: `${segLabel}（${seg.distanceSource === 'FULL_ESTIMATE' ? 'GPSなし: Google推奨ルート' : '一部推定'}）`,
+                  km: Number(seg.distanceKm),
+                });
+              }
+            }
+          } catch (decodeErr) {
+            console.warn('⚠️ [Map Debug] 道路経路ポリラインのデコード失敗', decodeErr);
+          }
+        });
+      }
+      const distM = (p: google.maps.LatLngLiteral, q: google.maps.LatLngLiteral): number => {
+        const R = 6371000, rad = Math.PI / 180;
+        const dLat = (q.lat - p.lat) * rad, dLng = (q.lng - p.lng) * rad;
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(p.lat * rad) * Math.cos(q.lat * rad) * Math.sin(dLng / 2) ** 2;
+        return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+      };
+      // 描画用に間引かれたGPS点の端点でも一致するよう、許容距離を広めに取る
+      const LEG_MATCH_TOLERANCE_M = 1500;
+      const hasRoadLegBetween = (p: google.maps.LatLngLiteral, q: google.maps.LatLngLiteral): boolean =>
+        roadLegs.some(l => distM(p, l.from) <= LEG_MATCH_TOLERANCE_M && distM(q, l.to) <= LEG_MATCH_TOLERANCE_M);
+
       if (routeGpsLogs.length > 0) {
-        // ★ GPS欠落区間（5分以上のギャップ）を点線で表示
+        // GPSの途切れ: 5分超、または90秒超かつ道路経路が保存されている区間
         const GAP_THRESHOLD_MS = 5 * 60 * 1000;
+        const ROAD_GAP_THRESHOLD_MS = 90 * 1000;
         let segStart = 0;
         for (let i = 1; i <= routeGpsLogs.length; i++) {
           const isLastSeg = i === routeGpsLogs.length;
           const prevLog = routeGpsLogs[i - 1];
           const currLog = routeGpsLogs[i];
-          const isGap = !isLastSeg && prevLog && currLog &&
-            (new Date(currLog.recordedAt).getTime() - new Date(prevLog.recordedAt).getTime()) > GAP_THRESHOLD_MS;
+          let isGap = false;
+          let gapHasRoad = false;
+          if (!isLastSeg && prevLog && currLog) {
+            const diffMs = new Date(currLog.recordedAt).getTime() - new Date(prevLog.recordedAt).getTime();
+            const pp = { lat: prevLog.latitude, lng: prevLog.longitude };
+            const cp = { lat: currLog.latitude, lng: currLog.longitude };
+            gapHasRoad = diffMs > ROAD_GAP_THRESHOLD_MS && hasRoadLegBetween(pp, cp);
+            isGap = diffMs > GAP_THRESHOLD_MS || gapHasRoad;
+          }
 
           if (isGap || isLastSeg) {
-            // 通常区間: 実線（青）
+            // 通常区間: 実線（青）= GPS実測の走行軌跡
             const segPath = routeGpsLogs.slice(segStart, i).map(log => ({ lat: log.latitude, lng: log.longitude }));
             if (segPath.length >= 2) {
               new google.maps.Polyline({
@@ -298,75 +364,72 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
               });
             }
             if (isGap && prevLog && currLog) {
-              // 欠落区間: 点線（グレー）
-              new google.maps.Polyline({
-                path: [
-                  { lat: prevLog.latitude, lng: prevLog.longitude },
-                  { lat: currLog.latitude, lng: currLog.longitude },
-                ],
-                geodesic: true,
-                strokeColor: '#64748B',
-                strokeOpacity: 0,
-                strokeWeight: 2,
-                icons: [{
-                  icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, strokeColor: '#64748B', scale: 3 },
-                  offset: '0',
-                  repeat: '12px',
-                }],
-                map: map,
-              });
+              // 欠落区間: 道路経路が無い場合のみ、最後の手段として直線の点線（グレー）
+              if (!gapHasRoad) {
+                new google.maps.Polyline({
+                  path: [
+                    { lat: prevLog.latitude, lng: prevLog.longitude },
+                    { lat: currLog.latitude, lng: currLog.longitude },
+                  ],
+                  geodesic: true,
+                  strokeColor: '#64748B',
+                  strokeOpacity: 0,
+                  strokeWeight: 2,
+                  icons: [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, strokeColor: '#64748B', scale: 3 },
+                    offset: '0',
+                    repeat: '12px',
+                  }],
+                  map: map,
+                });
+              }
               segStart = i;
             }
           }
         }
-
-        // ✅ Phase2: 推定経路（Google Routes API）のポリライン重ね描画
-        console.log('[RouteSegments][Frontend] 🖌️ 描画チェック: routeSegments件数=' + routeSegments.length + ', geometry libロード済み=' + !!(window as any).google?.maps?.geometry?.encoding);
-        if (routeSegments.length > 0) {
-          console.log('[RouteSegments][Frontend] 🖌️ routeSegments詳細:', routeSegments.map(s => ({ idx: s.segmentIndex, from: s.fromActivityType, to: s.toActivityType, source: s.distanceSource, hasPolyline: !!s.routePolyline })));
-        }
-        if ((window as any).google?.maps?.geometry?.encoding && routeSegments.length > 0) {
-          const orangeCandidates = routeSegments.filter(seg => seg.routePolyline && (seg.distanceSource === 'GPS_PARTIAL_ESTIMATE' || seg.distanceSource === 'FULL_ESTIMATE'));
-          console.log(`[RouteSegments][Frontend] 🖌️ オレンジ線描画対象: ${orangeCandidates.length}件 / 全${routeSegments.length}件`);
-          const estimateInfoWindow = new google.maps.InfoWindow();
-          routeSegments
-            .filter(seg => seg.routePolyline && (seg.distanceSource === 'GPS_PARTIAL_ESTIMATE' || seg.distanceSource === 'FULL_ESTIMATE'))
-            .forEach(seg => {
-              try {
-                const decodedPath = (window as any).google.maps.geometry.encoding.decodePath(seg.routePolyline as string);
-                const estimatePolyline = new google.maps.Polyline({
-                  path: decodedPath,
-                  geodesic: true,
-                  strokeColor: '#F97316',
-                  strokeOpacity: 0,
-                  strokeWeight: 3,
-                  icons: [{
-                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: '#F97316', scale: 3 },
-                    offset: '0',
-                    repeat: '10px',
-                  }],
-                  map: map,
-                });
-                const sourceLabel = seg.distanceSource === 'GPS_PARTIAL_ESTIMATE'
-                  ? '一部推定（記録済みGPS地点を経由するGoogle推奨ルート）'
-                  : '全推定（Google推奨ルート）';
-                estimatePolyline.addListener('click', (e: any) => {
-                  estimateInfoWindow.setContent(
-                    `<div style="font-size:12px;line-height:1.6;">🧭 推定経路<br>区間: ${seg.fromActivityType} → ${seg.toActivityType}<br>距離: ${Number(seg.distanceKm).toFixed(2)} km<br>根拠: ${sourceLabel}</div>`
-                  );
-                  estimateInfoWindow.setPosition(e.latLng);
-                  estimateInfoWindow.open(map);
-                });
-              } catch (decodeErr) {
-                console.warn('⚠️ [Map Debug] 推定経路ポリラインのデコード失敗', decodeErr);
-              }
-            });
-        }
-
-        // GPS記録ポイントのインフォウィンドウ（個別マーカーはrouteGpsLogs数が多いため省略）
         console.log('✅ [Map Debug] 走行軌跡描画完了:', routeGpsLogs.length, '点');
       } else {
         console.log('ℹ️ [Map Debug] routeGpsLogs なし - 走行軌跡描画スキップ');
+      }
+
+      // 道路経路の取得に失敗した区間（FALLBACK_STRAIGHT）は、最後の手段として直線の点線で表示
+      routeSegments
+        .filter(seg => seg.distanceSource === 'FALLBACK_STRAIGHT' && !seg.routePolyline)
+        .forEach(seg => {
+          const wp = seg.inputWaypoints;
+          const o = wp?.origin, d = wp?.destination;
+          if (!o || !d) return;
+          new google.maps.Polyline({
+            path: [{ lat: Number(o.latitude), lng: Number(o.longitude) }, { lat: Number(d.latitude), lng: Number(d.longitude) }],
+            geodesic: true, strokeColor: '#64748B', strokeOpacity: 0, strokeWeight: 2,
+            icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, strokeColor: '#64748B', scale: 3 }, offset: '0', repeat: '12px' }],
+            map: map,
+          });
+        });
+
+      // ✅ 道路経路（Google推奨ルート）を道路に沿った実線（オレンジ）で描画。GPS点が無い運行でも描画する。
+      if (roadLegs.length > 0) {
+        const estimateInfoWindow = new google.maps.InfoWindow();
+        roadLegs.forEach(leg => {
+          const roadPolyline = new google.maps.Polyline({
+            path: leg.path,
+            geodesic: true,
+            strokeColor: '#F97316',
+            strokeOpacity: 0.9,
+            strokeWeight: 4,
+            zIndex: 5,
+            map: map,
+          });
+          roadPolyline.addListener('click', (e: any) => {
+            estimateInfoWindow.setContent(
+              `<div style="font-size:12px;line-height:1.6;">🧭 補完経路（Google推奨ルート）<br>区間: ${leg.label}` +
+              (leg.km != null ? `<br>距離: ${leg.km.toFixed(2)} km` : '') + `</div>`
+            );
+            estimateInfoWindow.setPosition(e.latLng);
+            estimateInfoWindow.open(map);
+          });
+        });
+        console.log('✅ [Map Debug] 道路経路描画:', roadLegs.length, '本');
       }
 
       // =====================================================================
@@ -380,16 +443,19 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
 
         console.log('📍 [Map Debug] Event path created with', path.length, 'points');
 
-        // イベント間をつなぐポリライン（細い緑色の点線）
-        new google.maps.Polyline({
-          path: path,
-          geodesic: true,
-          strokeColor: '#10B981',  // emerald-500
-          strokeOpacity: 0.6,
-          strokeWeight: 2,
-          map: map
-        });
-        console.log('✅ [Map Debug] Event polyline drawn');
+        // イベント間をつなぐ直線（細い緑色）。走行軌跡・道路経路がある場合は直線で上書きしない。
+        // （GPS実測ログも道路経路も無い運行でだけ、位置関係の目安として描画）
+        if (routeGpsLogs.length === 0 && roadLegs.length === 0) {
+          new google.maps.Polyline({
+            path: path,
+            geodesic: true,
+            strokeColor: '#10B981',  // emerald-500
+            strokeOpacity: 0.6,
+            strokeWeight: 2,
+            map: map
+          });
+          console.log('✅ [Map Debug] Event polyline drawn（経路データなしのため直線）');
+        }
 
         // ✅ イベントごとのマーカーを描画
         const infoWindow = new google.maps.InfoWindow();
@@ -487,6 +553,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       if (activeGpsPoints.length > 0) {
         activeGpsPoints.forEach(p => allPoints.push({ lat: p.latitude, lng: p.longitude }));
       }
+      roadLegs.forEach(l => l.path.forEach(p => allPoints.push(p)));
 
       if (allPoints.length > 1) {
         const bounds = new google.maps.LatLngBounds();
@@ -505,7 +572,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       console.error('❌ [Map Debug] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
       setMapError('地図の表示中にエラーが発生しました');
     }
-  }, [mapsLoaded, gpsRecords, timelineGpsPoints, routeGpsLogs, activeTab, mapRef]);
+  }, [mapsLoaded, gpsRecords, timelineGpsPoints, routeGpsLogs, routeSegments, activeTab, mapRef]);
 
   // ===================================================================
   // データ取得
@@ -2401,8 +2468,12 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                         走行軌跡（GPS実測ログ）
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="inline-block w-6 h-0.5 bg-emerald-500 rounded" style={{ height: '2px' }}></span>
-                        イベント接続線
+                        <span className="inline-block w-6 rounded" style={{ height: '4px', backgroundColor: '#F97316' }}></span>
+                        補完経路（Google推奨ルート・道路沿い）
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-6" style={{ borderTop: '2px dashed #64748B' }}></span>
+                        経路データなし（直線）
                       </span>
                       <span className="flex items-center gap-1">
                         <span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>

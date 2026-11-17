@@ -77,7 +77,7 @@ export async function getRouteModifiers(): Promise<{ avoidHighways: boolean; avo
 
 /** GPS点の間隔がこの秒数を超えたら「途切れ」とみなして、その間だけ道路距離を推定する */
 const GAP_FILL_MIN_STRAIGHT_KM = 0.3;   // これ未満の途切れは直線距離で十分（APIを呼ばない）
-const MAX_GAP_FILL_CALLS = 10;          // 1区間あたりのRoutes API呼び出し上限
+const MAX_GAP_FILL_CALLS = 40;          // 1区間あたりのRoutes API呼び出し上限（距離の大きい途切れを優先）
 
 const ROUTES_API_ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 
@@ -387,26 +387,51 @@ async function resolveSegment(
                  { latitude: to.latitude, longitude: to.longitude, recordedAt: to.time } as GpsPoint];
     let actualKm = 0, filledKm = 0, apiCalls = 0, fallbackGaps = 0;
     const gaps: any[] = [];
+
+    // 1) 途切れ区間を抽出（GPSが取れている部分は実測距離）
+    type GapCand = { idx: number; a: GpsPoint; b: GpsPoint; d: number; gapSec: number };
+    const cands: GapCand[] = [];
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1]!, b = pts[i]!;
       const d = calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
       const gapSec = (new Date(b.recordedAt as any).getTime() - new Date(a.recordedAt as any).getTime()) / 1000;
       if (gapSec <= GPS_GAP_THRESHOLD_SECONDS || d < GAP_FILL_MIN_STRAIGHT_KM) { actualKm += d; continue; }
+      cands.push({ idx: i, a, b, d, gapSec });
+    }
+
+    // 2) 距離の大きい途切れから順に Routes API で道路経路を取得（上限 MAX_GAP_FILL_CALLS）。
+    //    ✅ 取得した道路ポリラインは捨てず、途切れごとに保存する（CMSで道路に沿って描画するため）。
+    const byDistance = [...cands].sort((x, y) => y.d - x.d);
+    const filled = new Map<number, { km: number; polyline: string | null; fallback: boolean }>();
+    for (const c of byDistance) {
+      let result: { km: number; polyline: string | null; fallback: boolean } | null = null;
       if (apiCalls < MAX_GAP_FILL_CALLS) {
-        try {
-          apiCalls++;
-          const r = await callRoutesApi({ latitude: a.latitude, longitude: a.longitude }, { latitude: b.latitude, longitude: b.longitude }, []);
-          const km = r.distanceMeters / 1000;
-          filledKm += km;
-          gaps.push({ gapSec: Math.round(gapSec), straightKm: +d.toFixed(3), routeKm: +km.toFixed(3) });
-          continue;
-        } catch (e) {
-          rlog(`[RouteSegments] ⚠️ 途切れ補完のRoutes API失敗 → 直線×${FALLBACK_STRAIGHT_FACTOR}: ${e instanceof Error ? e.message : String(e)}`);
+        for (let attempt = 1; attempt <= 2 && !result; attempt++) {   // 一時的な失敗は1回だけ再試行
+          try {
+            apiCalls++;
+            const r = await callRoutesApi({ latitude: c.a.latitude, longitude: c.a.longitude }, { latitude: c.b.latitude, longitude: c.b.longitude }, []);
+            result = { km: r.distanceMeters / 1000, polyline: r.encodedPolyline || null, fallback: false };
+          } catch (e) {
+            rlog(`[RouteSegments] ⚠️ 途切れ補完のRoutes API失敗(試行${attempt}) : ${e instanceof Error ? e.message : String(e)}`);
+          }
         }
       }
-      fallbackGaps++;
-      filledKm += d * FALLBACK_STRAIGHT_FACTOR;
-      gaps.push({ gapSec: Math.round(gapSec), straightKm: +d.toFixed(3), fallbackKm: +(d * FALLBACK_STRAIGHT_FACTOR).toFixed(3) });
+      if (!result) { fallbackGaps++; result = { km: c.d * FALLBACK_STRAIGHT_FACTOR, polyline: null, fallback: true }; }
+      filled.set(c.idx, result);
+    }
+
+    // 3) 時系列順に結果を記録
+    for (const c of cands) {
+      const r = filled.get(c.idx)!;
+      filledKm += r.km;
+      gaps.push({
+        gapSec: Math.round(c.gapSec),
+        straightKm: +c.d.toFixed(3),
+        ...(r.fallback ? { fallbackKm: +r.km.toFixed(3) } : { routeKm: +r.km.toFixed(3) }),
+        from: { latitude: c.a.latitude, longitude: c.a.longitude, recordedAt: new Date(c.a.recordedAt as any).toISOString() },
+        to:   { latitude: c.b.latitude, longitude: c.b.longitude, recordedAt: new Date(c.b.recordedAt as any).toISOString() },
+        polyline: r.polyline
+      });
     }
     const totalKm = actualKm + filledKm;
     rlog(`[RouteSegments] 🧩 区間#${segmentIndex}: GPS実測=${actualKm.toFixed(3)}km + 途切れ補完=${filledKm.toFixed(3)}km（${gaps.length}か所, API=${apiCalls}回, 直線代替=${fallbackGaps}） = ${totalKm.toFixed(3)}km`);
@@ -443,11 +468,24 @@ async function resolveSegment(
   rlog(`[RouteSegments] 🌐 区間#${segmentIndex}: Google Routes APIを呼び出します (availability=${availability}, 中間点=${intermediates.length}件)`);
 
   try {
-    const result = await callRoutesApi(
-      { latitude: from.latitude, longitude: from.longitude },
-      { latitude: to.latitude, longitude: to.longitude },
-      intermediates
-    );
+    // 一時的な失敗（通信・429等）で直線に落ちないよう、1回だけ再試行する
+    let result: RoutesApiResult;
+    try {
+      result = await callRoutesApi(
+        { latitude: from.latitude, longitude: from.longitude },
+        { latitude: to.latitude, longitude: to.longitude },
+        intermediates
+      );
+    } catch (firstErr) {
+      const m = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      if (m.startsWith('APIKEY_')) throw firstErr;   // キー問題は再試行しても無駄
+      rlog(`[RouteSegments] ⚠️ 区間#${segmentIndex}: Routes API失敗、再試行します: ${m}`);
+      result = await callRoutesApi(
+        { latitude: from.latitude, longitude: from.longitude },
+        { latitude: to.latitude, longitude: to.longitude },
+        intermediates
+      );
+    }
 
     rlog(`[RouteSegments] ✅ 区間#${segmentIndex}: Routes API成功 = ${(result.distanceMeters / 1000).toFixed(3)}km, polyline長=${result.encodedPolyline?.length ?? 0}文字`);
 
