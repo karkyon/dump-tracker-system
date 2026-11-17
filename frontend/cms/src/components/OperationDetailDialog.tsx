@@ -280,7 +280,7 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
       //   - 全推定/旧方式: 区間全体の道路ポリライン（routePolyline）
       //   → 直線ではなく道路をトレースして描画する。経路データが無い途切れだけ、最後の手段として直線(灰色破線)。
       // =====================================================================
-      type RoadLeg = { path: google.maps.LatLngLiteral[]; from: google.maps.LatLngLiteral; to: google.maps.LatLngLiteral; label: string; km: number | null };
+      type RoadLeg = { path: google.maps.LatLngLiteral[]; from: google.maps.LatLngLiteral; to: google.maps.LatLngLiteral; t0: number | null; t1: number | null; label: string; km: number | null };
       const roadLegs: RoadLeg[] = [];
       const geoEnc = (window as any).google?.maps?.geometry?.encoding;
       const decodeToLiteral = (enc: string): google.maps.LatLngLiteral[] =>
@@ -299,6 +299,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                   path,
                   from: { lat: Number(g.from.latitude), lng: Number(g.from.longitude) },
                   to: { lat: Number(g.to.latitude), lng: Number(g.to.longitude) },
+                  t0: g.from.recordedAt ? new Date(g.from.recordedAt).getTime() : null,
+                  t1: g.to.recordedAt ? new Date(g.to.recordedAt).getTime() : null,
                   label: `${segLabel}（GPS欠損を道路経路で補完）`,
                   km: g.routeKm != null ? Number(g.routeKm) : null,
                 });
@@ -310,6 +312,8 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
                   path,
                   from: path[0]!,
                   to: path[path.length - 1]!,
+                  t0: null,
+                  t1: null,
                   label: `${segLabel}（${seg.distanceSource === 'FULL_ESTIMATE' ? 'GPSなし: Google推奨ルート' : '一部推定'}）`,
                   km: Number(seg.distanceKm),
                 });
@@ -326,10 +330,23 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
         const h = Math.sin(dLat / 2) ** 2 + Math.cos(p.lat * rad) * Math.cos(q.lat * rad) * Math.sin(dLng / 2) ** 2;
         return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
       };
-      // 描画用に間引かれたGPS点の端点でも一致するよう、許容距離を広めに取る
+      // 表示用に間引かれたGPS点と、補完経路（間引き前の生GPS点が起点/終点）の対応付け。
+      // 位置の近さだけで判定すると、間引きで端点がずれた途切れを取りこぼし、補完経路の上に
+      // 灰色の直線が重なって描かれてしまう。そのため「時間帯の重なり」を優先して判定する。
       const LEG_MATCH_TOLERANCE_M = 1500;
-      const hasRoadLegBetween = (p: google.maps.LatLngLiteral, q: google.maps.LatLngLiteral): boolean =>
-        roadLegs.some(l => distM(p, l.from) <= LEG_MATCH_TOLERANCE_M && distM(q, l.to) <= LEG_MATCH_TOLERANCE_M);
+      const hasRoadLegBetween = (
+        pLog: { latitude: number; longitude: number; recordedAt: string },
+        qLog: { latitude: number; longitude: number; recordedAt: string }
+      ): boolean => {
+        const ta = new Date(pLog.recordedAt).getTime();
+        const tb = new Date(qLog.recordedAt).getTime();
+        const p = { lat: pLog.latitude, lng: pLog.longitude };
+        const q = { lat: qLog.latitude, lng: qLog.longitude };
+        return roadLegs.some(l =>
+          (l.t0 != null && l.t1 != null && l.t0 < tb && l.t1 > ta) ||
+          (distM(p, l.from) <= LEG_MATCH_TOLERANCE_M && distM(q, l.to) <= LEG_MATCH_TOLERANCE_M)
+        );
+      };
 
       if (routeGpsLogs.length > 0) {
         // GPSの途切れ: 5分超、または90秒超かつ道路経路が保存されている区間
@@ -346,8 +363,10 @@ const OperationDetailDialog: React.FC<OperationDetailDialogProps> = ({
             const diffMs = new Date(currLog.recordedAt).getTime() - new Date(prevLog.recordedAt).getTime();
             const pp = { lat: prevLog.latitude, lng: prevLog.longitude };
             const cp = { lat: currLog.latitude, lng: currLog.longitude };
-            gapHasRoad = diffMs > ROAD_GAP_THRESHOLD_MS && hasRoadLegBetween(pp, cp);
-            isGap = diffMs > GAP_THRESHOLD_MS || gapHasRoad;
+            gapHasRoad = diffMs > ROAD_GAP_THRESHOLD_MS && hasRoadLegBetween(prevLog, currLog);
+            // 停車中の長時間無記録（移動300m未満）は途切れ扱いにしない（灰色の短い破線を出さない）
+            const movedM = distM(pp, cp);
+            isGap = (diffMs > GAP_THRESHOLD_MS && movedM >= 300) || gapHasRoad;
           }
 
           if (isGap || isLastSeg) {

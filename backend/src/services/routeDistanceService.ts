@@ -10,6 +10,7 @@ import { DatabaseService } from '../utils/database';
 import { DatabaseError, ValidationError, NotFoundError } from '../utils/errors';
 import logger from '../utils/logger';
 import { calculateDistance } from '../utils/gpsCalculations';
+import { isFillableGap } from '../utils/gpsGap';
 
 type DistanceSource = 'GPS_ACTUAL' | 'GPS_PARTIAL_ESTIMATE' | 'FULL_ESTIMATE' | 'FALLBACK_STRAIGHT';
 
@@ -76,7 +77,6 @@ export async function getRouteModifiers(): Promise<{ avoidHighways: boolean; avo
 }
 
 /** GPS点の間隔がこの秒数を超えたら「途切れ」とみなして、その間だけ道路距離を推定する */
-const GAP_FILL_MIN_STRAIGHT_KM = 0.3;   // これ未満の途切れは直線距離で十分（APIを呼ばない）
 const MAX_GAP_FILL_CALLS = 40;          // 1区間あたりのRoutes API呼び出し上限（距離の大きい途切れを優先）
 
 const ROUTES_API_ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes';
@@ -159,7 +159,7 @@ function simplifyWaypoints(points: GpsPoint[]): GpsPoint[] {
 // GPS欠落パターン判定
 // =====================================
 
-function classifyGpsAvailability(gpsPoints: GpsPoint[]): 'ACTUAL' | 'PARTIAL' | 'FULL' {
+function classifyGpsAvailability(from: StopPoint, to: StopPoint, gpsPoints: GpsPoint[]): 'ACTUAL' | 'PARTIAL' | 'FULL' {
   if (gpsPoints.length === 0) return 'FULL';
   if (gpsPoints.length < 2) return 'PARTIAL';
 
@@ -169,6 +169,19 @@ function classifyGpsAvailability(gpsPoints: GpsPoint[]): 'ACTUAL' | 'PARTIAL' | 
       return 'PARTIAL';
     }
   }
+
+  // ✅ 区間の両端（イベント地点 ↔ 最初/最後のGPS点）の途切れも判定する。
+  //   従来はGPS点同士の途切れだけを見ていたため、荷降・積込・休憩・給油などのイベントをまたいで
+  //   GPSが途切れた場合（最後のGPS点→イベント地点、イベント地点→最初のGPS点）が補完されず、
+  //   画面では直線（または経路なし）になっていた。
+  const first = gpsPoints[0]!;
+  const last = gpsPoints[gpsPoints.length - 1]!;
+  const headKm = calculateDistance(from.latitude, from.longitude, first.latitude, first.longitude);
+  const headSec = (first.recordedAt.getTime() - from.time.getTime()) / 1000;
+  if (isFillableGap(headKm, headSec)) return 'PARTIAL';
+  const tailKm = calculateDistance(last.latitude, last.longitude, to.latitude, to.longitude);
+  const tailSec = (to.time.getTime() - last.recordedAt.getTime()) / 1000;
+  if (isFillableGap(tailKm, tailSec)) return 'PARTIAL';
 
   return 'ACTUAL';
 }
@@ -352,7 +365,7 @@ async function resolveSegment(
     toLongitude: to.longitude
   };
 
-  const availability = classifyGpsAvailability(gpsPoints);
+  const availability = classifyGpsAvailability(from, to, gpsPoints);
   rlog(`[RouteSegments] 🧭 区間#${segmentIndex} (${from.activityType}→${to.activityType}) GPS可用性判定: ${availability} (GPS点数=${gpsPoints.length})`);
 
   if (availability === 'ACTUAL') {
@@ -395,7 +408,7 @@ async function resolveSegment(
       const a = pts[i - 1]!, b = pts[i]!;
       const d = calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
       const gapSec = (new Date(b.recordedAt as any).getTime() - new Date(a.recordedAt as any).getTime()) / 1000;
-      if (gapSec <= GPS_GAP_THRESHOLD_SECONDS || d < GAP_FILL_MIN_STRAIGHT_KM) { actualKm += d; continue; }
+      if (!isFillableGap(d, gapSec)) { actualKm += d; continue; }
       cands.push({ idx: i, a, b, d, gapSec });
     }
 
