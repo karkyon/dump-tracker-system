@@ -691,7 +691,19 @@ export class OperationService {
    */
   async delete(where: Prisma.OperationWhereUniqueInput) {
     try {
-      return await this.prisma.operation.delete({ where });
+      // gps_logs.operation_id は ON DELETE NO ACTION のため、GPSログが残っていると
+      // 運行を削除できず DATABASE_ERROR になっていた。同一トランザクションで先にGPSログを削除する。
+      // （operation_details / inspection_records 等は DB 側の CASCADE で削除される）
+      return await this.prisma.$transaction(async (tx) => {
+        const target = await tx.operation.findUnique({ where, select: { id: true } });
+        if (!target) {
+          const notFound: any = new Error('Operation not found');
+          notFound.code = 'P2025';
+          throw notFound;
+        }
+        await tx.gpsLog.deleteMany({ where: { operationId: target.id } });
+        return tx.operation.delete({ where });
+      });
     } catch (error) {
       logger.error('運行削除エラー', { error, where });
       if ((error as any).code === 'P2025') {
